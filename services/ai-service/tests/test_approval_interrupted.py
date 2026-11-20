@@ -1,5 +1,6 @@
 """An approved write whose run never wrote its outcome — the ai-service running it stopped between pending → approved
-and the end (out of memory, a lost node, the shutdown cutting the request) — does not stay approved for good: past
+and the end (out of memory, a lost node; a shutdown cutting the request ends it at once, test_approval_cut_closes.py)
+— does not stay approved for good: past
 APPROVED_RUN_LIMIT_SECONDS a new card, an opened card or the first database use ends it failed, masked, with an
 ai.tool.interrupt row. A run still going on another server is left alone, and nothing runs it again."""
 import asyncio
@@ -92,10 +93,6 @@ async def _card(db):
                                          tool="k8s_patch_resource", args=copy.deepcopy(PATCH))
 
 
-async def _cut():
-    raise asyncio.CancelledError()  # uvicorn's --timeout-graceful-shutdown cancels a request still running
-
-
 async def _left_by_a_stopped_server(db, seconds_ago):
     """What a server killed right after pending → approved leaves in the database."""
     row = await _card(db)
@@ -107,12 +104,9 @@ def _interrupts(rows):
     return [r for r in rows if r["action"] == "ai.tool.interrupt"]
 
 
-async def test_a_run_cut_after_its_approval_ends_failed_once_its_time_is_past(db, rows, monkeypatch):
-    api = _api(monkeypatch, call=_cut)
-    row = await _card(db)
-    with pytest.raises(asyncio.CancelledError):
-        await api.approve_tool_approval(row.id, request=SimpleNamespace(), authorization="Bearer x")
-    assert [r["action"] for r in rows] == ["ai.tool.approve"]
+async def test_a_run_whose_server_was_killed_ends_failed_once_its_time_is_past(db, rows, monkeypatch):
+    api = _api(monkeypatch)
+    row = await _left_by_a_stopped_server(db, 0)  # killed with no shutdown: nothing of the request ran after pending → approved
 
     # within the limit it may still be running on its server: nothing ends it
     assert (await api.get_tool_approval(row.id, authorization="Bearer x"))["status"] == "approved"

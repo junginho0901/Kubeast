@@ -428,12 +428,9 @@ async def approve_tool_approval(
     request: Request,
     authorization: str = Depends(bearer_or_cookie),
 ):
-    from app.database import APPROVED_RUN_LIMIT_SECONDS, utcnow
-    from app.services.audit_target import EXEC_TOOL, kept_tool_args, pod_exec_row, tool_target, write_tool_input
-    from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
-    from app.services.ai import access as tool_access, formatters
-    from app.services.ai.permissions import app_permission_error
-    from app.services.ai.streaming import tool_outcome
+    from app.database import utcnow
+    from app.services import approval_runs
+    from app.services.audit_writer import AuditUnavailable, require_audit_ready
 
     from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
     payload = _caller(authorization)
@@ -474,6 +471,20 @@ async def approve_tool_approval(
         refusal = HTTPException(status_code=409, detail="Approval is no longer pending")
         await _refused_decision_row("ai.tool.approve", refusal, approval_id, pending, request, authorization)
         raise refusal
+    # From here the run is this request's: a shutdown that cuts it before its end closes it at once (approval_runs).
+    async with approval_runs.running(db, approval.id) as run:
+        return await _run_approved(db, run, approval, approval_token, ai_service, payload, request, authorization)
+
+
+async def _run_approved(db, run, approval, approval_token: str, ai_service, payload, request: Request, authorization: str) -> dict:
+    """An approval this request moved to `approved`: its row, the call, its end and the chat message."""
+    from app.database import APPROVED_RUN_LIMIT_SECONDS, utcnow
+    from app.services.audit_target import EXEC_TOOL, kept_tool_args, pod_exec_row, tool_target, write_tool_input
+    from app.services.audit_writer import fail_closed_enabled, write_audit
+    from app.services.ai import access as tool_access, formatters
+    from app.services.ai.permissions import app_permission_error
+    from app.services.ai.streaming import tool_outcome
+
     actor, http = _extract_audit_meta(request, authorization)
     stored = await write_audit(
         action="ai.tool.approve", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
@@ -522,7 +533,7 @@ async def approve_tool_approval(
         result="success" if status == "executed" else "failure", error=error[:500] if error else error,
     )
     # The rows before the chat message: the conversation may have been deleted during the call, and the message with it.
-    ended, late = await _end_run(db, approval.id, status, formatted, kept_args, outcome_row)
+    ended, late = await run.ending(_end_run(db, approval.id, status, formatted, kept_args, outcome_row))
     approval = ended or approval
     if approval.tool == EXEC_TOOL and not refusal:
         await write_audit(

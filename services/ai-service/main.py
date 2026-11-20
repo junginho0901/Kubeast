@@ -16,6 +16,7 @@ from app.api import router
 from app.api_public import admin_router, public_router
 from app.api_alert_inbox import router as alert_inbox_router
 from app.api_investigations import router as investigations_router
+from app.services import approval_runs
 from app.services.investigation import settings as investigation_settings
 from app.services.investigation.webhook import router as alerts_router
 from app.config import settings
@@ -39,8 +40,9 @@ if mcp_flags.mcp_enabled():
     _mcp = mcp_server.KubeastMCPServer()
 
 
-# How long the lifespan's end waits for the investigation worker, after uvicorn's --timeout-graceful-shutdown (Dockerfile),
-# inside the 30 s the chart's grace period leaves after its preStop wait.
+# How long the lifespan's end waits for the investigation worker and, at the same time, for the approved AI writes the
+# shutdown cut (approval_runs), after uvicorn's --timeout-graceful-shutdown (Dockerfile), inside the 30 s the chart's
+# grace period leaves after its preStop wait.
 WORKER_STOP_SECONDS = 4
 
 
@@ -91,6 +93,8 @@ async def lifespan(_app: FastAPI):
             async with _mcp.session_manager.run():
                 yield
     finally:
+        # A cut approved run ends itself in a task of its own; the event loop would cancel it once the lifespan returns.
+        runs_settled = asyncio.ensure_future(approval_runs.settle(WORKER_STOP_SECONDS))
         if worker_task is not None:
             restore_signals()
             stop.set()
@@ -100,6 +104,7 @@ async def lifespan(_app: FastAPI):
                 await asyncio.wait_for(worker_task, timeout=WORKER_STOP_SECONDS)
             except (asyncio.CancelledError, Exception):
                 pass
+        await runs_settled
 
 
 app = FastAPI(
