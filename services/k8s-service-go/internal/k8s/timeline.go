@@ -3,12 +3,11 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -22,27 +21,6 @@ const timelinePageSize = 500
 // eachRolloutPage lists a kind timelinePageSize at a time, giving each page to keep, as a big read past the first.
 func eachRolloutPage[L metav1.ListInterface](ctx context.Context, list func(metav1.ListOptions) (L, error), keep func(L)) error {
 	return eachPage(ctx, metav1.ListOptions{Limit: timelinePageSize}, list, keep)
-}
-
-// rolloutReplicaSet keeps what rolloutHistoryFromLists reads of a ReplicaSet.
-func rolloutReplicaSet(rs *appsv1.ReplicaSet) appsv1.ReplicaSet {
-	kept := appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{
-		Name:              rs.Name,
-		Namespace:         rs.Namespace,
-		CreationTimestamp: rs.CreationTimestamp,
-		OwnerReferences:   rs.OwnerReferences,
-		Annotations:       map[string]string{},
-	}}
-	for _, a := range []string{"deployment.kubernetes.io/revision", "kubernetes.io/change-cause"} {
-		if v, ok := rs.Annotations[a]; ok {
-			kept.Annotations[a] = v
-		}
-	}
-	kept.Spec.Replicas = rs.Spec.Replicas
-	for _, c := range rs.Spec.Template.Spec.Containers {
-		kept.Spec.Template.Spec.Containers = append(kept.Spec.Template.Spec.Containers, corev1.Container{Image: c.Image})
-	}
-	return kept
 }
 
 // TimelineResult holds merged events and rollout history for a timeline view.
@@ -218,7 +196,8 @@ func timelineEventRow(e *corev1.Event) map[string]interface{} {
 }
 
 // getNamespaceRolloutHistory collects the rollouts of a namespace (all when empty, each of a limited grant's namespaces
-// in turn): each Deployment's ReplicaSets and each StatefulSet's and DaemonSet's ControllerRevisions created in the window.
+// in turn): each Deployment's ReplicaSets and each StatefulSet's and DaemonSet's ControllerRevisions created in the window,
+// each kind from one read for everyone whose identity may list it there (rolloutWindow), else as the caller.
 func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace string, cutoff time.Time) ([]map[string]interface{}, error) {
 	if scope := scopeFromCtx(ctx); namespace == "" && len(scope) > 0 {
 		result, err := fanOutNamespaces(scope, func(ns string) ([]map[string]interface{}, error) {
@@ -235,41 +214,23 @@ func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace stri
 
 func (s *Service) rolloutHistoryIn(ctx context.Context, namespace string, cutoff time.Time) ([]map[string]interface{}, error) {
 	var wg sync.WaitGroup
-	deploys := &appsv1.DeploymentList{}
-	rsList := &appsv1.ReplicaSetList{}
-	crRows := make([]map[string]interface{}, 0)
+	var deployments map[string]bool
+	var sets []rolloutRS
+	var revisions []rolloutCR
 	var deploysErr, rsErr, crErr error
 
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		deploysErr = eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.DeploymentList, error) {
-			return s.clientsetCtx(ctx).AppsV1().Deployments(namespace).List(ctx, o)
-		}, func(page *appsv1.DeploymentList) {
-			for i := range page.Items {
-				deploys.Items = append(deploys.Items, appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: page.Items[i].Namespace, Name: page.Items[i].Name}})
-			}
-		})
+		deployments, deploysErr = s.rolloutDeployments(ctx, namespace)
 	}()
 	go func() {
 		defer wg.Done()
-		rsErr = eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ReplicaSetList, error) {
-			return s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).List(ctx, o)
-		}, func(page *appsv1.ReplicaSetList) {
-			for i := range page.Items {
-				if !page.Items[i].CreationTimestamp.Time.Before(cutoff) {
-					rsList.Items = append(rsList.Items, rolloutReplicaSet(&page.Items[i]))
-				}
-			}
-		})
+		sets, rsErr = s.rolloutReplicaSets(ctx, namespace, cutoff)
 	}()
 	go func() {
 		defer wg.Done()
-		crErr = eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ControllerRevisionList, error) {
-			return s.clientsetCtx(ctx).AppsV1().ControllerRevisions(namespace).List(ctx, o)
-		}, func(page *appsv1.ControllerRevisionList) {
-			crRows = append(crRows, controllerRevisionRollouts(page, cutoff)...)
-		})
+		revisions, crErr = s.rolloutRevisions(ctx, namespace, cutoff)
 	}()
 	wg.Wait()
 
@@ -283,36 +244,9 @@ func (s *Service) rolloutHistoryIn(ctx context.Context, namespace string, cutoff
 		return nil, fmt.Errorf("list controller revisions for timeline: %w", crErr)
 	}
 
-	result := append(rolloutHistoryFromLists(deploys, rsList, cutoff), crRows...)
+	result := append(deploymentRolloutRows(deployments, sets), revisionRolloutRows(revisions)...)
 	sortRolloutsNewestFirst(result)
 	return result, nil
-}
-
-// controllerRevisionRollouts is each StatefulSet's and DaemonSet's ControllerRevision created after cutoff, by its
-// controlling owner.
-func controllerRevisionRollouts(crList *appsv1.ControllerRevisionList, cutoff time.Time) []map[string]interface{} {
-	result := make([]map[string]interface{}, 0)
-	for i := range crList.Items {
-		cr := &crList.Items[i]
-		if cr.CreationTimestamp.Time.Before(cutoff) {
-			continue
-		}
-		owner := metav1.GetControllerOf(cr)
-		if owner == nil || (owner.Kind != "StatefulSet" && owner.Kind != "DaemonSet") {
-			continue
-		}
-		result = append(result, map[string]interface{}{
-			"kind":         owner.Kind,
-			"name":         owner.Name,
-			"namespace":    cr.Namespace,
-			"revision":     cr.Revision,
-			"change_cause": nil,
-			"created_at":   toISO(&cr.CreationTimestamp),
-			"images":       extractImagesFromControllerRevision(cr),
-			"replicas":     0,
-		})
-	}
-	return result
 }
 
 // sortRolloutsNewestFirst orders rollout entries by created_at, the newest first.
@@ -324,182 +258,45 @@ func sortRolloutsNewestFirst(result []map[string]interface{}) {
 	})
 }
 
-// rolloutHistoryFromLists pairs each ReplicaSet created after cutoff with its
-// owning Deployment. Deployments are keyed by namespace/name: with
-// metav1.NamespaceAll both lists span the cluster, and a ReplicaSet may only
-// be owned by a Deployment in its own namespace.
-func rolloutHistoryFromLists(deploys *appsv1.DeploymentList, rsList *appsv1.ReplicaSetList, cutoff time.Time) []map[string]interface{} {
-	deployKeys := make(map[string]bool, len(deploys.Items))
-	for _, d := range deploys.Items {
-		deployKeys[d.Namespace+"/"+d.Name] = true
-	}
-
-	result := make([]map[string]interface{}, 0)
-	for _, rs := range rsList.Items {
-		if rs.CreationTimestamp.Time.Before(cutoff) {
-			continue
-		}
-
-		// Find owning deployment
-		ownerName := ""
-		for _, ref := range rs.OwnerReferences {
-			if ref.Kind == "Deployment" && deployKeys[rs.Namespace+"/"+ref.Name] {
-				ownerName = ref.Name
-				break
-			}
-		}
-		if ownerName == "" {
-			continue
-		}
-
-		revStr, ok := rs.Annotations["deployment.kubernetes.io/revision"]
-		if !ok {
-			continue
-		}
-		rev, err := strconv.ParseInt(revStr, 10, 64)
-		if err != nil {
-			continue
-		}
-
-		images := extractContainerImages(rs.Spec.Template.Spec.Containers)
-		changeCause := rs.Annotations["kubernetes.io/change-cause"]
-
-		replicas := int32(0)
-		if rs.Spec.Replicas != nil {
-			replicas = *rs.Spec.Replicas
-		}
-
-		result = append(result, map[string]interface{}{
-			"kind":         "Deployment",
-			"name":         ownerName,
-			"namespace":    rs.Namespace,
-			"revision":     rev,
-			"change_cause": nilIfEmpty(changeCause),
-			"created_at":   toISO(&rs.CreationTimestamp),
-			"images":       images,
-			"replicas":     replicas,
-		})
-	}
-
+// sortRolloutRowsByTime orders one kind's rows by created_at, the newest first, as they were before the kinds join.
+func sortRolloutRowsByTime(result []map[string]interface{}) {
 	sort.Slice(result, func(i, j int) bool {
 		ti, _ := time.Parse(time.RFC3339, result[i]["created_at"].(string))
 		tj, _ := time.Parse(time.RFC3339, result[j]["created_at"].(string))
 		return ti.After(tj)
 	})
-
-	return result
 }
 
+// getDeploymentRolloutTimeline is the rollouts of the Deployment name: its ReplicaSets created in the window.
 func (s *Service) getDeploymentRolloutTimeline(ctx context.Context, namespace, name string, cutoff time.Time) ([]map[string]interface{}, error) {
-	result := make([]map[string]interface{}, 0)
-	err := eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ReplicaSetList, error) {
-		return s.clientsetCtx(ctx).AppsV1().ReplicaSets(namespace).List(ctx, o)
-	}, func(page *appsv1.ReplicaSetList) {
-		for i := range page.Items {
-			rs := &page.Items[i]
-			if rs.CreationTimestamp.Time.Before(cutoff) {
-				continue
-			}
-
-			owned := false
-			for _, ref := range rs.OwnerReferences {
-				if ref.Kind == "Deployment" && ref.Name == name {
-					owned = true
-					break
-				}
-			}
-			if !owned {
-				continue
-			}
-
-			revStr, ok := rs.Annotations["deployment.kubernetes.io/revision"]
-			if !ok {
-				continue
-			}
-			rev, err := strconv.ParseInt(revStr, 10, 64)
-			if err != nil {
-				continue
-			}
-
-			images := extractContainerImages(rs.Spec.Template.Spec.Containers)
-			changeCause := rs.Annotations["kubernetes.io/change-cause"]
-
-			replicas := int32(0)
-			if rs.Spec.Replicas != nil {
-				replicas = *rs.Spec.Replicas
-			}
-
-			result = append(result, map[string]interface{}{
-				"kind":         "Deployment",
-				"name":         name,
-				"namespace":    namespace,
-				"revision":     rev,
-				"change_cause": nilIfEmpty(changeCause),
-				"created_at":   toISO(&rs.CreationTimestamp),
-				"images":       images,
-				"replicas":     replicas,
-			})
-		}
-	})
+	sets, err := s.rolloutReplicaSets(ctx, namespace, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("list replicasets for timeline: %w", err)
 	}
-
-	sort.Slice(result, func(i, j int) bool {
-		ti, _ := time.Parse(time.RFC3339, result[i]["created_at"].(string))
-		tj, _ := time.Parse(time.RFC3339, result[j]["created_at"].(string))
-		return ti.After(tj)
-	})
-
+	result := make([]map[string]interface{}, 0)
+	for i := range sets {
+		if slices.Contains(sets[i].deployments, name) {
+			result = append(result, sets[i].row(name, namespace))
+		}
+	}
+	sortRolloutRowsByTime(result)
 	return result, nil
 }
 
+// getControllerRevisionTimeline is the rollouts of the StatefulSet or DaemonSet name: its ControllerRevisions created
+// in the window.
 func (s *Service) getControllerRevisionTimeline(ctx context.Context, namespace, kind, name string, cutoff time.Time) ([]map[string]interface{}, error) {
-	result := make([]map[string]interface{}, 0)
-	err := eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ControllerRevisionList, error) {
-		return s.clientsetCtx(ctx).AppsV1().ControllerRevisions(namespace).List(ctx, o)
-	}, func(page *appsv1.ControllerRevisionList) {
-		for i := range page.Items {
-			cr := &page.Items[i]
-			if cr.CreationTimestamp.Time.Before(cutoff) {
-				continue
-			}
-
-			owned := false
-			for _, ref := range cr.OwnerReferences {
-				if ref.Kind == kind && ref.Name == name {
-					owned = true
-					break
-				}
-			}
-			if !owned {
-				continue
-			}
-
-			images := extractImagesFromControllerRevision(cr)
-
-			result = append(result, map[string]interface{}{
-				"kind":         kind,
-				"name":         name,
-				"namespace":    namespace,
-				"revision":     cr.Revision,
-				"change_cause": nil,
-				"created_at":   toISO(&cr.CreationTimestamp),
-				"images":       images,
-				"replicas":     0,
-			})
-		}
-	})
+	revisions, err := s.rolloutRevisions(ctx, namespace, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("list controller revisions for timeline: %w", err)
 	}
-
-	sort.Slice(result, func(i, j int) bool {
-		ti, _ := time.Parse(time.RFC3339, result[i]["created_at"].(string))
-		tj, _ := time.Parse(time.RFC3339, result[j]["created_at"].(string))
-		return ti.After(tj)
-	})
-
+	result := make([]map[string]interface{}, 0)
+	for i := range revisions {
+		if slices.Contains(revisions[i].owners, ownerKey{kind, name}) {
+			result = append(result, revisions[i].row(kind, name, namespace))
+		}
+	}
+	sortRolloutRowsByTime(result)
 	return result, nil
 }
 
