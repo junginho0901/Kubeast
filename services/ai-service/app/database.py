@@ -350,18 +350,6 @@ class DatabaseService:
             )
             await db.commit()
     
-    async def delete_session(self, session_id: str):
-        """세션 삭제"""
-        async with self.async_session() as db:
-            from sqlalchemy import select
-            result = await db.execute(
-                select(Session).where(Session.id == session_id)
-            )
-            session = result.scalar_one_or_none()
-            if session:
-                await db.delete(session)
-                await db.commit()
-    
     async def add_message(
         self,
         session_id: str,

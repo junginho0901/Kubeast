@@ -161,9 +161,17 @@ func (r *Repository) UpdateSessionTitle(ctx context.Context, id, title string) e
 	return err
 }
 
-// DeleteSession deletes a session and its related messages and context.
-// Explicitly deletes children first for compatibility with tables created
-// by SQLAlchemy ORM (which may lack ON DELETE CASCADE at the DB level).
+// deleteSessionStatements delete a conversation, the rows that name it first: tool_approvals reference sessions
+// without ON DELETE CASCADE (the retention purge in auth-service deletes them first too), and tables the SQLAlchemy
+// ORM created before the migrations may lack it on messages and session_contexts.
+var deleteSessionStatements = []string{
+	`DELETE FROM tool_approvals WHERE session_id = $1`,
+	`DELETE FROM session_contexts WHERE session_id = $1`,
+	`DELETE FROM messages WHERE session_id = $1`,
+	`DELETE FROM sessions WHERE id = $1`,
+}
+
+// DeleteSession deletes a session with its context, messages and write tool approvals, in one transaction.
 func (r *Repository) DeleteSession(ctx context.Context, id string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -171,14 +179,10 @@ func (r *Repository) DeleteSession(ctx context.Context, id string) error {
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, `DELETE FROM session_contexts WHERE session_id = $1`, id); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM messages WHERE session_id = $1`, id); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE id = $1`, id); err != nil {
-		return err
+	for _, stmt := range deleteSessionStatements {
+		if _, err := tx.Exec(ctx, stmt, id); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit(ctx)
