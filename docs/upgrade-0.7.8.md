@@ -32,7 +32,7 @@ helm list -n kubeast                          # CHART kubeast-0.7.7
 helm get values kubeast -n kubeast -o yaml    # the values you set yourself
 ```
 
-From a version before 0.7.7, also read the release notes of each version in between.
+From a version before 0.7.7, upgrade to 0.7.7 first and read the release notes of each version in between: this upgrade was rehearsed only from 0.7.7.
 
 ### 1.2 Rehearse with a dry run
 
