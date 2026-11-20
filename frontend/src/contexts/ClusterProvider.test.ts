@@ -581,9 +581,17 @@ describe("a tab's own choice and the other tabs of the browser", () => {
     useLayoutEffect(() => { seen.fallbackDrawn += 1 })
     return null
   }
-  // Layout's pending access requests (usePendingAccessRequestCount), a cluster-scoped read every minute
+  // Layout's pending access requests (usePendingAccessRequestCount), a cluster-scoped read every minute, on its way for
+  // a while as a read over the network is: the provider draws the count of reads on their way
   function Pending() {
-    useQuery({ queryKey: ['access-requests', 'admin', 'pending-count'], queryFn: async () => (await client.get('/auth/admin/access-requests', { params: { status: 'pending', limit: 0 } })).data, refetchInterval: 60_000 })
+    useQuery({
+      queryKey: ['access-requests', 'admin', 'pending-count'],
+      queryFn: async () => {
+        await new Promise((r) => setTimeout(r, 20))
+        return (await client.get('/auth/admin/access-requests', { params: { status: 'pending', limit: 0 } })).data
+      },
+      refetchInterval: 60_000,
+    })
     return null
   }
   // as Layout draws it: under the cluster's key, the reads beside the page, the gate and the page in it
