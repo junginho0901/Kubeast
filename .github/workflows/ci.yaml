@@ -200,6 +200,32 @@ jobs:
       # Bundling monaco-editor exceeds Node's default heap.
       - run: NODE_OPTIONS=--max-old-space-size=4096 npx vite build
 
+  # Token contrast, hand-written colours and the bundle's size. Not a required check: each step reports, and fails only with --strict.
+  design-checks:
+    name: design checks (informational)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: token contrast
+        run: npm run check:contrast
+      - name: hand-written colours
+        if: ${{ !cancelled() }}
+        run: npm run check:colours
+      - name: bundle size
+        if: ${{ !cancelled() }}
+        run: |
+          NODE_OPTIONS=--max-old-space-size=4096 npx vite build
+          npm run check:bundle
+
   helm:
     name: helm lint + unittest + kubeconform
     runs-on: ubuntu-latest

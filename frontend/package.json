@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "eslint . --max-warnings 0",
+    "check:contrast": "node scripts/token-contrast.mjs",
+    "check:colours": "node scripts/hand-colours.mjs",
+    "check:bundle": "node scripts/bundle-budget.mjs",
     "preview": "vite preview",
     "test": "vitest run"
   },

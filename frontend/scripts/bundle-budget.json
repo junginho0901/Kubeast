@@ -1,0 +1,5 @@
+{
+  "about": "Budget for bundle-budget.mjs. margin: how far a measure may grow over the baseline (0.1 = 10%); the font may not grow at all. notice: growth printed as 'grew'. baseline: written by --write-baseline <ref> from the build of a release tag; until then the script prints the measures and compares nothing.",
+  "margin": 0.1,
+  "notice": 0.01
+}
