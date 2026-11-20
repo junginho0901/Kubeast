@@ -288,9 +288,9 @@ func timelineSaid(t *testing.T, res *TimelineResult, err error) string {
 	return answerJSON(t, map[string]interface{}{"events": res.Events, "rollouts": res.RolloutHistory, "summary": summary})
 }
 
-// Forty different people opening the Timeline of every namespace at one moment have the cluster's events read about
-// twice as kubeast:cache and never as themselves, and each gets what its own read gives. One who leaves while it waits
-// gets its own error at once.
+// Forty different people opening the Timeline of every namespace at one moment have the cluster's events read twice as
+// kubeast:cache (the first one's read and one for everyone who came during it) and never as themselves, and each gets
+// what its own read gives. One who leaves while it waits gets its own error at once.
 func TestACrowdOpeningTheTimelineReadsTheEventsOnceForEveryoneWhoMayListThem(t *testing.T) {
 	api := &windowCluster{may: func(string, string) bool { return true }, hold: make(chan struct{}), events: windowEvents(time.Now().Truncate(time.Second))}
 	s, own := api.start(t)
@@ -305,26 +305,29 @@ func TestACrowdOpeningTheTimelineReadsTheEventsOnceForEveryoneWhoMayListThem(t *
 			answers[i] = timelineSaid(t, res, err)
 		}()
 	}
-	if !eventually(t, 5*time.Second, func() bool { _, reads := api.count(overviewCacheUser); return api.reviewsSeen() >= n && reads >= 1 }) {
+	// the first caller's read is held at its first page; every other caller waits for the read after it
+	b, key := s.defaultBundle.Load(), eventWindowKey("", metav1.ListOptions{}, 500, "")
+	if !eventually(t, 5*time.Second, func() bool { return b.eventWindows.Waiting(key) == n-1 }) {
+		waiting := b.eventWindows.Waiting(key)
 		api.release()
 		wg.Wait()
-		t.Fatalf("%d reviews, the shared read not started", api.reviewsSeen())
+		t.Fatalf("%d callers wait for the next read, want %d", waiting, n-1)
 	}
-	ctx, cancel := context.WithTimeout(wideCaller("late@example.com"), 100*time.Millisecond)
+	// one of them asking again, its review answered already, so the only wait is the read's
+	ctx, cancel := context.WithTimeout(wideCaller("u00@example.com"), 100*time.Millisecond)
 	defer cancel()
 	start := time.Now()
 	_, err := s.GetNamespaceTimeline(ctx, "", 24, 500, "")
 	if took := time.Since(start); err == nil || !strings.Contains(err.Error(), "events not listed") || took > 2*time.Second {
 		t.Errorf("the timeline whose request ended while it waited: %v after %v", err, took)
 	}
-	time.Sleep(100 * time.Millisecond)
 	api.release()
 	wg.Wait()
 
 	pages, reads := api.count(overviewCacheUser)
 	t.Logf("%d timelines at once: %d reads of the events as kubeast:cache (%d pages), %d pages as the callers, %d reviews", n, reads, pages, api.pagesByCallers(), api.reviewsSeen())
-	if reads < 1 || reads > 2 || api.pagesByCallers() != 0 {
-		t.Errorf("reads of the events: %d as kubeast:cache (want 1 or 2), %d pages as the callers (want 0)", reads, api.pagesByCallers())
+	if reads != 2 || api.pagesByCallers() != 0 {
+		t.Errorf("reads of the events: %d as kubeast:cache (want 2), %d pages as the callers (want 0)", reads, api.pagesByCallers())
 	}
 	for i, got := range answers {
 		res, err := own.GetNamespaceTimeline(wideCaller(fmt.Sprintf("u%02d@example.com", i)), "", 24, 500, "")
@@ -495,13 +498,14 @@ func TestPeopleAnsweredByOneEventReadShareItsEventsAndRows(t *testing.T) {
 			events[i] = &evs[0]
 		}()
 	}
-	// the first read is held at its first page; the others wait for the one after it
-	if !eventually(t, 5*time.Second, func() bool { _, reads := api.count(overviewCacheUser); return api.reviewsSeen() >= 2*n && reads >= 1 }) {
+	// the first read is held at its first page; the others wait for the one after it, the same read for both kinds
+	b, key := s.defaultBundle.Load(), eventWindowKey("", metav1.ListOptions{}, 500, "")
+	if !eventually(t, 5*time.Second, func() bool { return b.eventWindows.Waiting(key) == 2*n-1 }) {
+		waiting := b.eventWindows.Waiting(key)
 		api.release()
 		wg.Wait()
-		t.Fatalf("%d reviews, the shared read not started", api.reviewsSeen())
+		t.Fatalf("%d callers wait for the next read, want %d", waiting, 2*n-1)
 	}
-	time.Sleep(100 * time.Millisecond)
 	api.release()
 	wg.Wait()
 	distinctRows, distinctEvents := map[uintptr]bool{}, map[*corev1.Event]bool{}

@@ -243,8 +243,7 @@ func (s *Service) eventWindowFor(ctx context.Context, namespace string, opts met
 // sharedEventWindow is readEventWindow as kubeast:cache, one at a time per namespace, selector, type and limit for
 // everyone waiting (b.eventWindows): the run that answers a caller started after it asked.
 func (s *Service) sharedEventWindow(ctx context.Context, b *clientBundle, namespace string, opts metav1.ListOptions, limit int, eventType string) (*eventWindow, error) {
-	key := strings.Join([]string{namespace, opts.FieldSelector, opts.LabelSelector, eventType, strconv.Itoa(limit)}, "\x00")
-	w, _, err := b.eventWindows.Do(ctx, key, func(ctx context.Context) (*eventWindow, error) {
+	w, _, err := b.eventWindows.Do(ctx, eventWindowKey(namespace, opts, limit, eventType), func(ctx context.Context) (*eventWindow, error) {
 		// none of the caller's values but the record of its calls: kubeast:cache's own identity
 		plain, cancel := context.WithCancel(carryClusterCalls(context.Background(), ctx))
 		defer context.AfterFunc(ctx, cancel)()
@@ -264,4 +263,9 @@ func (s *Service) sharedEventWindow(ctx context.Context, b *clientBundle, namesp
 	}
 	accesstrail.Cached(ctx, "events of "+where+" (read as "+overviewCacheUser+")")
 	return w, nil
+}
+
+// eventWindowKey is the read of b.eventWindows that answers namespace, opts' selectors, eventType and limit.
+func eventWindowKey(namespace string, opts metav1.ListOptions, limit int, eventType string) string {
+	return strings.Join([]string{namespace, opts.FieldSelector, opts.LabelSelector, eventType, strconv.Itoa(limit)}, "\x00")
 }
