@@ -332,14 +332,14 @@ func (a *standIn) callerCalls() []apiCall {
 	return out
 }
 
-// callerReads are callerCalls and the lists of events made as kubeast:cache, which k8s-service makes once for everyone
-// whose own access check says they may list those events, in place of their own lists.
+// callerReads are callerCalls and the lists of events and of the Timeline's rollout kinds made as kubeast:cache, which
+// k8s-service makes once for everyone whose own access check says they may list them, in place of their own lists.
 func (a *standIn) callerReads() []apiCall {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	var out []apiCall
 	for _, c := range a.calls {
-		if c.user == signedInUser || (c.user == "kubeast:cache" && strings.HasSuffix(c.path, "/events")) {
+		if c.user == signedInUser || (c.user == "kubeast:cache" && readForEveryone.MatchString(c.path)) {
 			out = append(out, c)
 		}
 	}
@@ -374,6 +374,10 @@ func wideLists(calls []apiCall) []string {
 }
 
 var namespacePath = regexp.MustCompile(`/namespaces/([^/]+)`)
+
+// readForEveryone is the paths of the lists k8s-service makes once as kubeast:cache for everyone who may list them:
+// events, and the Deployments, ReplicaSets and ControllerRevisions of the Timeline's rollouts.
+var readForEveryone = regexp.MustCompile(`(/events|^/apis/apps/v1/(namespaces/[^/]+/)?(deployments|replicasets|controllerrevisions))$`)
 
 // namespacesReached are the namespaces the caller's calls went into, the namespace objects read by name among them.
 func namespacesReached(calls []apiCall) map[string]bool {
