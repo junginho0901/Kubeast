@@ -58,6 +58,11 @@ const changed = (change: (body: any) => void) => async (route: Route) => {
   await route.fulfill({ response, json: body })
 }
 
+// a read the page sent just before the test ended (a list asked again) is not answered after the page closes
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
+})
+
 test.describe('notice bands in every colour mode', () => {
   test('the no-permission band', async ({ page }, info) => {
     await page.route(/\/api\/v1\/cluster\/nodes(\?|$)/, (route) =>
