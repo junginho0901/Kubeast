@@ -4,6 +4,8 @@ import { fakeRender, fakeUnmount } from '@/testing/fakeHooks'
 // Typing the API key variable's name in Add Model asked the provider's model list once a letter (34 letters typed,
 // 35 requests), where the Base URL and CA fields wait 500 ms after the last key. The name waits with them now; a
 // provider picked or a saved model opened still asks at once, with its own key variable.
+// The Base URL and CA wait the same 500 ms, and a provider picked, a saved model opened or the form reset asked first
+// with the address and CA of the form before (an Azure model opened: once with no address); they are set at once too.
 
 const query = vi.hoisted(() => ({ asked: new Set<string>(), answers: new Map<string, unknown>() }))
 
@@ -128,5 +130,88 @@ describe('AI Models: the provider model list while the key variable is typed', (
     vi.advanceTimersByTime(500)
     render()
     expect(asked(), 'nothing more once the wait ends').toEqual([['gemini', 'KUBEAST_AI_KEY_GEMINI']])
+  })
+})
+
+const PEM = '-----BEGIN CERTIFICATE-----\nMIIBkubeasttest\n-----END CERTIFICATE-----\n'
+const AZURE: ModelConfigResponse = {
+  id: 8, name: 'azure', provider: 'azure', model: 'kubeast-deploy', base_url: 'https://kubeast-test.openai.azure.com/openai/v1/',
+  api_key_env: 'KUBEAST_AI_KEY_AZURE', api_key_secret_name: null, api_key_secret_key: null, extra_headers: {}, tls_verify: true,
+  ca_cert: PEM, options: null, enabled: true, is_default: false, tier: 'default', created_at: '', updated_at: '',
+}
+
+describe('AI Models: the provider model list with the address and CA of a provider picked, a model opened or the form reset', () => {
+  const asked = (list: ReturnType<typeof opened>) => list.mock.calls.map(([p]) => [p.provider, p.base_url, p.ca_cert])
+
+  it('asks a provider picked at once with its address and the CA in the field, and nothing more at 500 ms', () => {
+    const list = opened()
+    render().setFormCaCert(PEM)
+    render().handleProviderChange('ollama')
+    render()
+    const first = [['ollama', 'http://localhost:11434', PEM.trim()]]
+    expect(asked(list)).toEqual(first)
+    vi.advanceTimersByTime(500)
+    render()
+    expect(asked(list), 'nothing more once the wait ends').toEqual(first)
+  })
+
+  it('asks a saved Azure model at once with its own address and CA, never with the empty address before', () => {
+    const list = opened()
+    render().openEditForm(AZURE)
+    render()
+    const first = [['azure', AZURE.base_url, PEM.trim()]]
+    expect(asked(list)).toEqual(first)
+    vi.advanceTimersByTime(500)
+    render()
+    expect(asked(list), 'nothing more once the wait ends').toEqual(first)
+  })
+
+  it('asks Add opened over a saved model with the reset form, not with the address and CA of the model closed', () => {
+    const list = opened()
+    render().openEditForm(AZURE)
+    render()
+    vi.advanceTimersByTime(500)
+    render()
+    list.mockClear()
+    const form = render()
+    // the kept answers forgotten, so the reset form's own key asks again
+    query.asked.clear()
+    form.openCreateForm()
+    render()
+    const first = [['openai', undefined, undefined]]
+    expect(asked(list)).toEqual(first)
+    vi.advanceTimersByTime(500)
+    render()
+    expect(asked(list), 'nothing more once the wait ends').toEqual(first)
+  })
+
+  it('still asks 500 ms after the last key typed in Base URL or CA', () => {
+    const list = opened()
+    render().handleProviderChange('ollama')
+    render()
+    list.mockClear()
+    const url = 'http://ollama.kubeast.internal:11434'
+    for (let i = 1; i <= url.length; i++) {
+      vi.advanceTimersByTime(50)
+      render().setFormBaseUrl(url.slice(0, i))
+      expect(render().formBaseUrl, 'the field shows each letter at once').toBe(url.slice(0, i))
+    }
+    expect(list, 'nothing asked while typing').not.toHaveBeenCalled()
+    vi.advanceTimersByTime(499)
+    render()
+    expect(list, 'nothing asked before 500 ms').not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    render()
+    expect(asked(list)).toEqual([['ollama', url, undefined]])
+
+    list.mockClear()
+    render().setFormCaCert(PEM)
+    render()
+    vi.advanceTimersByTime(499)
+    render()
+    expect(list, 'a CA pasted waits too').not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    render()
+    expect(asked(list)).toEqual([['ollama', url, PEM.trim()]])
   })
 })
