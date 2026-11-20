@@ -3,7 +3,8 @@
 uvicorn cancels a request still running --timeout-graceful-shutdown (20 s, Dockerfile) after SIGTERM. A run cut there
 before its end began is ended right away (DatabaseService.close_cut_tool_approval: failed, masked, an ai.tool.interrupt
 row with end_reason shutdown) instead of at the first look past APPROVED_RUN_LIMIT_SECONDS; a run whose end began keeps
-that end. Both go in a task of their own behind asyncio.shield, since the request's cancel scope cancels each of its
+that end, and one cut while its approval was moving to `approved` is closed once that move has finished, if it made
+it (approving). These go in a task of their own behind asyncio.shield, since the request's cancel scope cancels each of its
 awaits again. The lifespan's end waits for them (settle, main.py): once it returns the event loop cancels what is left,
 and a run not closed by then is ended by that later look, as one a killed process left.
 """
@@ -49,6 +50,31 @@ def _hold(run: Run, step: Awaitable[Any], what: str) -> asyncio.Task:
 
     task.add_done_callback(done)
     return task
+
+
+async def approving(db: Any, approval_id: str, move: Awaitable[Any]) -> Any:
+    """The request's move of approval_id from `pending` to `approved` (move: the transition, which gives the row it
+    moved, or None when another press or end came first). A cancel while it is under way lets the move finish in a
+    task of its own: a row it moved is this request's run, cut before it began, and is closed as running closes one;
+    a row it did not move is left as it is."""
+    moving = asyncio.ensure_future(move)
+    try:
+        return await asyncio.shield(moving)
+    except asyncio.CancelledError:
+        run = Run(approval_id)
+        _open.add(run)
+        run.task = _hold(run, _close_if_moved(db, approval_id, moving), "close")
+        try:
+            await asyncio.shield(run.task)
+        except Exception:
+            pass  # logged when it ends
+        raise
+
+
+async def _close_if_moved(db: Any, approval_id: str, moving: "asyncio.Future[Any]") -> bool:
+    if await moving is None:
+        return False
+    return await db.close_cut_tool_approval(approval_id)
 
 
 @asynccontextmanager

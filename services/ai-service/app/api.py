@@ -466,7 +466,10 @@ async def approve_tool_approval(
     # One statement moves pending → approved; a second click, or two clicks
     # racing, finds the row no longer pending and stops here.
     pending = approval
-    approval = await db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=utcnow())
+    # A shutdown that cuts this move lets it finish and closes the run it made (approval_runs.approving).
+    approval = await approval_runs.approving(
+        db, approval.id, db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=utcnow()),
+    )
     if approval is None:
         refusal = HTTPException(status_code=409, detail="Approval is no longer pending")
         await _refused_decision_row("ai.tool.approve", refusal, approval_id, pending, request, authorization)
