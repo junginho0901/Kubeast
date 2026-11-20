@@ -254,7 +254,7 @@ export default function AccessReview() {
       </div>
 
       {viewId && viewed && (
-        <div className="shrink-0 rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-100 flex items-center justify-between gap-3" data-testid="access-review-snapshot-banner">
+        <div className="shrink-0 rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-200 flex items-center justify-between gap-3" data-testid="access-review-snapshot-banner">
           <span>
             <History className="inline w-4 h-4 mr-1" />
             {tr('accessReview.snapshot.viewing', 'Viewing the report as signed off on {{when}} by {{who}}.', { when: formatWhen(viewed.reviewed_at), who: viewed.reviewed_by_email })}
