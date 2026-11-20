@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/proxypath"
 	"github.com/prometheus/prometheus/promql/parser"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -72,11 +73,15 @@ func (s *Service) prometheusFlavor(ctx context.Context, src *promSource) string 
 		}
 		body = b
 	} else {
-		b, err := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().AbsPath(src.proxy.proxyBase()).Suffix("-", "healthy").Do(ctx).Raw()
+		rc, err := s.proxyClientCtx(ctx)
 		if err != nil {
 			return ""
 		}
-		body = b
+		a := proxyGet(ctx, rc.Get().AbsPath(src.proxy.proxyBase()).Suffix("-", "healthy"))
+		if a.err != nil {
+			return ""
+		}
+		body = a.body
 	}
 	switch text := string(body); {
 	case strings.Contains(text, "VictoriaMetrics"):
@@ -108,24 +113,31 @@ func (s *Service) promGetData(ctx context.Context, src *promSource, promPath str
 		body = b
 	} else {
 		sub, query, _ := strings.Cut(promPath, "?")
-		req := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().AbsPath(src.proxy.proxyBase()).Suffix(sub)
+		rc, err := s.proxyClientCtx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		req := rc.Get().AbsPath(src.proxy.proxyBase()).Suffix(sub)
 		params, _ := url.ParseQuery(query)
 		for k, vals := range params {
 			for _, v := range vals {
 				req = req.Param(k, v)
 			}
 		}
-		b, err := req.Do(ctx).Raw()
-		if err != nil {
+		a := proxyGet(ctx, req)
+		if a.err != nil {
 			switch {
-			case apierrors.IsForbidden(err), apierrors.IsUnauthorized(err):
-				return nil, err
-			case apierrors.IsNotFound(err), unsupportedPathError(err):
+			case a.clusterRefusal():
+				return nil, a.err
+			case a.cluster, a.storeOwnAuth(), proxypath.NotFollowed(a.err) != nil:
+				// the API server's 404 is the Service missing, not an API the store has not
+				return nil, promProxyError(src.proxy, a)
+			case a.code == http.StatusNotFound || unsupportedPathError(a.err):
 				return nil, fmt.Errorf("%w: %s", ErrPrometheusNotServed, sub)
 			}
-			return nil, fmt.Errorf("%w: %v", ErrPrometheusUpstream, err)
+			return nil, fmt.Errorf("%w: %v", ErrPrometheusUpstream, a.err)
 		}
-		body = b
+		body = a.body
 	}
 	var env struct {
 		Status string          `json:"status"`
