@@ -19,6 +19,7 @@ import {
 } from './gatewayHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface OpenDetailArgs {
   kind: string
@@ -98,29 +99,29 @@ export function GatewayTable({
             <tr>
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                  <SortButton>{tr('gatewaysPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                 </th>
               )}
               <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('gatewaysPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('class')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.class', 'Class Name')}{renderSortIcon('class')}</span>
+                <SortButton>{tr('gatewaysPage.table.class', 'Class Name')}{renderSortIcon('class')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.status', 'Conditions')}{renderSortIcon('status')}</span>
+                <SortButton>{tr('gatewaysPage.table.status', 'Conditions')}{renderSortIcon('status')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('listeners')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.listeners', 'Listeners')}{renderSortIcon('listeners')}</span>
+                <SortButton>{tr('gatewaysPage.table.listeners', 'Listeners')}{renderSortIcon('listeners')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('routes')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.attachedRoutes', 'Attached Routes')}{renderSortIcon('routes')}</span>
+                <SortButton>{tr('gatewaysPage.table.attachedRoutes', 'Attached Routes')}{renderSortIcon('routes')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addresses')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.addresses', 'Addresses')}{renderSortIcon('addresses')}</span>
+                <SortButton>{tr('gatewaysPage.table.addresses', 'Addresses')}{renderSortIcon('addresses')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewaysPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('gatewaysPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

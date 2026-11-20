@@ -20,6 +20,7 @@ import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide
 import { applyClusterRoleWatchEvent } from './clusterroles/clusterRoleWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 type SortKey = null | 'name' | 'rules' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -211,13 +212,13 @@ rules:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRolesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                  <SortButton>{tr('clusterRolesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('rules')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRolesPage.table.rules', 'Rules')}{renderSortIcon('rules')}</span>
+                  <SortButton>{tr('clusterRolesPage.table.rules', 'Rules')}{renderSortIcon('rules')}</SortButton>
                 </th>
                 <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRolesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                  <SortButton>{tr('clusterRolesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

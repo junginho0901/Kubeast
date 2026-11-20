@@ -16,6 +16,7 @@ import {
   type SortKey,
 } from './limitRangeHelpers'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface LimitRangeTableProps {
   pagedLimitRanges: LimitRangeInfo[]
@@ -74,26 +75,26 @@ export function LimitRangeTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => onSort('name')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('limitRanges.table.name', 'Name')}{renderSortIcon('name')}
-                </span>
+                </SortButton>
               </th>
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('limitRanges.table.namespace', 'Namespace')}{renderSortIcon('namespace')}
-                  </span>
+                  </SortButton>
                 </th>
               )}
               <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('types')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('limitRanges.table.types', 'Types')}{renderSortIcon('types')}
-                </span>
+                </SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('limitRanges.table.age', 'Age')}{renderSortIcon('age')}
-                </span>
+                </SortButton>
               </th>
             </tr>
           </thead>

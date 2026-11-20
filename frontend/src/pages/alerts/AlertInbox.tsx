@@ -32,6 +32,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
 import { keepSameRead } from '@/utils/keepSameRead'
 import { everyUntilRefused, unlessRefused } from '@/services/queryDefaults'
+import { openOnPress } from '@/components/openOnPress'
 
 // Alerts: every alert Alertmanager sent for the selected cluster (features.alertInvestigation's webhook), firing or
 // resolved, for whoever reads the cluster as a whole. Resolving is the alert rule's: the marks here (acknowledged,
@@ -324,7 +325,7 @@ export default function AlertInbox() {
                     key={r.id}
                     ref={idx === 0 ? firstRowRef : undefined}
                     className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                    onClick={() => open(r.id)}
+                    {...openOnPress(() => open(r.id))}
                     data-testid={`alert-row-${r.id}`}
                   >
                     <td className="py-3 px-4">

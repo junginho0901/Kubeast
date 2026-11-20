@@ -7,6 +7,7 @@ import { useResourceDetail } from '@/components/ResourceDetailContext'
 import type { DeviceClassItem } from '@/services/api'
 import { deviceClassToRawJson, formatAge, type SortKey } from './deviceClassesHelpers'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface Props {
   sortedDeviceClasses: DeviceClassItem[]
@@ -62,13 +63,13 @@ export default function DeviceClassesTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => onSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('deviceClassesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('deviceClassesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('selectors')}>
-                <span className="inline-flex items-center gap-1">{tr('deviceClassesPage.table.selectors', 'Selectors')}{renderSortIcon('selectors')}</span>
+                <SortButton>{tr('deviceClassesPage.table.selectors', 'Selectors')}{renderSortIcon('selectors')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => onSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('deviceClassesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('deviceClassesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

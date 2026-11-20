@@ -31,6 +31,7 @@ import { usersMatching } from './admin/adminListSearch'
 import { useDismiss } from '@/hooks/useDismiss'
 import { announceCreated } from '@/services/createdNoticeStore'
 import { CreatedNotice } from '@/components/CreatedNotice'
+import { SortButton } from '@/components/SortButton'
 
 const USER_COLUMNS = 6
 
@@ -491,16 +492,16 @@ export default function AdminUsers() {
           <thead ref={theadRef} className="bg-slate-800 text-slate-400">
             <tr className="text-left">
               <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('name')}>
-                {tr('adminUsers.table.name', 'Name')}{renderSortIcon('name')}
+                <SortButton className="text-left">{tr('adminUsers.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('email')}>
-                {tr('adminUsers.table.email', 'Email')}{renderSortIcon('email')}
+                <SortButton className="text-left">{tr('adminUsers.table.email', 'Email')}{renderSortIcon('email')}</SortButton>
               </th>
               <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('team')}>
-                {tr('adminUsers.table.team', 'Team')}{renderSortIcon('team')}
+                <SortButton className="text-left">{tr('adminUsers.table.team', 'Team')}{renderSortIcon('team')}</SortButton>
               </th>
               <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('role')}>
-                {tr('adminUsers.table.role', 'Role')}{renderSortIcon('role')}
+                <SortButton className="text-left">{tr('adminUsers.table.role', 'Role')}{renderSortIcon('role')}</SortButton>
               </th>
               <th className="px-4 py-3">{tr('adminUsers.table.password', 'Password')}</th>
               <th className="px-4 py-3">{tr('adminUsers.table.delete', 'Delete')}</th>

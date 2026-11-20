@@ -18,6 +18,7 @@ import {
 } from './ingressClassHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface OpenDetailArgs {
   kind: string
@@ -93,19 +94,19 @@ export function IngressClassTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('ingressClassesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('controller')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.controller', 'Controller')}{renderSortIcon('controller')}</span>
+                <SortButton>{tr('ingressClassesPage.table.controller', 'Controller')}{renderSortIcon('controller')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('default')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.default', 'Default')}{renderSortIcon('default')}</span>
+                <SortButton>{tr('ingressClassesPage.table.default', 'Default')}{renderSortIcon('default')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[310px] cursor-pointer" onClick={() => handleSort('parameters')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.parameters', 'Parameters')}{renderSortIcon('parameters')}</span>
+                <SortButton>{tr('ingressClassesPage.table.parameters', 'Parameters')}{renderSortIcon('parameters')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressClassesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('ingressClassesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

@@ -21,6 +21,7 @@ import { crdVersionsText } from './crdVersions'
 import { applyCRDWatchEvent } from './crdWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 type SortKey = null | 'name' | 'group' | 'version' | 'scope' | 'kind' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -240,22 +241,22 @@ spec:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                  <SortButton>{tr('crdPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.group', 'Group')}{renderSortIcon('group')}</span>
+                  <SortButton>{tr('crdPage.table.group', 'Group')}{renderSortIcon('group')}</SortButton>
                 </th>
                 <th className="col-optional text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('version')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.versions', 'Versions')}{renderSortIcon('version')}</span>
+                  <SortButton>{tr('crdPage.table.versions', 'Versions')}{renderSortIcon('version')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('scope')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.scope', 'Scope')}{renderSortIcon('scope')}</span>
+                  <SortButton>{tr('crdPage.table.scope', 'Scope')}{renderSortIcon('scope')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('kind')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.kind', 'Kind')}{renderSortIcon('kind')}</span>
+                  <SortButton>{tr('crdPage.table.kind', 'Kind')}{renderSortIcon('kind')}</SortButton>
                 </th>
                 <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                  <SortButton>{tr('crdPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

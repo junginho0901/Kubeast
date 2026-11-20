@@ -20,6 +20,7 @@ import {
 import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface OpenDetailArgs {
   kind: string
@@ -99,35 +100,35 @@ export function ReplicaSetTable({
             <tr>
               {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[140px]">{tr('replicasets.table.namespace', 'Namespace')}</th>}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('replicasets.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('current')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.current', 'Current')}{renderSortIcon('current')}</span>
+                <SortButton>{tr('replicasets.table.current', 'Current')}{renderSortIcon('current')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('desired')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.desired', 'Desired')}{renderSortIcon('desired')}</span>
+                <SortButton>{tr('replicasets.table.desired', 'Desired')}{renderSortIcon('desired')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('ready')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.ready', 'Ready')}{renderSortIcon('ready')}</span>
+                <SortButton>{tr('replicasets.table.ready', 'Ready')}{renderSortIcon('ready')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('available')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.available', 'Available')}{renderSortIcon('available')}</span>
+                <SortButton>{tr('replicasets.table.available', 'Available')}{renderSortIcon('available')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.status', 'Status')}{renderSortIcon('status')}</span>
+                <SortButton>{tr('replicasets.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
+                <SortButton>{tr('replicasets.table.containers', 'Containers')}{renderSortIcon('containers')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.images', 'Images')}{renderSortIcon('images')}</span>
+                <SortButton>{tr('replicasets.table.images', 'Images')}{renderSortIcon('images')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('selector')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.selector', 'Selector')}{renderSortIcon('selector')}</span>
+                <SortButton>{tr('replicasets.table.selector', 'Selector')}{renderSortIcon('selector')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[160px]">{tr('replicasets.table.owner', 'Owner')}</th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('replicasets.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('replicasets.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

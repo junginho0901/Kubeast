@@ -21,6 +21,7 @@ import {
 } from './jobHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface OpenDetailArgs {
   kind: string
@@ -100,25 +101,25 @@ export function JobTable({
             <tr>
               {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[140px]">{tr('jobs.table.namespace', 'Namespace')}</th>}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('jobs.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('completions')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.completions', 'Completions')}{renderSortIcon('completions')}</span>
+                <SortButton>{tr('jobs.table.completions', 'Completions')}{renderSortIcon('completions')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.status', 'Status')}{renderSortIcon('status')}</span>
+                <SortButton>{tr('jobs.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('duration')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.duration', 'Duration')}{renderSortIcon('duration')}</span>
+                <SortButton>{tr('jobs.table.duration', 'Duration')}{renderSortIcon('duration')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
+                <SortButton>{tr('jobs.table.containers', 'Containers')}{renderSortIcon('containers')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.images', 'Images')}{renderSortIcon('images')}</span>
+                <SortButton>{tr('jobs.table.images', 'Images')}{renderSortIcon('images')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('jobs.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

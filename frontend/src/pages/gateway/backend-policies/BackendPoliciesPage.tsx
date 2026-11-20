@@ -18,6 +18,7 @@ import {
 import { useBackendPoliciesData, type BackendPolicyConfig } from './useBackendPoliciesData'
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface PageStrings {
   title: string
@@ -220,20 +221,20 @@ ${yamlBodyTemplate}`
               <tr>
                 {showNamespaceColumn && (
                   <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                    <span className="inline-flex items-center gap-1">{strings.tableNamespace}{renderSortIcon('namespace')}</span>
+                    <SortButton>{strings.tableNamespace}{renderSortIcon('namespace')}</SortButton>
                   </th>
                 )}
                 <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{strings.tableName}{renderSortIcon('name')}</span>
+                  <SortButton>{strings.tableName}{renderSortIcon('name')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('targetRef')}>
-                  <span className="inline-flex items-center gap-1">{strings.tableTargetRef}{renderSortIcon('targetRef')}</span>
+                  <SortButton>{strings.tableTargetRef}{renderSortIcon('targetRef')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[140px]">
                   {strings.tableStatus}
                 </th>
                 <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{strings.tableAge}{renderSortIcon('age')}</span>
+                  <SortButton>{strings.tableAge}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

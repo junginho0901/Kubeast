@@ -22,6 +22,7 @@ import {
 } from './pvHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface OpenDetailArgs {
   kind: string
@@ -97,37 +98,37 @@ export function PVTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('pvs.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.status', 'Status')}{renderSortIcon('status')}</span>
+                <SortButton>{tr('pvs.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('storageClass')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.storageClass', 'StorageClass')}{renderSortIcon('storageClass')}</span>
+                <SortButton>{tr('pvs.table.storageClass', 'StorageClass')}{renderSortIcon('storageClass')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('capacity')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.capacity', 'Capacity')}{renderSortIcon('capacity')}</span>
+                <SortButton>{tr('pvs.table.capacity', 'Capacity')}{renderSortIcon('capacity')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('accessModes')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.accessModes', 'Access Modes')}{renderSortIcon('accessModes')}</span>
+                <SortButton>{tr('pvs.table.accessModes', 'Access Modes')}{renderSortIcon('accessModes')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('reclaimPolicy')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.reclaimPolicy', 'Reclaim Policy')}{renderSortIcon('reclaimPolicy')}</span>
+                <SortButton>{tr('pvs.table.reclaimPolicy', 'Reclaim Policy')}{renderSortIcon('reclaimPolicy')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('claim')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.claim', 'Claim')}{renderSortIcon('claim')}</span>
+                <SortButton>{tr('pvs.table.claim', 'Claim')}{renderSortIcon('claim')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('volumeMode')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.volumeMode', 'Volume Mode')}{renderSortIcon('volumeMode')}</span>
+                <SortButton>{tr('pvs.table.volumeMode', 'Volume Mode')}{renderSortIcon('volumeMode')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('source')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.source', 'Source')}{renderSortIcon('source')}</span>
+                <SortButton>{tr('pvs.table.source', 'Source')}{renderSortIcon('source')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('reason')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.reason', 'Reason')}{renderSortIcon('reason')}</span>
+                <SortButton>{tr('pvs.table.reason', 'Reason')}{renderSortIcon('reason')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('pvs.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('pvs.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

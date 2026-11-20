@@ -20,6 +20,7 @@ import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide
 import { applyRuntimeClassWatchEvent } from './runtimeclasses/runtimeClassWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 type SortKey = null | 'name' | 'handler' | 'age'
 
@@ -260,19 +261,19 @@ handler: runc
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 w-[300px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('runtimeClasses.table.name', 'Name')}{renderSortIcon('name')}
-                  </span>
+                  </SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('handler')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('runtimeClasses.table.handler', 'Handler')}{renderSortIcon('handler')}
-                  </span>
+                  </SortButton>
                 </th>
                 <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('runtimeClasses.table.age', 'Age')}{renderSortIcon('age')}
-                  </span>
+                  </SortButton>
                 </th>
               </tr>
             </thead>

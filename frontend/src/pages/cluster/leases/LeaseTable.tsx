@@ -10,6 +10,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './leaseHelpers'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface LeaseTableProps {
   pagedLeases: LeaseInfo[]
@@ -69,30 +70,30 @@ export function LeaseTable({
             <tr>
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('leases.table.namespace', 'Namespace')}{renderSortIcon('namespace')}
-                  </span>
+                  </SortButton>
                 </th>
               )}
               <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => onSort('name')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('leases.table.name', 'Name')}{renderSortIcon('name')}
-                </span>
+                </SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('holder')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('leases.table.holder', 'Holder')}{renderSortIcon('holder')}
-                </span>
+                </SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('duration')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('leases.table.duration', 'Duration (s)')}{renderSortIcon('duration')}
-                </span>
+                </SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('leases.table.age', 'Age')}{renderSortIcon('age')}
-                </span>
+                </SortButton>
               </th>
             </tr>
           </thead>

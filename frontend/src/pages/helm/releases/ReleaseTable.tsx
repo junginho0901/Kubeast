@@ -14,6 +14,7 @@ import {
   type SortKey,
   type SortDir,
 } from './releaseHelpers'
+import { SortButton } from '@/components/SortButton'
 
 interface Props {
   paged: HelmReleaseSummary[]
@@ -76,44 +77,44 @@ export default function ReleaseTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="col-low text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('namespace')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {t('helmReleases.table.namespace')}{renderSortIcon('namespace')}
-                </span>
+                </SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('name')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {t('helmReleases.table.name')}{renderSortIcon('name')}
-                </span>
+                </SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => onSort('revision')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {t('helmReleases.table.revision')}{renderSortIcon('revision')}
-                </span>
+                </SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('status')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {t('helmReleases.table.status')}{renderSortIcon('status')}
-                </span>
+                </SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => onSort('chart')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {t('helmReleases.table.chart')}{renderSortIcon('chart')}
-                </span>
+                </SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('chartVersion')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {t('helmReleases.table.chartVersion')}{renderSortIcon('chartVersion')}
-                </span>
+                </SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('appVersion')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {t('helmReleases.table.appVersion')}{renderSortIcon('appVersion')}
-                </span>
+                </SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => onSort('updated')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {t('helmReleases.table.updated')}{renderSortIcon('updated')}
-                </span>
+                </SortButton>
               </th>
             </tr>
           </thead>

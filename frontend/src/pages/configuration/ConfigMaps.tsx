@@ -24,6 +24,7 @@ import { applyConfigMapWatchEvent } from './configmaps/configMapWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 type SortKey = null | 'name' | 'namespace' | 'dataCount' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -277,17 +278,17 @@ data:
               <tr>
                 {showNamespaceColumn && (
                   <th className="col-low text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                    <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                    <SortButton>{tr('configMapsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                   </th>
                 )}
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                  <SortButton>{tr('configMapsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('dataCount')}>
-                  <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.data', 'Data')}{renderSortIcon('dataCount')}</span>
+                  <SortButton>{tr('configMapsPage.table.data', 'Data')}{renderSortIcon('dataCount')}</SortButton>
                 </th>
                 <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                  <SortButton>{tr('configMapsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

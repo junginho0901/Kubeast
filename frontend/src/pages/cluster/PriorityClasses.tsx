@@ -20,6 +20,7 @@ import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide
 import { applyPriorityClassWatchEvent } from './priorityclasses/priorityClassWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 type SortKey = null | 'name' | 'value' | 'globalDefault' | 'preemptionPolicy' | 'age'
 
@@ -279,29 +280,29 @@ description: "Sample priority class"
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('priorityClasses.table.name', 'Name')}{renderSortIcon('name')}
-                  </span>
+                  </SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('value')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('priorityClasses.table.value', 'Value')}{renderSortIcon('value')}
-                  </span>
+                  </SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('globalDefault')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('priorityClasses.table.globalDefault', 'Global Default')}{renderSortIcon('globalDefault')}
-                  </span>
+                  </SortButton>
                 </th>
                 <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('preemptionPolicy')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('priorityClasses.table.preemptionPolicy', 'Preemption Policy')}{renderSortIcon('preemptionPolicy')}
-                  </span>
+                  </SortButton>
                 </th>
                 <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('priorityClasses.table.age', 'Age')}{renderSortIcon('age')}
-                  </span>
+                  </SortButton>
                 </th>
               </tr>
             </thead>

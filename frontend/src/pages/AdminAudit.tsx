@@ -21,6 +21,7 @@ import { keepSameRead } from '@/utils/keepSameRead'
 import { useConfirm } from '@/services/confirm'
 import { ActionFailure } from '@/components/ActionFailure'
 import { useDownload } from '@/hooks/useDownload'
+import { openOnPress } from '@/components/openOnPress'
 
 const SERVICES = ['', 'auth', 'k8s', 'helm', 'ai', 'admin']
 const RESULTS = ['', 'success', 'failure']
@@ -579,7 +580,7 @@ interface AuditRowProps {
   playLabel: string
 }
 
-function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTime, onPlay, playLabel }: AuditRowProps) {
+export function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTime, onPlay, playLabel }: AuditRowProps) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
   // kubectl's kind/name form: a bare ID such as a role's "589" says nothing without its type
@@ -595,7 +596,8 @@ function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTime, onP
         className={`border-t border-slate-700 hover:bg-slate-800/50 cursor-pointer ${
           entry.Result === 'failure' ? 'bg-red-950/20' : ''
         }`}
-        onClick={onToggle}
+        {...openOnPress(onToggle)}
+        aria-expanded={expanded}
       >
         <td className="px-3 py-2 text-slate-300 whitespace-nowrap" title={utcTitle(entry.CreatedAt)}>{fmtTime(entry.CreatedAt)}</td>
         <td className="px-3 py-2 text-slate-200"><span className="block max-w-[170px] truncate" title={entry.ActorEmail || undefined}>{entry.ActorEmail || '-'}</span></td>

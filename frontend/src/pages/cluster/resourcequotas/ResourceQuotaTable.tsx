@@ -10,6 +10,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './resourceQuotaHelpers'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface ResourceQuotaTableProps {
   pagedResourceQuotas: ResourceQuotaInfo[]
@@ -68,26 +69,26 @@ export function ResourceQuotaTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => onSort('name')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('resourceQuotas.table.name', 'Name')}{renderSortIcon('name')}
-                </span>
+                </SortButton>
               </th>
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">
+                  <SortButton>
                     {tr('resourceQuotas.table.namespace', 'Namespace')}{renderSortIcon('namespace')}
-                  </span>
+                  </SortButton>
                 </th>
               )}
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('requests')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('resourceQuotas.table.requests', 'Request')}{renderSortIcon('requests')}
-                </span>
+                </SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('resourceQuotas.table.age', 'Age')}{renderSortIcon('age')}
-                </span>
+                </SortButton>
               </th>
             </tr>
           </thead>

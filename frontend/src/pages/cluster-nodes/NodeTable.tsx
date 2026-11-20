@@ -7,6 +7,7 @@ import { formatAge, getStatusColor } from './clusterNodeHelpers'
 import type { NodeInfo, NodeMetric, SortKey, SortDir } from './clusterNodeHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface Props {
   pagedNodes: NodeInfo[]
@@ -65,31 +66,31 @@ export default function NodeTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => onSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('nodes.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('nodes.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('nodes.table.status', 'Status')}{renderSortIcon('status')}</span>
+                <SortButton>{tr('nodes.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('roles')}>
-                <span className="inline-flex items-center gap-1">{tr('nodes.table.roles', 'Roles')}{renderSortIcon('roles')}</span>
+                <SortButton>{tr('nodes.table.roles', 'Roles')}{renderSortIcon('roles')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('cpu')}>
-                <span className="inline-flex items-center gap-1">{tr('nodes.table.cpu', 'CPU')}{renderSortIcon('cpu')}</span>
+                <SortButton>{tr('nodes.table.cpu', 'CPU')}{renderSortIcon('cpu')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('memory')}>
-                <span className="inline-flex items-center gap-1">{tr('nodes.table.memory', 'Memory')}{renderSortIcon('memory')}</span>
+                <SortButton>{tr('nodes.table.memory', 'Memory')}{renderSortIcon('memory')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('version')}>
-                <span className="inline-flex items-center gap-1">{tr('nodes.table.version', 'Version')}{renderSortIcon('version')}</span>
+                <SortButton>{tr('nodes.table.version', 'Version')}{renderSortIcon('version')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('internal_ip')}>
-                <span className="inline-flex items-center gap-1">{tr('nodes.table.internalIp', 'Internal IP')}{renderSortIcon('internal_ip')}</span>
+                <SortButton>{tr('nodes.table.internalIp', 'Internal IP')}{renderSortIcon('internal_ip')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('external_ip')}>
-                <span className="inline-flex items-center gap-1">{tr('nodes.table.externalIp', 'External IP')}{renderSortIcon('external_ip')}</span>
+                <SortButton>{tr('nodes.table.externalIp', 'External IP')}{renderSortIcon('external_ip')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => onSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('nodes.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('nodes.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

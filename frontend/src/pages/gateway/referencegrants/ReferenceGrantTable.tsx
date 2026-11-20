@@ -21,6 +21,7 @@ import {
 } from './referenceGrantHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface OpenDetailArgs {
   kind: string
@@ -100,20 +101,20 @@ export function ReferenceGrantTable({
             <tr>
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">{tr('referenceGrantsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                  <SortButton>{tr('referenceGrantsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                 </th>
               )}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('referenceGrantsPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('referenceGrantsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('from')}>
-                <span className="inline-flex items-center gap-1">{tr('referenceGrantsPage.table.from', 'From')}{renderSortIcon('from')}</span>
+                <SortButton>{tr('referenceGrantsPage.table.from', 'From')}{renderSortIcon('from')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('to')}>
-                <span className="inline-flex items-center gap-1">{tr('referenceGrantsPage.table.to', 'To')}{renderSortIcon('to')}</span>
+                <SortButton>{tr('referenceGrantsPage.table.to', 'To')}{renderSortIcon('to')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('referenceGrantsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('referenceGrantsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

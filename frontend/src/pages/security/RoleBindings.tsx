@@ -22,6 +22,7 @@ import { applyRoleBindingWatchEvent } from './rolebindings/roleBindingWatchNorma
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 type SortKey = null | 'name' | 'namespace' | 'roleRef' | 'subjects' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -271,20 +272,20 @@ subjects:
               <tr>
                 {showNamespaceColumn && (
                   <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                    <span className="inline-flex items-center gap-1">{tr('roleBindingsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                    <SortButton>{tr('roleBindingsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                   </th>
                 )}
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('roleBindingsPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                  <SortButton>{tr('roleBindingsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('roleRef')}>
-                  <span className="inline-flex items-center gap-1">{tr('roleBindingsPage.table.roleRef', 'Role Ref')}{renderSortIcon('roleRef')}</span>
+                  <SortButton>{tr('roleBindingsPage.table.roleRef', 'Role Ref')}{renderSortIcon('roleRef')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('subjects')}>
-                  <span className="inline-flex items-center gap-1">{tr('roleBindingsPage.table.subjects', 'Subjects')}{renderSortIcon('subjects')}</span>
+                  <SortButton>{tr('roleBindingsPage.table.subjects', 'Subjects')}{renderSortIcon('subjects')}</SortButton>
                 </th>
                 <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('roleBindingsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                  <SortButton>{tr('roleBindingsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

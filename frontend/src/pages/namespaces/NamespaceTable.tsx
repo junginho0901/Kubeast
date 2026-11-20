@@ -7,6 +7,7 @@ import { formatRelative, getStatusColor } from './namespaceHelpers'
 import type { NamespaceInfo, SortKey, SortDir } from './namespaceHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface Props {
   pagedNamespaces: NamespaceInfo[]
@@ -63,22 +64,22 @@ export default function NamespaceTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               <th className="text-left py-3 px-4 w-[40%] cursor-pointer" onClick={() => onSort('name')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('namespaces.table.name', 'Name')}{renderSortIcon('name')}
-                </span>
+                </SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => onSort('status')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('namespaces.table.status', 'Status')}{renderSortIcon('status')}
-                </span>
+                </SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[30%]">
                 {tr('namespaces.table.labels', 'Labels')}
               </th>
               <th className="col-low text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => onSort('age')}>
-                <span className="inline-flex items-center gap-1">
+                <SortButton>
                   {tr('namespaces.table.age', 'Age')}{renderSortIcon('age')}
-                </span>
+                </SortButton>
               </th>
             </tr>
           </thead>

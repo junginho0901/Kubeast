@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation, Trans } from 'react-i18next'
 import { api } from '@/services/api'
@@ -17,6 +17,8 @@ import { classifyReadFailure, failureFields } from '@/utils/aiContext/readFailur
 import { policyResultTarget } from '@/utils/detailTargets'
 import { formatTime, utcTitle } from '@/utils/time'
 import { keepSameRead } from '@/utils/keepSameRead'
+import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 // Security → Policy Reports: what the cluster's policy engine (Kyverno, Trivy Operator, …) wrote into
@@ -227,15 +229,19 @@ export default function PolicyReports() {
 
   const openRow = (r: PolicyReportResult) => {
     const target = policyResultTarget(r)
-    if (target) openDetail(target)
+    return target ? () => openDetail(target) : null
   }
+  // a policy or namespace row shows its results: the row leaves with its tab, so the focus goes to the Results tab
+  const resultsTab = useRef<HTMLButtonElement>(null)
   const showPolicy = (p: PolicyReportPolicyRow) => {
     setPolicyFilter(policyKey(p))
     setTab('results')
+    resultsTab.current?.focus()
   }
   const showNamespace = (ns: string) => {
     setNamespace(ns)
     setTab('results')
+    resultsTab.current?.focus()
   }
   const resultLabel = (v: string) => tr(`policyReports.result.${v}`, v)
   const columnCount = tab === 'policies' ? 10 : tab === 'namespaces' ? 7 : 8
@@ -244,11 +250,12 @@ export default function PolicyReports() {
   const errorDetail = ((tab === 'results' ? resultsQuery.error : summaryQuery.error) as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
   const sortHeader = (key: NonNullable<SortKey>, label: string, extra = '', align = 'text-left') => (
     <th className={`${extra} ${align} py-3 px-4 cursor-pointer whitespace-nowrap`} onClick={() => handleSort(key)}>
-      <span className="inline-flex items-center gap-1">{label}{renderSortIcon(key)}</span>
+      <SortButton>{label}{renderSortIcon(key)}</SortButton>
     </th>
   )
   const tabButton = (value: Tab, label: string) => (
     <button
+      ref={value === 'results' ? resultsTab : undefined}
       type="button"
       role="tab"
       aria-selected={tab === value}
@@ -449,7 +456,7 @@ export default function PolicyReports() {
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {tab === 'policies' && pagedPolicies.map((r, idx) => (
-                    <tr ref={idx === 0 ? firstRowRef : undefined} key={policyKey(r)} data-testid="policy-report-row" className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => showPolicy(r)}>
+                    <tr ref={idx === 0 ? firstRowRef : undefined} key={policyKey(r)} data-testid="policy-report-row" className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" {...openOnPress(() => showPolicy(r))}>
                       <td className="py-3 px-4 font-medium text-ink"><span className="block truncate" title={r.policy}>{r.policy}</span></td>
                       <td className="col-optional py-3 px-4 text-xs"><span className="block truncate" title={r.category}>{r.category || '-'}</span></td>
                       <td className="py-3 px-4 text-xs">{r.severity || '-'}</td>
@@ -459,14 +466,16 @@ export default function PolicyReports() {
                     </tr>
                   ))}
                   {tab === 'namespaces' && pagedNamespaces.map((r, idx) => (
-                    <tr ref={idx === 0 ? firstRowRef : undefined} key={r.namespace || '(cluster)'} data-testid="policy-report-row" className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => r.namespace && showNamespace(r.namespace)}>
+                    <tr ref={idx === 0 ? firstRowRef : undefined} key={r.namespace || '(cluster)'} data-testid="policy-report-row" className={`text-slate-200 hover:bg-slate-800/60 ${r.namespace ? 'cursor-pointer' : ''}`} {...(r.namespace ? openOnPress(() => showNamespace(r.namespace)) : {})}>
                       <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{r.namespace || tr('policyReports.clusterScope', 'Cluster-scoped')}</span></td>
                       <td className="py-3 px-4 text-right text-xs font-mono">{r.policies}</td>
                       {countCells(r)}
                     </tr>
                   ))}
-                  {tab === 'results' && pagedResults.map((r, idx) => (
-                    <tr ref={idx === 0 ? firstRowRef : undefined} key={`${r.report}/${r.policy}/${r.rule}/${r.name}/${idx}`} data-testid="policy-report-row" className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openRow(r)}>
+                  {tab === 'results' && pagedResults.map((r, idx) => {
+                    const onOpen = openRow(r)
+                    return (
+                    <tr ref={idx === 0 ? firstRowRef : undefined} key={`${r.report}/${r.policy}/${r.rule}/${r.name}/${idx}`} data-testid="policy-report-row" className={`text-slate-200 hover:bg-slate-800/60 ${onOpen ? 'cursor-pointer' : ''}`} {...(onOpen ? openOnPress(onOpen) : {})}>
                       <td className="py-3 px-4"><span className={`badge ${RESULT_BADGE[r.result] || 'badge-neutral'}`} data-testid="policy-report-result">{resultLabel(r.result)}</span></td>
                       <td className="py-3 px-4 text-xs font-medium text-ink"><span className="block truncate" title={r.policy}>{r.policy}</span></td>
                       <td className="py-3 px-4 text-xs font-mono">
@@ -481,7 +490,8 @@ export default function PolicyReports() {
                       <td className="col-optional py-3 px-4 text-xs font-mono"><span className="block truncate" title={r.rule}>{r.rule || '-'}</span></td>
                       <td className="col-low py-3 px-4 text-xs font-mono whitespace-nowrap" title={r.timestamp ? utcTitle(r.timestamp) : undefined}>{r.timestamp ? formatTime(r.timestamp) : '-'}</td>
                     </tr>
-                  ))}
+                    )
+                  })}
                   {isLoading && (
                     <tr>
                       <td colSpan={columnCount} className="py-10 px-4 text-center text-slate-400">

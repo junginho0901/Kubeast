@@ -20,6 +20,7 @@ import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide
 import { applyClusterRoleBindingWatchEvent } from './rolebindings/roleBindingWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 type SortKey = null | 'name' | 'roleRef' | 'subjects' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -218,16 +219,16 @@ subjects:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRoleBindingsPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                  <SortButton>{tr('clusterRoleBindingsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('roleRef')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRoleBindingsPage.table.roleRef', 'Role Ref')}{renderSortIcon('roleRef')}</span>
+                  <SortButton>{tr('clusterRoleBindingsPage.table.roleRef', 'Role Ref')}{renderSortIcon('roleRef')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('subjects')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRoleBindingsPage.table.subjects', 'Subjects')}{renderSortIcon('subjects')}</span>
+                  <SortButton>{tr('clusterRoleBindingsPage.table.subjects', 'Subjects')}{renderSortIcon('subjects')}</SortButton>
                 </th>
                 <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('clusterRoleBindingsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                  <SortButton>{tr('clusterRoleBindingsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

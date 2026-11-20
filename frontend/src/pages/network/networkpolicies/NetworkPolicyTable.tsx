@@ -20,6 +20,7 @@ import {
 } from './networkPolicyHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface OpenDetailArgs {
   kind: string
@@ -99,29 +100,29 @@ export function NetworkPolicyTable({
             <tr>
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                  <SortButton>{tr('networkPoliciesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                 </th>
               )}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('networkPoliciesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('podSelector')}>
-                <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.podSelector', 'Pod Selector')}{renderSortIcon('podSelector')}</span>
+                <SortButton>{tr('networkPoliciesPage.table.podSelector', 'Pod Selector')}{renderSortIcon('podSelector')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('types')}>
-                <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.types', 'Types')}{renderSortIcon('types')}</span>
+                <SortButton>{tr('networkPoliciesPage.table.types', 'Types')}{renderSortIcon('types')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('ingressRules')}>
-                <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.ingressRules', 'Ingress')}{renderSortIcon('ingressRules')}</span>
+                <SortButton>{tr('networkPoliciesPage.table.ingressRules', 'Ingress')}{renderSortIcon('ingressRules')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('egressRules')}>
-                <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.egressRules', 'Egress')}{renderSortIcon('egressRules')}</span>
+                <SortButton>{tr('networkPoliciesPage.table.egressRules', 'Egress')}{renderSortIcon('egressRules')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('defaultDeny')}>
-                <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.defaultDeny', 'Default Deny')}{renderSortIcon('defaultDeny')}</span>
+                <SortButton>{tr('networkPoliciesPage.table.defaultDeny', 'Default Deny')}{renderSortIcon('defaultDeny')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('networkPoliciesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('networkPoliciesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

@@ -20,6 +20,7 @@ import {
 } from './ingressHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 interface OpenDetailArgs {
   kind: string
@@ -99,26 +100,26 @@ export function IngressTable({
             <tr>
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                  <SortButton>{tr('ingressesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                 </th>
               )}
               <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <SortButton>{tr('ingressesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('class')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.class', 'Class')}{renderSortIcon('class')}</span>
+                <SortButton>{tr('ingressesPage.table.class', 'Class')}{renderSortIcon('class')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('hosts')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.hosts', 'Hosts')}{renderSortIcon('hosts')}</span>
+                <SortButton>{tr('ingressesPage.table.hosts', 'Hosts')}{renderSortIcon('hosts')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('backends')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.routes', 'Routes')}{renderSortIcon('backends')}</span>
+                <SortButton>{tr('ingressesPage.table.routes', 'Routes')}{renderSortIcon('backends')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('addresses')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.addresses', 'Address')}{renderSortIcon('addresses')}</span>
+                <SortButton>{tr('ingressesPage.table.addresses', 'Address')}{renderSortIcon('addresses')}</SortButton>
               </th>
               <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('ingressesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <SortButton>{tr('ingressesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

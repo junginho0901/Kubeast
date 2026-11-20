@@ -24,6 +24,7 @@ import { applyServiceAccountWatchEvent } from './serviceaccounts/serviceAccountW
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
 
 type SortKey = null | 'name' | 'namespace' | 'secrets' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -286,17 +287,17 @@ metadata:
               <tr>
                 {showNamespaceColumn && (
                   <th className="col-low text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                    <span className="inline-flex items-center gap-1">{tr('serviceAccountsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                    <SortButton>{tr('serviceAccountsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                   </th>
                 )}
                 <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('serviceAccountsPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                  <SortButton>{tr('serviceAccountsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('secrets')}>
-                  <span className="inline-flex items-center gap-1">{tr('serviceAccountsPage.table.secrets', 'Secrets')}{renderSortIcon('secrets')}</span>
+                  <SortButton>{tr('serviceAccountsPage.table.secrets', 'Secrets')}{renderSortIcon('secrets')}</SortButton>
                 </th>
                 <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('serviceAccountsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                  <SortButton>{tr('serviceAccountsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>
