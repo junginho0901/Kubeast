@@ -270,7 +270,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 
 | Value | Default | Stage | Not run yet, or Tested |
 | --- | --- | --- | --- |
-| `podShutdown.preStopSeconds` | 5 | beta | Tested: a server-side dry run of the default install on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off), where the API server refused the seven Deployments with a preStop wait (`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`) and took all 58 objects with `0` |
+| `podShutdown.preStopSeconds` | 5 | beta | Tested: a server-side dry run of the default install on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off), where the API server refused the seven Deployments with a preStop wait (`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`) and took all 58 objects with `0`. That run had `streams.enabled` off: with it on, `k8s-service-stream` has a preStop `sleep` of `streams.preStopSeconds` whatever `podShutdown.preStopSeconds` is, so streams need Kubernetes 1.30 or later and, below 1.33, a `streams.preStopSeconds` of 1 or more ([cluster requirements](cluster-requirements.md) §15) |
 | `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | The users turned off in a test install |
 | `replicas.k8sService` and `replicas.toolServer` above 1 | 1 | alpha | The sizes for 2 and 3 k8s-service pods |
 | `autoscaling.<service>` | off | alpha | Tested: on EKS 1.35, HPAs on k8s-service and the gateway went from 2 to 3 pods and back, and were turned on and off, with no request through the load balancer failing |

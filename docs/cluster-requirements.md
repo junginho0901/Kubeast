@@ -540,7 +540,7 @@ service:
 | What | Requirement |
 | --- | --- |
 | User namespaces | `podSecurity.hostUsers: false` (default) needs Kubernetes 1.33 or later and a node kernel that supports it (6.3 or later). Otherwise `true` |
-| Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service, but for the bundled PostgreSQL and Redis, wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection to a pod that has exited; `0` leaves the wait out |
+| Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service, but for the bundled PostgreSQL and Redis, wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection to a pod that has exited; `0` leaves the wait out. With `streams.enabled`, `k8s-service-stream` waits `streams.preStopSeconds` (10 s) the same way whatever `podShutdown.preStopSeconds` is, so it needs Kubernetes 1.30 or later and, below 1.33, a `streams.preStopSeconds` of 1 or more (Kubernetes takes a `sleep` of 0 from 1.33 on) |
 | Storage | With the built-in PostgreSQL, a PVC — the default StorageClass or `postgresql.storageClassName` |
 | Exposure | NodePort (default), LoadBalancer, or an Ingress controller (`ingress.enabled`) |
 | A proxy or load balancer in front | An idle timeout above 30 s (AWS ALB's default is 60 s). While quiet, a live list, terminal, node shell, followed log and AI answer send something every 25 s and the Helm releases stream every 30 s — a WebSocket ping, an SSE comment line — so they stay open; the gateway gives them 600 to 3 600 s itself |

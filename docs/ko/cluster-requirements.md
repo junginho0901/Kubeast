@@ -556,7 +556,7 @@ service:
 | 항목 | 조건 |
 | --- | --- |
 | 사용자 네임스페이스 | `podSecurity.hostUsers: false`(기본)를 쓰려면 Kubernetes 1.33 이상과 이를 지원하는 노드 커널(6.3 이상)이 필요합니다. 조건이 맞지 않으면 `true` |
-| 파드 종료 | Kubernetes 1.30 이상: 차트의 Service 뒤 파드는(번들 PostgreSQL과 Redis는 빼고) 기본 `preStop` `sleep` 동작(1.30 베타·기본 켜짐, 1.34 GA)으로 SIGTERM 전에 `podShutdown.preStopSeconds`(5초) 기다리므로, 롤링 업데이트 중 이미 종료한 파드로 새 연결이 가지 않습니다. `0`이면 기다리지 않습니다 |
+| 파드 종료 | Kubernetes 1.30 이상: 차트의 Service 뒤 파드는(번들 PostgreSQL과 Redis는 빼고) 기본 `preStop` `sleep` 동작(1.30 베타·기본 켜짐, 1.34 GA)으로 SIGTERM 전에 `podShutdown.preStopSeconds`(5초) 기다리므로, 롤링 업데이트 중 이미 종료한 파드로 새 연결이 가지 않습니다. `0`이면 기다리지 않습니다. `streams.enabled`를 켜면 `k8s-service-stream`은 `podShutdown.preStopSeconds`와 상관없이 같은 방식으로 `streams.preStopSeconds`(10초)를 기다리므로 Kubernetes 1.30 이상이 필요하고, 1.33 아래에서는 `streams.preStopSeconds`를 1 이상으로 둡니다(Kubernetes는 1.33부터 `sleep` 0을 받습니다) |
 | 저장소 | 내장 PostgreSQL을 쓰면 PVC — 기본 StorageClass 또는 `postgresql.storageClassName` |
 | 노출 | NodePort(기본)·LoadBalancer, 또는 Ingress 컨트롤러(`ingress.enabled`) |
 | 앞단 프록시·로드 밸런서 | 유휴 시간 제한 30초 초과(AWS ALB 기본값은 60초). 조용한 동안 실시간 목록·터미널·노드 셸·로그 실시간 보기·AI 답은 25초마다, Helm 릴리스 스트림은 30초마다 무언가를 보내므로(WebSocket 핑, SSE 주석 줄) 열린 채 유지됩니다. 게이트웨이 자체는 이들에 600~3 600초를 줍니다 |
