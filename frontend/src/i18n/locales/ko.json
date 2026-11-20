@@ -3184,7 +3184,8 @@
       "confirm": "새 비밀번호 확인",
       "confirmPlaceholder": "다시 입력",
       "updating": "변경 중...",
-      "submit": "비밀번호 변경"
+      "submit": "비밀번호 변경",
+      "wrongCurrent": "현재 비밀번호가 틀립니다."
     },
     "title": "Settings",
     "subtitle": "프로필, 비밀번호, 언어, 색 모드를 관리합니다.",
