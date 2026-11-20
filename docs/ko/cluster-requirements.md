@@ -182,6 +182,8 @@ discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server
   - Lens·Headlamp와 같은 `namespace/service:port` 형식으로 적습니다.
   - API가 하위 경로에 있으면 `namespace/service:port/경로`처럼 경로까지 적습니다(예: VictoriaMetrics 클러스터 `monitoring/vmselect-main:8481/select/0/prometheus`).
   - Kubeast는 API 서버 프록시로 읽고, 상태 API로 `/-/healthy` 연결 여부와 저장소 종류(`flavor`: prometheus·victoriametrics)를 알려 줍니다.
+  - Service가 리다이렉트로 답하면 같은 API 서버의 그 Service 프록시 경로 안에서만 따라갑니다. 프록시로 가는 요청마다 Kubeast의 클러스터 자격 증명과 사용자 신원이 실리므로 그 밖의 리다이렉트는 따라가지 않고, 읽기는 까닭과 함께 502로 답합니다.
+  - 저장소가 직접 쓴 401·403(앞에 둔 kube-rbac-proxy 같은 인증 프록시)은 로그아웃이나 거절이 아니라 저장소의 문구를 담은 502입니다. API 서버가 프록시를 거절한 것은 그대로 403입니다. 인증 프록시 뒤의 저장소는 주소와 인증으로 등록합니다.
   - 저장소 종류는 `/-/healthy` 응답 문구로 판단합니다.
 - **클러스터 안 자동 발견**: 아래 순서로 찾습니다. `/-/healthy`가 응답하면 그 Service를 쓰고, 결과는 클러스터마다 기억합니다. 찾았으면 10분, 못 찾았거나 찾다가 오류 · 시간 초과가 나면 1분입니다.
   - ① 모든 Namespace에서 레이블로 찾고, Service의 포트를 모두 시도합니다. 레이블 순서는 다음과 같습니다.
@@ -314,6 +316,7 @@ Read 사용자에게도 열어 주려면 이 주소를 §1의 `viewerProxyServic
 
 - **Kubeast가 찾는 방법**: 이름에 `opencost`가 들어간 Service 중 **포트 9003**인 것을 `opencost`·`kubecost`·`monitoring`·`cost` Namespace에서 찾고, `/healthz`로 확인합니다.
   - 찾은 결과는 10분, 찾지 못한 결과는 5분 동안 기억합니다.
+  - Prometheus Service(§3)와 같은 규칙으로 API 서버 프록시를 거쳐 읽습니다. 리다이렉트는 자기 프록시 경로 안에서만 따라가고, OpenCost가 직접 쓴 401·403은 502입니다.
 - **조건**: OpenCost는 Prometheus를 읽고, Prometheus는 OpenCost의 `/metrics`를 다시 수집해야 합니다. OpenCost가 내보내는 가격·클러스터 지표를 할당 계산에 쓰기 때문입니다.
 - **예시**: [`opencost-values.yaml`](../../deploy/examples/target-cluster/opencost-values.yaml) — §3 예시의 Prometheus를 읽도록 맞춘 값입니다.
 
@@ -624,7 +627,9 @@ service:
   - Relay Service는 `features.networkFlows.relay`(기본 `kube-system/hubble-relay:443`)이거나, 항목에 적은 것(`proxy:<namespace>/<service>:<port>`)입니다.
   - **Relay가 TLS로 서비스해야 합니다**(`hubble.relay.tls.server.enabled=true`). API 서버는 백엔드와 TLS일 때만 HTTP/2로 말하고, gRPC에는 HTTP/2가 필요합니다. 평문 Relay면 502나 503이 오고, 메시지에 이 설정 이름이 나옵니다.
   - API 서버는 Relay 인증서를 검사하지 않고(IP로 중계) 클라이언트 인증서도 보내지 않습니다. 그래서 클라이언트 인증서를 요구하는 Relay(`hubble.relay.tls.server.mtls=true`)는 주소 모드를 써야 합니다.
+  - Relay나 Whisker의 리다이렉트는 같은 API 서버의 그 Service 프록시 경로 안에서만 따라가고, 그 밖이면 502입니다.
 - **주소 모드**(`https://<host>:<port>`): Kubeast가 Relay에 직접 TLS로 연결합니다.
+  - 리다이렉트는 따라가지 않습니다. 리다이렉트로 답하는 Relay는 502입니다. Relay가 답하는 주소를 등록하세요.
   - `tls.existingSecret`에 `ca.crt`를 넣고, `tls.clientCertificate: true`면 mTLS용 `tls.crt`·`tls.key`도 넣습니다. 인증서에서 확인할 이름은 `tls.serverName`으로 바꿀 수 있습니다.
   - k8s-service에서 Relay로 연결할 수 있어야 합니다. `networkPolicy`가 켜져 있으면 그 주소를 `features.networkFlows.egressCIDRs`에 추가하세요.
   - 읽기 전마다 아래와 같은 권한을 클러스터에 물어(SelfSubjectAccessReview) 두 모드에서 같은 사람만 읽게 합니다.

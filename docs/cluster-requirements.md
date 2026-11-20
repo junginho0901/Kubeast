@@ -179,6 +179,8 @@ These read Prometheus:
   - The format is `namespace/service:port`, the same as Lens and Headlamp.
   - If the API sits under a path, include the path: `namespace/service:port/path`. For example, a VictoriaMetrics cluster: `monitoring/vmselect-main:8481/select/0/prometheus`.
   - Kubeast reads it through the API server proxy.
+  - A redirect from the Service is followed only on the same API server and under that Service's proxy path. Any other is refused, since every request through the proxy carries Kubeast's cluster credential and the user's identity, and the read answers 502 with the reason.
+  - A 401 or 403 the store writes itself (an authenticating proxy such as kube-rbac-proxy in front of it) is a 502 with the store's words, not a sign-out or a refusal. The API server's own refusal of the proxy stays a 403. Register a store behind an authenticating proxy by URL with its authentication.
   - The status API reports whether `/-/healthy` is reachable, and the store type (`flavor`: prometheus or victoriametrics). The type comes from the text of the `/-/healthy` answer.
 - **Auto-discovery in the cluster** has two steps:
   - ① By label, in all namespaces, in this order:
@@ -302,6 +304,7 @@ In Kubeast, Admin → Clusters → Edit → Prometheus "Check connection" shows 
 ## 4. OpenCost (cost)
 
 - **How Kubeast finds it**: it looks for Services with `opencost` in the name on **port 9003** in the `opencost`, `kubecost`, `monitoring` and `cost` namespaces and checks them with `/healthz`. A found Service is remembered for 10 minutes, a miss for 5 minutes.
+  - It is read through the API server proxy with the same rules as a Prometheus Service (§3): a redirect only under its own proxy path, and its own 401 or 403 is a 502.
 - **Requirement**: OpenCost reads Prometheus, and Prometheus must scrape OpenCost's `/metrics` back (the price and cluster metrics OpenCost exports are used in the allocation calculation).
 - **Example**: [`opencost-values.yaml`](../deploy/examples/target-cluster/opencost-values.yaml) — values that make it read the Prometheus of the §3 example.
 
@@ -608,7 +611,9 @@ For the drawers' "Recent Flows" and the AI tool `network_flows` (`features.netwo
   - The Relay Service is `features.networkFlows.relay` (default `kube-system/hubble-relay:443`), or the one an entry names (`proxy:<namespace>/<service>:<port>`).
   - **The Relay must serve TLS** (`hubble.relay.tls.server.enabled=true`): the API server speaks HTTP/2 to a backend only over TLS, and gRPC needs HTTP/2. A plaintext Relay gives 502 or 503, and the message names that setting.
   - The API server does not check the Relay's certificate (it proxies by IP) and sends no client certificate, so a Relay that requires client certificates (`hubble.relay.tls.server.mtls=true`) needs the address mode.
+  - A redirect from the Relay or Whisker is followed only on the same API server and under its Service's proxy path; any other gives 502.
 - **Address mode** (`https://<host>:<port>`): Kubeast connects to the Relay itself over TLS.
+  - It follows no redirect: a Relay that answers with one gives 502. Register the address the Relay answers on.
   - `tls.existingSecret` holds `ca.crt`, and with `tls.clientCertificate: true` also `tls.crt` and `tls.key` for mTLS. `tls.serverName` overrides the name checked on the certificate.
   - The Relay must be reachable from k8s-service: add the address to `features.networkFlows.egressCIDRs` when `networkPolicy` is on.
   - Kubeast asks the cluster the same permission as below (SelfSubjectAccessReview) before each read, so the same people read in both modes.

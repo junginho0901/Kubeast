@@ -262,8 +262,8 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, k8s.ErrBadSelector), errors.Is(err, k8s.ErrBadQuery):
 		return http.StatusBadRequest
-	case errors.Is(err, k8s.ErrPrometheusUpstream):
-		// The metrics store answered with an error (or not at all): not this service's fault.
+	case errors.Is(err, k8s.ErrPrometheusUpstream), errors.Is(err, k8s.ErrCostUpstream):
+		// The metrics or cost store answered with an error (or not at all): not this service's fault.
 		return http.StatusBadGateway
 	}
 	msg := err.Error()
