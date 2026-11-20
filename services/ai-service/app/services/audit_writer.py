@@ -80,11 +80,11 @@ async def audit_ready() -> tuple[bool, Optional[str]]:
             async with db.engine.connect() as conn:
                 await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=2.0)
                 if _write_broken:
-                    trans = await conn.begin()
+                    # SELECT 1 began the connection's transaction (SQLAlchemy autobegin): the insert joins it
                     try:
                         await asyncio.wait_for(conn.execute(_PROBE_SQL), timeout=2.0)
                     finally:
-                        await trans.rollback()
+                        await conn.rollback()
         _write_broken = False
     except Exception as exc:  # unreachable, timeout, pool exhausted, the table refusing rows, ...
         ok, error = False, str(exc) or exc.__class__.__name__
