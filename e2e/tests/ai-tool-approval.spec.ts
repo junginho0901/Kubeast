@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -7,7 +7,8 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 
 // H2: a write tool the model picks is never executed straight away. The chat
 // shows an approval card; nothing changes until the user approves, and a
-// rejection leaves the cluster untouched.
+// rejection leaves the cluster untouched. A conversation that showed a card is
+// deleted with its approval rows.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -40,6 +41,15 @@ async function deleteConversations(request: APIRequestContext, headers: Record<s
   for (const id of ids) await request.delete(`/api/v1/sessions/${id}`, { headers, failOnStatusCode: false })
 }
 
+// The approval rows of these conversations in the dev database, counted, on the kind cluster Kubeast runs on.
+function approvalRows(kubeconfig: string, ids: string[]): number {
+  for (const id of ids) expect(id, 'a conversation id').toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+  const sql = `SELECT count(*) FROM tool_approvals WHERE session_id = ANY('{${ids.join(',')}}')`
+  const out = execFileSync('kubectl', ['--kubeconfig', kubeconfig, '--context', 'kind-kubeast', '-n', 'kubeast', 'exec', 'deploy/postgres', '--', 'psql', '-U', 'kubeast', '-d', 'kubeast', '-tAc', sql], { encoding: 'utf8' }).trim()
+  expect(out, 'a row count').toMatch(/^\d+$/)
+  return Number(out)
+}
+
 async function askForScale(page: Page, made: string[]): Promise<void> {
   await page.goto('/ai-chat?cluster=test2')
   await page.waitForLoadState('networkidle')
@@ -64,6 +74,8 @@ test.describe('AI write tools need approval (H2)', () => {
     const kubeconfig = execSync('kind get kubeconfig --name test2', { encoding: 'utf8' })
     const kcPath = path.join(os.tmpdir(), 'e2e-test2-kubeconfig')
     fs.writeFileSync(kcPath, kubeconfig)
+    const dbKcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-tool-approval-')), 'kubeconfig')
+    fs.writeFileSync(dbKcPath, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })
     const manifest =
       'apiVersion: v1\nkind: Namespace\nmetadata:\n  name: f3approve\n---\n' +
       'apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: pause\n  namespace: f3approve\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: pause\n  template:\n    metadata:\n      labels:\n        app: pause\n    spec:\n      containers:\n        - name: pause\n          image: registry.k8s.io/pause:3.10\n'
@@ -117,6 +129,14 @@ test.describe('AI write tools need approval (H2)', () => {
         const list: any[] = Array.isArray(rows) ? rows : rows.items || rows.logs || []
         expect(list.length, 'ai.tool.approve audit row').toBeGreaterThan(0)
       }
+
+      // 4) Each conversation is deleted, those that showed a card too, and its approval rows go with it.
+      expect(approvalRows(dbKcPath, made), 'the rejected and the approved card are rows of these conversations').toBeGreaterThanOrEqual(2)
+      for (const id of made) {
+        const res = await request.delete(`/api/v1/sessions/${id}`, { headers: admin })
+        expect(res.status(), `delete conversation ${id}`).toBe(200)
+      }
+      expect(approvalRows(dbKcPath, made), 'approval rows left after the deletes').toBe(0)
     } finally {
       await ctx.close()
       await deleteConversations(request, admin, made)
