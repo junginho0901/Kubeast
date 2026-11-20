@@ -5,6 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -93,7 +98,7 @@ func TestBigSharedWritesTakeTurns(t *testing.T) {
 func TestASlowReaderDoesNotHoldItsPlaceFromTheOthers(t *testing.T) {
 	body := nodeListSized()
 	places := limits.NewSlots("test", 1)
-	const turn = 10 * time.Millisecond
+	const turn = 50 * time.Millisecond // wide enough that a busy runner does not make the fast writer look slow
 	slow := &paced{pause: 3 * turn, total: len(body), began: make(chan struct{})}
 	fast := &paced{total: len(body)}
 	slowDone := make(chan error, 1)
@@ -174,5 +179,82 @@ func TestABigBodyIsWrittenWithoutAPlaceWhenNoneComesInTime(t *testing.T) {
 	}
 	if n := places.InUse(); n != bigWritePlaces {
 		t.Errorf("%d places taken, want the %d held before: the write took one", n, bigWritePlaces)
+	}
+}
+
+// A caller that leaves while it waits for a place after part of its body went out gets errLeftPartWay, which
+// writeShared turns into a cut connection (http.ErrAbortHandler) rather than a body that ends as if whole; one that left
+// before any part went out has nothing to cut.
+func TestACallerThatLeavesPartWayGetsACutConnection(t *testing.T) {
+	body := nodeListSized()
+	places := limits.NewSlots("test", 1)
+	const turn = 50 * time.Millisecond
+	ctx, leave := context.WithCancel(context.Background())
+	defer leave()
+	w := &paced{pause: 3 * turn, total: len(body), began: make(chan struct{})}
+	done := make(chan error, 1)
+	go func() { done <- writeInTurns(ctx, w, body, places, turn, time.Minute) }()
+	<-w.began
+	give, err := places.Take(context.Background()) // the place it gives back after its slow first part
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer give()
+	leave()
+	err = <-done
+	if !errors.Is(err, errLeftPartWay) || w.written.Load() != bigWritePart {
+		t.Fatalf("a caller gone after one part: %v with %d bytes written; want errLeftPartWay after %d", err, w.written.Load(), bigWritePart)
+	}
+	func() {
+		defer func() {
+			if r := recover(); r != http.ErrAbortHandler {
+				t.Errorf("abortIfCut(%v) recovered %v, want http.ErrAbortHandler", err, r)
+			}
+		}()
+		abortIfCut(err)
+	}()
+	abortIfCut(context.Canceled)
+}
+
+// Through a real socket, a body that writeShared writes reaches the client as one Write of it did: the same bytes,
+// status and headers.
+func TestASharedBodyGoesOutAsOneWriteOfItWould(t *testing.T) {
+	body := nodeListSized()
+	answer := func(write func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			write(w, r)
+		}
+	}
+	get := func(h http.Handler) (*http.Response, []byte) {
+		t.Helper()
+		srv := httptest.NewServer(h)
+		defer srv.Close()
+		resp, err := http.Get(srv.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		got, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp, got
+	}
+	one, oneBody := get(answer(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) }))
+	shared, sharedBody := get(answer(func(w http.ResponseWriter, r *http.Request) { writeShared(w, r, body) }))
+	if !bytes.Equal(oneBody, body) || !bytes.Equal(sharedBody, body) {
+		t.Fatalf("bodies of %d (one Write) and %d (writeShared) bytes, want both the %d shared ones", len(oneBody), len(sharedBody), len(body))
+	}
+	if shared.StatusCode != one.StatusCode || shared.ContentLength != one.ContentLength ||
+		!slices.Equal(shared.TransferEncoding, one.TransferEncoding) {
+		t.Errorf("writeShared: %d, length %d, %v; one Write: %d, length %d, %v", shared.StatusCode, shared.ContentLength,
+			shared.TransferEncoding, one.StatusCode, one.ContentLength, one.TransferEncoding)
+	}
+	one.Header.Del("Date")
+	shared.Header.Del("Date")
+	if !reflect.DeepEqual(shared.Header, one.Header) {
+		t.Errorf("writeShared's headers %v, one Write's %v", shared.Header, one.Header)
 	}
 }

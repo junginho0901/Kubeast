@@ -118,7 +118,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 ## 메모리
 
 - k8s-service가 받은 연결은 보내기 버퍼가 128 KiB다(리눅스는 두 배로 잡고 더 늘리지 않는다, `cmd/server/conn_buffers.go`의 `capSendBuffer`). Go 안에서 한 벌을 같이 쓰는 답(노드 목록)도 커널은 소켓마다 따로 쥐고, 그 몫은 cgroup에는 세지만 Go 메모리 한도는 모른다. k8s-service에 리스너를 더하면 같은 상한을 걸고, k8s-service가 여는 연결(API 서버 · auth-service · DB)은 커널 기본값 그대로 둔다.
-- 여러 사람에게 같은 바이트를 보내는 답(노드 목록, 노드 칸, `handler.Shared`가 기다린 사람에게 주는 답)은 `writeShared`로 쓴다(`internal/handler/shared_write.go`). 256 KiB를 넘는 본문은 64 KiB씩, 자리 16개 중 하나를 쥐고 쓰고, 한 덩어리가 100 ms를 넘게 걸린 느린 읽는 이는 그 덩어리 뒤에 자리를 내놓고, 1초 안에 자리를 못 얻은 본문은 자리 없이 쓴다(읽지 않는 이가 자리를 쥐어도 멈추지 않게, `kubeast_shared_writes_without_place_total`이 센다). 초마다 다시 만드는 노드 목록을 기다리던 사람들이 한꺼번에 쓰면 소켓마다 커널이 한 벌씩 쥐기 때문이다. 같은 바이트를 여럿에게 보내는 새 답도 이 함수로 쓴다.
+- 여러 사람에게 같은 바이트를 보내는 답(노드 목록 · 노드 칸 답은 묶였든 아니든, `handler.Shared`가 기다린 사람에게 주는 답)은 `writeShared`로 쓴다(`internal/handler/shared_write.go`). 256 KiB를 넘는 본문은 64 KiB씩, 자리 16개 중 하나를 쥐고 쓰고, 한 덩어리가 100 ms를 넘게 걸린 느린 읽는 이는 그 덩어리 뒤에 자리를 내놓고, 자리를 기다린 시간이 본문마다 합쳐 1초에 닿으면 남은 것을 자리 없이 쓴다(읽지 않는 이가 자리를 쥐어도 멈추지 않게, `kubeast_shared_writes_without_place_total`이 센다). 첫 덩어리를 쓴 뒤 다음 차례를 기다리다 요청이 떠나면 연결을 끊는다(`http.ErrAbortHandler`) — 잘린 본문이 다 받은 것처럼 끝나지 않게. 초마다 다시 만드는 노드 목록을 기다리던 사람들이 한꺼번에 쓰면 소켓마다 커널이 한 벌씩 쥐기 때문이다. 같은 바이트를 여럿에게 보내는 새 답도 이 함수로 쓴다.
 
 ## 빌드 / 배포
 

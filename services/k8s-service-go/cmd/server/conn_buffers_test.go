@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// Fifty callers reading slowly each get the whole of one shared answer of the node list's size, written as GetNodes
-// writes it, through connections whose kernel queue holds a fraction of it.
+// Fifty callers reading slowly each get the whole of one shared answer of the node list's size, written in one Write,
+// through connections whose kernel queue holds a fraction of it.
 func TestABigSharedAnswerArrivesWholeThroughCappedConnections(t *testing.T) {
 	shared := make([]byte, 966_279)
 	for i := range shared {
