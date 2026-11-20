@@ -88,9 +88,10 @@ func proxyAPIServerAt(t *testing.T, serverPath string, answers map[string]answer
 			a = apiStatus(http.StatusNotFound, "NotFound", "the server could not find the requested resource")
 		}
 		if a.location != "" {
-			// written as the store wrote it: http.Redirect would clean the path
+			// written as the store wrote it: http.Redirect would clean the path; with a body, as http.Redirect writes one
 			w.Header().Set("Location", a.location)
 			w.WriteHeader(http.StatusFound)
+			_, _ = w.Write([]byte("<a href=\"x\">Found</a>.\n"))
 			return
 		}
 		w.Header().Set("Content-Type", a.contentType)
