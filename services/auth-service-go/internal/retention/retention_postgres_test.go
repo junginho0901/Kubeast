@@ -2,9 +2,12 @@ package retention
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/auditsink"
+	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
 )
 
@@ -129,8 +133,72 @@ func TestPostgresPurgeDeletesOnlyExpiredRows(t *testing.T) {
 
 	// A second run finds nothing.
 	again, err := Purger{Pool: pool, Cfg: Config{AuditDays: 365, ChatDays: 180}}.Purge(ctx, now)
-	if err != nil || again != (Result{}) {
+	if err != nil || !reflect.DeepEqual(again, Result{}) {
 		t.Fatalf("second purge = %+v, %v; want zero", again, err)
+	}
+}
+
+// The tool approvals a purge deletes while approved, by age or with their idle conversation, are named in the run's
+// record by ids and names, without the call's arguments; one deleted in another state is only counted.
+func TestPostgresPurgeNamesTheApprovalsItDeletedWhileApproved(t *testing.T) {
+	pool := freshMigratedDatabase(t)
+	ctx := context.Background()
+	now := time.Date(2026, 11, 20, 3, 0, 0, 0, time.UTC)
+	old, recent := now.AddDate(0, 0, -200), now.AddDate(0, 0, -1)
+	seed := []string{
+		`INSERT INTO auth_users (id, name, email, password_hash) VALUES ('u1', 'U', 'u1@example.com', 'x')`,
+		`INSERT INTO sessions (id, user_id, title, created_at, updated_at) VALUES ('s-idle', 'u1', 'idle', $1, $1), ('s-live', 'u1', 'live', $2, $2)`,
+		`INSERT INTO tool_approvals (id, session_id, user_id, user_email, cluster, tool, args, status, created_at, expires_at, decided_at) VALUES
+		   ('a-old-approved', 's-live', 'u1', 'u1@example.com', 'self', 'k8s_patch_resource', '{"env":"raw-arg-value"}', 'approved', $1, $1, $1),
+		   ('a-old-executed', 's-live', 'u1', 'u1@example.com', 'self', 'k8s_scale', '{}', 'executed', $1, $1, $1),
+		   ('a-idle-approved', 's-idle', 'u1', 'u1@example.com', 'prod', 'k8s_scale', '{}', 'approved', $2, $2, $2),
+		   ('a-new-approved', 's-live', 'u1', 'u1@example.com', 'self', 'k8s_scale', '{}', 'approved', $2, $2, $2)`,
+	}
+	for _, stmt := range seed {
+		args := []any{old, recent}
+		if !strings.Contains(stmt, "$1") {
+			args = nil
+		}
+		if _, err := pool.Exec(ctx, stmt, args...); err != nil {
+			t.Fatalf("seed %q: %v", stmt[:40], err)
+		}
+	}
+
+	w := &captureWriter{}
+	res := Purger{Pool: pool, Cfg: Config{ChatDays: 180}, Audit: w, Now: func() time.Time { return now }}.RunOnce(ctx)
+	if res.ToolApprovals != 3 || res.Sessions != 1 {
+		t.Fatalf("result = %+v, want tool_approvals 3, sessions 1", res)
+	}
+	if len(w.recs) != 1 || w.recs[0].Result != audit.ResultSuccess {
+		t.Fatalf("records = %+v", w.recs)
+	}
+	var after struct {
+		OpenApprovals []OpenApproval `json:"open_approvals"`
+	}
+	if err := json.Unmarshal(w.recs[0].After, &after); err != nil {
+		t.Fatal(err)
+	}
+	got := after.OpenApprovals
+	slices.SortFunc(got, func(a, b OpenApproval) int { return strings.Compare(a.ID, b.ID) })
+	want := []OpenApproval{
+		{ID: "a-idle-approved", SessionID: "s-idle", Tool: "k8s_scale", Cluster: "prod", ApprovedAt: &recent},
+		{ID: "a-old-approved", SessionID: "s-live", Tool: "k8s_patch_resource", Cluster: "self", ApprovedAt: &old},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("open_approvals = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		g, e := got[i], want[i]
+		if g.ID != e.ID || g.SessionID != e.SessionID || g.Tool != e.Tool || g.Cluster != e.Cluster || g.ApprovedAt == nil || !g.ApprovedAt.Equal(*e.ApprovedAt) {
+			t.Errorf("open_approvals[%d] = %+v, want %+v", i, g, e)
+		}
+	}
+	if strings.Contains(string(w.recs[0].After), "raw-arg-value") {
+		t.Fatalf("the record holds a call's argument: %s", w.recs[0].After)
+	}
+	var left string
+	if err := pool.QueryRow(ctx, `SELECT string_agg(id, ',') FROM tool_approvals`).Scan(&left); err != nil || left != "a-new-approved" {
+		t.Fatalf("approvals left = %q, %v", left, err)
 	}
 }
 
