@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/limits"
@@ -18,20 +19,29 @@ const (
 	bigWritePart   = 64 << 10
 	bigWritePlaces = 16
 	bigWriteTurn   = 100 * time.Millisecond
+	bigWriteWait   = time.Second
 )
 
-var bigWriteSlots = limits.NewSlots("big shared answer write", bigWritePlaces)
+var (
+	bigWriteSlots         = limits.NewSlots("big shared answer write", bigWritePlaces)
+	bigWritesWithoutPlace atomic.Int64
+)
+
+// BigWritesWithoutPlace is how many big shared bodies got no place within bigWriteWait and were written without one.
+func BigWritesWithoutPlace() int64 { return bigWritesWithoutPlace.Load() }
 
 // writeShared writes body, made once for several callers (the node list, a node box, a shared read's answer), taking
 // turns with the other big ones; the bytes are the same.
 func writeShared(w http.ResponseWriter, r *http.Request, body []byte) {
-	_ = writeInTurns(r.Context(), w, body, bigWriteSlots, bigWriteTurn)
+	_ = writeInTurns(r.Context(), w, body, bigWriteSlots, bigWriteTurn, bigWriteWait)
 }
 
 // writeInTurns keeps its place from part to part while each goes out within turn. A part that took longer, a reader
 // slower than the others, gives the place back so the next writer goes first: a slow reader holds a place for one part,
-// not its whole body. A caller that leaves while it waits writes nothing more.
-func writeInTurns(ctx context.Context, w io.Writer, body []byte, places *limits.Slots, turn time.Duration) error {
+// not its whole body. A caller that leaves while it waits writes nothing more. A place that does not come within wait
+// (the places held by readers that stopped reading) leaves the rest written at once without one, as before the places,
+// so no body stops behind them.
+func writeInTurns(ctx context.Context, w io.Writer, body []byte, places *limits.Slots, turn, wait time.Duration) error {
 	if len(body) <= bigSharedBody {
 		_, err := w.Write(body)
 		return err
@@ -44,8 +54,16 @@ func writeInTurns(ctx context.Context, w io.Writer, body []byte, places *limits.
 	}()
 	for len(body) > 0 {
 		if give == nil {
+			waitCtx, cancel := context.WithTimeout(ctx, wait)
 			var err error
-			if give, err = places.Take(ctx); err != nil {
+			give, err = places.Take(waitCtx)
+			cancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				bigWritesWithoutPlace.Add(1)
+				_, err = w.Write(body)
 				return err
 			}
 		}

@@ -66,7 +66,7 @@ func TestBigSharedWritesTakeTurns(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			w := &paced{pause: time.Millisecond, total: len(body), under: &under, most: &most}
-			if err := writeInTurns(context.Background(), w, body, places, time.Minute); err != nil {
+			if err := writeInTurns(context.Background(), w, body, places, time.Minute, time.Minute); err != nil {
 				errs <- err
 				return
 			}
@@ -97,9 +97,9 @@ func TestASlowReaderDoesNotHoldItsPlaceFromTheOthers(t *testing.T) {
 	slow := &paced{pause: 3 * turn, total: len(body), began: make(chan struct{})}
 	fast := &paced{total: len(body)}
 	slowDone := make(chan error, 1)
-	go func() { slowDone <- writeInTurns(context.Background(), slow, body, places, turn) }()
+	go func() { slowDone <- writeInTurns(context.Background(), slow, body, places, turn, time.Minute) }()
 	<-slow.began
-	if err := writeInTurns(context.Background(), fast, body, places, turn); err != nil {
+	if err := writeInTurns(context.Background(), fast, body, places, turn, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	atFastDone := slow.written.Load()
@@ -131,13 +131,48 @@ func TestOnlyABigBodyWaitsForAPlaceAndStopsWhenItsCallerLeaves(t *testing.T) {
 
 	small := make([]byte, bigSharedBody)
 	w := &paced{total: len(small)}
-	if err := writeInTurns(gone, w, small, places, bigWriteTurn); err != nil || !bytes.Equal(w.got.Bytes(), small) {
+	if err := writeInTurns(gone, w, small, places, bigWriteTurn, bigWriteWait); err != nil || !bytes.Equal(w.got.Bytes(), small) {
 		t.Fatalf("a body of %d bytes with every place taken: %d written, %v", len(small), w.got.Len(), err)
 	}
 
 	big := nodeListSized()
 	w = &paced{total: len(big)}
-	if err := writeInTurns(gone, w, big, places, bigWriteTurn); !errors.Is(err, context.Canceled) || w.written.Load() != 0 {
+	err = writeInTurns(gone, w, big, places, bigWriteTurn, bigWriteWait)
+	if !errors.Is(err, context.Canceled) || w.written.Load() != 0 {
 		t.Fatalf("a big body whose caller left: %d bytes written, %v; want none and context.Canceled", w.written.Load(), err)
+	}
+}
+
+// With every place held by writers that do not move (readers that stopped reading), a big body waits for one no longer
+// than wait and is then written whole without one, and counted: no body stops behind them.
+func TestABigBodyIsWrittenWithoutAPlaceWhenNoneComesInTime(t *testing.T) {
+	places := limits.NewSlots("test", bigWritePlaces)
+	for range bigWritePlaces {
+		give, err := places.Take(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer give()
+	}
+	const wait = 50 * time.Millisecond
+	body := nodeListSized()
+	w := &paced{total: len(body)}
+	counted := BigWritesWithoutPlace()
+	began := time.Now()
+	if err := writeInTurns(context.Background(), w, body, places, bigWriteTurn, wait); err != nil {
+		t.Fatal(err)
+	}
+	took := time.Since(began)
+	if !bytes.Equal(w.got.Bytes(), body) {
+		t.Fatalf("got %d bytes, not the %d shared ones", w.got.Len(), len(body))
+	}
+	if took < wait {
+		t.Errorf("written after %s, before the %s it waits for a place", took, wait)
+	}
+	if n := BigWritesWithoutPlace() - counted; n != 1 {
+		t.Errorf("%d writes counted without a place, want 1", n)
+	}
+	if n := places.InUse(); n != bigWritePlaces {
+		t.Errorf("%d places taken, want the %d held before: the write took one", n, bigWritePlaces)
 	}
 }

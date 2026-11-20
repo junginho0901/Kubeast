@@ -394,6 +394,10 @@ func main() {
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
 	m.Registry.MustRegister(k8s.ClientWaitCollectors()...)
 	m.Registry.MustRegister(k8s.AccessReviewCollectors()...)
+	m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: "kubeast_shared_writes_without_place_total", Help: "Answers made once for several callers (the node list, a node box, a shared read) past 256 KiB that got no write place within a second and were written without one, since start-up.",
+		ConstLabels: prometheus.Labels{"service": "k8s"},
+	}, func() float64 { return float64(handler.BigWritesWithoutPlace()) }))
 	if role.ServesStreams() {
 		m.Gauge("kubeast_terminals_open", "Open terminals (pod exec, node shell).",
 			func() float64 { terminals, _ := streams.Open(); return float64(terminals) })
