@@ -3014,6 +3014,7 @@
       "selectAllPages": "Select all {{count}} pending users, on every page",
       "selectAllFound": "Select all {{count}} pending users the search finds, on every page",
       "selectAllPages_one": "Select the 1 pending user",
+      "selectAccount": "Select {{account}}",
       "selectedEveryPage": "{{count}} selected, on every page",
       "notChanged": "{{done}} of {{total}} accounts changed. Not changed: {{accounts}}",
       "reasonFailed": "the change failed, the audit log says why",

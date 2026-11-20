@@ -22,6 +22,7 @@ import {
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -86,6 +87,7 @@ export function ReferenceGrantTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -100,20 +102,20 @@ export function ReferenceGrantTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" {...sortHead('namespace')}>
                   <SortButton>{tr('referenceGrantsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                 </th>
               )}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>{tr('referenceGrantsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('from')}>
+              <th className="text-left py-3 px-4 w-[280px] cursor-pointer" {...sortHead('from')}>
                 <SortButton>{tr('referenceGrantsPage.table.from', 'From')}{renderSortIcon('from')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('to')}>
+              <th className="text-left py-3 px-4 w-[280px] cursor-pointer" {...sortHead('to')}>
                 <SortButton>{tr('referenceGrantsPage.table.to', 'To')}{renderSortIcon('to')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>{tr('referenceGrantsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>

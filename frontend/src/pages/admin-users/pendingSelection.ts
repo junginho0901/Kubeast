@@ -24,3 +24,9 @@ export function toggleAllFound(selected: ReadonlySet<string>, foundIds: readonly
   else foundIds.forEach((id) => next.add(id))
   return next
 }
+
+// The account a row's box chooses, for the box's name (WCAG 4.1.2): the name the row shows and, when it has one, its
+// email, since two accounts may share a name.
+export function pendingAccountName(u: { name: string; email?: string | null }): string {
+  return u.email ? `${u.name} (${u.email})` : u.name
+}

@@ -19,6 +19,7 @@ import {
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -83,6 +84,7 @@ export function VPATable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -99,48 +101,48 @@ export function VPATable({
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[150px]">{tr('vpas.table.namespace', 'Namespace')}</th>
               )}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>
                   {tr('vpas.table.name', 'Name')}{renderSortIcon('name')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('target')}>
+              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('target')}>
                 <SortButton>
                   {tr('vpas.table.reference', 'Reference')}{renderSortIcon('target')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('updateMode')}>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('updateMode')}>
                 <SortButton>
                   {tr('vpas.table.mode', 'Mode')}{renderSortIcon('updateMode')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('cpu')}>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('cpu')}>
                 <SortButton>
                   {tr('vpas.table.cpu', 'CPU')}{renderSortIcon('cpu')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('memory')}>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('memory')}>
                 <SortButton>
                   {tr('vpas.table.memory', 'Memory')}{renderSortIcon('memory')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('provided')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('provided')}>
                 <SortButton>
                   {tr('vpas.table.provided', 'Provided')}{renderSortIcon('provided')}
                 </SortButton>
               </th>
               {/* the CRD's wide columns MinReplicas and OOMSeconds (VPA 1.7) */}
-              <th className="col-optional text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('minReplicas')}>
+              <th className="col-optional text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('minReplicas')}>
                 <SortButton>
                   {tr('vpas.table.minReplicas', 'Min Replicas')}{renderSortIcon('minReplicas')}
                 </SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('oomSeconds')}>
+              <th className="col-optional text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('oomSeconds')}>
                 <SortButton>
                   {tr('vpas.table.oomSeconds', 'OOM Seconds')}{renderSortIcon('oomSeconds')}
                 </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>
                   {tr('vpas.table.age', 'Age')}{renderSortIcon('age')}
                 </SortButton>

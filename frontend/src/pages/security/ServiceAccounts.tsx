@@ -25,6 +25,7 @@ import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 type SortKey = null | 'name' | 'namespace' | 'secrets' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -129,6 +130,7 @@ export default function ServiceAccounts() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -286,17 +288,17 @@ metadata:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="col-low text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                  <th className="col-low text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('namespace')}>
                     <SortButton>{tr('serviceAccountsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                   </th>
                 )}
-                <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
+                <th className="text-left py-3 px-4 cursor-pointer" {...sortHead('name')}>
                   <SortButton>{tr('serviceAccountsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('secrets')}>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('secrets')}>
                   <SortButton>{tr('serviceAccountsPage.table.secrets', 'Secrets')}{renderSortIcon('secrets')}</SortButton>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('age')}>
                   <SortButton>{tr('serviceAccountsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>

@@ -11,6 +11,7 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './leaseHelpers'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface LeaseTableProps {
   pagedLeases: LeaseInfo[]
@@ -55,6 +56,7 @@ export function LeaseTable({
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, onSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -69,28 +71,28 @@ export function LeaseTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('namespace')}>
                   <SortButton>
                     {tr('leases.table.namespace', 'Namespace')}{renderSortIcon('namespace')}
                   </SortButton>
                 </th>
               )}
-              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => onSort('name')}>
+              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>
                   {tr('leases.table.name', 'Name')}{renderSortIcon('name')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('holder')}>
+              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('holder')}>
                 <SortButton>
                   {tr('leases.table.holder', 'Holder')}{renderSortIcon('holder')}
                 </SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('duration')}>
+              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('duration')}>
                 <SortButton>
                   {tr('leases.table.duration', 'Duration (s)')}{renderSortIcon('duration')}
                 </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>
                   {tr('leases.table.age', 'Age')}{renderSortIcon('age')}
                 </SortButton>

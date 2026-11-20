@@ -19,6 +19,7 @@ import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -82,6 +83,7 @@ export function StatefulSetTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -98,25 +100,25 @@ export function StatefulSetTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[150px]">{tr('statefulsets.table.namespace', 'Namespace')}</th>}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>{tr('statefulsets.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('ready')}>
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('ready')}>
                 <SortButton>{tr('statefulsets.table.ready', 'Ready')}{renderSortIcon('ready')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('upToDate')}>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('upToDate')}>
                 <SortButton>{tr('statefulsets.table.upToDate', 'Up to date')}{renderSortIcon('upToDate')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('available')}>
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('available')}>
                 <SortButton>{tr('statefulsets.table.available', 'Available')}{renderSortIcon('available')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('status')}>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('status')}>
                 <SortButton>{tr('statefulsets.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('service')}>
+              <th className="col-optional text-left py-3 px-4 w-[160px] cursor-pointer" {...sortHead('service')}>
                 <SortButton>{tr('statefulsets.table.service', 'Service')}{renderSortIcon('service')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>{tr('statefulsets.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>

@@ -21,6 +21,7 @@ import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -85,6 +86,7 @@ export function DeploymentTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -101,37 +103,37 @@ export function DeploymentTable({
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[150px]">{tr('deployments.table.namespace', 'Namespace')}</th>
               )}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>
                   {tr('deployments.table.name', 'Name')}{renderSortIcon('name')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('ready')}>
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('ready')}>
                 <SortButton>
                   {tr('deployments.table.ready', 'Ready')}{renderSortIcon('ready')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('updated')}>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('updated')}>
                 <SortButton>
                   {tr('deployments.table.updated', 'Up to date')}{renderSortIcon('updated')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('available')}>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('available')}>
                 <SortButton>
                   {tr('deployments.table.available', 'Available')}{renderSortIcon('available')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('status')}>
                 <SortButton>
                   {tr('deployments.table.status', 'Status')}{renderSortIcon('status')}
                 </SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('image')}>
+              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" {...sortHead('image')}>
                 <SortButton>
                   {tr('deployments.table.image', 'Image')}{renderSortIcon('image')}
                 </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>
                   {tr('deployments.table.age', 'Age')}{renderSortIcon('age')}
                 </SortButton>

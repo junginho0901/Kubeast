@@ -95,8 +95,9 @@ const CONTROL_IN_ROW: Record<string, RegExp> = {
   '/src/pages/helm/releases/ReleaseTable.tsx': /<Link to=\{to\}/,
 }
 
-// the elements `<tr …>…</tr>` (or `<th …>…</th>`) whose opening tag holds an onClick, read past the `>` inside `{…}`
-function clicked(source: string, tag: 'tr' | 'th'): { open: string; whole: string }[] {
+// the elements `<tr …>…</tr>` (or `<th …>…</th>`) whose opening tag holds an onClick (or what `opens` names), read past
+// the `>` inside `{…}`
+function clicked(source: string, tag: 'tr' | 'th', opens = /\bonClick=/): { open: string; whole: string }[] {
   const found: { open: string; whole: string }[] = []
   for (const m of source.matchAll(new RegExp(`<${tag}\\b`, 'g'))) {
     let i = m.index! + tag.length + 1
@@ -109,13 +110,18 @@ function clicked(source: string, tag: 'tr' | 'th'): { open: string; whole: strin
     }
     const open = source.slice(m.index, i)
     const end = source.indexOf(`</${tag}>`, i)
-    if (/\bonClick=/.test(open)) found.push({ open, whole: source.slice(m.index, end < 0 ? i : end) })
+    if (opens.test(open)) found.push({ open, whole: source.slice(m.index, end < 0 ? i : end) })
   }
   return found
 }
 const rowsWithoutKeys = (source: string) => clicked(source, 'tr').filter((r) => !/openOnPress\(|tabIndex=/.test(r.open)).map((r) => r.whole)
-// a header whose click sorts takes the Tab order through the SortButton in it
-const headersWithoutButton = (source: string) => clicked(source, 'th').filter((h) => !/<SortButton\b/.test(h.whole)).length
+// a header whose click sorts takes the Tab order through the SortButton in it, and its click and aria-sort from
+// sortHeaderProps, so it says the order the table is in
+const SORT_HEAD = /\{\.\.\.sortHead\(/
+const sortingHeaders = (source: string) => clicked(source, 'th', new RegExp(`\\bonClick=|${SORT_HEAD.source}`))
+const headersWithoutButton = (source: string) => sortingHeaders(source).filter((h) => !/<SortButton\b/.test(h.whole)).length
+const headersWithoutOrder = (source: string) => clicked(source, 'th', /(?:)/)
+  .filter((h) => /<SortButton\b/.test(h.whole) || /\bonClick=/.test(h.open)).filter((h) => !SORT_HEAD.test(h.open)).length
 
 describe('the rows the keyboard reaches', () => {
   it('are every clicked row, the listed ones through the control in them, and a listed one fixed leaves the list', () => {
@@ -138,6 +144,19 @@ describe('the rows the keyboard reaches', () => {
       if (n > 0) found[path] = n
     }
     expect(found).toEqual({})
+  })
+
+  it('and every such header says the order the table is in', () => {
+    const found: Record<string, number> = {}
+    let headers = 0
+    for (const [path, source] of Object.entries(sources)) {
+      headers += sortingHeaders(source).length
+      const n = headersWithoutOrder(source)
+      if (n > 0) found[path] = n
+    }
+    expect(found).toEqual({})
+    // the sortable headers of the console when aria-sort came (57 files)
+    expect(headers).toBeGreaterThanOrEqual(334)
   })
 
   it('include the boxes of a list page that open the drawer', () => {

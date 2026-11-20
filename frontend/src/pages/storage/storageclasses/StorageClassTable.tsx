@@ -22,6 +22,7 @@ import {
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -83,6 +84,7 @@ export function StorageClassTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -96,26 +98,26 @@ export function StorageClassTable({
         <table className="w-full text-sm min-w-[1300px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>{tr('storageclasses.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('provisioner')}>
+              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" {...sortHead('provisioner')}>
                 <SortButton>{tr('storageclasses.table.provisioner', 'Provisioner')}{renderSortIcon('provisioner')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('default')}>
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('default')}>
                 <SortButton>{tr('storageclasses.table.default', 'Default')}{renderSortIcon('default')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('reclaimPolicy')}>
+              <th className="text-left py-3 px-4 w-[160px] cursor-pointer" {...sortHead('reclaimPolicy')}>
                 <SortButton>{tr('storageclasses.table.reclaimPolicy', 'Reclaim Policy')}{renderSortIcon('reclaimPolicy')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('bindingMode')}>
+              <th className="text-left py-3 px-4 w-[190px] cursor-pointer" {...sortHead('bindingMode')}>
                 <SortButton>{tr('storageclasses.table.volumeBindingMode', 'Volume Binding Mode')}{renderSortIcon('bindingMode')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('allowExpansion')}>
+              <th className="col-optional text-left py-3 px-4 w-[170px] cursor-pointer" {...sortHead('allowExpansion')}>
                 <SortButton>{tr('storageclasses.table.allowVolumeExpansion', 'Allow Volume Expansion')}{renderSortIcon('allowExpansion')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[120px]">{tr('storageclasses.table.parameters', 'Parameters')}</th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>{tr('storageclasses.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>

@@ -3117,6 +3117,7 @@
       "selectPending": "대기 중인 사용자 전체 선택",
       "selectAllPages": "모든 페이지의 대기 중인 사용자 {{count}}명 전체 선택",
       "selectAllFound": "검색으로 찾은 대기 중인 사용자 {{count}}명을 모든 페이지에서 전체 선택",
+      "selectAccount": "{{account}} 선택",
       "selectedEveryPage": "모든 페이지에서 {{count}}명 선택됨",
       "notChanged": "계정 {{total}}개 중 {{done}}개를 바꿨습니다. 바꾸지 못한 계정: {{accounts}}",
       "reasonFailed": "변경 실패, 까닭은 감사 로그에 있습니다",

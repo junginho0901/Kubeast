@@ -18,6 +18,7 @@ import { costOutsideCards, hasCostOutside, type CostOutside } from '@/utils/cost
 import { formatTime } from '@/utils/time'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 // Workload kinds the detail drawer opens; OpenCost's other rows (no controller, a ReplicationController) stay plain.
@@ -82,6 +83,7 @@ export default function Cost() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -309,38 +311,38 @@ export default function Cost() {
               <table className="w-full text-sm min-w-[760px] table-fixed" data-testid="cost-table">
                 <thead ref={theadRef} className="text-slate-400">
                   <tr>
-                    <th className="text-left py-3 px-4 w-[300px] cursor-pointer" onClick={() => handleSort('name')}>
+                    <th className="text-left py-3 px-4 w-[300px] cursor-pointer" {...sortHead('name')}>
                       <SortButton>
                         {tr('cost.table.name', 'Name')}{renderSortIcon('name')}
                       </SortButton>
                     </th>
                     {byWorkload && <th className="col-low text-left py-3 px-4 w-[160px]">{tr('cost.table.namespace', 'Namespace')}</th>}
-                    <th className="text-right py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('cpu')}>
+                    <th className="text-right py-3 px-4 w-[110px] cursor-pointer" {...sortHead('cpu')}>
                       <SortButton>
                         {tr('cost.table.cpu', 'CPU')}{renderSortIcon('cpu')}
                       </SortButton>
                     </th>
-                    <th className="text-right py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('ram')}>
+                    <th className="text-right py-3 px-4 w-[110px] cursor-pointer" {...sortHead('ram')}>
                       <SortButton>
                         {tr('cost.table.ram', 'Memory')}{renderSortIcon('ram')}
                       </SortButton>
                     </th>
-                    <th className="col-optional text-right py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('pv')}>
+                    <th className="col-optional text-right py-3 px-4 w-[110px] cursor-pointer" {...sortHead('pv')}>
                       <SortButton>
                         {tr('cost.table.pv', 'PV')}{renderSortIcon('pv')}
                       </SortButton>
                     </th>
-                    <th className="col-optional text-right py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('network')}>
+                    <th className="col-optional text-right py-3 px-4 w-[110px] cursor-pointer" {...sortHead('network')}>
                       <SortButton>
                         {tr('cost.table.network', 'Network')}{renderSortIcon('network')}
                       </SortButton>
                     </th>
-                    <th className="text-right py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('total')}>
+                    <th className="text-right py-3 px-4 w-[120px] cursor-pointer" {...sortHead('total')}>
                       <SortButton>
                         {tr('cost.table.total', 'Total')}{renderSortIcon('total')}
                       </SortButton>
                     </th>
-                    <th className="col-optional text-right py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('efficiency')}>
+                    <th className="col-optional text-right py-3 px-4 w-[100px] cursor-pointer" {...sortHead('efficiency')}>
                       <SortButton>
                         {tr('cost.table.efficiency', 'Efficiency')}{renderSortIcon('efficiency')}
                       </SortButton>

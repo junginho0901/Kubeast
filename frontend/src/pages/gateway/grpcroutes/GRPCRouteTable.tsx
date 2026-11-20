@@ -21,6 +21,7 @@ import {
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -85,6 +86,7 @@ export function GRPCRouteTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -99,29 +101,29 @@ export function GRPCRouteTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" {...sortHead('namespace')}>
                   <SortButton>{tr('grpcRoutesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                 </th>
               )}
-              <th className="text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[230px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>{tr('grpcRoutesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('hostnames')}>
+              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" {...sortHead('hostnames')}>
                 <SortButton>{tr('grpcRoutesPage.table.hostnames', 'Hostnames')}{renderSortIcon('hostnames')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('parents')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('parents')}>
                 <SortButton>{tr('grpcRoutesPage.table.parentRefs', 'Parent Refs')}{renderSortIcon('parents')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('rules')}>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('rules')}>
                 <SortButton>{tr('grpcRoutesPage.table.rules', 'Rules')}{renderSortIcon('rules')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('backends')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('backends')}>
                 <SortButton>{tr('grpcRoutesPage.table.backendRefs', 'Backend Refs')}{renderSortIcon('backends')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('status')}>
+              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('status')}>
                 <SortButton>{tr('grpcRoutesPage.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>{tr('grpcRoutesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>

@@ -18,6 +18,7 @@ import {
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -82,6 +83,7 @@ export function PDBTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -98,37 +100,37 @@ export function PDBTable({
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[140px]">{tr('pdbs.table.namespace', 'Namespace')}</th>
               )}
-              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>
                   {tr('pdbs.table.name', 'Name')}{renderSortIcon('name')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('minAvailable')}>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('minAvailable')}>
                 <SortButton>
                   {tr('pdbs.table.minAvailable', 'Min Available')}{renderSortIcon('minAvailable')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('maxUnavailable')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('maxUnavailable')}>
                 <SortButton>
                   {tr('pdbs.table.maxUnavailable', 'Max Unavailable')}{renderSortIcon('maxUnavailable')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('allowedDisruptions')}>
+              <th className="text-left py-3 px-4 w-[140px] cursor-pointer" {...sortHead('allowedDisruptions')}>
                 <SortButton>
                   {tr('pdbs.table.allowedDisruptions', 'Allowed Disruptions')}{renderSortIcon('allowedDisruptions')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('currentHealthy')}>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('currentHealthy')}>
                 <SortButton>
                   {tr('pdbs.table.currentHealthy', 'Current')}{renderSortIcon('currentHealthy')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('desiredHealthy')}>
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('desiredHealthy')}>
                 <SortButton>
                   {tr('pdbs.table.desiredHealthy', 'Desired')}{renderSortIcon('desiredHealthy')}
                 </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>
                   {tr('pdbs.table.age', 'Age')}{renderSortIcon('age')}
                 </SortButton>

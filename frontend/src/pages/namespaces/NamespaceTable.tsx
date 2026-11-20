@@ -8,6 +8,7 @@ import type { NamespaceInfo, SortKey, SortDir } from './namespaceHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface Props {
   pagedNamespaces: NamespaceInfo[]
@@ -48,6 +49,7 @@ export default function NamespaceTable({
   onRowClick,
   tr,
 }: Props) {
+  const sortHead = sortHeaderProps(sortKey, sortDir, onSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc' ? (
@@ -63,12 +65,12 @@ export default function NamespaceTable({
         <table className="w-full text-sm min-w-[700px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[40%] cursor-pointer" onClick={() => onSort('name')}>
+              <th className="text-left py-3 px-4 w-[40%] cursor-pointer" {...sortHead('name')}>
                 <SortButton>
                   {tr('namespaces.table.name', 'Name')}{renderSortIcon('name')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => onSort('status')}>
+              <th className="text-left py-3 px-4 w-[15%] cursor-pointer" {...sortHead('status')}>
                 <SortButton>
                   {tr('namespaces.table.status', 'Status')}{renderSortIcon('status')}
                 </SortButton>
@@ -76,7 +78,7 @@ export default function NamespaceTable({
               <th className="col-optional text-left py-3 px-4 w-[30%]">
                 {tr('namespaces.table.labels', 'Labels')}
               </th>
-              <th className="col-low text-left py-3 px-4 w-[15%] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[15%] cursor-pointer" {...sortHead('age')}>
                 <SortButton>
                   {tr('namespaces.table.age', 'Age')}{renderSortIcon('age')}
                 </SortButton>

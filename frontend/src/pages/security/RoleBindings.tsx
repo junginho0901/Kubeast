@@ -23,6 +23,7 @@ import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 type SortKey = null | 'name' | 'namespace' | 'roleRef' | 'subjects' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -105,6 +106,7 @@ export default function RoleBindings() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -271,20 +273,20 @@ subjects:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                  <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" {...sortHead('namespace')}>
                     <SortButton>{tr('roleBindingsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                   </th>
                 )}
-                <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
+                <th className="text-left py-3 px-4 cursor-pointer" {...sortHead('name')}>
                   <SortButton>{tr('roleBindingsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('roleRef')}>
+                <th className="text-left py-3 px-4 cursor-pointer" {...sortHead('roleRef')}>
                   <SortButton>{tr('roleBindingsPage.table.roleRef', 'Role Ref')}{renderSortIcon('roleRef')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('subjects')}>
+                <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('subjects')}>
                   <SortButton>{tr('roleBindingsPage.table.subjects', 'Subjects')}{renderSortIcon('subjects')}</SortButton>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
                   <SortButton>{tr('roleBindingsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>

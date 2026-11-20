@@ -22,6 +22,7 @@ import {
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -86,6 +87,7 @@ export function EndpointSliceTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -100,35 +102,35 @@ export function EndpointSliceTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" {...sortHead('namespace')}>
                   <SortButton>{tr('endpointSlicesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                 </th>
               )}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>{tr('endpointSlicesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('service')}>
+              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('service')}>
                 <SortButton>{tr('endpointSlicesPage.table.service', 'Service')}{renderSortIcon('service')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('addressType')}>
+              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('addressType')}>
                 <SortButton>{tr('endpointSlicesPage.table.addressType', 'Address Type')}{renderSortIcon('addressType')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('ports')}>
+              <th className="col-optional text-left py-3 px-4 w-[260px] cursor-pointer" {...sortHead('ports')}>
                 <SortButton>{tr('endpointSlicesPage.table.ports', 'Ports')}{renderSortIcon('ports')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[280px]">
                 {tr('endpointSlicesPage.table.endpoints', 'Endpoints')}
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('endpoints')}>
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('endpoints')}>
                 <SortButton>{tr('endpointSlicesPage.table.total', 'Total')}{renderSortIcon('endpoints')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('ready')}>
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('ready')}>
                 <SortButton>{tr('endpointSlicesPage.table.ready', 'Ready')}{renderSortIcon('ready')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('notReady')}>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('notReady')}>
                 <SortButton>{tr('endpointSlicesPage.table.notReady', 'Not Ready')}{renderSortIcon('notReady')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>{tr('endpointSlicesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>

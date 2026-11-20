@@ -21,6 +21,7 @@ import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -85,6 +86,7 @@ export function ReplicaSetTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -99,35 +101,35 @@ export function ReplicaSetTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[140px]">{tr('replicasets.table.namespace', 'Namespace')}</th>}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>{tr('replicasets.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('current')}>
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('current')}>
                 <SortButton>{tr('replicasets.table.current', 'Current')}{renderSortIcon('current')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('desired')}>
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('desired')}>
                 <SortButton>{tr('replicasets.table.desired', 'Desired')}{renderSortIcon('desired')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('ready')}>
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('ready')}>
                 <SortButton>{tr('replicasets.table.ready', 'Ready')}{renderSortIcon('ready')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('available')}>
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('available')}>
                 <SortButton>{tr('replicasets.table.available', 'Available')}{renderSortIcon('available')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('status')}>
                 <SortButton>{tr('replicasets.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('containers')}>
                 <SortButton>{tr('replicasets.table.containers', 'Containers')}{renderSortIcon('containers')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
+              <th className="col-optional text-left py-3 px-4 w-[230px] cursor-pointer" {...sortHead('images')}>
                 <SortButton>{tr('replicasets.table.images', 'Images')}{renderSortIcon('images')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('selector')}>
+              <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('selector')}>
                 <SortButton>{tr('replicasets.table.selector', 'Selector')}{renderSortIcon('selector')}</SortButton>
               </th>
               <th className="col-optional text-left py-3 px-4 w-[160px]">{tr('replicasets.table.owner', 'Owner')}</th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>{tr('replicasets.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>

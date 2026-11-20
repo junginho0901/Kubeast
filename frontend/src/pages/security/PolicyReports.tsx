@@ -19,6 +19,7 @@ import { formatTime, utcTitle } from '@/utils/time'
 import { keepSameRead } from '@/utils/keepSameRead'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 // Security → Policy Reports: what the cluster's policy engine (Kyverno, Trivy Operator, …) wrote into
@@ -106,6 +107,7 @@ export default function PolicyReports() {
     }
     setSortKey(null)
   }
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -249,7 +251,7 @@ export default function PolicyReports() {
   const isError = tab === 'results' ? resultsQuery.isError : summaryQuery.isError
   const errorDetail = ((tab === 'results' ? resultsQuery.error : summaryQuery.error) as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail
   const sortHeader = (key: NonNullable<SortKey>, label: string, extra = '', align = 'text-left') => (
-    <th className={`${extra} ${align} py-3 px-4 cursor-pointer whitespace-nowrap`} onClick={() => handleSort(key)}>
+    <th className={`${extra} ${align} py-3 px-4 cursor-pointer whitespace-nowrap`} {...sortHead(key)}>
       <SortButton>{label}{renderSortIcon(key)}</SortButton>
     </th>
   )

@@ -11,6 +11,7 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './resourceQuotaHelpers'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface ResourceQuotaTableProps {
   pagedResourceQuotas: ResourceQuotaInfo[]
@@ -55,6 +56,7 @@ export function ResourceQuotaTable({
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, onSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -68,24 +70,24 @@ export function ResourceQuotaTable({
         <table className="w-full text-sm min-w-[700px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => onSort('name')}>
+              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>
                   {tr('resourceQuotas.table.name', 'Name')}{renderSortIcon('name')}
                 </SortButton>
               </th>
               {showNamespaceColumn && (
-                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('namespace')}>
                   <SortButton>
                     {tr('resourceQuotas.table.namespace', 'Namespace')}{renderSortIcon('namespace')}
                   </SortButton>
                 </th>
               )}
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('requests')}>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('requests')}>
                 <SortButton>
                   {tr('resourceQuotas.table.requests', 'Request')}{renderSortIcon('requests')}
                 </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>
                   {tr('resourceQuotas.table.age', 'Age')}{renderSortIcon('age')}
                 </SortButton>

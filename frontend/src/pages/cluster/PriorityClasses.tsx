@@ -21,6 +21,7 @@ import { applyPriorityClassWatchEvent } from './priorityclasses/priorityClassWat
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 type SortKey = null | 'name' | 'value' | 'globalDefault' | 'preemptionPolicy' | 'age'
 
@@ -106,6 +107,7 @@ export default function PriorityClasses() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -279,27 +281,27 @@ description: "Sample priority class"
           <table className="w-full text-sm min-w-[800px] table-fixed">
             <thead ref={theadRef} className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('name')}>
+                <th className="text-left py-3 px-4 w-[250px] cursor-pointer" {...sortHead('name')}>
                   <SortButton>
                     {tr('priorityClasses.table.name', 'Name')}{renderSortIcon('name')}
                   </SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('value')}>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('value')}>
                   <SortButton>
                     {tr('priorityClasses.table.value', 'Value')}{renderSortIcon('value')}
                   </SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('globalDefault')}>
+                <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('globalDefault')}>
                   <SortButton>
                     {tr('priorityClasses.table.globalDefault', 'Global Default')}{renderSortIcon('globalDefault')}
                   </SortButton>
                 </th>
-                <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('preemptionPolicy')}>
+                <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('preemptionPolicy')}>
                   <SortButton>
                     {tr('priorityClasses.table.preemptionPolicy', 'Preemption Policy')}{renderSortIcon('preemptionPolicy')}
                   </SortButton>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
                   <SortButton>
                     {tr('priorityClasses.table.age', 'Age')}{renderSortIcon('age')}
                   </SortButton>

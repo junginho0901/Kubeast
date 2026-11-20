@@ -21,6 +21,7 @@ import {
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -85,6 +86,7 @@ export function IngressTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -99,26 +101,26 @@ export function IngressTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && (
-                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('namespace')}>
                   <SortButton>{tr('ingressesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                 </th>
               )}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>{tr('ingressesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('class')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('class')}>
                 <SortButton>{tr('ingressesPage.table.class', 'Class')}{renderSortIcon('class')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('hosts')}>
+              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" {...sortHead('hosts')}>
                 <SortButton>{tr('ingressesPage.table.hosts', 'Hosts')}{renderSortIcon('hosts')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('backends')}>
+              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" {...sortHead('backends')}>
                 <SortButton>{tr('ingressesPage.table.routes', 'Routes')}{renderSortIcon('backends')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('addresses')}>
+              <th className="text-left py-3 px-4 w-[190px] cursor-pointer" {...sortHead('addresses')}>
                 <SortButton>{tr('ingressesPage.table.addresses', 'Address')}{renderSortIcon('addresses')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>{tr('ingressesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>

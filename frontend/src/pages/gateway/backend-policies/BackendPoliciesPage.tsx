@@ -19,6 +19,7 @@ import { useBackendPoliciesData, type BackendPolicyConfig } from './useBackendPo
 import { useNamespaceParam } from '@/hooks/useNamespaceParam'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface PageStrings {
   title: string
@@ -107,6 +108,7 @@ export default function BackendPoliciesPage<T extends BackendPolicyLike>({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -220,20 +222,20 @@ ${yamlBodyTemplate}`
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('namespace')}>
+                  <th className="col-low text-left py-3 px-4 w-[170px] cursor-pointer" {...sortHead('namespace')}>
                     <SortButton>{strings.tableNamespace}{renderSortIcon('namespace')}</SortButton>
                   </th>
                 )}
-                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
+                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
                   <SortButton>{strings.tableName}{renderSortIcon('name')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[280px] cursor-pointer" onClick={() => handleSort('targetRef')}>
+                <th className="text-left py-3 px-4 w-[280px] cursor-pointer" {...sortHead('targetRef')}>
                   <SortButton>{strings.tableTargetRef}{renderSortIcon('targetRef')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[140px]">
                   {strings.tableStatus}
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
+                <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
                   <SortButton>{strings.tableAge}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>

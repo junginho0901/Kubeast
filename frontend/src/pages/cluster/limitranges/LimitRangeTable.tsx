@@ -17,6 +17,7 @@ import {
 } from './limitRangeHelpers'
 import { openOnPress } from '@/components/openOnPress'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface LimitRangeTableProps {
   pagedLimitRanges: LimitRangeInfo[]
@@ -61,6 +62,7 @@ export function LimitRangeTable({
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, onSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -74,24 +76,24 @@ export function LimitRangeTable({
         <table className="w-full text-sm min-w-[700px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => onSort('name')}>
+              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>
                   {tr('limitRanges.table.name', 'Name')}{renderSortIcon('name')}
                 </SortButton>
               </th>
               {showNamespaceColumn && (
-                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => onSort('namespace')}>
+                <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('namespace')}>
                   <SortButton>
                     {tr('limitRanges.table.namespace', 'Namespace')}{renderSortIcon('namespace')}
                   </SortButton>
                 </th>
               )}
-              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('types')}>
+              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('types')}>
                 <SortButton>
                   {tr('limitRanges.table.types', 'Types')}{renderSortIcon('types')}
                 </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => onSort('age')}>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
                 <SortButton>
                   {tr('limitRanges.table.age', 'Age')}{renderSortIcon('age')}
                 </SortButton>

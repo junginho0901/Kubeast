@@ -15,6 +15,7 @@ import {
   type SortDir,
 } from './releaseHelpers'
 import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface Props {
   paged: HelmReleaseSummary[]
@@ -53,6 +54,7 @@ export default function ReleaseTable({
   const { t } = useTranslation()
   const navigate = useNavigate()
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, onSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -76,42 +78,42 @@ export default function ReleaseTable({
         <table className="w-full text-sm table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="col-low text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => onSort('namespace')}>
+              <th className="col-low text-left py-3 px-4 w-[140px] cursor-pointer" {...sortHead('namespace')}>
                 <SortButton>
                   {t('helmReleases.table.namespace')}{renderSortIcon('namespace')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('name')}>
+              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('name')}>
                 <SortButton>
                   {t('helmReleases.table.name')}{renderSortIcon('name')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => onSort('revision')}>
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('revision')}>
                 <SortButton>
                   {t('helmReleases.table.revision')}{renderSortIcon('revision')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('status')}>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('status')}>
                 <SortButton>
                   {t('helmReleases.table.status')}{renderSortIcon('status')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => onSort('chart')}>
+              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('chart')}>
                 <SortButton>
                   {t('helmReleases.table.chart')}{renderSortIcon('chart')}
                 </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('chartVersion')}>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('chartVersion')}>
                 <SortButton>
                   {t('helmReleases.table.chartVersion')}{renderSortIcon('chartVersion')}
                 </SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('appVersion')}>
+              <th className="col-optional text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('appVersion')}>
                 <SortButton>
                   {t('helmReleases.table.appVersion')}{renderSortIcon('appVersion')}
                 </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => onSort('updated')}>
+              <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('updated')}>
                 <SortButton>
                   {t('helmReleases.table.updated')}{renderSortIcon('updated')}
                 </SortButton>
