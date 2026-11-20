@@ -3,6 +3,7 @@ package memlimit
 import (
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"testing"
 )
 
@@ -16,9 +17,57 @@ func TestGoMemLimit(t *testing.T) {
 		"tool-server, 256 Mi and kubectl": {256 * mi, 120 * mi, 241591910 - 120*mi},
 		"a limit kubectl would take all":  {128 * mi, 120 * mi, 32 * mi},
 	} {
-		if got := goMemLimit(c.limit, c.reserved); got != c.want {
+		if got := goMemLimitShare(c.limit, memoryLimitShare, c.reserved); got != c.want {
 			t.Errorf("%s: %d, want %d", name, got, c.want)
 		}
+	}
+}
+
+// k8s-service's 80 % leaves the kernel's memory for its sockets 102 MiB of 512 Mi; reserved bytes and the floor work as
+// at 90 %.
+func TestGoMemLimitShare(t *testing.T) {
+	const mi = int64(1) << 20
+	for name, c := range map[string]struct {
+		limit    int64
+		share    float64
+		reserved int64
+		want     int64
+	}{
+		"k8s-service, 512 Mi":             {512 * mi, 0.8, 0, 429496729},
+		"k8s-service, 1 Gi":               {1024 * mi, 0.8, 0, 858993459},
+		"less reserved bytes":             {512 * mi, 0.8, 48 * mi, 429496729 - 48*mi},
+		"a limit reserved bytes take all": {128 * mi, 0.8, 120 * mi, 32 * mi},
+		"the other services' 90 %":        {512 * mi, memoryLimitShare, 0, 483183820},
+	} {
+		if got := goMemLimitShare(c.limit, c.share, c.reserved); got != c.want {
+			t.Errorf("%s: %d, want %d", name, got, c.want)
+		}
+	}
+}
+
+// A GOMEMLIMIT in the environment is the limit: SetShare leaves it, and without it sets the share of the cgroup's.
+func TestSetShareLeavesAGOMEMLIMITFromTheEnvironment(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "memory.max")
+	if err := os.WriteFile(file, []byte("536870912\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	files := cgroupMemoryFiles
+	cgroupMemoryFiles = []string{file}
+	was := debug.SetMemoryLimit(-1)
+	t.Cleanup(func() {
+		cgroupMemoryFiles = files
+		debug.SetMemoryLimit(was)
+	})
+
+	t.Setenv("GOMEMLIMIT", "300MiB")
+	SetShare(0.8, 0)
+	if got := debug.SetMemoryLimit(-1); got != was {
+		t.Fatalf("with GOMEMLIMIT set the limit went from %d to %d", was, got)
+	}
+	t.Setenv("GOMEMLIMIT", "")
+	SetShare(0.8, 0)
+	if got := debug.SetMemoryLimit(-1); got != 429496729 {
+		t.Fatalf("without GOMEMLIMIT the limit is %d, want 80 %% of 512 Mi, 429496729", got)
 	}
 }
 

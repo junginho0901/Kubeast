@@ -117,6 +117,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 ## 메모리
 
+- Go 서비스는 `services/pkg/memlimit`로 cgroup 메모리 한도의 90 %를 GC 한도로 주고(`Set`), k8s-service는 80 %다(`SetShare(k8sMemoryLimitShare, 0)`). 나머지는 cgroup은 세고 Go는 모르는 커널 몫(소켓 버퍼 · slab)이다. `GOMEMLIMIT` 환경 값이 있으면 그 값이 한도다.
 - k8s-service가 받은 연결은 보내기 버퍼가 128 KiB다(리눅스는 두 배로 잡고 더 늘리지 않는다, `cmd/server/conn_buffers.go`의 `capSendBuffer`). Go 안에서 한 벌을 같이 쓰는 답(노드 목록)도 커널은 소켓마다 따로 쥐고, 그 몫은 cgroup에는 세지만 Go 메모리 한도는 모른다. k8s-service에 리스너를 더하면 같은 상한을 걸고, k8s-service가 여는 연결(API 서버 · auth-service · DB)은 커널 기본값 그대로 둔다.
 
 ## 빌드 / 배포
