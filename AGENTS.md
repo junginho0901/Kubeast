@@ -80,7 +80,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   로그 전용 폴백은 없다.
 - 민감 필드(password, secret, token, apikey 등)는 **`audit.MaskSensitive(...)` 적용 후** 저장. 문자열 안은 읽지 못하므로 YAML·JSON 글은 행에 넣지 말고 길이나 요약만 남긴다(`yaml_len`, `helmValuesAudit`).
 - 값을 못 읽는 사람이 저장한 Secret·Helm values의 행에는 값 대신 자리 이름만 남긴다: 값이 그대로인 자리는 `kept_masked`, Helm에서 새로 쓰거나 지운 자리는 `changed_masked`.
-- AI 쓰기 도구의 인자는 실행에 필요한 동안만 원문이다. 저장되는 답과 스트림(멈춘 답은 화면이 스트림에서 받은 글로 저장한다)은 처음부터, 승인 행은 실행·거절·만료·중단(실행 도중 ai-service가 멈춰 승인 10분 뒤 `ai.tool.interrupt`로 끝남) 뒤에 필드가 같은 가린 사본을 갖는다(`audit_target.shown_tool_args`, `kept_tool_args`).
+- AI 쓰기 도구의 인자는 실행에 필요한 동안만 원문이다. 저장되는 답과 스트림(멈춘 답은 화면이 스트림에서 받은 글로 저장한다)은 처음부터, 승인 행은 실행·거절·만료·중단(실행 도중 ai-service가 멈춘 호출은 승인 10분이 지난 뒤 처음 들여다본 ai-service가 `ai.tool.interrupt`로 끝냄. 들여다보는 때는 새 승인 카드, 카드 열기, 프로세스의 첫 데이터베이스 사용이고 타이머는 없음) 뒤에 필드가 같은 가린 사본을 갖는다(`audit_target.shown_tool_args`, `kept_tool_args`).
 
 ### PR 리뷰 기준
 
