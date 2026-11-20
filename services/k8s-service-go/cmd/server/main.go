@@ -515,15 +515,7 @@ func main() {
 		r.Post("/internal/clusters/{id}/validate", h.ValidateCluster)
 	})
 
-	// Create HTTP server
-	// WriteTimeout=0 to support long-lived WebSocket connections
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 0,
-		IdleTimeout:  120 * time.Second,
-	}
+	srv := newHTTPServer(fmt.Sprintf(":%d", cfg.Port), r)
 
 	// Graceful shutdown
 	done := make(chan os.Signal, 1)

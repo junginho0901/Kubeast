@@ -115,6 +115,10 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 - 프로세스 안의 한도 · 캐시 · 카운터는 파드마다다(설치 전체로는 레플리카 수만큼 곱해진다). 설치 전체에서 지켜야 하는 값은 DB나 Redis에 둔다.
   그런 일이나 상태를 더하는 변경은 docs/high-availability.md(en · ko)에 파드가 무엇을 쥐는지 적는다.
 
+## 메모리
+
+- k8s-service가 받은 연결은 보내기 버퍼가 128 KiB다(리눅스는 두 배로 잡고 더 늘리지 않는다, `cmd/server/conn_buffers.go`의 `capSendBuffer`). Go 안에서 한 벌을 같이 쓰는 답(노드 목록)도 커널은 소켓마다 따로 쥐고, 그 몫은 cgroup에는 세지만 Go 메모리 한도는 모른다. k8s-service에 리스너를 더하면 같은 상한을 걸고, k8s-service가 여는 연결(API 서버 · auth-service · DB)은 커널 기본값 그대로 둔다.
+
 ## 빌드 / 배포
 
 - **빌드/배포는 항상 `scripts/rebuild-kind.sh` 를 통해 수행**한다. 직접 docker/kubectl 명령을 돌리지 않는다.
