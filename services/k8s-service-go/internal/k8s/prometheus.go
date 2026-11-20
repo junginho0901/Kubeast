@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/proxypath"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -489,27 +490,21 @@ func probeServiceLabels(ctx context.Context, cs kubernetes.Interface, selectors 
 }
 
 // verifyPrometheusProxy checks if a service is Prometheus by hitting /-/healthy
-// via the K8s API proxy. A refusal (403) still counts as found: the Service is
-// there, and the cluster decides on each caller's own query, not on the
-// discovery identity's.
+// via the K8s API proxy. The API server's refusal (403) still counts as found:
+// the Service is there, and the cluster decides on each caller's own query, not
+// on the discovery identity's. The Service's own 401 or 403 does not: its API
+// cannot be read through the proxy.
 func verifyPrometheusProxy(ctx context.Context, cs kubernetes.Interface, info *promServiceInfo) bool {
-	result := cs.CoreV1().RESTClient().Get().
-		AbsPath(info.proxyBase()).
-		Suffix("-", "healthy").
-		Do(ctx)
-
-	var statusCode int
-	result.StatusCode(&statusCode)
-	body, err := result.Raw()
+	rc, err := proxyClient(cs)
 	if err != nil {
-		if statusCode == http.StatusForbidden {
-			return true
-		}
-		slog.Debug("Prometheus verify failed", "status", statusCode, "err", err)
 		return false
 	}
-	if statusCode != http.StatusOK {
-		slog.Debug("Prometheus verify non-200", "status", statusCode, "body", string(body))
+	a := proxyGet(ctx, rc.Get().AbsPath(info.proxyBase()).Suffix("-", "healthy"))
+	if a.err != nil {
+		if a.cluster && a.code == http.StatusForbidden {
+			return true
+		}
+		slog.Debug("Prometheus verify failed", "status", a.code, "err", a.err)
 		return false
 	}
 	return true
@@ -520,8 +515,11 @@ func verifyPrometheusProxy(ctx context.Context, cs kubernetes.Interface, info *p
 // AbsPath does not handle query parameters correctly for service proxy URLs.
 func (s *Service) prometheusViaProxyUncached(ctx context.Context, info *promServiceInfo, promPath string) ([]map[string]interface{}, error) {
 	// Use the K8s RESTClient with proper param handling
-	req := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().
-		AbsPath(info.proxyBase())
+	rc, err := s.proxyClientCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	req := rc.Get().AbsPath(info.proxyBase())
 
 	// Parse promPath to separate the path and query parts
 	// e.g. "/api/v1/query?query=up" → subpath="/api/v1/query", params={"query": "up"}
@@ -540,18 +538,11 @@ func (s *Service) prometheusViaProxyUncached(ctx context.Context, info *promServ
 		req = req.Suffix(promPath)
 	}
 
-	result := req.Do(ctx)
-	body, err := result.Raw()
-	if err != nil {
-		var statusCode int
-		result.StatusCode(&statusCode)
-		// The proxy's 5xx or timeout is the Prometheus Service not answering, not the cluster: an upstream error (502),
-		// which the cluster's breaker does not count, as the external store's and metrics-server's are.
-		if statusCode >= http.StatusInternalServerError || apierrors.IsServiceUnavailable(err) || apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) {
-			return nil, fmt.Errorf("%w: prometheus proxy request failed (status %d): %v", ErrPrometheusUpstream, statusCode, err)
-		}
-		return nil, fmt.Errorf("prometheus proxy request failed (status %d): %w", statusCode, err)
+	a := proxyGet(ctx, req)
+	if a.err != nil {
+		return nil, promProxyError(info, a)
 	}
+	body := a.body
 
 	var resp prometheusResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -563,6 +554,29 @@ func (s *Service) prometheusViaProxyUncached(ctx context.Context, info *promServ
 	}
 
 	return resp.Data.Result, nil
+}
+
+// promProxyError is a failed query of the Prometheus Service through the API server proxy, for the caller. The API
+// server's own 401 or 403 stays what it is (the person may not read the Service). The rest of what the store did not
+// answer is an upstream error (502), which the cluster's breaker does not count, as the external store's and
+// metrics-server's are: a redirect not followed, the API server's other answers (no such Service, no endpoint, the
+// Service not answering), the proxy's 5xx or timeout, and the store's own 401 or 403 (an authenticating proxy in front
+// of it), which is not the person's sign-in or a refusal of the cluster. The store's other answers stay as client-go
+// read them.
+func promProxyError(info *promServiceInfo, a proxyAnswer) error {
+	switch {
+	case proxypath.NotFollowed(a.err) != nil:
+		return fmt.Errorf("%w: prometheus proxy request failed: %v", ErrPrometheusUpstream, proxypath.NotFollowed(a.err))
+	case a.clusterRefusal():
+		return fmt.Errorf("prometheus proxy request failed (status %d): %w", a.code, a.err)
+	case a.cluster:
+		return fmt.Errorf("%w: prometheus proxy request failed (status %d): the cluster's API server answered for the Prometheus Service %s: %v", ErrPrometheusUpstream, a.code, info.ref(), a.err)
+	case a.storeOwnAuth():
+		return fmt.Errorf("%w: prometheus proxy request failed (status %d), answered by the Prometheus Service %s itself: %s", ErrPrometheusUpstream, a.code, info.ref(), a.bodyText())
+	case a.code >= http.StatusInternalServerError || apierrors.IsServiceUnavailable(a.err) || apierrors.IsTimeout(a.err) || apierrors.IsServerTimeout(a.err):
+		return fmt.Errorf("%w: prometheus proxy request failed (status %d): %v", ErrPrometheusUpstream, a.code, a.err)
+	}
+	return fmt.Errorf("prometheus proxy request failed (status %d): %w", a.code, a.err)
 }
 
 // extractPrometheusValue extracts the float64 value from a Prometheus instant query result.
