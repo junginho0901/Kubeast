@@ -612,7 +612,8 @@ func statusError(resp *http.Response) error {
 	return fmt.Errorf("%w (%d): %s", ErrUnavailable, resp.StatusCode, detail)
 }
 
-// grpcStatus turns a non-zero grpc-status into an error.
+// grpcStatus turns a non-zero grpc-status into an error. A PermissionDenied or Unauthenticated is the Relay's own, or
+// that of a proxy in front of it: the API server refuses the proxy with a Status (statusError), never with a gRPC status.
 func grpcStatus(h http.Header) error {
 	st := h.Get("Grpc-Status")
 	if st == "" || st == "0" {
@@ -626,7 +627,7 @@ func grpcStatus(h http.Header) error {
 	case "4": // DeadlineExceeded
 		base = ErrTimeout
 	case "7", "16": // PermissionDenied, Unauthenticated
-		base = ErrForbidden
+		return fmt.Errorf("%w: the Relay (or a proxy in front of it) answered grpc-status %s itself, not the cluster: %s", ErrUnavailable, st, msg)
 	}
 	return fmt.Errorf("%w: relay grpc-status %s: %s", base, st, msg)
 }

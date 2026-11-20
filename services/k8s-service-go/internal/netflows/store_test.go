@@ -328,7 +328,7 @@ func TestQueryErrors(t *testing.T) {
 		{"API server refuses", &relay{status: http.StatusForbidden, body: apiStatus(http.StatusForbidden, "Forbidden", `services "https:hubble-relay:443" is forbidden`)}, ErrForbidden, "is forbidden"},
 		{"plain Relay behind the proxy", &relay{status: http.StatusServiceUnavailable}, ErrUnavailable, "hubble.relay.tls.server.enabled"},
 		{"no such service", &relay{status: http.StatusNotFound}, ErrRelayMissing, "refused"},
-		{"trailers-only refusal", &relay{header: map[string]string{"Grpc-Status": "7", "Grpc-Message": "denied"}}, ErrForbidden, "denied"},
+		{"trailers-only refusal", &relay{header: map[string]string{"Grpc-Status": "7", "Grpc-Message": "denied"}}, ErrUnavailable, "answered grpc-status 7 itself, not the cluster: denied"},
 		{"bad request", &relay{trailer: map[string]string{"Grpc-Status": "3", "Grpc-Message": "number and since"}}, ErrInvalidRequest, "number and since"},
 		{"failure after messages", &relay{messages: fixtureMessages(t, "getflows-web.bin")[:2], trailer: map[string]string{"Grpc-Status": "13", "Grpc-Message": "boom"}}, ErrUnavailable, "boom"},
 		{"no status at the end", &relay{messages: fixtureMessages(t, "getflows-web.bin")[:1]}, ErrUnavailable, "without a gRPC status"},
@@ -383,6 +383,28 @@ func TestTheFlowSourcesOwn401Or403IsNotTheClustersRefusal(t *testing.T) {
 		_, err = s.Read(context.Background(), calico, client, srv.URL+whiskerFlowsPath, req, whiskerNow)
 		if !errors.Is(err, c.want) || !strings.Contains(err.Error(), c.text) || c.want == ErrUnavailable && errors.Is(err, ErrForbidden) {
 			t.Errorf("Whisker, %s: %v, want %v containing %q", c.name, err, c.want, c.text)
+		}
+	}
+}
+
+// A gRPC PermissionDenied or Unauthenticated comes from past the API server — the Relay, or a proxy in front of it that
+// speaks gRPC — since the API server refuses the proxy with an HTTP status and a Status. At the start of the answer or
+// at its end, it is the Relay not answering, with its words, not the cluster refusing the read.
+func TestTheRelaysOwnGRPCRefusalIsNotTheClustersRefusal(t *testing.T) {
+	s := testStore()
+	req := Request{Namespace: "demo"}
+	_ = s.Normalize(&req)
+	for _, st := range []string{"7", "16"} {
+		for name, r := range map[string]*relay{
+			"at the start": {header: map[string]string{"Grpc-Status": st, "Grpc-Message": "RBAC: access denied"}},
+			"at the end":   {messages: fixtureMessages(t, "getflows-web.bin")[:1], trailer: map[string]string{"Grpc-Status": st, "Grpc-Message": "RBAC: access denied"}},
+		} {
+			srv, client := r.serve(t)
+			_, err := s.Read(context.Background(), Target{Mode: "proxy"}, client, srv.URL+getFlowsPath, req, fixtureNow)
+			want := "answered grpc-status " + st + " itself, not the cluster: RBAC: access denied"
+			if !errors.Is(err, ErrUnavailable) || errors.Is(err, ErrForbidden) || !strings.Contains(err.Error(), want) {
+				t.Errorf("grpc-status %s %s: %v, want %v containing %q", st, name, err, ErrUnavailable, want)
+			}
 		}
 	}
 }

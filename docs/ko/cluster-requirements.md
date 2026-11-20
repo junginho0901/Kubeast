@@ -657,10 +657,10 @@ service:
   - **Relay가 TLS로 서비스해야 합니다**(`hubble.relay.tls.server.enabled=true`). API 서버는 백엔드와 TLS일 때만 HTTP/2로 말하고, gRPC에는 HTTP/2가 필요합니다. 평문 Relay면 502나 503이 오고, 메시지에 이 설정 이름이 나옵니다.
   - API 서버는 Relay 인증서를 검사하지 않고(IP로 중계) 클라이언트 인증서도 보내지 않습니다. 그래서 클라이언트 인증서를 요구하는 Relay(`hubble.relay.tls.server.mtls=true`)는 주소 모드를 써야 합니다.
   - Relay나 Whisker의 리다이렉트는 같은 API 서버의 그 Service 프록시 경로 안에서만 따라가고, 그 밖이면 502입니다.
-  - Relay나 Whisker가 직접 쓴 401·403(앞에 둔 인증 프록시)은 거절이 아니라 그 문구를 담은 502입니다. API 서버가 프록시를 거절한 것은 그대로 403입니다.
+  - Relay나 Whisker가 직접 쓴 401·403(앞에 둔 인증 프록시)과 Relay가 보낸 gRPC PermissionDenied·Unauthenticated는 거절이 아니라 그 문구를 담은 502입니다. API 서버가 프록시를 거절한 것은 그대로 403입니다.
 - **주소 모드**(`https://<host>:<port>`): Kubeast가 Relay에 직접 TLS로 연결합니다.
   - 리다이렉트는 따라가지 않습니다. 리다이렉트로 답하는 Relay는 502입니다. Relay가 답하는 주소를 등록하세요.
-  - 주소에서 온 401·403은 Relay 자신의 답이고, 그 문구를 담은 502입니다. 사이에서 거절할 API 서버가 없기 때문입니다.
+  - 주소에서 온 401·403과 gRPC PermissionDenied·Unauthenticated는 Relay 자신의 답이고, 그 문구를 담은 502입니다. 사이에서 거절할 API 서버가 없기 때문입니다.
   - `tls.existingSecret`에 `ca.crt`를 넣고, `tls.clientCertificate: true`면 mTLS용 `tls.crt`·`tls.key`도 넣습니다. 인증서에서 확인할 이름은 `tls.serverName`으로 바꿀 수 있습니다.
   - k8s-service에서 Relay로 연결할 수 있어야 합니다. `networkPolicy`가 켜져 있으면 그 주소를 `features.networkFlows.egressCIDRs`에 추가하세요.
   - 읽기 전마다 아래와 같은 권한을 클러스터에 물어(SelfSubjectAccessReview) 두 모드에서 같은 사람만 읽게 합니다.

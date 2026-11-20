@@ -642,10 +642,10 @@ For the drawers' "Recent Flows" and the AI tool `network_flows` (`features.netwo
   - **The Relay must serve TLS** (`hubble.relay.tls.server.enabled=true`): the API server speaks HTTP/2 to a backend only over TLS, and gRPC needs HTTP/2. A plaintext Relay gives 502 or 503, and the message names that setting.
   - The API server does not check the Relay's certificate (it proxies by IP) and sends no client certificate, so a Relay that requires client certificates (`hubble.relay.tls.server.mtls=true`) needs the address mode.
   - A redirect from the Relay or Whisker is followed only on the same API server and under its Service's proxy path; any other gives 502.
-  - A 401 or 403 the Relay or Whisker writes itself (an authenticating proxy in front of it) is a 502 with its words, not a refusal. The API server's own refusal of the proxy stays a 403.
+  - A 401 or 403 the Relay or Whisker writes itself (an authenticating proxy in front of it), and a gRPC PermissionDenied or Unauthenticated from the Relay, is a 502 with its words, not a refusal. The API server's own refusal of the proxy stays a 403.
 - **Address mode** (`https://<host>:<port>`): Kubeast connects to the Relay itself over TLS.
   - It follows no redirect: a Relay that answers with one gives 502. Register the address the Relay answers on.
-  - A 401 or 403 at the address is the Relay's own, a 502 with its words: no API server is in between to refuse.
+  - A 401 or 403 at the address, and a gRPC PermissionDenied or Unauthenticated, is the Relay's own, a 502 with its words: no API server is in between to refuse.
   - `tls.existingSecret` holds `ca.crt`, and with `tls.clientCertificate: true` also `tls.crt` and `tls.key` for mTLS. `tls.serverName` overrides the name checked on the certificate.
   - The Relay must be reachable from k8s-service: add the address to `features.networkFlows.egressCIDRs` when `networkPolicy` is on.
   - Kubeast asks the cluster the same permission as below (SelfSubjectAccessReview) before each read, so the same people read in both modes.
