@@ -18,7 +18,7 @@ import { ActionFailure } from '@/components/ActionFailure'
 import { MessageList, type DisplayMessage } from './MessageList'
 import { conversationGone, forgetsConversation, turnsOnScreen } from './turnsOnScreen'
 import { modalOpen } from '@/hooks/useModalStack'
-import { focusables } from '@/utils/focusables'
+import { keepTabIn } from '@/utils/focusables'
 import { hiddenEarlier, mergeNewestPage, prependEarlier } from '@/services/sessionMessages'
 import { useStickToBottom } from '@/hooks/useStickToBottom'
 import { useEarlierMessages } from '@/hooks/useEarlierMessages'
@@ -277,11 +277,7 @@ export function ChatPanel({
       onClose()
     } else if (e.key === 'Tab' && modalOpen()) {
       e.stopPropagation()
-      const list = focusables(e.currentTarget)
-      if (list.length === 0) return
-      const first = list[0], last = list[list.length - 1]
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+      keepTabIn(e.currentTarget, e, document.activeElement)
     }
   }
 
