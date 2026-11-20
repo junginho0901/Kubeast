@@ -72,7 +72,8 @@ def test_required_version_matches_go_migrations():
     # install-wide Claude Code limit ai-service keeps; 28 adds node_drains, which only k8s-service reads; 29 counts
     # how many times a stopping ai-service put a running investigation back in the queue; 30 adds node_shells, which
     # only k8s-service reads; 31 adds alert_investigations.result; 32 makes the self sign-ups a provider's sign-in
-    # reached oidc accounts, which only auth-service reads).
+    # reached oidc accounts, which only auth-service reads; 33 indexes tool_approvals by (status, decided_at) and
+    # session_id for ai-service's sweeps before each new card and a chat's cards and delete).
     import pathlib
     import re
     go = (pathlib.Path(__file__).resolve().parents[2] / "pkg" / "dbmigrate" / "dbmigrate.go").read_text()
