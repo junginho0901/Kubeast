@@ -17,7 +17,7 @@ func (h *Handler) GetNodes(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(raw)
+	writeShared(w, r, raw)
 }
 
 // DescribeNode handles GET /api/v1/nodes/{name}/describe.
