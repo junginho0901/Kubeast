@@ -33,8 +33,10 @@ type windowCluster struct {
 	// as an authorizer that reads the field selector may decide otherwise than a review
 	may  func(user, namespace string) bool
 	list func(user, namespace string) bool
-	// cacheRefused refuses the events to kubeast:cache; hold holds its first pages until closed
+	// cacheRefused refuses the events to kubeast:cache; reviewFails answers every review 500; hold holds kubeast:cache's
+	// first pages until closed
 	cacheRefused bool
+	reviewFails  bool
 	hold         chan struct{}
 	released     sync.Once
 	events       []corev1.Event
@@ -92,6 +94,10 @@ func (a *windowCluster) serve(w http.ResponseWriter, r *http.Request) {
 		a.mu.Lock()
 		a.reviews++
 		a.mu.Unlock()
+		if a.reviewFails {
+			writeStatus(w, http.StatusInternalServerError, "InternalError", "the review could not be answered")
+			return
+		}
 		review.APIVersion, review.Kind = "authorization.k8s.io/v1", "SelfSubjectAccessReview"
 		review.Status.Allowed = ra.Verb == "list" && ra.Resource == "events" && a.may(user, ra.Namespace)
 		writeJSON(w, review)
@@ -427,6 +433,36 @@ func TestTimelineEventsAreTheCallersOwnWhenTheCacheIdentityIsRefused(t *testing.
 	}
 	if _, reads := api.count(overviewCacheUser); reads != 2 {
 		t.Errorf("kubeast:cache was asked for the events %d times, want once in each of the two places: its refusal holds for the next reads", reads)
+	}
+}
+
+// A review the API server fails (500, not a refusal) reads the events as the caller, as before the review: the answer is
+// the caller's own read's, across the cluster, in a namespace and for a grant limited to namespaces, and nothing is read
+// as kubeast:cache.
+func TestAFailedReviewReadsTheEventsAsTheCaller(t *testing.T) {
+	api := &windowCluster{may: func(string, string) bool { return true }, reviewFails: true, events: windowEvents(time.Now().Truncate(time.Second))}
+	s, own := api.start(t)
+	for _, ctx := range []context.Context{wideCaller("a@example.com"), grantCaller("two@example.com", "bulk", "shop")} {
+		for _, namespace := range []string{"", "shop"} {
+			evs, counts, err := s.newestEventsSince(ctx, namespace, metav1.ListOptions{}, time.Time{}, 50, "")
+			got := eventsSaid(evs, counts, err)
+			evs, counts, err = own.newestEventsSince(ctx, namespace, metav1.ListOptions{}, time.Time{}, 50, "")
+			if want := eventsSaid(evs, counts, err); err != nil || got != want {
+				t.Errorf("%q:\n got %.300s\nwant %.300s", namespace, got, want)
+			}
+		}
+	}
+	res, err := s.GetNamespaceTimeline(wideCaller("a@example.com"), "", 24, 500, "")
+	got := timelineSaid(t, res, err)
+	res, err = own.GetNamespaceTimeline(wideCaller("a@example.com"), "", 24, 500, "")
+	if want := timelineSaid(t, res, err); err != nil || got != want {
+		t.Errorf("the timeline:\n got %.300s\nwant %.300s", got, want)
+	}
+	if api.reviewsSeen() == 0 {
+		t.Error("no review was asked")
+	}
+	if pages, reads := api.count(overviewCacheUser); reads != 0 {
+		t.Errorf("%d reads of the events as kubeast:cache (%d pages), want none", reads, pages)
 	}
 }
 

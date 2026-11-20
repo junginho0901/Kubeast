@@ -219,17 +219,14 @@ func readEventWindow(ctx context.Context, client kubernetes.Interface, namespace
 // eventWindowFor is namespace's events read once as kubeast:cache for everyone asking the same at that moment whose
 // identity may list every event there (SelfSubjectAccessReview through mayList, 60 s): what that identity's own list
 // gives, whatever the selector. shared false says to read them as the caller: no cache identity, a limit of all, a
-// review that refuses, or kubeast:cache refused them within the last minute.
+// review that refuses or fails, or kubeast:cache refused them within the last minute.
 func (s *Service) eventWindowFor(ctx context.Context, namespace string, opts metav1.ListOptions, limit int, eventType string) (*eventWindow, bool, error) {
 	b := s.bundleForCtx(ctx)
 	if b == nil || b.cacheClient == nil || limit < 1 || eventsRefusedTo(b, namespace) {
 		return nil, false, nil
 	}
-	may, err := s.mayList(ctx, b, "events", namespace)
-	if err != nil && !apierrors.IsForbidden(err) {
-		return nil, false, fmt.Errorf("events not listed: %w", err)
-	}
-	if !may {
+	// a review the cluster did not answer says nothing of the caller's rights: its own read answers, as before the review
+	if may, err := s.mayList(ctx, b, "events", namespace); err != nil || !may {
 		return nil, false, nil
 	}
 	w, err := s.sharedEventWindow(ctx, b, namespace, opts, limit, eventType)
