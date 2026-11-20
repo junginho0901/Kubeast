@@ -18,7 +18,7 @@ export function TrafficPanel({ line, result, opener, titleRef, onClose, onWhy, o
   line: TrafficLine
   result: TrafficResult
   opener: RefObject<{ focus(): void } | null>
-  titleRef?: RefObject<HTMLDivElement | null>
+  titleRef?: RefObject<HTMLHeadingElement | null>
   onClose: () => void
   onWhy: (c: LineCheck) => void
   onOpen: (e: TrafficEnd) => void
@@ -43,9 +43,9 @@ export function TrafficPanel({ line, result, opener, titleRef, onClose, onWhy, o
   return (
     <div className="absolute top-3 right-3 bottom-3 z-20 w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-xl border border-hairline bg-slate-800 p-4 text-sm shadow-xl break-words" data-testid="traffic-panel">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div ref={titleRef} tabIndex={-1} className="text-lg font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400" data-testid="traffic-panel-title">
+        <h2 ref={titleRef} tabIndex={-1} className="text-lg font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400" data-testid="traffic-panel-title">
           {tr('resourceGraph.traffic.panelTitle', 'Traffic')}
-        </div>
+        </h2>
         <button type="button" onClick={closeToLine} className="p-1 rounded-lg text-slate-400 hover:text-ink hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-primary-400 hit-area-40" aria-label={tr('common.close', 'Close')} data-testid="traffic-panel-close">
           <X className="w-4 h-4" />
         </button>

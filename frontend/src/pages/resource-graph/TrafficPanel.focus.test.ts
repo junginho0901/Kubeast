@@ -59,4 +59,10 @@ describe('Resource Graph traffic panel focus', () => {
     ]))
     expect(title?.children).toBe('Traffic')
   })
+
+  it('names itself with a second-level heading at the card title size, as the drawer header and the pod group window do', () => {
+    const title = elementsOf(panel({}), (p) => p['data-testid'] === 'traffic-panel-title')[0]
+    expect(title?.type).toBe('h2')
+    expect(String(title?.props.className).split(' ')).toEqual(expect.arrayContaining(['text-lg', 'font-semibold']))
+  })
 })

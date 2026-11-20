@@ -120,7 +120,7 @@ export default function ResourceGraph() {
   // the line pressed, or opened with Enter, to open the traffic panel, which Escape and its X give the focus back to
   const lineOpener = useRef<{ focus(): void } | null>(null)
   // the panel's title, which takes the focus once the panel an Enter opened is drawn (`focusPanel`, set by that Enter)
-  const panelTitle = useRef<HTMLDivElement | null>(null)
+  const panelTitle = useRef<HTMLHeadingElement | null>(null)
   const focusPanel = useRef(false)
   // the box that opened the drawer with Enter, which closing the drawer gives the focus back to
   const boxOpener = useRef<{ focus(): void; isConnected: boolean } | null>(null)
