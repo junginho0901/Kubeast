@@ -558,3 +558,158 @@ describe('the first selection when the address change does not land', () => {
     expect(await run(false, 'gone')).toEqual({ opened: true, shown: 'default', stored: 'default', asked: ['/admin/users?cluster=default'] })
   })
 })
+
+// Each tab keeps its own choice; the stored one is where a new tab starts. A tab moved by the sidebar (no ?cluster=)
+// read the stored one on every render: when a sign-in in another tab of the browser had cleared it, the tab's next
+// cluster-scoped read (Layout's pending access requests, every minute) drew it with no cluster, the gate took the page
+// away until the picker chose again, and the window open on it and what was typed there went; when another tab had
+// picked another cluster, the tab moved to it.
+describe("a tab's own choice and the other tabs of the browser", () => {
+  const seen = { pageMounts: 0, windowOpen: false, fallbackDrawn: 0, shown: [] as string[] }
+  let openWindow: () => void = () => {}
+  let go: (to: string) => void = () => {}
+  let forget: () => void = () => {}
+  // a page with a window open in its own state, as Role Management's Create Role
+  function Page() {
+    const [open, setOpen] = useState(false)
+    openWindow = () => setOpen(true)
+    seen.windowOpen = open
+    useLayoutEffect(() => { seen.pageMounts += 1 }, [])
+    return null
+  }
+  function Fallback() {
+    useLayoutEffect(() => { seen.fallbackDrawn += 1 })
+    return null
+  }
+  // Layout's pending access requests (usePendingAccessRequestCount), a cluster-scoped read every minute, on its way for
+  // a while as a read over the network is: the provider draws the count of reads on their way
+  function Pending() {
+    useQuery({
+      queryKey: ['access-requests', 'admin', 'pending-count'],
+      queryFn: async () => {
+        await new Promise((r) => setTimeout(r, 20))
+        return (await client.get('/auth/admin/access-requests', { params: { status: 'pending', limit: 0 } })).data
+      },
+      refetchInterval: 60_000,
+    })
+    return null
+  }
+  // as Layout draws it: under the cluster's key, the reads beside the page, the gate and the page in it
+  function Body() {
+    const { currentCluster, forgetCluster } = useCluster()
+    const navigate = useNavigate()
+    go = navigate
+    forget = forgetCluster
+    useLayoutEffect(() => { if (seen.shown.at(-1) !== currentCluster) seen.shown.push(currentCluster) })
+    return createElement(Fragment, { key: currentCluster || 'default' }, createElement(Pending), createElement(ClusterGate, { fallback: createElement(Fallback), children: createElement(Page) }))
+  }
+  const stored = () => window.localStorage.getItem('kubeast:current-cluster')
+  const pendingReads = () => sentReads.filter((r) => r.startsWith('/auth/admin/access-requests '))
+  const pass = async (ms: number) => { for (let t = 0; t < ms; t += 500) await act(async () => { await vi.advanceTimersByTimeAsync(500) }) }
+  // a tab opened at `url`, with what the tabs before stored, or `storedAs`
+  const open = async (url: string, storedAs?: string) => {
+    if (storedAs) window.localStorage.setItem('kubeast:current-cluster', storedAs)
+    else if (storedAs === '') window.localStorage.removeItem('kubeast:current-cluster')
+    Object.assign(seen, { pageMounts: 0, windowOpen: false, fallbackDrawn: 0, shown: [] })
+    root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(MemoryRouter, { initialEntries: [url] },
+        createElement(QueryClientProvider, { client: new QueryClient({ defaultOptions: { queries: queryDefaults } }) },
+          createElement(ClusterProvider, null, createElement(Picker), createElement(Body)))))
+    })
+    await pass(3_000)
+  }
+  // opened on a link to `default`, moved by the sidebar to Role Management (the address drops ?cluster=), Create Role open
+  const onRolesWithWindowOpen = async () => {
+    await open('/?cluster=default', '')
+    await act(async () => go('/admin/roles'))
+    await act(async () => openWindow())
+    await pass(1_000)
+    expect({ shown: seen.shown, stored: stored(), pageMounts: seen.pageMounts, windowOpen: seen.windowOpen })
+      .toEqual({ shown: ['default'], stored: 'default', pageMounts: 1, windowOpen: true })
+    sentReads.length = 0
+    seen.fallbackDrawn = 0
+  }
+  const end = async () => {
+    await act(async () => root.unmount())
+    vi.useRealTimers()
+    registry = ['self']
+  }
+
+  it('keeps the page and its open window when another tab clears the stored choice (a sign-in there), past the reads every minute', async () => {
+    vi.useFakeTimers()
+    registry = ['default', 'self']
+    try {
+      await onRolesWithWindowOpen()
+      window.localStorage.removeItem('kubeast:current-cluster')
+      window.dispatchEvent(new Event('storage'))
+      await pass(125_000)
+      expect({ shown: seen.shown, pageMounts: seen.pageMounts, windowOpen: seen.windowOpen, fallbackDrawn: seen.fallbackDrawn, stored: stored(), readsEveryMinute: pendingReads().length >= 2, readsElsewhere: pendingReads().filter((r) => !r.includes('cluster=default')) })
+        .toEqual({ shown: ['default'], pageMounts: 1, windowOpen: true, fallbackDrawn: 0, stored: null, readsEveryMinute: true, readsElsewhere: [] })
+    } finally {
+      await end()
+    }
+  })
+
+  it('stays on its own cluster when another tab picks another one', async () => {
+    vi.useFakeTimers()
+    registry = ['default', 'self']
+    try {
+      await onRolesWithWindowOpen()
+      window.localStorage.setItem('kubeast:current-cluster', 'self')
+      window.dispatchEvent(new Event('storage'))
+      await pass(125_000)
+      expect({ shown: seen.shown, pageMounts: seen.pageMounts, windowOpen: seen.windowOpen, fallbackDrawn: seen.fallbackDrawn, stored: stored(), atSelf: sentReads.filter((r) => r.includes('cluster=self')) })
+        .toEqual({ shown: ['default'], pageMounts: 1, windowOpen: true, fallbackDrawn: 0, stored: 'self', atSelf: [] })
+    } finally {
+      await end()
+    }
+  })
+
+  it('a new tab starts on the cluster last picked, in any tab', async () => {
+    vi.useFakeTimers()
+    registry = ['default', 'self']
+    try {
+      await open('/?cluster=default', '')
+      await act(async () => go('/admin/roles'))
+      await act(async () => pick('self'))
+      await pass(1_000)
+      expect({ shown: seen.shown, stored: stored() }).toEqual({ shown: ['default', 'self'], stored: 'self' })
+      await act(async () => root.unmount())
+
+      sentReads.length = 0
+      await open('/admin/roles')
+      expect({ shown: seen.shown, stored: stored(), pageMounts: seen.pageMounts, reads: pendingReads() })
+        .toEqual({ shown: ['self'], stored: 'self', pageMounts: 1, reads: ['/auth/admin/access-requests status=pending&limit=0&cluster=self'] })
+    } finally {
+      await end()
+    }
+  })
+
+  it("a sign-in in this tab drops this tab's choice and the stored one: the gate chooses again among the person's clusters", async () => {
+    vi.useFakeTimers()
+    registry = ['default', 'self']
+    try {
+      await open('/?cluster=default', '')
+      await act(async () => go('/admin/roles'))
+      await act(async () => pick('self'))
+      await pass(1_000)
+      expect({ shown: seen.shown, stored: stored() }).toEqual({ shown: ['default', 'self'], stored: 'self' })
+
+      // signed out: the sign-in page, whose address names no cluster, the tab still on its choice
+      await act(async () => go('/login'))
+      await pass(1_000)
+      expect(seen.shown.at(-1)).toBe('self')
+      seen.shown = []
+      // Login's answer: the selection forgotten, then the page it came from
+      await act(async () => {
+        forget()
+        go('/admin/roles')
+      })
+      await pass(3_000)
+      expect({ shown: seen.shown, stored: stored() }).toEqual({ shown: ['', 'default'], stored: 'default' })
+    } finally {
+      await end()
+    }
+  })
+})
