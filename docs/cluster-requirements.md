@@ -66,7 +66,7 @@ Prefer group bindings; if you bind a `User`, make sure that person's account exi
 **Requests with no person behind them.** Some reads are Kubeast's own, and the cluster's audit log names Kubeast for them:
 
 - With no `Impersonate-User` header: the server version, the API discovery it keeps once per cluster for everyone, and its health checks. Only a `GET` of `/version`, `/api`, `/apis`, `/api/v1` or `/apis/<group>/<version>` (after the path of the cluster's server URL, when it has one) goes out so. Besides those, the connection check (registering a cluster, giving it a new kubeconfig, the connection test) gets the `kube-system` Namespace so, for its UID, with the credential's own rights (§1).
-- As the fixed identity `kubeast:cache` (the `view` rights of §1): the overview informers, an object's events, a namespace's or the cluster's events for the Timeline and the events API, and a node's pods read once for everyone who may list them, the `kube-system` UID that tells the cluster Kubeast runs in, the `metrics.k8s.io` group check, and the search for Prometheus and OpenCost Services.
+- As the fixed identity `kubeast:cache` (the `view` rights of §1): the overview informers, an object's events, a namespace's or the cluster's events for the Timeline and the events API, the Deployments, ReplicaSets and ControllerRevisions of the Timeline's rollouts, and a node's pods read once for everyone who may list them, the `kube-system` UID that tells the cluster Kubeast runs in, the `metrics.k8s.io` group check, and the search for Prometheus and OpenCost Services.
 
 Any other request whose signed-in person Kubeast cannot name is not sent, and a kubectl tool is not run.
 
