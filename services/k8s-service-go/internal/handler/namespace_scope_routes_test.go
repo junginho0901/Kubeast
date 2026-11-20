@@ -332,6 +332,20 @@ func (a *standIn) callerCalls() []apiCall {
 	return out
 }
 
+// callerReads are callerCalls and the lists of events made as kubeast:cache, which k8s-service makes once for everyone
+// whose own access check says they may list those events, in place of their own lists.
+func (a *standIn) callerReads() []apiCall {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var out []apiCall
+	for _, c := range a.calls {
+		if c.user == signedInUser || (c.user == "kubeast:cache" && strings.HasSuffix(c.path, "/events")) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func (a *standIn) reset() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -618,15 +632,15 @@ func TestScopedGrantKeepsItsOwnNamespaces(t *testing.T) {
 			}
 			if tc.want != "" {
 				var got []string
-				for _, c := range rig.api.callerCalls() {
+				for _, c := range rig.api.callerReads() {
 					got = append(got, c.method+" "+c.path)
 				}
 				if !slices.Contains(got, tc.want) {
 					t.Errorf("status %d, the cluster got %v, want %s: %.200s", w.Code, got, tc.want, w.Body.String())
 				}
 			}
-			if reached := namespacesReached(rig.api.callerCalls()); reached[outside] {
-				t.Errorf("reached the namespace outside: %+v", rig.api.callerCalls())
+			if reached := namespacesReached(rig.api.callerReads()); reached[outside] {
+				t.Errorf("reached the namespace outside: %+v", rig.api.callerReads())
 			}
 		})
 	}
@@ -710,7 +724,7 @@ func TestScopedListsNarrowToTheGrant(t *testing.T) {
 			if strings.Contains(w.Body.String(), notWant) {
 				t.Errorf("%q is in the answer: %.400s", notWant, w.Body.String())
 			}
-			if wide := wideLists(rig.api.callerCalls()); len(wide) != 0 {
+			if wide := wideLists(rig.api.callerReads()); len(wide) != 0 {
 				t.Errorf("listed across namespaces: %v", wide)
 			}
 		})
@@ -760,7 +774,7 @@ func TestUnscopedCallerIsUnchanged(t *testing.T) {
 				t.Fatalf("refused: %.300s", w.Body.String())
 			}
 			var got []string
-			for _, c := range rig.api.callerCalls() {
+			for _, c := range rig.api.callerReads() {
 				got = append(got, c.method+" "+c.path)
 			}
 			if !slices.Contains(got, tc.want) {
