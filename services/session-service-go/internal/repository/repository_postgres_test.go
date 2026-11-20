@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/junginho0901/kubeast/services/pkg/dbmigrate"
+	"github.com/junginho0901/kubeast/services/session-service-go/internal/model"
 )
 
 // Runs the statements against PostgreSQL named by DBMIGRATE_TEST_DATABASE_URL (as services/pkg/dbmigrate; skipped
@@ -90,7 +93,7 @@ func TestPostgresDeleteSessionTakesItsToolApprovals(t *testing.T) {
 	seedConversation(t, repo, "s-plain")
 
 	for _, id := range []string{"s-cards", "s-plain"} {
-		if err := repo.DeleteSession(ctx, id); err != nil {
+		if _, err := repo.DeleteSession(ctx, id); err != nil {
 			t.Fatalf("delete %s: %v", id, err)
 		}
 	}
@@ -106,5 +109,89 @@ func TestPostgresDeleteSessionTakesItsToolApprovals(t *testing.T) {
 		if n := rowsOf(t, pool, `SELECT count(*) FROM `+table+` WHERE `+column+` = 's-other'`); n != 1 {
 			t.Errorf("%s: %d rows of the conversation kept, want 1", table, n)
 		}
+	}
+}
+
+// The delete returns the approvals it took while approved, with their tool, cluster and approval time; those in
+// another state, and another conversation's approved one, are not named.
+func TestPostgresDeleteSessionNamesTheApprovalsItTookWhileApproved(t *testing.T) {
+	pool := freshMigratedDatabase(t)
+	repo := New(pool)
+	ctx := context.Background()
+	before := time.Now().UTC().Add(-time.Second)
+	seedConversation(t, repo, "s-run", "executed", "approved", "rejected", "pending", "approved")
+	seedConversation(t, repo, "s-other", "approved")
+
+	open, err := repo.DeleteSession(ctx, "s-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(open) != 2 {
+		t.Fatalf("named %+v, want s-run-1 and s-run-4", open)
+	}
+	slices.SortFunc(open, func(a, b model.OpenApproval) int { return strings.Compare(a.ID, b.ID) })
+	for i, id := range []string{"s-run-1", "s-run-4"} {
+		a := open[i]
+		if a.ID != id || a.Tool != "k8s_scale_deployment" || a.Cluster != "self" || a.ApprovedAt == nil ||
+			a.ApprovedAt.Before(before) || a.ApprovedAt.After(time.Now().UTC()) {
+			t.Errorf("named %+v, want %s with its tool, cluster and approval time", a, id)
+		}
+	}
+	if n := rowsOf(t, pool, `SELECT count(*) FROM tool_approvals WHERE session_id = 's-other' AND status = 'approved'`); n != 1 {
+		t.Errorf("another conversation's approved approval: %d left, want 1", n)
+	}
+
+	none, err := repo.DeleteSession(ctx, "s-other-gone")
+	if err != nil || none != nil {
+		t.Fatalf("a conversation that is not there: %+v, %v", none, err)
+	}
+}
+
+// A write to an approval that commits while the delete waits for its row decides what the delete names: an outcome
+// written then is not named, and an approval made then is.
+func TestPostgresDeleteSessionNamesTheApprovalAsTheWriteItWaitedForLeftIt(t *testing.T) {
+	for _, c := range []struct {
+		from, to string
+		named    int
+	}{{"approved", "executed", 0}, {"pending", "approved", 1}} {
+		t.Run(c.from+"-to-"+c.to, func(t *testing.T) {
+			pool := freshMigratedDatabase(t)
+			repo := New(pool)
+			ctx := context.Background()
+			seedConversation(t, repo, "s-run", c.from)
+
+			run, err := pool.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer run.Rollback(ctx)
+			if _, err := run.Exec(ctx, `UPDATE tool_approvals SET status = $1 WHERE id = 's-run-0'`, c.to); err != nil {
+				t.Fatal(err)
+			}
+
+			type answer struct {
+				open []model.OpenApproval
+				err  error
+			}
+			done := make(chan answer, 1)
+			go func() {
+				open, err := repo.DeleteSession(ctx, "s-run")
+				done <- answer{open, err}
+			}()
+			deadline := time.Now().Add(10 * time.Second)
+			for rowsOf(t, pool, `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE 'DELETE FROM tool_approvals%'`) == 0 {
+				if time.Now().After(deadline) {
+					t.Fatal("the delete never waited for the row")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if err := run.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			got := <-done
+			if got.err != nil || len(got.open) != c.named {
+				t.Fatalf("named %+v (%v), want %d", got.open, got.err, c.named)
+			}
+		})
 	}
 }
