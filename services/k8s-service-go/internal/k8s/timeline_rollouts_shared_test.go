@@ -519,8 +519,21 @@ func TestTheSharedRolloutReadsAreEachIdentitysOwnAnswer(t *testing.T) {
 		"liar@example.com":     wideCaller("liar@example.com"),
 		"none@example.com":     wideCaller("none@example.com"),
 	}
-	someRS, someCR := api.sets[r.IntN(len(api.sets))].CreationTimestamp.Time, api.revs[r.IntN(len(api.revs))].CreationTimestamp.Time
-	cutoffs := []time.Time{{}, base.Add(-time.Hour), base.Add(-6*time.Hour + 500*time.Millisecond), base.Add(-24 * time.Hour), someRS, someCR}
+	// a window starting at the very second of a Deployment's rollout and of a StatefulSet's or DaemonSet's, which it holds
+	atRow := func(deployment bool) time.Time {
+		var at []time.Time
+		for _, row := range api.before("", "", "", time.Time{}) {
+			if (row["kind"] == "Deployment") == deployment {
+				t, _ := time.Parse(time.RFC3339, row["created_at"].(string))
+				at = append(at, t)
+			}
+		}
+		if len(at) == 0 {
+			t.Fatal("the objects have no rollout of that kind")
+		}
+		return at[r.IntN(len(at))]
+	}
+	cutoffs := []time.Time{{}, base.Add(-time.Hour), base.Add(-6*time.Hour + 500*time.Millisecond), base.Add(-24 * time.Hour), atRow(true), atRow(false)}
 	type ask struct {
 		user, namespace, kind, name string
 		cutoff                      time.Time
