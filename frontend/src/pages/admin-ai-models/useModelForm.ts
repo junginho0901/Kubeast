@@ -80,19 +80,22 @@ export function useModelForm() {
   // checked as ai-service checks it, so a half-typed address asks the provider for nothing and Test and Save wait
   const baseUrlProblem = currentProviderDef.needsBaseUrl ? urlProblem(formBaseUrl) : null
   // The provider's own model list for the open form; the built-in list when it cannot be had.
+  // Typed values are asked 500 ms after the last key; a key variable set in one go (provider, opened model) at once.
   const [listBaseUrl, setListBaseUrl] = useState(formBaseUrl)
+  const [listApiKeyEnv, setListApiKeyEnv] = useState(formApiKeyEnv)
   const [listCaCert, setListCaCert] = useState(formCaCert.trim())
   useEffect(() => {
     const id = setTimeout(() => {
       setListBaseUrl(formBaseUrl)
+      setListApiKeyEnv(formApiKeyEnv)
       setListCaCert(formCaCert.trim())
     }, 500)
     return () => clearTimeout(id)
-  }, [formBaseUrl, formCaCert])
+  }, [formBaseUrl, formApiKeyEnv, formCaCert])
   const formOpen = isCreating || editingId != null
   const providerModels = useQuery({
-    queryKey: ['provider-models', formProvider, listBaseUrl, formApiKeyEnv, listCaCert],
-    queryFn: () => api.listProviderModels({ provider: formProvider, base_url: listBaseUrl || undefined, api_key_env: formApiKeyEnv || undefined, ca_cert: listCaCert || undefined }),
+    queryKey: ['provider-models', formProvider, listBaseUrl, listApiKeyEnv, listCaCert],
+    queryFn: () => api.listProviderModels({ provider: formProvider, base_url: listBaseUrl || undefined, api_key_env: listApiKeyEnv || undefined, ca_cert: listCaCert || undefined }),
     enabled: formOpen && formProvider !== 'custom' && formProvider !== 'claude-code' && !urlProblem(listBaseUrl),
     staleTime: 5 * 60_000,
     retry: false,
@@ -128,6 +131,7 @@ export function useModelForm() {
     setFormCustomModel(false)
     setFormBaseUrl('')
     setFormApiKeyEnv(PROVIDER_CATALOG[0].defaultApiKeyEnv)
+    setListApiKeyEnv(PROVIDER_CATALOG[0].defaultApiKeyEnv)
     setFormEnabled(true)
     setFormIsDefault(false)
     setFormTier('default')
@@ -151,6 +155,7 @@ export function useModelForm() {
     setFormCustomModel(!isKnown)
     setFormBaseUrl(cfg.base_url || '')
     setFormApiKeyEnv(cfg.api_key_env || provDef?.defaultApiKeyEnv || '')
+    setListApiKeyEnv(cfg.api_key_env || provDef?.defaultApiKeyEnv || '')
     setFormEnabled(cfg.enabled)
     setFormIsDefault(cfg.is_default)
     setFormTier(cfg.tier === 'economy' ? 'economy' : 'default')
@@ -177,6 +182,7 @@ export function useModelForm() {
       setFormCustomModel(false)
       setFormBaseUrl(prov.defaultBaseUrl ?? '')
       setFormApiKeyEnv(prov.defaultApiKeyEnv ?? '')
+      setListApiKeyEnv(prov.defaultApiKeyEnv ?? '')
       setTestResult(null)
     }
   }
