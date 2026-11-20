@@ -66,6 +66,7 @@ kubectl version    # Server Version: v1.30 이상
 Service 뒤에 있는 차트 파드는(번들 PostgreSQL과 Redis는 빼고) 이제 SIGTERM 전에 `preStop`에서 `podShutdown.preStopSeconds`(5초)를 기다리며, 이때 쿠버네티스 내장 `sleep` 동작(1.30에서 베타·기본 켜짐, 1.34에서 GA)을 씁니다. 더 낮은 클러스터에서는 `podShutdown.preStopSeconds: 0`으로 둡니다(#856).
 Helm의 확인은 이것을 잡지 않습니다. API 서버가 preStop 기다림이 있는 Deployment마다 `spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`로 거절합니다.
 [1.2](#12-드라이런으로-미리-해-보기)의 `kubectl apply` 드라이런이 업그레이드 전에 이것을 보여 줍니다. Kubernetes 1.29.14(kind, `PodLifecycleSleepAction` 기능 게이트 꺼짐)에서 preStop 기다림이 있는 Deployment 7개가 거절되었고, `podShutdown.preStopSeconds: 0`으로 두면 모든 객체를 받았습니다.
+이 드라이런은 `streams.enabled`를 끈 설치였습니다. 켜면 `k8s-service-stream`은 `podShutdown.preStopSeconds`와 상관없이 `preStop`에서 `streams.preStopSeconds`(10초)를 기다리므로 Kubernetes 1.30 이상이 필요하고, 1.33 아래에서는 `streams.preStopSeconds`를 1 이상으로 둡니다(Kubernetes는 1.33부터 `sleep` 0을 받습니다. [클러스터 요구 사항](cluster-requirements.md) §15).
 
 ### 1.4 노드 드레인
 

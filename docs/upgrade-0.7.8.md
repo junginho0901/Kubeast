@@ -66,6 +66,7 @@ kubectl version    # Server Version: v1.30 or later
 The chart's pods behind a Service, but for the bundled PostgreSQL and Redis, now wait `podShutdown.preStopSeconds` (5 s) in `preStop` before SIGTERM, with the native `sleep` action (beta and on by default in 1.30, GA in 1.34). On an older cluster set `podShutdown.preStopSeconds: 0` (#856).
 Helm's checks do not catch it: the API server refuses each Deployment with a preStop wait, with `spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`.
 The `kubectl apply` dry run in [1.2](#12-rehearse-with-a-dry-run) shows it before the upgrade: on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off) it refused the seven Deployments with a preStop wait, and with `podShutdown.preStopSeconds: 0` it took every object.
+That dry run had `streams.enabled` off: with it on, `k8s-service-stream` waits `streams.preStopSeconds` (10 s) in `preStop` whatever `podShutdown.preStopSeconds` is, so streams need Kubernetes 1.30 or later and, below 1.33, a `streams.preStopSeconds` of 1 or more (Kubernetes takes a `sleep` of 0 from 1.33 on; [Cluster requirements](cluster-requirements.md) §15).
 
 ### 1.4 Node drains
 
