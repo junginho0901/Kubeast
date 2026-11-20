@@ -532,15 +532,15 @@ async def _run_approved(db, run, approval, approval_token: str, ai_service, payl
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
         result="success" if status == "executed" else "failure", error=error[:500] if error else error,
     )
+    # An exec is a k8s.pod.exec row too, written with the end and the outcome row.
+    exec_rows = [dict(
+        **pod_exec_row(args, tool_input, approval_id=approval.id), actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
+        request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
+        result="success" if status == "executed" else "failure", error=error[:500] if error else error,
+    )] if approval.tool == EXEC_TOOL and not refusal else []
     # The rows before the chat message: the conversation may have been deleted during the call, and the message with it.
-    ended, late = await run.ending(_end_run(db, approval.id, status, formatted, kept_args, outcome_row))
+    ended, late = await run.ending(_end_run(db, approval.id, status, formatted, kept_args, outcome_row, exec_rows))
     approval = ended or approval
-    if approval.tool == EXEC_TOOL and not refusal:
-        await write_audit(
-            **pod_exec_row(args, tool_input, approval_id=approval.id), actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
-            request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
-            result="success" if status == "executed" else "failure", error=error[:500] if error else error,
-        )
     icon = "✅" if status == "executed" and not late else "⚠️"
     said = f"was approved and {status}"
     if late:
@@ -560,8 +560,9 @@ async def _run_approved(db, run, approval, approval_token: str, ai_service, payl
     return _approval_dict(approval)
 
 
-async def _end_run(db, approval_id: str, status: str, formatted: str, kept_args: dict, outcome_row: dict):
-    """The approval leaves `approved` with its ai.tool.execute row in one transaction (end_tool_run). A run that outlived
+async def _end_run(db, approval_id: str, status: str, formatted: str, kept_args: dict, outcome_row: dict, exec_rows: list):
+    """The approval leaves `approved` with its ai.tool.execute row, and an exec's k8s.pod.exec row (exec_rows), in one
+    transaction (end_tool_run). A run that outlived
     APPROVED_RUN_LIMIT_SECONDS finds its approval ended as interrupted by a sweep meanwhile (or gone with its
     conversation): the outcome is known after all, so the row stays ended and says it, and the outcome row is written
     anyway. Returns the approval as it ended (None when not this run's end) and whether the run came back late."""
@@ -569,20 +570,22 @@ async def _end_run(db, approval_id: str, status: str, formatted: str, kept_args:
     from app.services.audit_writer import write_audit
 
     ended = await db.end_tool_run(
-        approval_id, "approved", outcome_row,
+        approval_id, "approved", outcome_row, exec_rows,
         status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(), args=kept_args,
     )
     if ended is not None:
         return ended, False
     current = await db.get_tool_approval(approval_id)
     if current is None or current.status != "failed" or current.result != INTERRUPTED_RESULT:
-        await write_audit(**outcome_row)
+        for row in (outcome_row, *exec_rows):
+            await write_audit(**row)
         return None, False
     late_row = {**outcome_row, "after": {**outcome_row["after"], "late_after_interrupt": True}}
     note = f"{status} after this approval was ended as interrupted: the run took longer than {APPROVED_RUN_LIMIT_SECONDS // 60} minutes."
-    ended = await db.end_tool_run(approval_id, "failed", late_row, result=f"{note}\n\n{formatted}"[:APPROVAL_RESULT_MAX_CHARS])
+    ended = await db.end_tool_run(approval_id, "failed", late_row, exec_rows, result=f"{note}\n\n{formatted}"[:APPROVAL_RESULT_MAX_CHARS])
     if ended is None:
-        await write_audit(**late_row)
+        for row in (late_row, *exec_rows):
+            await write_audit(**row)
     return ended or current, True
 
 

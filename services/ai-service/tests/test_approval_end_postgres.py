@@ -1,4 +1,5 @@
-"""On PostgreSQL: an approved run's end and its ai.tool.execute row land together (end_tool_run), and so do the
+"""On PostgreSQL: an approved run's end and its ai.tool.execute row (and an exec's k8s.pod.exec row) land together
+(end_tool_run), and so do the
 shutdown's close of a cut run and its ai.tool.interrupt row (close_cut_tool_approval). An outcome row the audit table
 refuses aborts the end's transaction and the run still ends, on its own, since it has run; a close whose row is refused
 leaves the approval approved for a later look. Two engines on one database stand for two replicas.
@@ -110,6 +111,32 @@ async def test_an_outcome_row_the_table_refuses_leaves_the_run_ended_without_it(
     assert (ended.status, ended.result) == ("executed", "patched"), "the run has run: it ends without its row"
     assert (await other.get_tool_approval(row.id)).status == "executed"
     assert await _audit_rows(other, "ai.tool.execute") == []
+    assert audit_writer.write_failures == failures + 2, "refused in the end's transaction, then on its own"
+
+
+def _pod_exec(row):
+    return dict(action="k8s.pod.exec", actor_user_id="u1", cluster=row.cluster, target_type="pod", target_id="web-0",
+                namespace="shop", after={"approval_id": row.id, "tool": "k8s_execute_command"})
+
+
+async def test_an_execs_pod_exec_row_lands_with_the_end(replicas):
+    db, other = replicas
+    row = await _approved(db)
+    ended = await db.end_tool_run(row.id, "approved", _outcome(row), [_pod_exec(row)], status="executed", result="ran")
+    assert ended.status == "executed"
+    assert await _audit_rows(other, "ai.tool.execute") == [(row.id, None, "success")]
+    assert await _audit_rows(other, "k8s.pod.exec") == [(row.id, None, "success")]
+
+
+async def test_a_pod_exec_row_the_table_refuses_rolls_back_the_outcome_row_with_it(replicas):
+    db, other = replicas
+    row = await _approved(db)
+    await _refuse(db, "k8s.pod.exec", "refuse_pod_exec")
+    failures = audit_writer.write_failures
+    ended = await db.end_tool_run(row.id, "approved", _outcome(row), [_pod_exec(row)], status="executed", result="ran")
+    assert ended.status == "executed", "the run has run: it ends on its own"
+    assert await _audit_rows(other, "ai.tool.execute") == [(row.id, None, "success")], "written once, after the end"
+    assert await _audit_rows(other, "k8s.pod.exec") == []
     assert audit_writer.write_failures == failures + 2, "refused in the end's transaction, then on its own"
 
 

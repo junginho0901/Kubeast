@@ -2,7 +2,7 @@
 Database models and session management
 """
 from datetime import UTC, datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Sequence
 from sqlalchemy import func
 from sqlalchemy import Column, String, DateTime, Text, JSON, Integer, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
@@ -615,17 +615,20 @@ class DatabaseService:
             await audit_writer.write_audit(**record)
         return True
 
-    async def end_tool_run(self, approval_id: str, from_status: str, record: Dict[str, Any], **fields: Any) -> Optional[ToolApproval]:
+    async def end_tool_run(self, approval_id: str, from_status: str, record: Dict[str, Any], also: Sequence[Dict[str, Any]] = (),
+                           **fields: Any) -> Optional[ToolApproval]:
         """An approved call's end: transition_tool_approval and its outcome row (record: write_audit's arguments) in one
         transaction, so a process stopped between the two leaves the approval approved, for the interrupted sweep, never
-        ended with no outcome row. The call has run, so a row the audit table refuses does not hold the approval: it
-        moves on its own and the row is written after it, as a failed write when it fails again. None when the row no
+        ended with no outcome row. also: rows of the same run that go in that transaction after it (an exec's
+        k8s.pod.exec). The call has run, so a row the audit table refuses does not hold the approval: it
+        moves on its own and the rows are written after it, as failed writes when they fail again. None when the row no
         longer has from_status; nothing is written then. The ended row is read after the end's connection has gone back
         to the pool, so an end never waits for a second connection while it holds one."""
         from sqlalchemy import update
 
         from app.services import audit_writer
 
+        rows = [record, *also]
         async with self.engine.connect() as conn:
             await conn.begin()
             moved = await conn.execute(
@@ -634,16 +637,21 @@ class DatabaseService:
             if moved.rowcount != 1:
                 await conn.rollback()
                 return None
-            stored = await audit_writer.write_audit(**record, conn=conn)
+            stored = True
+            for row in rows:
+                if not await audit_writer.write_audit(**row, conn=conn):
+                    stored = False
+                    break
             if stored:
-                await audit_writer.commit_row(conn, **record)  # mirrored to stdout once it has landed
+                await audit_writer.commit_rows(conn, rows)  # mirrored to stdout once they have landed
             else:
                 await conn.rollback()
         if stored:
             return await self.get_tool_approval(approval_id)
         ended = await self.transition_tool_approval(approval_id, from_status, **fields)
         if ended is not None:
-            await audit_writer.write_audit(**record)
+            for row in rows:
+                await audit_writer.write_audit(**row)
         return ended
 
     async def get_tool_approval(self, approval_id: str) -> Optional[ToolApproval]:

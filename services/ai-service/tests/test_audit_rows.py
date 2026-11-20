@@ -24,11 +24,13 @@ class Reader(Admin):
         return False
 
 
-async def fake_end_tool_run(db, approval_id, from_status, record, **fields):
-    """DatabaseService.end_tool_run on a stand-in database: its transition, then the outcome row (one transaction there)."""
+async def fake_end_tool_run(db, approval_id, from_status, record, also=(), **fields):
+    """DatabaseService.end_tool_run on a stand-in database: its transition, then the outcome row and the rows with it
+    (one transaction there)."""
     moved = await db.transition_tool_approval(approval_id, from_status, **fields)
     if moved is not None:
-        await audit_writer.write_audit(**record)
+        for row in (record, *also):
+            await audit_writer.write_audit(**row)
     return moved
 
 
