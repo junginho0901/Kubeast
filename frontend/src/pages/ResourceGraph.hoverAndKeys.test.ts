@@ -145,6 +145,42 @@ describe('Resource Graph traffic line on Enter', () => {
     key('Enter', drawn('.react-flow__edge', 'line-1'))
     expect(panel(page())?.line, 'the same page opens it on Enter').toBe(line)
   })
+
+  it('puts the focus on the panel’s title once the panel an Enter opened is drawn, once for each Enter', () => {
+    trafficView()
+    key('Enter', drawn('.react-flow__edge', 'line-1'))
+    const titleRef = panel(page())?.titleRef as { current: unknown }
+    // the page draws the panel's title (a ref the fake render does not fill): the next Enter's panel has one
+    const title = { focus: vi.fn() }
+    titleRef.current = title
+    ;(panel(page())?.onClose as () => void)()
+    expect(panel(page())).toBeUndefined()
+    key('Enter', drawn('.react-flow__edge', 'line-1'))
+    expect(panel(page())?.titleRef, 'the same title the page focuses').toBe(titleRef)
+    expect(title.focus).toHaveBeenCalledOnce()
+    page()
+    expect(title.focus, 'not again as the page draws again').toHaveBeenCalledOnce()
+    // Enter on the line again, the panel still open, puts it there again
+    key('Enter', drawn('.react-flow__edge', 'line-1'))
+    page()
+    expect(title.focus).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves the focus on the line a press opened the panel from, as before, also after an Enter opened it', () => {
+    // node has no DOM: the press's element is no SVGElement or HTMLElement, which only drops the line Escape focuses
+    vi.stubGlobal('SVGElement', class {})
+    vi.stubGlobal('HTMLElement', class {})
+    trafficView()
+    key('Enter', drawn('.react-flow__edge', 'line-1'))
+    const titleRef = panel(page())?.titleRef as { current: unknown }
+    const title = { focus: vi.fn() }
+    titleRef.current = title
+    ;(panel(page())?.onClose as () => void)()
+    expect(panel(page())).toBeUndefined()
+    ;(flow(page()).onEdgeClick as (e: unknown, edge: Edge) => void)({ currentTarget: drawn('.react-flow__edge', 'line-1') }, edges[0])
+    expect(panel(page())?.line).toBe(line)
+    expect(title.focus).not.toHaveBeenCalled()
+  })
 })
 
 // A box takes the keyboard focus but Enter only selected it (React Flow's own key; onNodeClick hears the pointer only).

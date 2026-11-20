@@ -117,8 +117,11 @@ export default function ResourceGraph() {
   const view: GraphView = sources.length > 0 || metricsDown ? pickedView : 'structure'
   const source = pickedSource && sources.includes(pickedSource) ? pickedSource : sources[0]
   const [selected, setSelected] = useState<{ id: string; line: TrafficLine } | null>(null)
-  // the line pressed, or opened with Enter, to open the traffic panel, which Escape gives the focus back to
+  // the line pressed, or opened with Enter, to open the traffic panel, which Escape and its X give the focus back to
   const lineOpener = useRef<{ focus(): void } | null>(null)
+  // the panel's title, which takes the focus once the panel an Enter opened is drawn (`focusPanel`, set by that Enter)
+  const panelTitle = useRef<HTMLDivElement | null>(null)
+  const focusPanel = useRef(false)
   // the box that opened the drawer with Enter, which closing the drawer gives the focus back to
   const boxOpener = useRef<{ focus(): void; isConnected: boolean } | null>(null)
   const closeLine = useCallback(() => setSelected(null), [])
@@ -357,13 +360,20 @@ export default function ResourceGraph() {
     setSelected({ id: edge.id, line })
   }, [])
 
-  // Enter on a line with the keyboard focus opens its panel as a press does, and Escape gives the focus back to it
+  // Enter on a line with the keyboard focus opens its panel as a press does, with the focus on the panel's title, and
+  // Escape or the panel's X gives the focus back to the line
   const onLineKey = useCallback((e: React.KeyboardEvent) => {
     const hit = lineForKey({ key: e.key, isComposing: e.nativeEvent.isComposing, target: e.target }, edges)
     if (!hit) return
     lineOpener.current = hit.element
+    focusPanel.current = true
     setSelected({ id: hit.id, line: hit.line })
   }, [edges])
+  useEffect(() => {
+    if (!focusPanel.current) return
+    focusPanel.current = false
+    panelTitle.current?.focus()
+  }, [selected])
   const onGraphKey = useCallback((e: React.KeyboardEvent) => {
     onLineKey(e)
     onNodeKey(e)
@@ -582,7 +592,7 @@ export default function ResourceGraph() {
         )}
 
         {selectedLine && traffic && (
-          <TrafficPanel line={selectedLine} result={traffic} opener={lineOpener} onClose={closeLine} onWhy={setWhy} onOpen={openEnd} />
+          <TrafficPanel line={selectedLine} result={traffic} opener={lineOpener} titleRef={panelTitle} onClose={closeLine} onWhy={setWhy} onOpen={openEnd} />
         )}
         {why && <NetworkPolicyCheckModal self={why.self} selfName={why.selfName} namespace={why.namespace} initial={why.initial} onClose={() => setWhy(null)} />}
         {openGroup && (
