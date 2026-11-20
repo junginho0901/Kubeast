@@ -99,7 +99,7 @@ function main() {
     const flag = b && change > budget.notice ? ' (grew)' : ''
     console.log(`| ${k} | ${kb(v)} | ${b ? kb(b) : '-'} | ${b ? `${(change * 100).toFixed(2)}%${flag}` : '-'} | ${limit !== null ? kb(limit) : '-'} |`)
   }
-  const newBig = now.overWarnLine.filter((c) => !(base?.overWarnLine ?? []).includes(c))
+  const newBig = base ? now.overWarnLine.filter((c) => !base.overWarnLine.includes(c)) : []
   console.log(`\nchunks over 500 kB: ${now.overWarnLine.join(', ') || 'none'}${newBig.length ? ` — new: ${newBig.join(', ')}` : ''}`)
   console.log(`scripts ${now.counts.js} · stylesheets ${now.counts.css} · modulepreload ${now.counts.preload}`)
   if (!base) console.log('\nno baseline yet: --write-baseline <ref> on the release tag')
