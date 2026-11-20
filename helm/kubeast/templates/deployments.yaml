@@ -330,7 +330,7 @@ spec:
               value: "{{ $.Values.multicluster.bigReadConcurrency | default 2 }}"
             - name: EVENT_LIST_CONCURRENCY
               value: "{{ $.Values.multicluster.eventListConcurrency | default 4 }}"
-            # Only the keys of the main Secret this server reads, not the whole Secret; the proxy ones when it holds them
+            {{- /* Only the keys of the main Secret this server reads, not the whole Secret; the proxy ones when it holds them */}}
             {{- range $key := list "DATABASE_URL" "INTERNAL_API_TOKEN" "HTTP_PROXY" "HTTPS_PROXY" "NO_PROXY" }}
             - name: {{ $key }}
               valueFrom:
