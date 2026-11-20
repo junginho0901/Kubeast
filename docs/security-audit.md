@@ -34,6 +34,18 @@ To turn it off, set `auth.apiKeys.enabled: false` (`API_KEYS_ENABLED` in compose
 
 `GET /api/v1/auth/me` answers a key's token with that key's reach: its clusters, role ceiling and namespaces, not its owner's other grants.
 
+## Sign-in limits and sessions
+
+Sign-in has two limits. Single sign-on's own limits are the identity provider's.
+
+- The gateway takes 10 requests a second, with a burst of 20, from each client address on the sign-in routes (`login`, `register`, `oidc/login` and the API key exchange `token` under `/api/v1/auth/`) and answers 429 past that. Each gateway pod counts on its own. Behind an Ingress or a load balancer, list their addresses in `gateway.trustedProxies`, or every client counts as the proxy's one address.
+- Five wrong passwords for one account, each within 15 minutes of the one before, lock its password sign-in for 15 minutes (auth-service's `LOGIN_MAX_FAILURES` and `LOGIN_LOCKOUT_MINUTES`; the chart has no value for them). While it is locked the right password is refused too, and tries do not make the lock longer. A locked account, a wrong password and an unknown address get the same 401, and an unknown address takes the same hashing time. The audit log records `user.login.failed` with the reason, and `user.login.locked`.
+- The lock ends by itself after 15 minutes. A successful sign-in clears the count, and an admin's **Unlock** in Admin → User Management or a password reset ends the lock at once.
+
+Someone who knows an account's address can keep its password sign-in locked by sending five wrong passwords every 15 minutes. They cannot tell that it is locked, and the lock does not touch the account's single sign-on, its API keys or its open sessions. Where that matters, set `auth.passwordLogin: "admin-only"` or `"off"` once single sign-on works ([SSO setup](oidc.md)).
+
+One account may be signed in from any number of browsers at once: Kubeast sets no cap, and a new sign-in leaves the others as they are. Signing out ends that sign-in only; a password change, and an admin changing the account's role or password, end all of them.
+
 ## Open connections
 
 A terminal, a followed log and a live list are authenticated when they open. The browser cannot hand them a new token afterwards, so they do not end with their token.

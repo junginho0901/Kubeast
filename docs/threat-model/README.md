@@ -9,6 +9,8 @@ Each release writes one page covering only what that release changes. The pages 
 | v0.8.0 | The screen components that draw text | not written yet |
 | v0.8.1 | Module boundaries; the whole model | not written yet |
 
+Beside the release pages, the [ASVS 5.0 self-check](asvs-5.0.md) checks the whole of Kubeast against the OWASP ASVS 5.0.0: every level 1 requirement and the level 2 areas it names. It is read again against each release's tree.
+
 How a page is written:
 
 - A data-flow sketch with its trust boundaries, then one table per change: the threat and its STRIDE letter, where it is (a file or route), what stops it (a pointer to code or to a decided plan line), what is left before the release and which step owns it, and how it is checked (a test, a guard spec, a fault test).
