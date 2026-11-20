@@ -13,7 +13,7 @@ test('resource-drawer', async ({ page }) => {
   await page.getByPlaceholder(/search/i).first().pressSequentially('storefront', { delay: 60 })
   await beat(page, 800)
   await page.getByRole('cell', { name: 'storefront', exact: true }).first().click()
-  const drawer = page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()
+  const drawer = page.locator('[data-testid="resource-drawer"]').last()
   await expect(drawer).toBeVisible()
   c.step('drawer')
   await beat(page, 3000)

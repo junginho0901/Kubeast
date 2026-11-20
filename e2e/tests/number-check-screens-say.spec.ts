@@ -23,7 +23,7 @@ const BASE = process.env.E2E_BASE_URL || 'http://localhost:30080'
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const PW = 'E2e-say-throwaway-1!'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 
 function kubectlFor(kindName: string) {

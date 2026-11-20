@@ -13,7 +13,7 @@ import { test, expect, type Page } from '@playwright/test'
 // floating chat the settings they show.
 
 const NS = 'e2e-computed-values'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 const kubeconfig = execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' })
 const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-computed-')), 'kubeconfig')

@@ -28,7 +28,7 @@ const CR_GROUP = `g${STAMP}.cpui.kubeast.io`
 const CRD = `permchecks.${CR_GROUP}`
 const ROLE = `${PREFIX}-cr`
 const RBAC = 'rbac.authorization.k8s.io'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const LABELS = { 'kubeast.io/e2e': 'cluster-permission-ui' }
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 

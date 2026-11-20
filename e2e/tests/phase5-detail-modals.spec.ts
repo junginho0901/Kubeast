@@ -17,7 +17,7 @@ function kubectlFor(kindName: string) {
 }
 const kubectl = kubectlFor('kubeast')
 
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 type Pod = { metadata: { name: string }; spec: Record<string, any>; status?: { phase?: string } }
 const pods = (ns: string): Pod[] => JSON.parse(kubectl(`-n ${ns} get pods -o json`)).items

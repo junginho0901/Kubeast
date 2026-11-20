@@ -26,7 +26,7 @@ const gone = (what: string) => () => {
 
 const rowOf = (page: Page, name: string) => page.locator('tbody tr[data-open-row]').filter({ has: page.getByRole('cell', { name, exact: true }) })
 const listOf = (page: Page) => page.locator('table').filter({ has: page.locator('tbody tr[data-open-row]') })
-const drawer = (page: Page) => page.locator('div.fixed.inset-y-0.right-0')
+const drawer = (page: Page) => page.locator('[data-testid="resource-drawer"]')
 const titleOf = (page: Page, name: string) => drawer(page).locator('h2').filter({ hasText: name })
 const isFocused = (target: Locator) => target.evaluate((el) => el === document.activeElement).catch(() => false)
 

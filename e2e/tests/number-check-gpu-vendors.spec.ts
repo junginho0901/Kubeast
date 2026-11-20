@@ -27,7 +27,7 @@ const FAKE = 'kubeast.dev/e2e-fake-gpu-node'
 const AMD_NODE = `${CLUSTER}-gpu-amd`
 const INTEL_NODE = `${CLUSTER}-gpu-intel`
 const AMD_PLUGIN = { namespace: 'kube-system', name: 'amdgpu-device-plugin-daemonset' } // ROCm's k8s-ds-amdgpu-dp.yaml
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = any

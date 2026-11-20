@@ -22,15 +22,15 @@ test.describe('modal stacking — detail drawer over list modal', () => {
     await row.waitFor({ timeout: 10000 })
     await row.click()
 
-    // The drawer panel is the right-side fixed panel (max-w-[740px]).
-    const panel = page.locator('[class*="max-w-[740px]"]')
+    // The drawer panel is the right-side fixed panel.
+    const panel = page.locator('[data-testid="resource-drawer"]')
     await expect(panel).toBeVisible({ timeout: 10000 })
 
     // Stacking assertion: the element at the drawer panel's center must belong
     // to the drawer — if it were behind the list modal, elementFromPoint would
     // return the modal instead.
     const onTop = await page.evaluate(() => {
-      const panel = document.querySelector('[class*="max-w-[740px]"]') as HTMLElement | null
+      const panel = document.querySelector('[data-testid="resource-drawer"]') as HTMLElement | null
       if (!panel) return { found: false, onTop: false }
       const r = panel.getBoundingClientRect()
       const el = document.elementFromPoint(r.left + r.width / 2, r.top + 80)

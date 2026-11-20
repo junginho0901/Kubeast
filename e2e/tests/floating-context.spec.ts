@@ -147,7 +147,7 @@ test.describe('floating chat screen data', () => {
     const sent = await captureFloating(page)
     await page.goto('/workloads/pods?cluster=self')
     await firstPod(page).click()
-    const drawer = page.locator('[class*="max-w-[740px]"]')
+    const drawer = page.locator('[data-testid="resource-drawer"]')
     await expect(drawer).toBeVisible()
     const drawerLeft = (await drawer.boundingBox())!.x
 
@@ -204,7 +204,7 @@ test.describe('floating chat screen data', () => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto('/workloads/pods?cluster=self')
     await firstPod(page).click()
-    await expect(page.locator('[class*="max-w-[740px]"]')).toBeVisible()
+    await expect(page.locator('[data-testid="resource-drawer"]')).toBeVisible()
     const toggle = page.getByTestId('floating-chat-toggle')
     expect(await rightEdge(toggle)).toBeGreaterThan(1240)
     expect(await onTop(toggle)).toBe(true)

@@ -19,7 +19,7 @@ import { waitUntilListed } from './number-check.cr-shared'
 
 const RUN = Date.now().toString(36)
 const LABEL = 'kubeast.io/e2e=two-group-refs'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 // the screen's words as the English catalog has them
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

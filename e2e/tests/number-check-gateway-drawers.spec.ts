@@ -17,7 +17,7 @@ import { GW, arg, gatewayFixture, gatewayVersions, routeConds, summary, writeGat
 
 const NS = 'e2e-gw-drawers'
 const CLUSTER = 'test2'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = any

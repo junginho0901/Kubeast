@@ -27,7 +27,7 @@ import { sessionToken } from './session-token'
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:30080'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const CREATE_BUTTON = 'button.btn-primary:has(svg.lucide-plus)'
 
 async function adminHeaders(request: APIRequestContext) {

@@ -267,7 +267,7 @@ test.describe('Pods being deleted', () => {
     }, { timeout: 120_000, message: `${SET}: its pod runs` }).toBe('Running')
 
     await page.goto(`/workloads/replicasets?cluster=${CLUSTER}&namespace=${NS}&detail=ReplicaSet/${NS}/${SET}`)
-    const drawer = page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()
+    const drawer = page.locator('[data-testid="resource-drawer"]').last()
     // the pods table's cells: the pod's name, then its Status
     const status = drawer.locator('tr').filter({ has: page.getByRole('cell', { name, exact: true }) }).locator('td').nth(1)
     await expect(status).toHaveText('Running', { timeout: 20_000 })

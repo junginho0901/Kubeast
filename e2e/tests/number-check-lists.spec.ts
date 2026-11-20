@@ -59,7 +59,7 @@ const items = (plural: string, clusterScoped = false, allNamespaces = false, clu
 const cond = (o: Obj, type: string) => (o.status?.conditions ?? []).find((c: Obj) => c.type === type)?.status
 
 const FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.fixture.yaml'), 'utf8')
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 // a screen value and the cluster's are the same when they say the same thing in Kubeast's words: an empty value
 // is "-", booleans are Yes/No, access modes are spelled out, RESTARTS without kubectl's "(… ago)"

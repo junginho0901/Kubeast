@@ -12,7 +12,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
 // table says it reads its pages again and does. It does not skip. The namespace is removed after.
 
 const NS = 'e2e-big-ns-drawers'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 const kubeconfig = execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' })
 const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-big-ns-drawers-')), 'kubeconfig')

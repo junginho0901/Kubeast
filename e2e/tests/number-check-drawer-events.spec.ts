@@ -19,7 +19,7 @@ import { sessionToken } from './session-token'
 const NS = 'e2e-drawer-events'
 const CLUSTER = 'self'
 const NODE = 'kubeast-control-plane'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const id = Date.now().toString(36)
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''

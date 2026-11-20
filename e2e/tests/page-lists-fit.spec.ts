@@ -160,7 +160,7 @@ test.describe('Lists sized to the screen', () => {
     for (const width of [1348, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 })
       await page.goto('/cluster/namespaces?cluster=self&detail=Namespace/kube-system')
-      await expect(page.locator('div[class*="fixed"][class*="inset-y-0"][class*="right-0"]').last()).toContainText('kube-system', { timeout: 20_000 })
+      await expect(page.locator('[data-testid="resource-drawer"]').last()).toContainText('kube-system', { timeout: 20_000 })
       await expect(page.getByTestId('list-pager'), `${width}: the footer says what it shows`).toContainText(/Showing \d+-\d+ of \d+/, { timeout: 20_000 })
       const chat = page.getByTestId('floating-chat-toggle')
       // the button left of the drawer (right-[756px]) once its move has ended

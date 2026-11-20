@@ -11,7 +11,7 @@ import { sessionToken } from './session-token'
 // resource inside a group container, and a node click opens the resource drawer.
 // A Read user gets the graph without the kinds Kubernetes refuses them, also right
 // after an admin's answer was cached.
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const NODES = '.react-flow__node'
 
 const EMAIL = process.env.E2E_USER_EMAIL || 'admin'

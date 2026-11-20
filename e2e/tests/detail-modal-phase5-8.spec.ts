@@ -21,7 +21,7 @@ function kubectlFor(kindName: string) {
 }
 const kubectl = kubectlFor('kubeast')
 
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 // The list on `self`, searched for `name`; the drawer of the row whose name cell is exactly `name`.
 async function openDrawer(page: Page, route: string, name: string) {

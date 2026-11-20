@@ -22,7 +22,7 @@ const PW = 'E2e-protected-throwaway-1!'
 const STAMP = Date.now().toString(36)
 const MCP = '/api/v1/ai/mcp'
 const RPC = { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json' }
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 
 const EN: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'frontend/src/i18n/locales/en.json'), 'utf8'))

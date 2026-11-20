@@ -13,7 +13,7 @@ import { sessionToken } from './session-token'
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const CLUSTER = 'self'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const PAUSE = 'registry.k8s.io/pause:3.10'
 const RBAC = 'rbac.authorization.k8s.io'
 const stamp = Date.now().toString(36)

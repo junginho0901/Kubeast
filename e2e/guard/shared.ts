@@ -23,7 +23,7 @@ export const NS_A = `${PREFIX}-a`
 export const NS_B = `${PREFIX}-b`
 export const CR_GROUP = `g${STAMP}.guard.kubeast.io`
 const CRD = `guardchecks.${CR_GROUP}`
-export const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+export const DRAWER = '[data-testid="resource-drawer"]'
 const LABELS = { 'kubeast.io/e2e': 'guard' }
 export const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 export const source = (file: string) => fs.readFileSync(path.join(REPO, file), 'utf8')

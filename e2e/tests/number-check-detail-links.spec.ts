@@ -19,7 +19,7 @@ import { waitUntilListed } from './number-check.cr-shared'
 const RUN = Date.now().toString(36)
 const NS = `e2e-dlinks-${RUN}`
 const LABEL = 'kubeast.io/e2e=detail-links'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const GROUPS = ['links-a.kubeast.io', 'links-b.kubeast.io'] as const
 type Group = (typeof GROUPS)[number]
 const COLOR: Record<Group, string> = { 'links-a.kubeast.io': 'amber', 'links-b.kubeast.io': 'blue' }

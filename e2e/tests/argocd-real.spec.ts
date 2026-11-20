@@ -16,7 +16,7 @@ const CLUSTER = 'default'
 const APP = 'e2e-podinfo'
 const NS = 'e2e-argo'
 const DEPLOY = APP // the chart names its objects after the release, which Argo CD names after the Application
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const RPC = { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json' }
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 
