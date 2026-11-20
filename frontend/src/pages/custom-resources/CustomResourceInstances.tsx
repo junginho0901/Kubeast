@@ -284,7 +284,7 @@ export default function CustomResourceInstances() {
       </div>
 
       {readNotice.length > 0 && (
-        <div role="status" data-testid="cr-instances-notice" className="shrink-0 space-y-1 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-100">
+        <div role="status" data-testid="cr-instances-notice" className="shrink-0 space-y-1 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-200">
           {readNotice.map((line) => (
             <p key={line.text} data-testid={line.testId} title={line.title} className="flex items-start gap-3">
               {line.testId === 'cr-instances-forbidden'

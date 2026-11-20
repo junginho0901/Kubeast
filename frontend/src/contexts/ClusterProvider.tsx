@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQueryClient, useIsFetching, type QueryClient } from '@tanstack/react-query'
 
@@ -35,6 +35,8 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   const fromStorage =
     typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) || '' : ''
   const chosen = fromUrl || fromStorage
+  // a choice just stored is read by a render of its own, not only once the address change (a transition) lands
+  const [, readChosenAgain] = useReducer((n: number) => n + 1, 0)
 
   // The cluster the screen shows: it takes the chosen one in the same step as the cache and the stores (moveTo), so
   // no render names a cluster beside what the one before answered. React Router applies a URL change in a
@@ -115,6 +117,7 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(STORAGE_KEY, id)
     }
+    readChosenAgain()
     // a node of the cluster before (Cluster View's ?node=) is not one of the new cluster's
     setSearchParams(paramsForCluster(searchParams, id, currentCluster), { replace: true })
   }, [])

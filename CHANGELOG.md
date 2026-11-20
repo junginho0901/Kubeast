@@ -70,6 +70,7 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 
 ### Fixed
 
+- In the light color mode the notice bands (a refused read, a stopped live list, a past sign-off or snapshot, the hygiene collectors and a cut list, kinds the graph could not read), the pending access requests count, log search highlights and the PriorityClass conflict chip keep their text readable, and the sign-in pages keep the default mode's colors; they had shown pale text on a pale ground since 0.7.6.
 - No list, window or drawer draws one read's rows as another's after a switch of filter, tab, namespace, object or cluster.
 - Panels that closed only on a click outside, Advanced Search's Select Resources and Settings, also close on Escape and give the focus back to their button; with the Refetch interval list open, the first Escape closes only the list.
 - A list on Fit holds the rows that end inside its table, each measured at its own height, where 0.7.7 took the first row's height for every row: a list whose rows wrap holds another number of rows a page, and on the page it is counted on, no last row sticks out past the table's bottom.
