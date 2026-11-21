@@ -128,11 +128,12 @@ The same cluster's numbers for the upgrade from 0.7.7 are in [Upgrading from 0.7
 
 ## Sizing
 
-The rows below are filled from load runs measured the same way as "Many users" in [Architecture](architecture.md#many-users).
-Until then, take one pod's numbers there and multiply them by the pods.
+The rows below were measured on 2026-11-21 the same way as "Many users" in [Architecture](architecture.md#many-users): on kind with one node, KWOK with 50 000 pods and 1 001 nodes, and k8s-service at the chart's 512 Mi.
+They compare pod counts with each other; on a real cluster the seconds differ.
+T3 is the run of 500 different people keeping the Dashboard, Pods and Cluster View open for 6 minutes, then 100 of them opening those screens at the same instant; its p95 is that of the 6 minutes.
 
 | k8s-service pods | Memory per pod, idle / busy | Memory in total | Watches the API server holds for Kubeast | p95 of 500 people's usual use | Answers other than 200 during a rollout |
 | --- | --- | --- | --- | --- | --- |
-| 1 | [Resource usage](architecture.md#resource-usage), [Many users](architecture.md#many-users) | same | to be measured | to be measured | to be measured |
-| 2 | to be measured | to be measured | to be measured | to be measured | to be measured |
-| 3 | to be measured | to be measured | to be measured | to be measured | to be measured |
+| 1 | idle p90 113 / busy max 416 MiB | 416 MiB (most at one second of T3, all pods) | informers 7 · at most 1731 during T3 | 17 ms (T3) | 0 of 656 (none) |
+| 2 | idle p90 112 · 109 / busy max 322 · 289 MiB | 603 MiB (most at one second of T3, all pods) | informers 14 · at most 1738 during T3 | 31 ms (T3) | 0 of 730 (none) |
+| 3 | idle p90 107 · 106 · 103 / busy max 239 · 245 · 265 MiB | 736 MiB (most at one second of T3, all pods) | informers 21 · at most 1745 during T3 | 33 ms (T3) | 0 of 806 (none) |
