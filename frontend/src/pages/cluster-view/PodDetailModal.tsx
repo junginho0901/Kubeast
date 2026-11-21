@@ -11,7 +11,8 @@ import type { PodReadShown } from './podDetailRead'
 // selectedPod 가 없으면 mount 안 함.
 
 interface Props {
-  isAdmin: boolean
+  /** the pod's terminal would open (useCanExecPod): the Exec tab shows */
+  canExec: boolean
   manifest: string | undefined
   describeData: any
   describeError?: unknown
@@ -19,7 +20,7 @@ interface Props {
   podRead?: PodReadShown
 }
 
-export function PodDetailModal({ isAdmin, manifest, describeData, describeError, podRead = 'none' }: Props) {
+export function PodDetailModal({ canExec, manifest, describeData, describeError, podRead = 'none' }: Props) {
   const { selectedPod, closeDetailModal, activeTab, tr } = useClusterView()
 
   // containers not read yet are no containers: the layer says they are being read, and a failed read says itself
@@ -67,7 +68,7 @@ export function PodDetailModal({ isAdmin, manifest, describeData, describeError,
           </button>
         </div>
 
-        <PodDetailTabs isAdmin={isAdmin} />
+        <PodDetailTabs canExec={canExec} />
         <PodDetailTabBody manifest={manifest} describeData={describeData} describeError={describeError} podRead={podRead} />
       </div>
     </ModalOverlay>
