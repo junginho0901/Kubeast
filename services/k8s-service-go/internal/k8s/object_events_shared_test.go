@@ -32,8 +32,10 @@ type eventsCluster struct {
 	// as an authorizer that reads the field selector may decide otherwise than a review
 	may  func(user, namespace string) bool
 	list func(user, namespace string) bool
-	// cacheRefused refuses the events to kubeast:cache; hold holds its lists of events until closed
+	// cacheRefused refuses the events to kubeast:cache; reviewFails answers every review 500; hold holds kubeast:cache's
+	// lists of events until closed
 	cacheRefused bool
+	reviewFails  bool
 	hold         chan struct{}
 
 	mu                  sync.Mutex
@@ -108,6 +110,10 @@ func (a *eventsCluster) serve(w http.ResponseWriter, r *http.Request) {
 		a.mu.Lock()
 		a.reviews = append(a.reviews, apiCall{user: user, verb: ra.Verb, resource: ra.Resource, namespace: ra.Namespace})
 		a.mu.Unlock()
+		if a.reviewFails {
+			writeStatus(w, http.StatusInternalServerError, "InternalError", "the review could not be answered")
+			return
+		}
 		review.APIVersion, review.Kind = "authorization.k8s.io/v1", "SelfSubjectAccessReview"
 		review.Status.Allowed = ra.Verb == "list" && ra.Resource == "events" && a.may(user, ra.Namespace)
 		writeJSON(w, review)

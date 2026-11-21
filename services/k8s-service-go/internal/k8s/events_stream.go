@@ -98,9 +98,15 @@ func (s *Service) newestEventsRead(ctx context.Context, namespace string, opts m
 	var counts eventCounts
 	var from *eventWindow
 	var fromEvents []corev1.Event
-	one := namespace != "" || len(scopeFromCtx(ctx)) == 0
+	scope := scopeFromCtx(ctx)
+	one := namespace != "" || len(scope) == 0
+	namespaces := []string{namespace}
+	if !one {
+		namespaces = scope
+	}
+	may := s.eventReviews(ctx, namespaces, limit)
 	err := eachCallerNamespace(ctx, namespace, func(ns string) error {
-		w, shared, err := s.eventWindowFor(ctx, ns, opts, limit, eventType)
+		w, shared, err := s.eventWindowFor(ctx, ns, opts, limit, eventType, may[ns])
 		if err != nil {
 			return err
 		}
@@ -216,17 +222,39 @@ func readEventWindow(ctx context.Context, client kubernetes.Interface, namespace
 	return w, nil
 }
 
-// eventWindowFor is namespace's events read once as kubeast:cache for everyone asking the same at that moment whose
-// identity may list every event there (SelfSubjectAccessReview through mayList, 60 s): what that identity's own list
-// gives, whatever the selector. shared false says to read them as the caller: no cache identity, a limit of all, a
-// review that refuses or fails, or kubeast:cache refused them within the last minute.
-func (s *Service) eventWindowFor(ctx context.Context, namespace string, opts metav1.ListOptions, limit int, eventType string) (*eventWindow, bool, error) {
+// eventReviews says, for each of namespaces, whether the caller's identity may list every event there
+// (SelfSubjectAccessReview through mayList, 60 s), the reviews asked side by side, listFanOutWorkers at a time, so a
+// grant of 30 namespaces waits for about one round trip, not 30 in a row. None is asked without a cache identity, for a
+// limit of all, or of a namespace kubeast:cache was refused within the last minute: eventWindowFor would not share them.
+// A review the cluster did not answer says nothing of the caller's rights: that namespace reads as the caller, as before
+// the review, and the others still read once for everyone.
+func (s *Service) eventReviews(ctx context.Context, namespaces []string, limit int) map[string]bool {
+	may := make(map[string]bool, len(namespaces))
 	b := s.bundleForCtx(ctx)
-	if b == nil || b.cacheClient == nil || limit < 1 || eventsRefusedTo(b, namespace) {
-		return nil, false, nil
+	if b == nil || b.cacheClient == nil || limit < 1 {
+		return may
 	}
-	// a review the cluster did not answer says nothing of the caller's rights: its own read answers, as before the review
-	if may, err := s.mayList(ctx, b, "events", namespace); err != nil || !may {
+	allowed := make([]bool, len(namespaces))
+	sideBySide(len(namespaces), func(i int) {
+		if eventsRefusedTo(b, namespaces[i]) {
+			return
+		}
+		ok, err := s.mayList(ctx, b, "events", namespaces[i])
+		allowed[i] = err == nil && ok
+	})
+	for i, ns := range namespaces {
+		may[ns] = allowed[i]
+	}
+	return may
+}
+
+// eventWindowFor is namespace's events read once as kubeast:cache for everyone asking the same at that moment, for a
+// caller whose identity may list every event there (may, from eventReviews): what that identity's own list gives,
+// whatever the selector. shared false says to read them as the caller: no cache identity, a limit of all, a review that
+// refuses or fails, or kubeast:cache refused them within the last minute.
+func (s *Service) eventWindowFor(ctx context.Context, namespace string, opts metav1.ListOptions, limit int, eventType string, may bool) (*eventWindow, bool, error) {
+	b := s.bundleForCtx(ctx)
+	if !may || b == nil || b.cacheClient == nil || limit < 1 || eventsRefusedTo(b, namespace) {
 		return nil, false, nil
 	}
 	w, err := s.sharedEventWindow(ctx, b, namespace, opts, limit, eventType)

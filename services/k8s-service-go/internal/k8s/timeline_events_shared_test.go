@@ -33,18 +33,25 @@ type windowCluster struct {
 	// as an authorizer that reads the field selector may decide otherwise than a review
 	may  func(user, namespace string) bool
 	list func(user, namespace string) bool
-	// cacheRefused refuses the events to kubeast:cache; reviewFails answers every review 500; hold holds kubeast:cache's
-	// first pages until closed
-	cacheRefused bool
-	reviewFails  bool
-	hold         chan struct{}
-	released     sync.Once
-	events       []corev1.Event
+	// cacheRefused refuses the events to kubeast:cache; reviewFails answers every review 500, failReview those of the
+	// namespaces it names; hold holds kubeast:cache's first pages until closed; reviewsTogether holds each review until
+	// that many are under way at once, or a second has passed
+	cacheRefused    bool
+	reviewFails     bool
+	failReview      func(namespace string) bool
+	hold            chan struct{}
+	released        sync.Once
+	reviewsTogether int
+	events          []corev1.Event
 
-	mu         sync.Mutex
-	pages      map[string]int // every page of events asked, by user
-	firstPages map[string]int // the first pages, one a read, by user
-	reviews    int
+	mu          sync.Mutex
+	pages       map[string]int // every page of events asked, by user
+	firstPages  map[string]int // the first pages, one a read, by user
+	reviews     int
+	reviewsNow  int // reviews under way
+	reviewsMost int // the most under way at once
+	together    chan struct{}
+	allTogether bool
 }
 
 // release lets the held pages go, once; start makes it run before the server closes, which waits for them.
@@ -66,6 +73,13 @@ func (a *windowCluster) reviewsSeen() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.reviews
+}
+
+// reviewsAtOnce is the most reviews that were under way at one moment.
+func (a *windowCluster) reviewsAtOnce() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.reviewsMost
 }
 
 // pagesByCallers is the pages of events asked as anyone but kubeast:cache.
@@ -93,8 +107,31 @@ func (a *windowCluster) serve(w http.ResponseWriter, r *http.Request) {
 		ra := *review.Spec.ResourceAttributes
 		a.mu.Lock()
 		a.reviews++
+		a.reviewsNow++
+		a.reviewsMost = max(a.reviewsMost, a.reviewsNow)
+		if a.together == nil {
+			a.together = make(chan struct{})
+		}
+		if a.reviewsTogether > 0 && a.reviewsNow >= a.reviewsTogether && !a.allTogether {
+			close(a.together)
+			a.allTogether = true
+		}
+		together := a.together
 		a.mu.Unlock()
-		if a.reviewFails {
+		defer func() {
+			a.mu.Lock()
+			a.reviewsNow--
+			a.mu.Unlock()
+		}()
+		if a.reviewsTogether > 0 {
+			select {
+			case <-together:
+			case <-time.After(time.Second):
+			case <-r.Context().Done():
+				return
+			}
+		}
+		if a.reviewFails || (a.failReview != nil && a.failReview(ra.Namespace)) {
 			writeStatus(w, http.StatusInternalServerError, "InternalError", "the review could not be answered")
 			return
 		}
