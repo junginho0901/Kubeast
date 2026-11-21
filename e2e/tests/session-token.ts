@@ -1,8 +1,10 @@
 import type { APIResponse } from '@playwright/test'
 
 // The sign-in token of a password sign-in or refresh answer, read from its Set-Cookie header. auth-service names the
-// cookie kubeast.token, or __Host-kubeast.token on an https install; both are read, the __Host- one first.
-const NAMES = ['__Host-kubeast.token', 'kubeast.token']
+// cookie by AUTH_COOKIE_NAME (kubeast.token when unset); with that variable set here, __Host-<name> and <name> are read
+// first, then __Host-kubeast.token and kubeast.token, the first one set taken.
+const fromEnv = process.env.AUTH_COOKIE_NAME
+const NAMES = [...(fromEnv ? [`__Host-${fromEnv}`, fromEnv] : []), '__Host-kubeast.token', 'kubeast.token']
 
 export function sessionToken(res: APIResponse): string {
   const set = new Map<string, string>()
