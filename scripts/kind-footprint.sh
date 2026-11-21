@@ -116,14 +116,20 @@ wait_ready() {
 }
 
 # Run a shell script in the node with $base (the gateway's NodePort) and $token (the admin signed in); the admin
-# password goes through the environment, not the command line.
+# password goes through the environment, not the command line. The token is the cookie __Host-<name> or <name> of
+# AUTH_COOKIE_NAME when that variable is set here, then __Host-kubeast.token or kubeast.token (COOKIE_RE is the name
+# with its sed pattern characters escaped).
 in_node() {
   PW="$(kubectl_fp get secret kubeast-secrets -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d)" \
-    docker exec -e PW -e PORT="$(kubectl_fp get service gateway -o jsonpath='{.spec.ports[0].nodePort}')" "$@" "$NODE" sh -c '
+    docker exec -e PW -e PORT="$(kubectl_fp get service gateway -o jsonpath='{.spec.ports[0].nodePort}')" \
+    -e COOKIE_RE="$(printf '%s' "${AUTH_COOKIE_NAME:-}" | sed 's|[][\.*^$/]|\\&|g')" "$@" "$NODE" sh -c '
       base="http://127.0.0.1:$PORT"
-      token=$(curl -s -o /dev/null -D - -X POST "$base/api/v1/auth/login" -H "Content-Type: application/json" \
-        -d "{\"email\":\"admin\",\"password\":\"$PW\"}" \
-        | sed -n "s/^[Ss]et-[Cc]ookie: *\(__Host-\)\{0,1\}kubeast\.token=\([^;[:space:]]\{1,\}\).*/\2/p" | head -n 1)
+      hdrs=$(curl -s -o /dev/null -D - -X POST "$base/api/v1/auth/login" -H "Content-Type: application/json" \
+        -d "{\"email\":\"admin\",\"password\":\"$PW\"}")
+      cookie() { printf "%s\n" "$hdrs" | sed -n "s/^[Ss]et-[Cc]ookie: *\(__Host-\)\{0,1\}$1=\([^;[:space:]]\{1,\}\).*/\2/p" | head -n 1; }
+      token=
+      [ -z "$COOKIE_RE" ] || token=$(cookie "$COOKIE_RE")
+      [ -n "$token" ] || token=$(cookie "kubeast\.token")
       [ -n "$token" ] || { echo "login failed" >&2; exit 1; }
       api() { curl -s -H "Authorization: Bearer $token" -H "X-Requested-With: XMLHttpRequest" "$@"; }
       eval "$SCRIPT"'

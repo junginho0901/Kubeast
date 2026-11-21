@@ -20,6 +20,7 @@
 # Env knobs:
 #   E2E_BASE_URL       gateway URL, default http://localhost:30080
 #   API_SNAPSHOT_NS    fixture namespace, default clarinet
+#   AUTH_COOKIE_NAME   the install's sign-in cookie name, read before kubeast.token (scripts/session-token.awk)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -61,7 +62,7 @@ case "$MODE" in
     }
     TOKEN=$(printf '%s\n' "$LOGIN_HEADERS" | awk -f "$ROOT/scripts/session-token.awk")
     if [[ -z "$TOKEN" ]]; then
-      echo "ERROR: login answer set no kubeast.token or __Host-kubeast.token cookie" >&2
+      echo "ERROR: login answer set no ${AUTH_COOKIE_NAME:+${AUTH_COOKIE_NAME}, __Host-${AUTH_COOKIE_NAME}, }kubeast.token or __Host-kubeast.token cookie" >&2
       exit 1
     fi
 

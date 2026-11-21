@@ -137,7 +137,10 @@ class Api:
 
     def login(self) -> str:
         """The sign-in token from the answer's Set-Cookie header."""
-        session_cookies = ("__Host-kubeast.token", "kubeast.token")  # the sign-in cookie, an https install's name first
+        # The sign-in cookie, which auth-service names by AUTH_COOKIE_NAME (kubeast.token when unset): with that variable set
+        # here, __Host-<name> and <name> are read first, then __Host-kubeast.token and kubeast.token, the first one set taken.
+        name = os.environ.get("AUTH_COOKIE_NAME", "")
+        session_cookies = ((f"__Host-{name}", name) if name else ()) + ("__Host-kubeast.token", "kubeast.token")
         with request("POST", "/api/v1/auth/login", body={"email": self.email, "password": self._password}) as r:
             cookies = dict(c.split(";", 1)[0].strip().partition("=")[::2] for c in r.headers.get_all("Set-Cookie") or [])
         token = next((cookies[n] for n in session_cookies if cookies.get(n)), "")
