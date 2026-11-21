@@ -87,6 +87,13 @@ func (g *Group[T]) Waiting(key string) int {
 	return 0
 }
 
+// Keys is how many keys have a read under way; none is left once every read has ended.
+func (g *Group[T]) Keys() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return len(g.keys)
+}
+
 func newCall[T any](ctx context.Context, read func(context.Context) (T, error)) *call[T] {
 	readCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	return &call[T]{ctx: readCtx, cancel: cancel, read: read, waiters: 1, done: make(chan struct{})}

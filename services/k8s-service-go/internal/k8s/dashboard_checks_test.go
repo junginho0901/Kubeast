@@ -22,7 +22,7 @@ func dashboard(s *Service, ctx context.Context) {
 	for _, read := range []func(){
 		func() { _, _ = s.GetNamespaces(ctx) },
 		func() { _, _ = s.GetClusterOverview(ctx) },
-		func() { _, _ = s.GetPodPage(ctx, PodPageQuery{Sort: "name", Limit: 50}) },
+		func() { _, _ = s.GetPodPageJSON(ctx, PodPageQuery{Sort: "name", Limit: 50}) },
 		func() { _, _ = s.GetNodesJSON(ctx) },
 	} {
 		wg.Add(1)

@@ -26,6 +26,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/cache"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -620,6 +621,7 @@ func TestACrowdOnThePodsPageBuildsOncePerDecision(t *testing.T) {
 			if n := len(podRowSlots); n != 0 {
 				t.Errorf("%d places still held", n)
 			}
+			waitFor(t, "no build left under way", func() bool { return sc.answers(ci).Keys() == 0 })
 		})
 	}
 }
@@ -961,6 +963,54 @@ func TestTheSharedPodAnswerIsTheBytesResponseJSONWrites(t *testing.T) {
 	}
 }
 
+// The trail of a caller answered by the build another request started says so; the caller who built its own answer and
+// the first who waited, whose request the next build was started for, have no such line.
+func TestAPodAnswerWaitersTrailSaysAnotherRequestsReadAnsweredIt(t *testing.T) {
+	grants := map[string][]string{"a@example.com": {""}, "b@example.com": {""}, "c@example.com": {""}}
+	q := PodPageQuery{Limit: 50}
+	joined := func(r *accesstrail.Recorder) int {
+		n := 0
+		for _, req := range r.Snapshot().Requests {
+			if req.Source == "cache" && req.Cache == "the same read of another request" {
+				n++
+			}
+		}
+		return n
+	}
+	for _, sc := range podScreens {
+		t.Run(sc.name, func(t *testing.T) {
+			s, ci := shareCluster(t, pagePods(), grants)
+			key := keyOf(t, s, sc, wideCaller("a@example.com"), q)
+			ra, rb, rc := &accesstrail.Recorder{}, &accesstrail.Recorder{}, &accesstrail.Recorder{}
+			a := accesstrail.NewContext(wideCaller("a@example.com"), ra)
+			b := accesstrail.NewContext(wideCaller("b@example.com"), rb)
+			c := accesstrail.NewContext(wideCaller("c@example.com"), rc)
+			g := watchBuilds(t, s, &buildGate{step: "place", hold: func(nth, _ int) bool { return nth == 1 }})
+			first := askNow(func() string { return sc.ask(s, a, q) })
+			waitFor(t, "the first build is held", func() bool { return g.held() == 1 })
+			second := askNow(func() string { return sc.ask(s, b, q) })
+			waitFor(t, "the second waits for the next build", func() bool { return sc.answers(ci).Waiting(key) == 1 })
+			third := askNow(func() string { return sc.ask(s, c, q) })
+			waitFor(t, "the third waits for it too", func() bool { return sc.answers(ci).Waiting(key) == 2 })
+			g.open()
+			want := sc.own(s, wideCaller("a@example.com"), q)
+			for _, w := range []struct {
+				who   string
+				a     *asking
+				r     *accesstrail.Recorder
+				lines int
+			}{{"the first, who built its own answer", first, ra, 0}, {"the second, the next build's first", second, rb, 0}, {"the third", third, rc, 1}} {
+				if got := w.a.wait(t); got != want {
+					t.Errorf("%s:\n got %.300s\nwant %.300s", w.who, got, want)
+				}
+				if n := joined(w.r); n != w.lines {
+					t.Errorf("%s has %d lines of another request's read, want %d", w.who, n, w.lines)
+				}
+			}
+		})
+	}
+}
+
 // One caller leaving while it waits for the next build gets its own error at once and the others the answer; when all
 // who wait leave while the build waits for a place, it stops waiting, builds nothing and keeps no place.
 func TestPodAnswerWaitersThatLeave(t *testing.T) {
@@ -1041,6 +1091,7 @@ func TestPodAnswerWaitersThatLeave(t *testing.T) {
 			if n := len(podRowSlots); n != 0 {
 				t.Errorf("%d places held after everyone left", n)
 			}
+			waitFor(t, "no build left under way after everyone left", func() bool { return sc.answers(ci).Keys() == 0 })
 		})
 	}
 }

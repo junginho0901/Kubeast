@@ -67,22 +67,22 @@ func TestGetPodNodeSummary_AccessAndRevision(t *testing.T) {
 		pods = append(pods, p)
 	}
 	s, _, _ := pageBundle(t, fake.NewSimpleClientset(pods...), func(string) bool { return true })
-	sum, err := s.GetPodNodeSummary(ctx, "", "", "")
+	sum, err := answerOf[PodNodeSummary](s.GetPodNodeSummaryJSON(ctx, "", "", ""))
 	if err != nil || sum.Total != 4 || len(sum.Nodes) != 2 || sum.Source != "index" || sum.Nodes[0].OK != 2 {
 		t.Fatalf("all: %+v %v", sum, err)
 	}
-	again, err := s.GetPodNodeSummary(ctx, "", "", sum.Revision)
+	again, err := answerOf[PodNodeSummary](s.GetPodNodeSummaryJSON(ctx, "", "", sum.Revision))
 	if err != nil || !again.Unchanged || again.Nodes == nil {
 		t.Fatalf("same revision: %+v %v", again, err)
 	}
 
 	scoped := auth.WithPayload(ctx, auth.TokenPayload{UserID: "u1", Namespaces: map[string][]string{"default": {"a", "c"}}})
 	s, _, _ = pageBundle(t, fake.NewSimpleClientset(pods...), func(ns string) bool { return ns == "a" })
-	sum, err = s.GetPodNodeSummary(scoped, "", "", "")
+	sum, err = answerOf[PodNodeSummary](s.GetPodNodeSummaryJSON(scoped, "", "", ""))
 	if err != nil || sum.Total != 2 {
 		t.Fatalf("scoped to a (c refused): %+v %v", sum, err)
 	}
-	if _, err := s.GetPodNodeSummary(scoped, "b", "", ""); !apierrors.IsForbidden(err) {
+	if _, err := s.GetPodNodeSummaryJSON(scoped, "b", "", ""); !apierrors.IsForbidden(err) {
 		t.Fatalf("scoped, b outside the grant: %v", err)
 	}
 }
