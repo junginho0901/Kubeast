@@ -58,6 +58,10 @@ import (
 // (shellHangup's keys and grace, the audit row).
 const streamCloseWait = 5 * time.Second
 
+// k8sMemoryLimitShare is the Go collector's share of the container's limit, the rest left for the kernel's memory for
+// this server's sockets: at 90 %, 500 people at once took the pod to 509.9 MiB of 512 Mi with the Go side at 451.4.
+const k8sMemoryLimitShare = 0.85
+
 func main() {
 	// Load configuration
 	cfg := config.Load()
@@ -72,7 +76,7 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("starting k8s-service-go", "port", cfg.Port, "debug", cfg.Debug, "role", role)
-	memlimit.Set(0)
+	memlimit.SetShare(k8sMemoryLimitShare, 0)
 
 	// The /internal routes (kubeconfig for tool-server, validate/invalidate for
 	// auth-service) need the shared service token; without one they answer 503
