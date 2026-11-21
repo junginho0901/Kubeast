@@ -30,6 +30,7 @@
   - A missing name, kind or capability (metrics-server, etc.) comes back as a result instead of a kubectl error: **`not_found` (with a list of similar names), `unknown_kind` or `unavailable`**.
   - The AI therefore looks once instead of asking back while switching namespaces, then says where it looked and asks.
   - Similar names are searched only within that person's namespace scope.
+  - **Rule cards** (`ai.ruleCards`, off by default): with `chat` on, a question that names a failure a card knows (a reason such as `OOMKilled` or `ImagePullBackOff`, or an alert name) gets at most two cards for that turn — the checks that often find that failure's cause, in order, each with the tools that answer it, only those the turn offers. The defaults are one card per kind of failure (`app/services/rule_cards.json`); `cards` adds or replaces cards and `remove` leaves default kinds out. `investigations` does the same for alert investigations ([AI alerts](ai-alerts.md)).
   - Each tool block starts with a **🔐 line: who the cluster saw the call as**.
     - The user and groups are the impersonation values sent to the cluster, as the service that sent them reports them (tool-server, or k8s-service in its `X-Kubeast-Access` header).
     - The line also shows the Kubeast role, the namespace scope and whether the tool reads or writes.

@@ -191,6 +191,12 @@ ai:
   apiKeysSecret: ""
   model: "gpt-6-luna"
   baseUrlAllowedHosts: []  # 모델 설정의 base_url이 사설 주소(클러스터 안 Ollama, 사내 LLM 게이트웨이)면 여기에 등록하세요
+  ruleCards:               # 고장 종류마다 원인을 자주 찾아 주는 확인과 그 도구(features.md "규칙 카드")
+    chat: false            # (alpha) true면 카드가 아는 고장을 적은 채팅 질문이 그 턴에 카드를 최대 두 장 받습니다
+    investigations: false  # (alpha) true면 알림 조사의 첫 입력에 알림 이름과 라벨로 고른 카드가 최대 두 장 들어갑니다
+                           # 둘 다 끄면 카드 파일을 읽지 않고 채팅과 조사는 전과 같습니다
+    cards: []              # 같은 꼴의 카드를 더합니다(이미 있는 종류는 바꿉니다). 기본 카드는 app/services/rule_cards.json
+    remove: []             # 빼 둘 기본 종류. 예: [network_policy]
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),

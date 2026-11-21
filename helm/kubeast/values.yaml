@@ -399,6 +399,30 @@ ai:
     budget:
       sessionTokens: 0
       userDailyTokens: 0
+  # Rule cards: for a kind of failure (crash, oom, image, config_change,
+  # rollout, network_policy, dns, resource_limit, quota, node, dependency_down,
+  # dependency_slow, storage), the checks that often find its cause, in order,
+  # with the tools that answer them. The server picks at most two — from an
+  # alert's name and labels for an investigation, from the failure a question
+  # names for the chat — and gives them beside the first message, with only the
+  # tools that model is offered. The defaults are in ai-service
+  # (app/services/rule_cards.json). cards adds cards of the same shape (a kind
+  # already there is replaced); remove leaves default kinds out:
+  #   cards:
+  #     - kind: payments-db
+  #       title: Payments database slow
+  #       alerts: [PaymentsDBLatencyHigh]
+  #       terms: [pq canceling statement]
+  #       checks:
+  #         - check: The database's slow queries over the window
+  #           tools: [prometheus_query]
+  #   remove: [network_policy]
+  # At most 6 checks a card, 3 tools a check, 200 characters a check.
+  ruleCards:
+    chat: false
+    investigations: false
+    cards: []
+    remove: []
   # Write model responses, tool arguments and tool results to the ai-service
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.

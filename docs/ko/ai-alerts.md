@@ -77,6 +77,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 조사에서 CRD(Kyverno PolicyReport, Argo Rollout, KEDA ScaledObject 등)도 읽게 하려면 `extraRules`에 읽기 규칙을 추가하세요. 동사는 get, list, watch만 쓸 수 있고, `apiGroups "*"`, Secret, exec, 프록시, 토큰, 와일드카드 자원은 렌더 단계에서 거부합니다.
   - 추가한 규칙은 알림을 보내는 모든 클러스터에 다시 적용하세요(`scripts/render-target-rbac.sh`).
   - 모델은 `model`(ModelConfig 이름) 또는 기본 모델을 쓰고, 모델 호출은 `maxSteps`(8)번까지, 전체 시간은 `timeoutSeconds`(300)까지입니다. 마지막 호출에는 도구를 주지 않으므로 답이 돌아옵니다.
+  - `ai.ruleCards.investigations`를 켜면(기본 꺼짐) 첫 입력에 알림 이름과 라벨로 고른 규칙 카드가 최대 두 장 더 들어갑니다(목록에 있는 알림 이름이 먼저, 그다음 라벨 값의 `OOMKilled` 같은 이유). 카드는 그 고장의 원인을 자주 찾아내는 확인 순서와 각 확인에 쓸 도구이며, 조사에 주어진 도구만 적힙니다. 알림은 카드를 고르기만 하고 알림의 글은 카드에 들어가지 않으며, 모델 걸음이나 도구 호출을 쓰지 않습니다. 카드와 직접 더하는 법은 `ai.ruleCards`에 있습니다([기능](features.md)).
   - 알림의 라벨·주석은 프롬프트에서 "신뢰하지 않는 데이터"로 분리합니다.
 - **보고서**: 요약 · 확인한 것 · 가능한 원인 · 다음에 볼 것으로 구성됩니다(`language`, 기본 en).
   - API는 `GET /api/v1/ai/investigations`(목록, `status`·`cluster`로 거르기)와 `/{id}`(상세: 보고서·도구 호출·토큰)이고, 권한은 `admin.investigations.read`입니다.
