@@ -72,10 +72,12 @@ export default function Account() {
     e.preventDefault()
     setSuccess(null)
     if (!currentPassword || !newPassword) {
+      changePasswordMutation.reset()
       setLocalError(tr('account.password.required', 'Enter current and new passwords.'))
       return
     }
     if (newPassword !== confirmPassword) {
+      changePasswordMutation.reset()
       setLocalError(tr('account.password.mismatch', 'New passwords do not match.'))
       return
     }
