@@ -91,6 +91,10 @@ type Statuser interface {
 	Status(ctx context.Context) Status
 }
 
+// WriteTimeout is the longest one write through Guarded may take once its
+// caller's cancellation no longer reaches it.
+const WriteTimeout = 5 * time.Second
+
 // Guarded wraps a Store for fail-closed operation: it counts write failures,
 // keeps the last one, and answers Ready by pinging the store (cached for a
 // short window) so handlers can refuse to run an action that would go
@@ -99,10 +103,11 @@ type Statuser interface {
 // With failClosed off, Ready always passes and the wrapper only counts.
 type Guarded struct {
 	Store
-	pinger     Pinger
-	prober     WriteProber
-	failClosed bool
-	ttl        time.Duration
+	pinger       Pinger
+	prober       WriteProber
+	failClosed   bool
+	ttl          time.Duration
+	writeTimeout time.Duration
 
 	mu        sync.Mutex
 	checkedAt time.Time
@@ -123,15 +128,21 @@ type writeFailure struct {
 // Guard wraps store; pinger is normally the same PostgresStore. A nil pinger
 // means Ready only reflects the fail-closed switch (never pings).
 func Guard(store Store, pinger Pinger, failClosed bool) *Guarded {
-	g := &Guarded{Store: store, pinger: pinger, failClosed: failClosed, ttl: 2 * time.Second}
+	g := &Guarded{Store: store, pinger: pinger, failClosed: failClosed, ttl: 2 * time.Second, writeTimeout: WriteTimeout}
 	g.prober, _ = pinger.(WriteProber)
 	return g
 }
 
 // Write persists through the inner Store, counting and logging failures. A
-// failure also drops the Ready cache so the next check pings again.
+// failure also drops the Ready cache so the next check pings again. The write
+// keeps ctx's values but not its cancellation: a request whose client went
+// away after its change ran (net/http cancels the request's context when the
+// connection closes) still gets its row. It ends at ctx's deadline or after
+// writeTimeout, whichever comes first, so a step of a shutdown keeps its own.
 func (g *Guarded) Write(ctx context.Context, rec Record) (int64, error) {
-	id, err := g.Store.Write(ctx, rec)
+	wctx, cancel := writeContext(ctx, g.writeTimeout)
+	defer cancel()
+	id, err := g.Store.Write(wctx, rec)
 	g.mu.Lock()
 	if err != nil {
 		g.checkedAt, g.probedAt = time.Time{}, time.Time{}
@@ -146,6 +157,16 @@ func (g *Guarded) Write(ctx context.Context, rec Record) (int64, error) {
 		slog.ErrorContext(ctx, "audit: write failed", "action", rec.Action, "error", err)
 	}
 	return id, err
+}
+
+// writeContext is ctx without its cancellation, ending at ctx's deadline or
+// after limit, whichever comes first.
+func writeContext(ctx context.Context, limit time.Duration) (context.Context, context.CancelFunc) {
+	end := time.Now().Add(limit)
+	if d, ok := ctx.Deadline(); ok && d.Before(end) {
+		end = d
+	}
+	return context.WithDeadline(context.WithoutCancel(ctx), end)
 }
 
 // Ready implements Readier.

@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -207,5 +208,111 @@ func TestGuardedProbesAWriteAfterAFailedWrite(t *testing.T) {
 	_, _ = off.Write(ctx, Record{Action: "x"})
 	if err := off.Ready(ctx); err != nil {
 		t.Fatalf("fail-closed off: %v", err)
+	}
+}
+
+type requestKey struct{}
+
+// ctxStore refuses a write on an ended context, as the Postgres store does
+// (pgxpool's Acquire answers ctx.Err() before it takes a connection), and keeps
+// what the write's context carried. With block set it waits for the context.
+type ctxStore struct {
+	fakeStore
+	block    bool
+	rows     []Record
+	deadline time.Duration
+	value    any
+}
+
+func (s *ctxStore) Write(ctx context.Context, rec Record) (int64, error) {
+	if s.block {
+		<-ctx.Done()
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, fmt.Errorf("audit insert: %w", err)
+	}
+	if d, ok := ctx.Deadline(); ok {
+		s.deadline = time.Until(d)
+	}
+	s.value = ctx.Value(requestKey{})
+	s.rows = append(s.rows, rec)
+	return int64(len(s.rows)), nil
+}
+
+// A request whose client went away after its change ran: the row is stored
+// with the request's values, within WriteTimeout, and the store is not counted
+// as failing or marked broken.
+func TestGuardedWriteOutlivesItsCallersCancellation(t *testing.T) {
+	store := &ctxStore{}
+	p := &probingPinger{probeErr: errors.New("probe refused")}
+	g := Guard(store, p, true)
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), requestKey{}, "req-1"))
+	cancel()
+
+	id, err := g.Write(ctx, Record{Action: "k8s.pod.delete"})
+	if err != nil || id != 1 || len(store.rows) != 1 || store.rows[0].Action != "k8s.pod.delete" {
+		t.Fatalf("write after the caller left: id %d err %v rows %+v", id, err, store.rows)
+	}
+	if store.value != "req-1" {
+		t.Fatalf("the write lost the request's values: %v", store.value)
+	}
+	if store.deadline <= 0 || store.deadline > WriteTimeout {
+		t.Fatalf("write deadline = %v, want within %v", store.deadline, WriteTimeout)
+	}
+	if st := g.Status(context.Background()); st.WriteFailures != 0 || st.LastError != "" {
+		t.Fatalf("status = %+v", st)
+	}
+	if err := g.Ready(context.Background()); err != nil || p.probes != 0 {
+		t.Fatalf("store marked broken: %v probes %d", err, p.probes)
+	}
+}
+
+// A caller's deadline earlier than WriteTimeout stays (a step of a shutdown has
+// its own budget), and one already past ends the write as before.
+func TestGuardedWriteKeepsAnEarlierDeadline(t *testing.T) {
+	store := &ctxStore{}
+	g := Guard(store, &fakePinger{}, true)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if _, err := g.Write(ctx, Record{Action: "k8s.node.drain"}); err != nil {
+		t.Fatal(err)
+	}
+	if store.deadline <= 0 || store.deadline > 200*time.Millisecond {
+		t.Fatalf("write deadline = %v, want the caller's 200ms", store.deadline)
+	}
+
+	past, cancelPast := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelPast()
+	if _, err := g.Write(past, Record{Action: "k8s.node.drain"}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the caller's deadline", err)
+	}
+	if len(store.rows) != 1 || g.Status(context.Background()).WriteFailures != 1 {
+		t.Fatalf("rows %d failures %d", len(store.rows), g.Status(context.Background()).WriteFailures)
+	}
+}
+
+// A store that does not answer ends the write at writeTimeout, counted as a
+// failure; Guard sets WriteTimeout, 5 s.
+func TestGuardedWriteEndsAtItsTimeout(t *testing.T) {
+	if g := Guard(&fakeStore{}, nil, true); g.writeTimeout != WriteTimeout || WriteTimeout != 5*time.Second {
+		t.Fatalf("write timeout = %v (WriteTimeout %v), want 5s", g.writeTimeout, WriteTimeout)
+	}
+	store := &ctxStore{block: true}
+	g := Guard(store, &fakePinger{}, true)
+	g.writeTimeout = 50 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	_, err := g.Write(ctx, Record{Action: "helm.release.upgrade"})
+	took := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the write's deadline", err)
+	}
+	if took < 50*time.Millisecond || took > 2*time.Second {
+		t.Fatalf("write took %v, want about 50ms", took)
+	}
+	if st := g.Status(context.Background()); st.WriteFailures != 1 || !strings.Contains(st.LastError, "deadline exceeded") {
+		t.Fatalf("status = %+v", st)
 	}
 }
