@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { expect, type APIRequestContext, type Page, type Request } from '@playwright/test'
+import { sessionToken } from '../tests/session-token'
 
 // What the safety nets under e2e/guard share: the users, the objects, the screens and drawers the code lists.
 
@@ -228,7 +229,7 @@ export const ROLES: Role[] = [
 export async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token as string
+  return sessionToken(res)
 }
 type RoleRow = { id: number; name: string; permissions: string[] | null }
 export async function roleTable(request: APIRequestContext, admin: string): Promise<RoleRow[]> {
