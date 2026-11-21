@@ -15,7 +15,7 @@
 #   bash scripts/api-snapshot.sh diff <baseline-dir> <actual-dir>
 #
 # Auth: requires E2E_USER_EMAIL / E2E_USER_PASSWORD; logs in via
-# /api/v1/auth/login and uses the returned access_token as Bearer.
+# /api/v1/auth/login and uses the token of the answer's Set-Cookie header as Bearer.
 #
 # Env knobs:
 #   E2E_BASE_URL       gateway URL, default http://localhost:30080
@@ -54,15 +54,14 @@ case "$MODE" in
     # Login → Bearer token.
     LOGIN_BODY=$(jq -nc --arg e "$E2E_USER_EMAIL" --arg p "$E2E_USER_PASSWORD" \
       '{email:$e,password:$p}')
-    LOGIN_RESP=$(curl -sf -H 'Content-Type: application/json' \
+    LOGIN_HEADERS=$(curl -sf -o /dev/null -D - -H 'Content-Type: application/json' \
       -d "$LOGIN_BODY" "$BASE_URL/api/v1/auth/login") || {
       echo "ERROR: login failed against $BASE_URL/api/v1/auth/login" >&2
       exit 1
     }
-    TOKEN=$(echo "$LOGIN_RESP" | jq -r '.access_token // .token // empty')
+    TOKEN=$(printf '%s\n' "$LOGIN_HEADERS" | awk -f "$ROOT/scripts/session-token.awk")
     if [[ -z "$TOKEN" ]]; then
-      echo "ERROR: login response missing access_token / token" >&2
-      echo "$LOGIN_RESP" | jq . >&2
+      echo "ERROR: login answer set no kubeast.token or __Host-kubeast.token cookie" >&2
       exit 1
     fi
 

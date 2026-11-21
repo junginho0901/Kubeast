@@ -328,10 +328,16 @@ expect() { # expect "CODES" WHAT — stops unless CODE is one of CODES
   case " $1 " in *" $CODE "*) return 0 ;; esac
   stop "$2: HTTP $CODE $(jqb '.detail? // empty' | head -c 200 | mask)"
 }
-login() { # login EMAIL PASSWORD — sets TOKEN (empty on failure) and CODE; the answer is dropped
-  call POST /api/v1/auth/login "" "$(printf '{"email":"%s","password":"%s"}' "$1" "$2")"
+login() { # login EMAIL PASSWORD — sets TOKEN (the answer's Set-Cookie token, empty on failure) and CODE
+  local h
+  TMP_REQ=$(mktemp -d "${TMPDIR:-/tmp}/reh.XXXXXX"); h="$TMP_REQ/headers"
+  : > "$h"
+  CODE=$(printf '{"email":"%s","password":"%s"}' "$1" "$2" \
+    | curl -s -m "$CALL_TIMEOUT" -D "$h" -o /dev/null -w '%{http_code}' -X POST -H @<(hdr "" json) --data-binary @- "$GW/api/v1/auth/login")
+  [ -n "$CODE" ] || CODE=000
   TOKEN=""
-  [ "$CODE" = 200 ] && TOKEN=$(jqb '.access_token // empty')
+  [ "$CODE" = 200 ] && TOKEN=$(awk -f "$ROOT/scripts/session-token.awk" "$h")
+  rm -rf "$TMP_REQ"; TMP_REQ=""
   BODY=""
 }
 secret_key() { kc -n "$NS" get secret "$1" -o "jsonpath={.data.$2}" | base64 -d; }

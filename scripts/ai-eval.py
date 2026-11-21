@@ -136,8 +136,14 @@ class Api:
         self._token, self._renew_at, self.logins = "", 0.0, 0
 
     def login(self) -> str:
+        """The sign-in token from the answer's Set-Cookie header."""
+        session_cookies = ("__Host-kubeast.token", "kubeast.token")  # the sign-in cookie, an https install's name first
         with request("POST", "/api/v1/auth/login", body={"email": self.email, "password": self._password}) as r:
-            self._token = json.load(r)["access_token"]
+            cookies = dict(c.split(";", 1)[0].strip().partition("=")[::2] for c in r.headers.get_all("Set-Cookie") or [])
+        token = next((cookies[n] for n in session_cookies if cookies.get(n)), "")
+        if not token:
+            raise RuntimeError(f"sign-in of {self.email} set no {' or '.join(session_cookies)} cookie")
+        self._token = token
         self.logins += 1
         life = token_lifetime(self._token)
         self._renew_at = float("inf") if life is None else time.monotonic() + life - min(RENEW_MARGIN_SECONDS, life / 4)
