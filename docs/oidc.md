@@ -51,7 +51,7 @@ The authoritative description of the values is `auth.oidc` in [`helm/kubeast/val
 
 4. **Private CA** — if the provider's certificate is signed by an internal CA, put that CA in `customCAs` ([Add a trusted CA](operations.md#adding-trusted-cas-private-cas-tls-intercepting-proxies)). Without it, discovery fails with an x509 error and sign-in comes back with `oidc_provider`.
 5. **First admin** — sign in with the chart's `admin` account (password: `DEFAULT_ADMIN_PASSWORD` in `kubeast-secrets`). Then, in Admin → User Management, change your own SSO account to Admin. If group mapping (§3) gives you Admin, this step is not needed.
-6. **Reduce password sign-in** — once SSO works, set `auth.passwordLogin: "admin-only"` (only the `admin` account, as an emergency path when the provider is down) or `"off"`.
+6. **Reduce password sign-in** — once SSO works, set `auth.passwordLogin: "admin-only"` (only the `admin` account, as an emergency path when the provider is down) or `"off"`. `admin-only` opens the form to `admin.email` as written: an address that differs from it only in letter case gets `Password login is disabled` (403), also an account left from an earlier `admin.email` written in other letters, so sign in with `admin.email` as written (boot makes that account when none is stored so, and `reset-admin` recovers it).
 7. **Check** — click the button on the sign-in screen, sign in at the provider and come back. If the app opens, you are done. On failure the address becomes `/login?error=<code>` and the auth-service log has `oidc: login failed` (§6).
 
 ## 3. Connecting roles

@@ -48,7 +48,7 @@ Kubeast는 OpenID Connect 공급자(Keycloak, Google, Entra ID, Okta 등) 하나
 
 4. **사설 CA** — 공급자 인증서를 사내 CA가 서명했다면 `customCAs`에 그 CA를 넣으세요([신뢰할 CA 추가](operations.md#신뢰할-ca-추가-사설-catls-가로채는-프록시)). 넣지 않으면 discovery가 x509 오류로 실패하고, 로그인은 `oidc_provider` 오류로 돌아옵니다.
 5. **첫 관리자** — 차트의 `admin` 계정으로 로그인한 뒤(비밀번호는 `kubeast-secrets`의 `DEFAULT_ADMIN_PASSWORD`) Admin → User Management에서 본인 SSO 계정을 Admin으로 바꾸세요. 그룹 매핑(§3)으로 Admin을 준다면 이 단계는 필요 없습니다.
-6. **비밀번호 로그인 줄이기** — SSO가 동작하면 `auth.passwordLogin: "admin-only"` 또는 `"off"`로 설정하세요. 앞의 값은 공급자 장애에 대비해 `admin` 계정만 비상 경로로 남깁니다.
+6. **비밀번호 로그인 줄이기** — SSO가 동작하면 `auth.passwordLogin: "admin-only"` 또는 `"off"`로 설정하세요. 앞의 값은 공급자 장애에 대비해 `admin` 계정만 비상 경로로 남깁니다. `admin-only`는 `admin.email`을 적힌 그대로만 엽니다. 대소문자만 다른 주소는 `Password login is disabled`(403)를 받고, 예전에 `admin.email`을 다른 대소문자로 적었을 때 남은 계정도 같으므로 `admin.email`을 적힌 그대로 써서 로그인하세요(그렇게 저장된 계정이 없으면 부팅이 만들고, `reset-admin`이 되살립니다).
 7. **확인** — 로그인 화면의 버튼을 눌러 공급자를 거쳐 돌아온 뒤 앱이 열리면 끝입니다. 실패하면 주소가 `/login?error=<코드>`로 바뀌고 auth-service 로그에 `oidc: login failed`가 남습니다(§6).
 
 ## 3. 역할 연결
