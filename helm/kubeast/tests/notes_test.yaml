@@ -105,3 +105,32 @@ tests:
     asserts:
       - notMatchRegexRaw:
           pattern: Behind an AWS ALB
+
+  - it: says nothing of it behind that ALB when only the gateway's wait is the chart's (a deregistration delay written)
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=300
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB
+
+  - it: says nothing of it behind that ALB when only the delay is the chart's (podShutdown.preStopSeconds above 25)
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+      podShutdown.preStopSeconds: 40
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB
+
+  - it: says nothing of it while the chart's Ingress is off, whatever its annotations say
+    set:
+      ingress.enabled: false
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB

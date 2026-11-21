@@ -87,6 +87,30 @@ tests:
         template: gateway.yaml
         documentSelector: { path: kind, value: Deployment }
 
+  # The value is compared as written (the annotation's values are ip and instance).
+  - it: leaves both as they are with the target type written IP in capitals
+    set:
+      ingress.enabled: true
+      ingress.className: alb
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: IP
+    asserts:
+      - equal:
+          path: metadata.annotations
+          value:
+            alb.ingress.kubernetes.io/target-type: IP
+        template: ingress.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 35
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
   - it: gives the gateway 25 s inside a 55 s grace period and the target group a 20 s deregistration delay behind an ALB that sends to pod IPs
     set:
       ingress.enabled: true
