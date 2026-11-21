@@ -59,16 +59,26 @@ test.describe('Pods list paged by the server', () => {
     await page.goto(`/workloads/pods?cluster=${CLUSTER}`)
     await expect(rows(page).first()).toBeVisible()
 
-    // the cluster's pods (polled: a pod may come or go between the two reads)
-    await expect.poll(async () => {
-      const pods = clusterPods()
+    // the cluster's pods (tried again: a pod may come or go between the two reads), the footer's total and the cards
+    // all held to the same kubectl list
+    let pods: KPod[] = []
+    await expect(async () => {
+      pods = clusterPods()
       const shown = (await page.getByText(/Showing \d+-\d+ of \d+|\d+ 중/).first().innerText()).match(/of (\d+)/)?.[1]
-      return Number(shown) === pods.length && (await card(page, /^(Total|전체)$/)) === pods.length
-    }, { timeout: 20_000 }).toBe(true)
-    const pods = clusterPods()
-    expect(await card(page, /^(Pending|대기)$/)).toBe(pods.filter((p) => byPhase(p) && p.status.phase === 'Pending').length)
-    expect(await card(page, /^(Completed|완료)$/)).toBe(pods.filter((p) => byPhase(p) && p.status.phase === 'Succeeded').length)
-    expect(await card(page, /^(Restarted|재시작 이력)$/)).toBe(pods.filter((p) => restarts(p) > 0).length)
+      expect({
+        footer: Number(shown),
+        total: await card(page, /^(Total|전체)$/),
+        pending: await card(page, /^(Pending|대기)$/),
+        completed: await card(page, /^(Completed|완료)$/),
+        restarted: await card(page, /^(Restarted|재시작 이력)$/),
+      }, 'the footer and the cards, and kubectl read before them').toEqual({
+        footer: pods.length,
+        total: pods.length,
+        pending: pods.filter((p) => byPhase(p) && p.status.phase === 'Pending').length,
+        completed: pods.filter((p) => byPhase(p) && p.status.phase === 'Succeeded').length,
+        restarted: pods.filter((p) => restarts(p) > 0).length,
+      })
+    }).toPass({ timeout: 20_000 })
 
     // the browser asked for pages only, each one block of rows
     expect(asked.some((a) => a.url.includes('/pods/all'))).toBe(false)

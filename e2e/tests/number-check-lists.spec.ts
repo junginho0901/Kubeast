@@ -1447,10 +1447,24 @@ test.describe('number check — list screens', () => {
       await test.step('the picker: the namespace from the address, every namespace offered, the next choice kept on reload', async () => {
         await expect.soft(page.getByTestId('helm-namespace'), 'the address picks the namespace').toHaveText(NS)
         await page.getByTestId('helm-namespace').click()
-        const offered = await page.locator('[data-testid^="helm-namespace-opt-"]').evaluateAll((els) =>
-          els.map((el) => el.getAttribute('data-testid')!.replace('helm-namespace-opt-', '')).filter((n) => n !== 'all').sort())
-        const all = k.kubectl(`get namespaces -o jsonpath='{range .items[*]}{.metadata.name}{"\\n"}{end}'`).split('\n').filter(Boolean).sort()
-        expect.soft(offered, 'every namespace of the cluster, whichever is picked').toEqual(all)
+        // the picker and kubectl read together in each try, as a namespace an earlier test deleted without waiting may
+        // still go; the picker's list is read when the page loads (kept 30 s, Releases.tsx), so after a few seconds of
+        // disagreeing the page is loaded again. What differs is the answer: none once they agree
+        let loaded = Date.now()
+        await expect.configure({ soft: true }).poll(async () => {
+          if (Date.now() - loaded > 5_000) {
+            await page.reload()
+            loaded = Date.now()
+          }
+          if (!(await page.getByTestId('helm-namespace-opt-all').isVisible())) await page.getByTestId('helm-namespace').click()
+          const offered = await page.locator('[data-testid^="helm-namespace-opt-"]').evaluateAll((els) =>
+            els.map((el) => el.getAttribute('data-testid')!.replace('helm-namespace-opt-', '')).filter((n) => n !== 'all').sort())
+          const all = k.kubectl(`get namespaces -o jsonpath='{range .items[*]}{.metadata.name}{"\\n"}{end}'`).split('\n').filter(Boolean).sort()
+          return [
+            ...offered.filter((n) => !all.includes(n)).map((n) => `offered, not listed by kubectl: ${n}`),
+            ...all.filter((n) => !offered.includes(n)).map((n) => `listed by kubectl, not offered: ${n}`),
+          ]
+        }, { message: 'every namespace of the cluster, whichever is picked', timeout: 20_000 }).toEqual([])
         await page.getByTestId('helm-namespace-opt-kubeast').click()
         await expect.poll(() => new URL(page.url()).searchParams.get('namespace'), { timeout: 10_000 }).toBe('kubeast')
         await page.reload()
