@@ -39,8 +39,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          # each module pins its own Go version in go.mod
-          go-version-file: ${{ matrix.module }}/go.mod
+          # The images' Go (golang:1.27-alpine, its newest patch), not each go.mod's minimum: Go 1.27 builds
+          # encoding/json on encoding/json/v2, which writes bytes that are not UTF-8 otherwise than 1.26 did.
+          go-version: "1.27"
+          check-latest: true
           cache-dependency-path: ${{ matrix.module }}/go.sum
       - name: vet
         working-directory: ${{ matrix.module }}
@@ -57,8 +59,9 @@ jobs:
         run: go test -run 'JQ' .
 
   # The race detector over k8s-service's live lists (internal/ws) and handlers (internal/handler), whose sockets,
-  # terminals and streams run goroutines that can outlive their request, and the heartbeat and sweep goroutines of
-  # the node shell rows and the drains (internal/nodeshells, internal/drains). A job of its own, beside the longer helm job,
+  # terminals and streams run goroutines that can outlive their request, the heartbeat and sweep goroutines of
+  # the node shell rows and the drains (internal/nodeshells, internal/drains), and the client logic's informers,
+  # place queues and reads shared through internal/flight (internal/k8s). A job of its own, beside the longer helm job,
   # since its build with -race is not in the module cache.
   go-race:
     name: go race (k8s-service ws + handler)
@@ -67,7 +70,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: services/k8s-service-go/go.mod
+          # the go job's Go
+          go-version: "1.27"
+          check-latest: true
           cache-dependency-path: services/k8s-service-go/go.sum
       - name: internal/ws
         working-directory: services/k8s-service-go
@@ -81,6 +86,11 @@ jobs:
       - name: internal/nodeshells and internal/drains
         working-directory: services/k8s-service-go
         run: go test -race ./internal/nodeshells/ ./internal/drains/
+      # -short leaves out the three tests that measure a pod row's heap bytes over 50 000 to 100 000 rows
+      # (TestPodRowMemory*), which the go job runs: under -race the runtime turns its tiny allocator off.
+      - name: internal/k8s and internal/flight
+        working-directory: services/k8s-service-go
+        run: go test -race -short ./internal/k8s/ ./internal/flight/
 
   # Every Go test that needs PostgreSQL, found rather than listed (scripts/postgres-tests.sh):
   # each package whose tests read DBMIGRATE_TEST_DATABASE_URL runs whole against this server —

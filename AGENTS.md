@@ -131,6 +131,8 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   게이트웨이(nginx.conf)는 `scripts/rebuild-kind.sh gateway` — 릴리스 값 그대로 `helm upgrade`로 다시 렌더한다.
   ConfigMap을 `kubectl apply`로 쓰면 kubectl이 필드 소유자가 돼 다음 `helm upgrade`(Helm 4 서버 측 적용)가 충돌로 멈춘다.
 - `docs/X.md`와 `docs/ko/X.md`(`README.md`·`README.ko.md`도)는 같은 PR에서 고치고, `helm/kubeast/values.yaml`에 새 값 경로를 넣으면 `docs/configuration.md`·`docs/ko/configuration.md`에 적는다. 일부러 한쪽만 고치면 그 PR 커밋 메시지의 마지막 문단에 `Co-Authored-By`와 빈 줄 없이 붙여 트레일러로 까닭을 단다: `Docs-Pair: en-only [<파일>...] <이유>`(또는 `ko-only`, `values-not-in-docs [<값 경로>...] <이유>`). 파일·경로를 적으면 그것만, 안 적으면 PR 전체가 빠진다 — CI `scripts/check-docs-pair.sh`.
+- CI는 Go 모듈을 이미지가 빌드하는 Go로 시험한다(`.github/workflows/ci.yaml`의 `go-version: "1.27"`·`check-latest`, Dockerfile의 `golang:1.27-alpine`). 각 `go.mod`의 최소 판으로 시험하지 않는다 — Go 판이 바뀌면 표준 라이브러리가 쓰는 바이트도 바뀐다(1.27은 `encoding/json`을 `encoding/json/v2` 위에서 돌린다). 이미지의 Go를 바꾸는 PR은 거기 `go-version: "1.27"`을 모두 같이 바꾼다. dependabot의 base-images PR은 Dockerfile만 바꾼다.
+- CI `go race` 잡은 k8s-service의 고루틴 패키지를 `-race`로 돌린다(`internal/k8s`는 `-short`로, `TestPodRowMemory*`의 힙 측정은 빠진다). 호출보다 오래 사는 고루틴을 띄우는 패키지가 생기면 그 잡에 넣는다.
 
 ## Redis
 

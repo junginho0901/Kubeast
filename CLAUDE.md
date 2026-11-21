@@ -100,6 +100,8 @@ go test ./...                # all tests (standard go test; *_test.go alongside 
 go test ./internal/helm/...  # single package
 ```
 
+CI tests the Go modules with the Go the images build with (`go-version: "1.27"` and `check-latest` in `.github/workflows/ci.yaml`, `golang:1.27-alpine` in the Dockerfiles), not each `go.mod`'s minimum, since a Go release can change what the standard library writes (1.27 builds `encoding/json` on `encoding/json/v2`). A change of the images' Go changes every `go-version: "1.27"` there in the same PR; dependabot's base-images PR moves the Dockerfiles alone. The `go race` job runs k8s-service's goroutine packages with `-race` (`internal/k8s` with `-short`, which leaves out the heap measurements of `TestPodRowMemory*`); a package that starts goroutines outliving a call goes into it.
+
 **Python ai-service** (`services/ai-service`):
 ```bash
 pip install -r requirements.txt          # or requirements-dev.txt for tests
