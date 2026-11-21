@@ -176,6 +176,26 @@ test.describe('OIDC sign-in', () => {
     expect(res2.status()).toBe(401)
   })
 
+  test('an admin password reset gives a provisioned account no password', async ({ page, request }) => {
+    const email = newEmail('frank')
+    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
+    await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
+    const headers = { Authorization: `Bearer ${await adminToken(request)}` }
+    const users = (await (await request.get('/api/v1/auth/admin/users?limit=500', { headers })).json()) as Array<{ id: string; email: string; auth_source?: string }>
+    const account = users.find((u) => u.email === email)
+    expect(account?.auth_source).toBe('oidc')
+
+    const res = await request.post(`/api/v1/auth/admin/users/${account!.id}/reset-password`, { headers })
+    expect(res.status()).toBe(400)
+    const body = await res.json()
+    expect(body.detail).toMatch(/single sign-on/)
+    expect(body.temporary_password).toBeUndefined()
+
+    const audit = await (await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { action: 'user.password.reset', limit: 200 } })).json()
+    const rows = ((Array.isArray(audit) ? audit : audit.items) || []) as Array<Record<string, unknown>>
+    expect(rows.filter((r) => r.TargetID === account!.id).map((r) => [r.Result, r.Error])).toEqual([['failure', 'single_sign_on_account']])
+  })
+
   test('audit rows: provision, role sync, and login success/failure name the OIDC path', async ({ page, request }) => {
     const email = newEmail('dave')
     await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })

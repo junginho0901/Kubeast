@@ -287,6 +287,7 @@
 - `auth.impersonation.enabled=false` is for demos: k8s-service runs as `cluster-admin`, tool-server as `*`, and read APIs open with the cluster grant alone.
 - **Managing accounts stays within what you hold**:
   - A password reset hands the account to the admin, so it is refused for an account holding anything the admin does not: its global permissions and its per-cluster grants, with their namespaces.
+  - An account single sign-on made (`auth_source` `oidc`) gets no password from a reset: it is refused with 400 and leaves a failure in the audit log, and User Management shows "SSO account" in place of the button.
   - Deleting an account, changing its role, unlocking it and setting or revoking a grant gain the admin nothing, and taking access away must not wait for someone who holds it. They are refused only for an account with a global permission (`*`, `admin.*`) the admin lacks, whatever it holds per cluster. What the admin hands out stays under the ceiling of each grant.
   - Changing only the name or the team is not limited.
   - A refusal is 403 and leaves a failure in the audit log. A global admin (`*`) is not limited, and neither is a change to one's own account.
