@@ -84,7 +84,7 @@ func (s *Service) ownedPodRows(ctx context.Context, namespace, kind, name string
 	if ci := b.overviewInformers(); ci == nil || !ci.waitSynced(ctx, 0) {
 		return nil, false
 	}
-	set, err := s.callerPodRows(ctx, namespace, "")
+	set, err := s.callerPodRows(ctx, namespace, "", false)
 	if err != nil {
 		return nil, false
 	}

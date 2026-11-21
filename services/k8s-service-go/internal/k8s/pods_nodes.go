@@ -44,19 +44,29 @@ type PodNodeSummary struct {
 
 // GetPodNodeSummary counts the caller's pods per node in namespace ("" =
 // every namespace it may see) whose name, namespace, node or IP has q, as the
-// Pods list's search reads them.
+// Pods list's search reads them, made for this caller alone.
 func (s *Service) GetPodNodeSummary(ctx context.Context, namespace, q, revision string) (*PodNodeSummary, error) {
-	set, err := s.callerPodRows(ctx, namespace, revision)
+	set, err := s.callerPodRows(ctx, namespace, revision, false)
 	if err != nil {
 		return nil, err
 	}
 	defer set.done()
+	return podNodeSummaryOf(set, q), nil
+}
+
+// podNodeSummaryOf is the node map of set's rows, or the short answer when the caller's revision is current.
+func podNodeSummaryOf(set *podRowSet, q string) *PodNodeSummary {
 	if set.unchanged {
-		return &PodNodeSummary{Nodes: []PodNodeCount{}, Revision: set.revision, Unchanged: true, Source: set.source}, nil
+		return &PodNodeSummary{Nodes: []PodNodeCount{}, Revision: set.revision, Unchanged: true, Source: set.source}
 	}
-	sum := podNodeSummary(set.rows, q)
-	sum.Revision, sum.Source = set.revision, set.source
-	return sum, nil
+	return podNodeSummaryFrom(set.rows, set.revision, set.source, q)
+}
+
+// podNodeSummaryFrom is the node map of rows under the revision rev.
+func podNodeSummaryFrom(rows []*podRow, rev, source, q string) *PodNodeSummary {
+	sum := podNodeSummary(rows, q)
+	sum.Revision, sum.Source = rev, source
+	return sum
 }
 
 func podNodeSummary(rows []*podRow, q string) *PodNodeSummary {

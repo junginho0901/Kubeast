@@ -17,7 +17,7 @@ import (
 // names it (agentWorkload), keyed by the pod's name and by <generateName>* (Calico's name for the pods of one
 // GenerateName). Pods without one are left out; there is no cap on the pods.
 func (s *Service) NetflowsWorkloads(ctx context.Context, namespace string) (map[string]netflows.Workload, error) {
-	set, err := s.callerPodRows(ctx, namespace, "")
+	set, err := s.callerPodRows(ctx, namespace, "", false)
 	if err != nil {
 		return nil, err
 	}

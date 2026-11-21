@@ -1,5 +1,6 @@
 // Package flight runs one read at a time per key for everyone waiting on it, so a crowd asking one thing at one moment
-// costs the cluster about two reads. A caller's key must hold who is asking: an answer goes to everyone with that key.
+// costs the cluster about two reads. A caller's key must hold everything of who is asking that the answer depends on
+// (who it is, or what it may see): an answer goes to everyone with that key.
 package flight
 
 import (

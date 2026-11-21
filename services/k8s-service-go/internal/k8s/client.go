@@ -150,6 +150,9 @@ type Service struct {
 	accessChecks  flight.Group[bool]
 	accessAnswers accessAnswers
 	answered      answeredChecks
+	// podClock and podBuildStep stand in for the clock and watch the shared pods answers' builds in tests (pods_share.go)
+	podClock     func() time.Time
+	podBuildStep func(key, step string)
 
 	watchEnabled bool
 
