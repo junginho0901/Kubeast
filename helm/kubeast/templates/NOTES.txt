@@ -88,6 +88,15 @@ in bash, zsh and PowerShell.
     (postgresql.pool × the pods while a rollout runs, 4 for the migrations, 10 kept).
     Keep its max_connections above that.
 {{- end }}
+{{- if include "kubeast.albShutdownSetByChart" . }}
+
+▸ Behind an AWS ALB that sends to pod IPs
+
+    With alb.ingress.kubernetes.io/target-type: ip, the gateway pods wait 25 s before they stop and the Ingress
+    asks for a 20 s target group deregistration delay (docs/high-availability.md "Before you start").
+    Keep 2 or more AWS Load Balancer Controller pods (its chart's default replicaCount is 2): with one, the
+    targets are not updated while its node is drained.
+{{- end }}
 
 ▸ Upgrading
 

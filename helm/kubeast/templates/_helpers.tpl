@@ -457,6 +457,15 @@ true
 {{- end -}}
 {{- end -}}
 
+{{/* "true" when the chart itself set both behind an AWS ALB that sends to pod IPs: gateway.preStopSeconds is unset and
+     the gateway's wait was raised to 25 s, and kubeast.ingressAnnotations added the 20 s deregistration delay (its YAML
+     differs from ingress.annotations). NOTES.txt says so then; values you set yourself print nothing. */}}
+{{- define "kubeast.albShutdownSetByChart" -}}
+{{- if and (include "kubeast.albPodTargets" .) (kindIs "invalid" .Values.gateway.preStopSeconds) (ne (include "kubeast.gatewayPreStopSeconds" .) (include "kubeast.preStopSeconds" .)) (ne (include "kubeast.ingressAnnotations" .) (toYaml (.Values.ingress.annotations | default dict))) -}}
+true
+{{- end -}}
+{{- end -}}
+
 {{/* A grace period: the preStop wait, what the process waits for after SIGTERM — a drain's wait and close wait (.drain)
      and the 25 s its shutdown takes (k8s-service: the node drains' marking 3 s, the server 12 s, the recorder 10 s) — and
      5 s to spare. services/k8s-service-go/cmd/server shutdown_test holds the same sum. */}}
