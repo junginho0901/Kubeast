@@ -12,7 +12,7 @@ The authoritative description of the values is `auth.oidc` in [`helm/kubeast/val
 - The ID token's signature, issuer, audience (`clientId`), expiry and nonce are checked with the keys from discovery (`<issuerUrl>/.well-known/openid-configuration`).
 - If `email_verified` is `false`, the sign-in is refused. If `allowedDomains` is set, only mail addresses in those domains are accepted.
 - The account is created at the first sign-in (no password). If an account with the same email already exists, the person signs in to that account.
-- An admin's password reset is refused for an account the provider made (400): a reset gives it no password.
+- An admin's password reset is refused for an account the provider made (400): a reset gives it no password. The same holds for a self sign-up the provider took over (§5), and not for the chart's `admin` account (below).
 - An account the provider made does not sign in with a password, also one an admin's reset gave it before 0.7.9: the answer is a wrong password's `Invalid credentials` (401) and the audit row says `single_sign_on_account`. The chart's `admin` account (`admin.email`) signs in with its password whatever made it, so it stays the way in while the provider is down (`auth.passwordLogin: admin-only` included).
 - A name that is not an address (`claims.email` set to a username claim) does not reach an account made with a password, such as the chart's `admin`: the sign-in is refused with `oidc_account_conflict`. Accounts the provider made, and addresses in any claim, sign in as before.
 - If `claims.email` is a claim people can change themselves at the provider, set `allowedDomains`. An address is taken as the provider's word, whichever claim holds it, and that list is what limits which addresses count.
@@ -132,7 +132,7 @@ auth:
 
 A signed-in person's requests go to the target cluster as **that person's email + the group `kubeast:viewer`/`operator`/`admin`** (impersonation).
 Provider groups do not go to the cluster RBAC directly.
-A sign-in that reaches an account still waiting for approval (where a self sign-up stays) removes that account's password and ends its tokens, because the sign-up proved nothing about the address. An account past approval keeps its password.
+A sign-in that reaches an account still waiting for approval (where a self sign-up stays) removes that account's password and ends its tokens, because the sign-up proved nothing about the address. From 0.7.9 the account also becomes one the provider made (`auth_source` `oidc`): the password form refuses it and an admin's reset gives it no password, also once it is approved. Accounts taken over so by earlier versions become so at the upgrade (migration 31), a password an admin's reset gave one since included, and one an earlier version took over during a rolling upgrade or after a rollback at its next sign-in through the provider. An account past approval keeps its password and stays a password account, so a person who signs in both ways keeps both.
 For the cluster-side bindings, see [cluster-requirements §1](cluster-requirements.md).
 
 ## 6. Sign-in failure codes
