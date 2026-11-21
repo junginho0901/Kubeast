@@ -12,7 +12,7 @@ import (
 
 // selfSignUpsVersion is the migration that makes the self sign-ups a provider's sign-in reached oidc accounts; renumber
 // it with the file.
-const selfSignUpsVersion = 31
+const selfSignUpsVersion = 32
 
 // An upgrade marks the accounts the sign-up form made (self_signed_up) from their user.register rows, and makes oidc
 // every marked password account a provider's sign-in took over: one holding no password, and one a user.account.link
