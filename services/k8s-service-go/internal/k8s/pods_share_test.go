@@ -139,8 +139,8 @@ func keyOf(t *testing.T, s *Service, sc podScreen, ctx context.Context, q PodPag
 	return key
 }
 
-// buildGate watches the shared answers' builds (Service.podBuildStep): it counts each step by key and holds the builds
-// hold picks at step until open.
+// buildGate watches the shared answers' builds (Service.podBuildStep): it counts each step by key ("no place" too, a build
+// that stopped waiting for a place) and holds the builds hold picks at step until open.
 type buildGate struct {
 	step   string                       // "place" (before the build waits for a place) or "rows" (holding a place and the rows)
 	hold   func(nth, nthOfKey int) bool // counted at step
@@ -765,18 +765,91 @@ func TestEveryPodPageQueryFieldIsInTheShareKey(t *testing.T) {
 		text(podNodesShareKey(set, "team", "")) == text(podNodesShareKey(set, "", "team")) {
 		t.Error("the node map's key does not hold its namespace and its search apart")
 	}
-	for _, k := range []podShareKey{
-		podPageShareKey(set, PodPageQuery{Search: "\xff"}),
-		podPageShareKey(set, PodPageQuery{Phase: "Run\xfening"}),
-		podNodesShareKey(set, "", "\xfe"),
-		podPageShareKey(&podRowSet{revision: "r", namespaces: []string{"\xff"}}, PodPageQuery{}),
-	} {
-		if _, ok := k.text(); ok {
-			t.Errorf("%+v is shared: json.Marshal writes its bytes as another key's U+FFFD", k)
+	// a string of the key that is not UTF-8, in any field the page's query has, keeps it from being shared; the caller's
+	// revision is not in the key
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		q := PodPageQuery{}
+		v := reflect.ValueOf(&q).Elem().Field(i)
+		switch v.Kind() {
+		case reflect.String:
+			v.SetString("a\xffb")
+		case reflect.Slice:
+			v.Set(reflect.ValueOf([]string{"team/app", "shop/\xfe"}))
+		default:
+			continue
+		}
+		_, shared := podPageShareKey(set, q).text()
+		switch {
+		case field.Name == "Revision" && !shared:
+			t.Error("a caller's revision that is not UTF-8 keeps the page from being shared, though the key leaves it out")
+		case field.Name != "Revision" && shared:
+			t.Errorf("%s that is not UTF-8 is shared: json.Marshal may write it as another key's U+FFFD", field.Name)
 		}
 	}
-	if _, ok := podPageShareKey(set, PodPageQuery{Search: "\ufffd"}).text(); !ok {
-		t.Error("a search of U+FFFD itself is not shared")
+	for _, k := range []podShareKey{
+		podNodesShareKey(set, "\xff", ""),
+		podNodesShareKey(set, "", "\xfe"),
+		podPageShareKey(&podRowSet{revision: "r", namespaces: []string{"a", "\xff"}}, PodPageQuery{}),
+		podPageShareKey(&podRowSet{revision: "r\xbd", all: true}, PodPageQuery{}),
+	} {
+		if _, ok := k.text(); ok {
+			t.Errorf("%+v is shared: json.Marshal may write it as another key's U+FFFD", k)
+		}
+	}
+	for _, k := range []podShareKey{
+		podPageShareKey(set, PodPageQuery{Search: "\ufffd"}),
+		podNodesShareKey(set, "", "a\ufffdb"),
+	} {
+		if _, ok := k.text(); !ok {
+			t.Errorf("%+v is not shared: U+FFFD itself is UTF-8", k)
+		}
+	}
+}
+
+// Two callers of one decision whose searches differ only in bytes that are not UTF-8 each build their own answer, the
+// second while the first is held; two asking for U+FFFD itself wait on one build as any others.
+func TestAPodAnswerAskedWithBytesThatAreNotUTF8IsBuiltForItsCallerAlone(t *testing.T) {
+	grants := map[string][]string{"a@example.com": {""}, "b@example.com": {""}}
+	a, b := wideCaller("a@example.com"), wideCaller("b@example.com")
+	for _, sc := range podScreens {
+		t.Run(sc.name, func(t *testing.T) {
+			s, ci := shareCluster(t, pagePods(), grants)
+			qa, qb := PodPageQuery{Limit: 50, Search: "p\xbd"}, PodPageQuery{Limit: 50, Search: "p\xbe"}
+			g := watchBuilds(t, s, &buildGate{step: "place", hold: func(nth, _ int) bool { return nth == 1 }})
+			first := askNow(func() string { return sc.ask(s, a, qa) })
+			waitFor(t, "the first build is held", func() bool { return g.held() == 1 })
+			other := askNow(func() string { return sc.ask(s, b, qb) })
+			waitFor(t, "the second builds its own answer while the first is held", other.finished)
+			if got, want := other.wait(t), sc.own(s, b, qb); got != want {
+				t.Errorf("the second:\n got %.300s\nwant %.300s", got, want)
+			}
+			g.open()
+			if got, want := first.wait(t), sc.own(s, a, qa); got != want {
+				t.Errorf("the first:\n got %.300s\nwant %.300s", got, want)
+			}
+			if n := g.steps("rows"); n != 2 {
+				t.Errorf("%d builds, want one for each", n)
+			}
+
+			q := PodPageQuery{Limit: 50, Search: "p\ufffd"}
+			key := keyOf(t, s, sc, a, q)
+			g = watchBuilds(t, s, &buildGate{step: "place", hold: func(nth, _ int) bool { return nth == 1 }})
+			first = askNow(func() string { return sc.ask(s, a, q) })
+			waitFor(t, "the first build of U+FFFD is held", func() bool { return g.held() == 1 })
+			other = askNow(func() string { return sc.ask(s, b, q) })
+			waitFor(t, "the second waits for the next build", func() bool { return sc.answers(ci).Waiting(key) == 1 })
+			g.open()
+			for _, c := range []struct {
+				who string
+				ctx context.Context
+				a   *asking
+			}{{"the first", a, first}, {"the second", b, other}} {
+				if got, want := c.a.wait(t), sc.own(s, c.ctx, q); got != want {
+					t.Errorf("%s of U+FFFD:\n got %.300s\nwant %.300s", c.who, got, want)
+				}
+			}
+		})
 	}
 }
 
@@ -959,9 +1032,9 @@ func TestPodAnswerWaitersThatLeave(t *testing.T) {
 					t.Errorf("a waiter gone: %.200s", got)
 				}
 			}
-			time.Sleep(200 * time.Millisecond) // the build no one waits for sees its end before a place is free
+			// the first build and the next one no one waits for both stop waiting for a place before one is free
+			waitFor(t, "the next build stops waiting for a place", func() bool { return g.steps("no place") == 2 })
 			free()
-			time.Sleep(200 * time.Millisecond)
 			if n := g.steps("rows"); n != 0 {
 				t.Errorf("%d builds read the rows for no one", n)
 			}

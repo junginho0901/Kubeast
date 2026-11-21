@@ -1,10 +1,11 @@
 package k8s
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"reflect"
 	"time"
+	"unicode/utf8"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
 	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
@@ -27,13 +28,48 @@ type podShareKey struct {
 	Query      any      `json:"q"`
 }
 
-// text is the key as a flight key; json.Marshal writes every byte that is not UTF-8 as �, so such a key is not shared.
+// text is the key as a flight key, its JSON. A key holding a string that is not UTF-8 is not shared: json.Marshal writes
+// those bytes as U+FFFD, which another key may hold, and how it writes them differs between Go releases.
 func (k podShareKey) text() (string, bool) {
+	if !allUTF8(reflect.ValueOf(k)) {
+		return "", false
+	}
 	b, err := json.Marshal(k)
-	if err != nil || bytes.Contains(b, []byte(`�`)) {
+	if err != nil {
 		return "", false
 	}
 	return string(b), true
+}
+
+// allUTF8 says whether every string v holds, in its fields, elements, map keys and values and what it points to, is UTF-8.
+func allUTF8(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.String:
+		return utf8.ValidString(v.String())
+	case reflect.Struct:
+		for i := range v.NumField() {
+			if !allUTF8(v.Field(i)) {
+				return false
+			}
+		}
+	case reflect.Slice, reflect.Array:
+		for i := range v.Len() {
+			if !allUTF8(v.Index(i)) {
+				return false
+			}
+		}
+	case reflect.Map:
+		for it := v.MapRange(); it.Next(); {
+			if !allUTF8(it.Key()) || !allUTF8(it.Value()) {
+				return false
+			}
+		}
+	case reflect.Interface, reflect.Pointer:
+		if !v.IsNil() {
+			return allUTF8(v.Elem())
+		}
+	}
+	return true
 }
 
 // podPageShareKey is the key of set's page for q, the selector by the text the handler parsed it from, no caller's revision.
@@ -89,6 +125,7 @@ func (s *Service) sharedPodAnswer(ctx context.Context, answers *flight.Group[*po
 		s.buildStep(text, "place")
 		release, err := takePodRowSlot(ctx)
 		if err != nil {
+			s.buildStep(text, "no place")
 			return nil, err
 		}
 		v := func() any {
