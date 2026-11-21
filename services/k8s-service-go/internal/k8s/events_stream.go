@@ -257,6 +257,10 @@ func (s *Service) eventWindowFor(ctx context.Context, namespace string, opts met
 	if !may || b == nil || b.cacheClient == nil || limit < 1 || eventsRefusedTo(b, namespace) {
 		return nil, false, nil
 	}
+	// an allow asked before the reads is asked again, so its kept answer still ends within the minute (accessCheckTTL)
+	if ok, err := s.mayList(ctx, b, "events", namespace); err != nil || !ok {
+		return nil, false, nil
+	}
 	w, err := s.sharedEventWindow(ctx, b, namespace, opts, limit, eventType)
 	if apierrors.IsForbidden(err) {
 		b.eventsRefused.Store(namespace, time.Now().Add(accessCheckTTL()))

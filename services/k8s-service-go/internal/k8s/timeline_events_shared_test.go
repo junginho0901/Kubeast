@@ -34,13 +34,14 @@ type windowCluster struct {
 	may  func(user, namespace string) bool
 	list func(user, namespace string) bool
 	// cacheRefused refuses the events to kubeast:cache; reviewFails answers every review 500, failReview those of the
-	// namespaces it names; hold holds kubeast:cache's first pages until closed; reviewsTogether holds each review until
-	// that many are under way at once, or five seconds have passed
+	// namespaces it names; hold holds kubeast:cache's first pages until closed, onCacheRead runs as each is asked;
+	// reviewsTogether holds each review until that many are under way at once, or five seconds have passed
 	cacheRefused    bool
 	reviewFails     bool
 	failReview      func(namespace string) bool
 	hold            chan struct{}
 	released        sync.Once
+	onCacheRead     func(namespace string)
 	reviewsTogether int
 	events          []corev1.Event
 
@@ -165,6 +166,9 @@ func (a *windowCluster) serve(w http.ResponseWriter, r *http.Request) {
 		a.firstPages[user]++
 	}
 	a.mu.Unlock()
+	if user == overviewCacheUser && first && a.onCacheRead != nil {
+		a.onCacheRead(namespace)
+	}
 	if user == overviewCacheUser && first && a.hold != nil {
 		select {
 		case <-a.hold:

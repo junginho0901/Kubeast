@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -72,5 +73,38 @@ func TestOneNamespacesFailedReviewReadsOnlyThatNamespaceAsTheCaller(t *testing.T
 	// bulk's 1 234 events as the caller, three pages of 500; shop's 37 once as kubeast:cache
 	if callerReads != 1 || callerPages != 3 || cacheReads != 1 || cachePages != 1 {
 		t.Errorf("as the caller %d reads (%d pages), want 1 (3); as kubeast:cache %d reads (%d pages), want 1 (1)", callerReads, callerPages, cacheReads, cachePages)
+	}
+}
+
+// A grant's events review allowed before the reads, revoked once its kept answer ended, is asked again before that
+// namespace's read and reads it as the caller; the review still kept asks none.
+func TestAnAllowedEventReviewIsAskedAgainOnceItsAnswerEnded(t *testing.T) {
+	ctx := grantCaller("again@example.com", "bulk", "shop")
+	what, _ := listCheck("", "events", "shop")
+	var revoked atomic.Bool
+	var s, own *Service
+	api := &windowCluster{
+		may:    func(_, namespace string) bool { return namespace != "shop" || !revoked.Load() },
+		events: windowEvents(time.Now().Truncate(time.Second)),
+		onCacheRead: func(namespace string) {
+			if namespace == "bulk" {
+				revoked.Store(true)
+				s.accessAnswers.set(s.clusterCacheKey(ctx, what), true, time.Now().Add(-time.Millisecond))
+			}
+		},
+	}
+	s, own = api.start(t)
+	got := eventsSaid(s.newestEventsSince(ctx, "", metav1.ListOptions{}, time.Time{}, 50, ""))
+	asked := api.reviewsSeen()
+	callerPages, callerReads := api.count("again@example.com")
+	cachePages, cacheReads := api.count(overviewCacheUser)
+	want := eventsSaid(own.newestEventsSince(ctx, "", metav1.ListOptions{}, time.Time{}, 50, ""))
+	if got != want || !strings.HasPrefix(got, "50 of 1234 (412 warnings)") {
+		t.Errorf("the grant's events:\n got %.300s\nwant %.300s", got, want)
+	}
+	// two reviews before the reads and shop's again; shop refused to the caller on its first page; bulk's 1 234 events
+	// once as kubeast:cache, three pages of 500
+	if asked != 3 || callerReads != 1 || callerPages != 1 || cacheReads != 1 || cachePages != 3 {
+		t.Errorf("%d reviews, want 3; as the caller %d reads (%d pages), want 1 (1); as kubeast:cache %d reads (%d pages), want 1 (3)", asked, callerReads, callerPages, cacheReads, cachePages)
 	}
 }
