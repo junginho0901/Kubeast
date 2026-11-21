@@ -680,18 +680,88 @@
     {
       "name": "next to Korean letters",
       "input": "전화01012345678입니다 메일bob@example.com입니다 주민9001011234567번 카드1234-5678-9012-3456번\n",
-      "want": "전화<REDACTED:phone>입니다 메일<EMAIL_1>입니다 주민<REDACTED:rrn>번 카드<REDACTED:card>번\n"
+      "want": "전화<REDACTED:phone>입니다 메일<EMAIL_1>입니다 주민<REDACTED:rrn>번 카드<REDACTED:card>번\n",
+      "want_numbered": "전화<PHONE_1>입니다 메일<EMAIL_1>입니다 주민<RRN_1>번 카드<CARD_1>번\n"
     },
     {
       "name": "with another space between the parts",
       "input": "카드1234　5678　9012　3456번 전화010　1234　5678 주민900101　1234567\n",
-      "want": "카드<REDACTED:card>번 전화<REDACTED:phone> 주민<REDACTED:rrn>\n"
+      "want": "카드<REDACTED:card>번 전화<REDACTED:phone> 주민<REDACTED:rrn>\n",
+      "want_numbered": "카드<CARD_1>번 전화<PHONE_1> 주민<RRN_1>\n"
     },
     {
       "name": "digits in the middle of ASCII stay",
       "input": "x01012345678 a9001011234567b 12345678901234567 x@y\n",
       "want": "x01012345678 a9001011234567b 12345678901234567 x@y\n"
     }
+  ],
+  "numbered_personal_data": [
+    {
+      "name": "one address keeps its number across the texts of one table",
+      "key": "fixture-key",
+      "inputs": ["login ann@example.com\n", "retry bob@example.com then ann@example.com\n"],
+      "want": ["login <EMAIL_1>\n", "retry <EMAIL_2> then <EMAIL_1>\n"],
+      "table": {"email": {"ann@example.com": 1, "bob@example.com": 2}}
+    },
+    {
+      "name": "an address in another case and a number with other separators are the same value",
+      "key": "fixture-key",
+      "inputs": ["Ann@Example.com called 010-1234-5678\n", "ann@example.com called 01012345678 and 010 9876 5432\n"],
+      "want": ["<EMAIL_1> called <PHONE_1>\n", "<EMAIL_1> called <PHONE_1> and <PHONE_2>\n"],
+      "table": {"email": {"ann@example.com": 1}, "phone": {"01012345678": 1, "01098765432": 2}}
+    },
+    {
+      "name": "a table sent by the caller goes on from its highest number",
+      "key": "fixture-key",
+      "seed": {"email": {"carol@example.com": 3}},
+      "inputs": ["carol@example.com and dave@example.com\n"],
+      "want": ["<EMAIL_3> and <EMAIL_4>\n"],
+      "table": {"email": {"carol@example.com": 3, "dave@example.com": 4}}
+    },
+    {
+      "name": "each kind counts on its own",
+      "key": "k2",
+      "inputs": ["주민9001011234567 카드1234-5678-9012-3456 전화010-1111-2222 메일a@b.io\n", "카드1234567890123456 주민900101-1234567 카드4000-0000-0000-0002\n"],
+      "want": ["주민<RRN_1> 카드<CARD_1> 전화<PHONE_1> 메일<EMAIL_1>\n", "카드<CARD_1> 주민<RRN_1> 카드<CARD_2>\n"],
+      "table": {"email": {"a@b.io": 1}, "phone": {"01011112222": 1}, "rrn": {"9001011234567": 1}, "card": {"1234567890123456": 1, "4000000000000002": 2}}
+    },
+    {
+      "name": "numbers start past the highest one the conversation already holds",
+      "key": "fixture-key",
+      "after": {"email": 1, "phone": 2},
+      "inputs": ["mail x@example.com phone 010-5555-6666 then y@example.com\n"],
+      "want": ["mail <EMAIL_2> phone <PHONE_3> then <EMAIL_3>\n"],
+      "table": {"email": {"x@example.com": 2, "y@example.com": 3}, "phone": {"01055556666": 3}}
+    },
+    {
+      "name": "a table past the conversation's highest number goes on from the table",
+      "key": "fixture-key",
+      "after": {"email": 2},
+      "seed": {"email": {"carol@example.com": 5}},
+      "inputs": ["dave@example.com\n"],
+      "want": ["<EMAIL_6>\n"],
+      "table": {"email": {"carol@example.com": 5, "dave@example.com": 6}}
+    },
+    {
+      "name": "a number a text already holds is not given to a new value, in that text or a later one",
+      "key": "fixture-key",
+      "inputs": ["old <EMAIL_4> and \\u003cPHONE_1\\u003e, new z@example.com 010-7777-8888\n", "again z@example.com and w@example.com\n"],
+      "want": ["old <EMAIL_4> and \\u003cPHONE_1\\u003e, new <EMAIL_5> <PHONE_2>\n", "again <EMAIL_5> and <EMAIL_6>\n"],
+      "table": {"email": {"z@example.com": 5, "w@example.com": 6}, "phone": {"01077778888": 2}}
+    },
+    {
+      "name": "a placeholder already in the text is not a value",
+      "key": "fixture-key",
+      "inputs": ["owner: <EMAIL_7> or <PHONE_2>\n"],
+      "want": ["owner: <EMAIL_7> or <PHONE_2>\n"],
+      "table": {}
+    }
+  ],
+  "mask_keys": [
+    {"key": "fixture-key", "kind": "email", "value": "Ann@Example.com", "want": "275f7eafca13e294"},
+    {"key": "other-key", "kind": "email", "value": "ann@example.com", "want": "89ffea24108857bb"},
+    {"key": "fixture-key", "kind": "phone", "value": "010-1234-5678", "want": "5b68f3e89f0ece47"},
+    {"key": "", "kind": "card", "value": "1234 5678 9012 3456", "want": "e490e176acbcf1cc"}
   ],
   "commands": [
     {"name": "a shell", "input": ["/bin/sh"], "want": ["/bin/sh"]},

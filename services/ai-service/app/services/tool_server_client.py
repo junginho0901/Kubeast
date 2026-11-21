@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 
 from app.services.ai.access import trail as tool_trail
 from app.services.http_shared import ScopedClient
+from app.services.redact import Numbers, numbered_on
 
 DEFAULT_TOOL_SERVER_URL = os.getenv("TOOL_SERVER_URL", "http://tool-server:8086").rstrip("/")
 
@@ -26,6 +27,13 @@ class ToolServerClient:
         # and the cluster requests it made ({requests, total}, services/pkg/accesstrail).
         self.last_access: Optional[Dict[str, Any]] = None
         self.last_requests: Optional[Dict[str, Any]] = None
+        # The personal-data numbers of this client's run: one is made per chat request and per investigation, so a value
+        # keeps its number (<EMAIL_1>) across that answer's tool calls and nowhere else. Sent as masks, taken back from
+        # each answer (redact.Numbers.take_answer). None with REDACTION_NUMBERED off: no masks are sent.
+        self.numbers: Optional[Numbers] = Numbers() if numbered_on() else None
+
+    def _take(self, masks: Optional[Dict[str, Any]], table: Any, text: str) -> str:
+        return text if self.numbers is None or masks is None else self.numbers.take_answer(masks["table"], table, text)
 
     async def call_tool(
         self,
@@ -33,10 +41,13 @@ class ToolServerClient:
         arguments: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
     ) -> str:
+        masks = self.numbers.wire() if self.numbers is not None else None
         payload = {
             "name": name,
             "arguments": arguments or {},
         }
+        if masks is not None:
+            payload["masks"] = masks
         self.last_redacted = None
         self.last_access = None
         self.last_requests = None
@@ -50,6 +61,8 @@ class ToolServerClient:
                 self.last_access = body.get("access") if isinstance(body.get("access"), dict) else None
                 self.last_requests = tool_trail(body.get("requests"))
                 self.last_redacted = body.get("redacted") if isinstance(body.get("redacted"), dict) else None
+                if reason:
+                    reason = self._take(masks, body.get("masks"), str(reason))
             except Exception:
                 reason = None
             if reason:
@@ -61,9 +74,9 @@ class ToolServerClient:
         if isinstance(data, dict):
             self.last_requests = tool_trail(data.get("requests"))
         if isinstance(data, dict) and data.get("error"):
-            raise Exception(str(data.get("error")))
+            raise Exception(self._take(masks, data.get("masks"), str(data.get("error"))))
         if isinstance(data, dict):
             redacted = data.get("redacted")
             self.last_redacted = redacted if isinstance(redacted, dict) else None
-            return str(data.get("content") or "")
+            return self._take(masks, data.get("masks"), str(data.get("content") or ""))
         return ""
