@@ -280,5 +280,6 @@ Read [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) first. Some installs
 - A redirect from a Service that Kubeast reads through a cluster's API server is followed only on that API server ([GHSA-2hh4-6h6c-6979](https://github.com/junginho0901/Kubeast/security/advisories/GHSA-2hh4-6h6c-6979)). Up to 0.7.7 such a redirect could carry the cluster's credential to another host: when a Prometheus, OpenCost, Hubble Relay or Calico Whisker Service answered a read with a redirect to another host, Kubeast followed it and sent that host the cluster's credential, when it is a token, and the headers that name the signed-in person. This needed someone who could change what answers behind such a Service, or create a Service and a pod where Kubeast looks for one: for Prometheus when Kubeast finds it itself, and for OpenCost in `opencost`, `kubecost`, `monitoring` or `cost`. Where that was possible, replace the token in that cluster's kubeconfig and revoke the old one; the advisory says which credentials need nothing.
 - `go.opentelemetry.io/otel/trace` 1.47.0 in tool-server's kubectl module (GHSA-q7gw-24fr-5p69).
 
+[Unreleased]: https://github.com/junginho0901/Kubeast/compare/v0.7.9...HEAD
 [0.7.9]: https://github.com/junginho0901/Kubeast/compare/v0.7.8...v0.7.9
 [0.7.8]: https://github.com/junginho0901/Kubeast/compare/v0.7.7...v0.7.8
