@@ -68,8 +68,8 @@ type Config struct {
 	AllowRegistration  bool // self-service POST /auth/register (off: 404)
 	BootstrapDemoUsers bool // create the read/write demo accounts at boot (dev only)
 	PasswordMinLength  int
-	// PasswordLogin: "on" (default), "admin-only" (only DefaultAdminEmail may
-	// use a password — break-glass next to OIDC), "off". An account the
+	// PasswordLogin: "on" (default), "admin-only" (only DefaultAdminEmail, as
+	// written, may use a password — break-glass next to OIDC), "off". An account the
 	// provider made never signs in with a password, DefaultAdminEmail's aside.
 	PasswordLogin string
 

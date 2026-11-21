@@ -280,13 +280,14 @@ func clusterGrants(groups []string, prefix string) map[string]string {
 	return out
 }
 
-// passwordLoginAllowed applies PASSWORD_LOGIN (on / admin-only / off).
+// passwordLoginAllowed applies PASSWORD_LOGIN (on / admin-only / off). admin-only opens the form to the chart's admin
+// account alone (isChartAdmin), so an address that differs from DEFAULT_ADMIN_EMAIL only in letter case is refused.
 func passwordLoginAllowed(cfg config.Config, email string) bool {
 	switch cfg.PasswordLogin {
 	case "off":
 		return false
 	case "admin-only":
-		return strings.EqualFold(email, cfg.DefaultAdminEmail)
+		return isChartAdmin(cfg, email)
 	}
 	return true
 }

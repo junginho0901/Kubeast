@@ -123,3 +123,55 @@ func TestPasswordSignInStillOpensPasswordAccountsAndTheChartAdmin(t *testing.T) 
 		}
 	})
 }
+
+// admin-only opens the password form to the account stored under admin.email as written and to no other: a password
+// account whose address differs from it only in letter case (a self sign-up keeps the letters it was typed in) is
+// refused before it is looked up, as any other address is.
+func TestAdminOnlyOpensThePasswordFormToTheAdminAddressAsWritten(t *testing.T) {
+	adminOnly := func(email string) func(*config.Config) {
+		return func(c *config.Config) { c.DefaultAdminEmail, c.PasswordLogin = email, "admin-only" }
+	}
+	t.Run("the address as written", func(t *testing.T) {
+		api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, adminOnly("Ops@Example.com"), signInAccount(t, "Ops@Example.com", "password"))
+		if w := signInWith(api, "Ops@Example.com", testPassword); w.Code != http.StatusOK {
+			t.Fatalf("%d %s, want 200", w.Code, w.Body.String())
+		}
+		if rows := api.store.successes("user.login.success"); len(rows) != 1 {
+			t.Errorf("success rows = %+v, want one", rows)
+		}
+	})
+	for _, c := range []struct {
+		name, admin, stored string
+	}{
+		{"a password account in small letters", "Ops@Example.com", "ops@example.com"},
+		{"a password account in capitals", "Ops@Example.com", "OPS@EXAMPLE.COM"},
+		{"the default name in other letters", "admin", "Admin"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, adminOnly(c.admin), signInAccount(t, c.stored, "password"))
+			w := signInWith(api, c.stored, testPassword)
+			if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "Password login is disabled") {
+				t.Fatalf("%d %s, want 403 password login is disabled", w.Code, w.Body.String())
+			}
+			if setsASession(w) || strings.Contains(w.Body.String(), "access_token") {
+				t.Errorf("the answer holds a session: %v %s", w.Result().Cookies(), w.Body.String())
+			}
+			if rows := api.store.failures("user.login.failed"); len(rows) != 1 || rows[0].Error != "password_login_disabled" || rows[0].TargetEmail != c.stored {
+				t.Errorf("failure rows = %+v, want one password_login_disabled naming the address typed", rows)
+			}
+			if api.db.ran("WHERE u.email =") || api.db.ran(countsAFailure) {
+				t.Error("the refused address was looked up or counted toward the lockout")
+			}
+			if rows := api.store.successes("user.login.success"); len(rows) != 0 {
+				t.Errorf("success rows = %+v, want none", rows)
+			}
+		})
+	}
+	t.Run("on: the same account in other letters still signs in", func(t *testing.T) {
+		on := func(c *config.Config) { c.DefaultAdminEmail, c.PasswordLogin = "Ops@Example.com", "on" }
+		api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, on, signInAccount(t, "ops@example.com", "password"))
+		if w := signInWith(api, "ops@example.com", testPassword); w.Code != http.StatusOK {
+			t.Fatalf("%d %s, want 200", w.Code, w.Body.String())
+		}
+	})
+}
