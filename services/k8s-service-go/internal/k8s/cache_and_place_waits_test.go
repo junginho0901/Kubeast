@@ -3,10 +3,13 @@ package k8s
 import (
 	"context"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
@@ -103,6 +106,10 @@ func TestABundlesKubeastCacheClientTakesTheObservedRate(t *testing.T) {
 	if apps, ok := b.cacheClient.(*kubernetes.Clientset).AppsV1().RESTClient().GetRateLimiter().(cachedRate); !ok || apps != cache {
 		t.Error("kubeast:cache's apps client has another limiter")
 	}
+	// readMetricsGroup's GET /apis/metrics.k8s.io goes through kubeast:cache's discovery client
+	if d, ok := b.cacheClient.(*kubernetes.Clientset).Discovery().RESTClient().GetRateLimiter().(cachedRate); !ok || d != cache {
+		t.Error("kubeast:cache's discovery client has another limiter")
+	}
 }
 
 // Each take of a cluster's read places is one observation under its places only, never by cluster: about 0 when a
@@ -138,6 +145,73 @@ func TestEachTakeOfAReadPlaceIsObservedByPlacesOnly(t *testing.T) {
 	s := got[placesNodePods]
 	if s.count != 4 || s.sum < 0.14 || s.sum > 2 {
 		t.Errorf("%d observations summing %.3f s, want 4 summing about 0.15", s.count, s.sum)
+	}
+}
+
+// A read past its first page takes one of k8s-service's big read places once, before its second page, and keeps it to
+// the end: one observation under places="big_read" on the service's histogram, about 0 when a place was free, else its
+// wait, a read whose context ended while waiting too. A read of one page takes none.
+func TestEachTakeOfTheBigReadPlacesIsObservedUnderBigRead(t *testing.T) {
+	pages := func(n int) func(metav1.ListOptions) (*corev1.PodList, error) {
+		return func(o metav1.ListOptions) (*corev1.PodList, error) {
+			l := &corev1.PodList{}
+			if i, _ := strconv.Atoi(o.Continue); i+1 < n {
+				l.Continue = strconv.Itoa(i + 1)
+			}
+			return l, nil
+		}
+	}
+	read := func(ctx context.Context, n int) error {
+		return eachPage(ctx, metav1.ListOptions{}, pages(n), func(*corev1.PodList) {})
+	}
+	since := func(before waitSeries) waitSeries {
+		now := gatherPlaceWaits(t, clientWait)[placesBigRead]
+		return waitSeries{now.count - before.count, now.sum - before.sum}
+	}
+	ctx := context.Background()
+
+	before := gatherPlaceWaits(t, clientWait)[placesBigRead]
+	if err := read(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	if got := since(before); got.count != 0 {
+		t.Errorf("a read of one page took a big read place %d times, want none", got.count)
+	}
+	if err := read(ctx, 3); err != nil {
+		t.Fatal(err)
+	}
+	if got := since(before); got.count != 1 || got.sum > 0.5 {
+		t.Errorf("a read of three pages with a place free: %d observations summing %.3f s, want 1 of about 0", got.count, got.sum)
+	}
+
+	// every place held: one read's context ends after 50 ms, the next gets a place given back after 100 ms
+	held := make([]func(), 0, bigReadSlots.Cap())
+	for range bigReadSlots.Cap() {
+		release, err := bigReadSlots.Take(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		held = append(held, release)
+	}
+	defer func() {
+		for _, release := range held {
+			release()
+		}
+	}()
+	before = gatherPlaceWaits(t, clientWait)[placesBigRead]
+	short, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+	if err := read(short, 2); err == nil {
+		t.Fatal("a read whose context ended while every place was held got one")
+	}
+	given := held[0]
+	held = held[1:]
+	time.AfterFunc(100*time.Millisecond, given)
+	if err := read(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+	if got := since(before); got.count != 2 || got.sum < 0.14 || got.sum > 2 {
+		t.Errorf("%d observations summing %.3f s, want 2 summing about 0.15", got.count, got.sum)
 	}
 }
 

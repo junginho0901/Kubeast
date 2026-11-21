@@ -17,10 +17,12 @@ const (
 	limiterCache  = "cache"
 )
 
-// The places a kind of read takes on each cluster (clusterPlaces), as the place wait histogram names them.
+// The places a kind of read takes, on each cluster (clusterPlaces) or in k8s-service for every cluster (bigReadSlots),
+// as the place wait histogram names them.
 const (
 	placesNodePods  = "node_pods"
 	placesEventList = "event_list"
+	placesBigRead   = "big_read"
 )
 
 // clientWaitBuckets reach past passOverLimit to a request's 60 s.
@@ -44,7 +46,7 @@ func newClientWaitMetrics() *clientWaitMetrics {
 			Name: "kubeast_k8s_client_rate_waits_total", Help: "Requests to a cluster that waited for the client's rate, given a token or not, by limiter.", ConstLabels: svc,
 		}, []string{"limiter"}),
 		places: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name: "kubeast_k8s_read_place_wait_seconds", Help: "Seconds a read of a cluster waited for one of that cluster's places for its kind of read (a few microseconds when one was free), by places.",
+			Name: "kubeast_k8s_read_place_wait_seconds", Help: "Seconds a read of a cluster waited for one of the places for its kind of read, that cluster's or, for big_read, k8s-service's (a few microseconds when one was free), by places.",
 			ConstLabels: svc, Buckets: clientWaitBuckets,
 		}, []string{"places"}),
 	}
