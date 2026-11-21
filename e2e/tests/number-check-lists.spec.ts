@@ -2181,11 +2181,11 @@ test.describe('number check — list screens', () => {
 
             // a fresh read of the list API reads what the update left
             const live = await shown(page, name)
-            await expect.poll(async () => {
+            await expect(async () => {
               await held.goto(screenUrl(s))
               await expect(held.locator('main tbody tr').filter({ has: held.getByRole('cell', { name, exact: true }) })).toHaveCount(1, { timeout: 20_000 })
-              return shown(held, name)
-            }, { timeout: 40_000, message: `${k.kind}: a fresh read of the list API` }).toEqual(live)
+              expect(await shown(held, name), `${k.kind}: a fresh read of the list API`).toEqual(live)
+            }).toPass({ timeout: 40_000 })
 
             if (k.another) {
               const other = `${name}-2`
