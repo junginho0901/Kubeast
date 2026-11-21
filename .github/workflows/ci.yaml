@@ -260,6 +260,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Every Dockerfile's golang:X.Y is every go-version "X.Y" in this file; dependabot's base-images PR moves the Dockerfiles alone.
+      - name: the images' Go is CI's Go
+        run: scripts/check-go-version.sh
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "stable"
