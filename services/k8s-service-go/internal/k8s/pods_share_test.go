@@ -920,7 +920,10 @@ func TestPodAnswerWaitersThatLeave(t *testing.T) {
 				t.Errorf("the one who stayed: %.200s", got)
 			}
 
-			// every place taken: the first build and the next both wait for one, and everyone leaves
+			// every place taken: the first build and the next both wait for one, and everyone leaves; another query, so
+			// nothing is left of the key above
+			q2 := PodPageQuery{Limit: 50, Search: "p"}
+			key2 := keyOf(t, s, sc, a, q2)
 			for range cap(podRowSlots) {
 				podRowSlots <- struct{}{}
 			}
@@ -940,10 +943,10 @@ func TestPodAnswerWaitersThatLeave(t *testing.T) {
 			defer cancelA()
 			defer cancelB()
 			defer cancelC()
-			alone := askNow(func() string { return sc.ask(s, ctxA, q) })
+			alone := askNow(func() string { return sc.ask(s, ctxA, q2) })
 			waitFor(t, "the first build waits for a place", func() bool { return g.steps("place") == 1 })
-			waiters := []*asking{askNow(func() string { return sc.ask(s, ctxB, q) }), askNow(func() string { return sc.ask(s, ctxC, q) })}
-			waitFor(t, "two wait for the next build", func() bool { return sc.answers(ci).Waiting(key) == 2 })
+			waiters := []*asking{askNow(func() string { return sc.ask(s, ctxB, q2) }), askNow(func() string { return sc.ask(s, ctxC, q2) })}
+			waitFor(t, "two wait for the next build", func() bool { return sc.answers(ci).Waiting(key2) == 2 })
 			cancelA()
 			if got := alone.wait(t); got != "error: "+context.Canceled.Error() {
 				t.Errorf("the first, gone while it waited for a place: %.200s", got)
