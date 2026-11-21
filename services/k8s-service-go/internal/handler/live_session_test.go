@@ -522,8 +522,8 @@ func TestAMutationsRowIsStoredAfterTheBrowserClosed(t *testing.T) {
 	if row.Action != "k8s.pod.delete" || row.Result != audit.ResultSuccess || row.ActorUserID != "u1" || row.Cluster != "c" || row.RequestID != "req-1" {
 		t.Fatalf("row = %+v", row)
 	}
-	if len(store.deadlines) != 1 || store.deadlines[0] <= 0 || store.deadlines[0] > audit.WriteTimeout {
-		t.Fatalf("write deadline = %v, want within %v", store.deadlines, audit.WriteTimeout)
+	if len(store.deadlines) != 0 {
+		t.Fatalf("write deadline = %v, want none: the request had none", store.deadlines)
 	}
 	if st := guarded.Status(context.Background()); st.WriteFailures != 0 {
 		t.Fatalf("write failures = %d (%s)", st.WriteFailures, st.LastError)
