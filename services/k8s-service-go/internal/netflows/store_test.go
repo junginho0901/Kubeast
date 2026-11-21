@@ -409,6 +409,36 @@ func TestTheRelaysOwnGRPCRefusalIsNotTheClustersRefusal(t *testing.T) {
 	}
 }
 
+// At an address no API server is in between, so every 401 or 403 is the Relay's own, a Kubernetes Status too (an API
+// server registered there by mistake answering a request it cannot place): the flow source not answering, never the
+// cluster refusing the read. The same Status through the proxy stays the cluster's refusal.
+func TestEvery401Or403AtAnAddressIsTheRelaysOwn(t *testing.T) {
+	s := testStore()
+	req := Request{Namespace: "demo"}
+	_ = s.Normalize(&req)
+	cases := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"a plain 401", http.StatusUnauthorized, "Unauthorized"},
+		{"a 403 as a Status", http.StatusForbidden, apiStatus(http.StatusForbidden, "Forbidden", `forbidden: User "system:anonymous" cannot post path "/observer.Observer/GetFlows"`)},
+		{"a 401 as a Status", http.StatusUnauthorized, apiStatus(http.StatusUnauthorized, "Unauthorized", "Unauthorized")},
+	}
+	for _, c := range cases {
+		srv, client := (&relay{status: c.status, body: c.body}).serve(t)
+		_, err := s.Read(context.Background(), Target{Mode: "address", URL: srv.URL}, client, srv.URL+getFlowsPath, req, fixtureNow)
+		want := fmt.Sprintf("answered %d itself, not the cluster", c.status)
+		if !errors.Is(err, ErrUnavailable) || errors.Is(err, ErrForbidden) || !strings.Contains(err.Error(), want) {
+			t.Errorf("address, %s: %v, want %v containing %q", c.name, err, ErrUnavailable, want)
+		}
+	}
+	srv, client := (&relay{status: http.StatusForbidden, body: cases[1].body}).serve(t)
+	if _, err := s.Read(context.Background(), Target{Mode: "proxy"}, client, srv.URL+getFlowsPath, req, fixtureNow); !errors.Is(err, ErrForbidden) {
+		t.Errorf("proxy, a 403 as a Status: %v, want %v", err, ErrForbidden)
+	}
+}
+
 func TestNormalize(t *testing.T) {
 	s := testStore()
 	for _, bad := range []Request{
