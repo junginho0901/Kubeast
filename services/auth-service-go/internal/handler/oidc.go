@@ -300,7 +300,8 @@ const signInRefusedSingleSignOn = "single_sign_on_account"
 // it, as reset-admin gives it a password without changing how it was made. An account the provider made, or a self
 // sign-up a provider's sign-in reached while it waited for approval (endSelfSignUpCredentials, and a migration for
 // those reached by builds that left them password accounts), is oidc. It is the one answer of the password form
-// (refusesForSingleSignOn), an admin's reset (AdminResetPassword) and reset-admin's last line.
+// (refusesForSingleSignOn), a person's own change (ChangePassword), an admin's reset (AdminResetPassword) and
+// reset-admin's last line.
 func SignsInWithPassword(cfg config.Config, user *model.User) bool {
 	return user.AuthSource == model.AuthSourcePassword || strings.EqualFold(user.Email, cfg.DefaultAdminEmail)
 }

@@ -543,6 +543,9 @@ func (h *AuthHandler) writeMe(w http.ResponseWriter, user *model.User, permissio
 	}{user.ToResponseWithPermissions(permissions), matrix, roles, namespaces, h.cfg.JWTExpiresMinutes})
 }
 
+// passwordChangeRefusedSingleSignOn is the error of a change refused for an account the password form does not open.
+const passwordChangeRefusedSingleSignOn = "single_sign_on_account"
+
 // ChangePassword handles POST /auth/change-password
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	payload, ok := auth.FromContext(r.Context())
@@ -568,6 +571,14 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
+		return
+	}
+	// An account the password form refuses signs in at the provider: a password it holds is not one it changes, as an
+	// admin's reset gives it none.
+	if !SignsInWithPassword(h.cfg, user) {
+		h.writeAuditFailure(r, "user.password.change", &payload.UserID, &user.Email, &user.ID, &user.Email, passwordChangeRefusedSingleSignOn,
+			jsonRaw(map[string]interface{}{"auth_source": user.AuthSource}))
+		response.Error(w, http.StatusBadRequest, "Cannot change the password of an account that signs in through single sign-on")
 		return
 	}
 	if err := security.ValidatePassword(req.NewPassword, user.Email, h.cfg.PasswordMinLength); err != nil {
