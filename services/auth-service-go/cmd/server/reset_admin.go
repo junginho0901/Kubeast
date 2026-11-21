@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/handler"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/model"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/repository"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
@@ -74,7 +75,7 @@ func runResetAdmin(args []string, out io.Writer) int {
 		return 1
 	}
 	auditStore := audit.NewPostgresStore(pool, audit.ServiceAuth)
-	created, err := recoverAccount(ctx, repository.New(pool), auditStore, *email, cfg.DefaultAdminPassword, cfg.PasswordHashIterations)
+	user, created, err := recoverAccount(ctx, repository.New(pool), auditStore, *email, cfg.DefaultAdminPassword, cfg.PasswordHashIterations)
 	if err != nil {
 		fmt.Fprintln(out, "reset-admin:", err)
 		return 1
@@ -84,27 +85,38 @@ func runResetAdmin(args []string, out io.Writer) int {
 		what = "created"
 	}
 	fmt.Fprintf(out, "reset-admin: %s %s — role Admin, locks cleared, sessions ended.\n", what, *email)
-	fmt.Fprintln(out, "Sign in with the password in DEFAULT_ADMIN_PASSWORD (the install notes print the command that reads it), then change it.")
+	fmt.Fprintln(out, signInLine(cfg, user))
 	return 0
 }
 
+// signInLine is reset-admin's last line, how the recovered account signs in. The password form opens only an account
+// made with a password or the chart's admin account (DEFAULT_ADMIN_EMAIL), so one the provider made under another
+// address is told to sign in through the provider, or to recover the chart's admin account for a password.
+func signInLine(cfg config.Config, user *model.User) string {
+	if handler.SignsInWithPassword(cfg, user) {
+		return "Sign in with the password in DEFAULT_ADMIN_PASSWORD (the install notes print the command that reads it), then change it."
+	}
+	return "This account signs in through single sign-on and the password form refuses it: sign in through the provider. " +
+		"To sign in with a password while the provider is down, run reset-admin without --email, which recovers the chart's admin account (admin.email)."
+}
+
 // recoverAccount gives the account the password and the Admin role, clears its locks and ends its sessions, or creates
-// it, and records user.account.recover. It reports whether it created the account.
-func recoverAccount(ctx context.Context, store recoveryStore, auditStore audit.Writer, email, password string, iterations int) (bool, error) {
+// it, and records user.account.recover. It returns the account and whether it created it.
+func recoverAccount(ctx context.Context, store recoveryStore, auditStore audit.Writer, email, password string, iterations int) (*model.User, bool, error) {
 	role, err := store.GetRoleByName(ctx, "Admin")
 	if err != nil || role == nil {
-		return false, fmt.Errorf("no Admin role: %v", err)
+		return nil, false, fmt.Errorf("no Admin role: %v", err)
 	}
 	hash, err := security.HashPassword(password, iterations)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	rec := audit.Record{Service: audit.ServiceAuth, Action: actionAccountRecover, ActorUserID: "system", ActorEmail: "reset-admin",
 		TargetType: "user", TargetEmail: email}
 
 	user, err := store.GetUserByEmail(ctx, email)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	created := user == nil
 	if created {
@@ -129,7 +141,7 @@ func recoverAccount(ctx context.Context, store recoveryStore, auditStore audit.W
 	if _, werr := auditStore.Write(ctx, rec); werr != nil {
 		err = errors.Join(err, fmt.Errorf("audit row: %w", werr))
 	}
-	return created, err
+	return user, created, err
 }
 
 func roleChange(ctx context.Context, store recoveryStore, user *model.User, adminRoleID int) error {

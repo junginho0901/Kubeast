@@ -295,11 +295,23 @@ func passwordLoginAllowed(cfg config.Config, email string) bool {
 // sign-on.
 const signInRefusedSingleSignOn = "single_sign_on_account"
 
-// signsInWithPassword says whether the password form may open the account: one made with a password, or the chart's
+// SignsInWithPassword says whether the password form may open the account: one made with a password, or the chart's
 // admin account (DEFAULT_ADMIN_EMAIL, the break-glass path while the provider is down) whatever made it, as reset-admin
-// gives it a password without changing how it was made.
-func signsInWithPassword(cfg config.Config, user *model.User) bool {
+// gives it a password without changing how it was made. reset-admin reads it to say how the account it recovered
+// signs in.
+func SignsInWithPassword(cfg config.Config, user *model.User) bool {
 	return user.AuthSource == model.AuthSourcePassword || strings.EqualFold(user.Email, cfg.DefaultAdminEmail)
+}
+
+// refusesForSingleSignOn says whether the password form refuses the account because the provider made it. A refusal
+// spends one hash check against the dummy hash first, as an unknown address does, so the time of the answer does not
+// tell such an account from a missing one.
+func (h *AuthHandler) refusesForSingleSignOn(password string, user *model.User) bool {
+	if SignsInWithPassword(h.cfg, user) {
+		return false
+	}
+	h.checkPassword(password, h.dummyPasswordHash())
+	return true
 }
 
 // --- handlers ---------------------------------------------------------------

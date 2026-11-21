@@ -148,8 +148,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// An account the provider made signs in there, and a password it holds (an admin's reset gave it one before 0.7.9)
 	// does not open it. The answer is a wrong password's after the same hashing work, so it tells no one which accounts
 	// sign in through the provider, and no failure is counted toward the lockout, which guards only this form.
-	if !signsInWithPassword(h.cfg, user) {
-		security.VerifyPassword(req.Password, h.dummyPasswordHash())
+	if h.refusesForSingleSignOn(req.Password, user) {
 		reason := jsonRaw(map[string]interface{}{"reason": signInRefusedSingleSignOn, "auth_source": user.AuthSource})
 		h.writeAuditFailure(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, signInRefusedSingleSignOn, reason)
 		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
