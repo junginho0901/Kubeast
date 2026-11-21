@@ -238,7 +238,7 @@ kubectl -n kubeast exec deploy/auth-service -- /app/server reset-admin
 docker compose exec auth-service /app/server reset-admin
 ```
 
-`admin`이 아닌 계정은 `--email <계정>`으로 지정합니다. 공급자가 만든 계정은 Admin 역할과 잠금 해제는 받지만, 비밀번호 로그인이 거부되므로 계속 공급자로 로그인합니다(무엇이 만들었든 비밀번호로 로그인하는 것은 `admin.email` 계정뿐입니다). 이때 명령의 마지막 줄도 비밀번호 안내 대신 이것을 알려 줍니다. 만들어진 비밀번호 대신 새 비밀번호를 쓰려면 먼저 바꾸고(`helm upgrade … --reset-then-reuse-values --set admin.password=<새 비번>`, Docker는 `.env`의 `DEFAULT_ADMIN_PASSWORD`), auth-service를 다시 띄운 뒤(`kubectl -n kubeast rollout restart deploy/auth-service`, Docker는 `docker compose up -d auth-service`) `reset-admin`을 실행하세요.
+`admin`이 아닌 계정은 `--email <계정>`으로 지정합니다. 공급자가 만든 계정은 Admin 역할과 잠금 해제는 받지만 비밀번호는 받지 않고, 비밀번호 로그인이 거부되므로 계속 공급자로 로그인합니다(무엇이 만들었든 비밀번호로 로그인하는 것은 `admin.email` 계정뿐입니다). 이때 명령의 마지막 줄도 비밀번호 안내 대신 이것을 알려 줍니다. `admin.email` 계정을 공급자가 만들었으면 Account 화면에 Change password가 없으므로, 마지막 줄이 비밀번호를 바꾸는 길로 `POST /api/v1/auth/change-password`를 알려 줍니다. 만들어진 비밀번호 대신 새 비밀번호를 쓰려면 먼저 바꾸고(`helm upgrade … --reset-then-reuse-values --set admin.password=<새 비번>`, Docker는 `.env`의 `DEFAULT_ADMIN_PASSWORD`), auth-service를 다시 띄운 뒤(`kubectl -n kubeast rollout restart deploy/auth-service`, Docker는 `docker compose up -d auth-service`) `reset-admin`을 실행하세요.
 
 ### 3. 로그인 후 클러스터 연결 (Connect your cluster)
 
