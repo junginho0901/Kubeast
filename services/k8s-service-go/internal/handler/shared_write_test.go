@@ -243,8 +243,12 @@ func TestEachTakeOfAWritePlaceIsObserved(t *testing.T) {
 		t.Fatal(err)
 	}
 	count, sum = writeWaits(t)
-	if err := writeInTurns(ctx, &paced{total: len(body)}, body, places, time.Minute, 50*time.Millisecond); err != nil {
+	const wait = 50 * time.Millisecond
+	if err := writeInTurns(ctx, &paced{total: len(body)}, body, places, time.Minute, wait); err != nil {
 		t.Fatal(err)
+	}
+	if n, s := since(count, sum); n != 1 || s > wait.Seconds()+1e-9 {
+		t.Errorf("a take that reached its %s deadline: %d observations summing %.6f s, want 1 of no more than the deadline", wait, n, s)
 	}
 	time.AfterFunc(100*time.Millisecond, give)
 	if err := writeInTurns(ctx, &paced{total: len(body)}, body, places, time.Minute, time.Minute); err != nil {
@@ -262,6 +266,35 @@ func TestEachTakeOfAWritePlaceIsObserved(t *testing.T) {
 	}
 	if n, _ := since(count, sum); n != uint64(parts) {
 		t.Errorf("a reader slower than the turn: %d observations, want one for each of its %d parts", n, parts)
+	}
+}
+
+// A take that reached its body's deadline is observed as the wait up to it: one whose deadline's timer fired half a
+// second late is bigWriteWait, in the le="1" bucket and not in (1, 2.5]. A take begun after the deadline is 0.
+func TestATakeThatReachedTheDeadlineIsInTheOneSecondBucket(t *testing.T) {
+	start := time.Now().Add(-bigWriteWait - 500*time.Millisecond)
+	waited := placeWait(start, start.Add(bigWriteWait))
+	if waited != bigWriteWait.Seconds() {
+		t.Errorf("a take that reached the deadline: %v s, want the %v s up to it", waited, bigWriteWait.Seconds())
+	}
+	if late := placeWait(time.Now(), time.Now().Add(-time.Second)); late != 0 {
+		t.Errorf("a take begun after the deadline: %v s, want 0", late)
+	}
+
+	h := prometheus.NewHistogram(prometheus.HistogramOpts{Name: "deadline_take_seconds", Help: "test", Buckets: writePlaceWaitBuckets})
+	h.Observe(waited)
+	reg := prometheus.NewPedanticRegistry()
+	reg.MustRegister(h)
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := map[float64]uint64{}
+	for _, b := range families[0].GetMetric()[0].GetHistogram().GetBucket() {
+		in[b.GetUpperBound()] = b.GetCumulativeCount()
+	}
+	if in[0.5] != 0 || in[1] != 1 {
+		t.Errorf("cumulative counts le=0.5 %d, le=1 %d; want 0 and 1", in[0.5], in[1])
 	}
 }
 
