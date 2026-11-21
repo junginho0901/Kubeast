@@ -111,7 +111,7 @@ Check it with `kubectl -n <namespace> get hpa`.
 - An approved AI write runs on the ai-service pod that took the approval. When that pod is killed, or its shutdown cuts the run, before the outcome is written, the card says "running" until 10 minutes after the approval; then the first ai-service pod to look (a new approval card, the card opened, a pod's first database use) ends it failed as interrupted with an `ai.tool.interrupt` row, one pod for each approval since each ends it, with that row, in one transaction that holds the approval's row. A run takes far less than 10 minutes, so no pod ends a run another pod is still on. Whether the write changed the cluster is not known; nothing runs it again.
 - Each k8s-service pod watches the clusters for itself, so two requests that land on two pods can be a watch event apart for a moment.
 - Each k8s-service pod keeps the policy reports it read in its own memory for 60 s. A new policy report can take up to a minute to show in a drawer or a list read from the other pod; Refresh on the Policy Reports page reads them again on the pod it reaches.
-- Each k8s-service pod lists and watches the clusters it serves: the API server sees that once per pod.
+- Each k8s-service pod reads and watches the clusters it serves: its informers start each kind with a watch list, which the API server counts as a watch, and an API server that does not serve watch lists gets one LIST of each kind instead. The API server sees that once per pod.
 - Each k8s-service pod takes the memory one pod takes; the total grows with the pods.
 - Each k8s-service pod answers Cluster View's node boxes from its own informers and keeps the answers it gave the people who may see every namespace: at most 256 nodes and 8 MiB of answers (about 300 bytes a pod), and no pod row. A node's box is made once in each pod while the node's pods stay the same.
 - Each k8s-service pod makes its own reads for everyone asking at one moment (a drawer's events, a node's pods, the Timeline's and the events API's events, the Timeline's rollouts): a crowd makes about two of them in each pod, the one under way and one more for those who came during it, so up to about 2N over N pods.
@@ -131,9 +131,10 @@ The same cluster's numbers for the upgrade from 0.7.7 are in [Upgrading from 0.7
 The rows below were measured on 2026-11-21 the same way as "Many users" in [Architecture](architecture.md#many-users): on kind with one node, KWOK with 50 000 pods and 1 001 nodes, and k8s-service at the chart's 512 Mi.
 They compare pod counts with each other; on a real cluster the seconds differ.
 T3 is the run of 500 different people keeping the Dashboard, Pods and Cluster View open for 6 minutes, then 100 of them opening those screens at the same instant; its p95 is that of the 6 minutes.
+In T5, where pods were replaced while live lists were open, one pod's memory went up to 415, 356 and 298 MiB with 1, 2 and 3 pods.
 
 | k8s-service pods | Memory per pod, idle / busy | Memory in total | Watches the API server holds for Kubeast | p95 of 500 people's usual use | Answers other than 200 during a rollout |
 | --- | --- | --- | --- | --- | --- |
-| 1 | idle p90 113 / busy max 416 MiB | 416 MiB (most at one second of T3, all pods) | informers 7 · at most 1731 during T3 | 17 ms (T3) | 0 of 656 (none) |
-| 2 | idle p90 112 · 109 / busy max 322 · 289 MiB | 603 MiB (most at one second of T3, all pods) | informers 14 · at most 1738 during T3 | 31 ms (T3) | 0 of 730 (none) |
-| 3 | idle p90 107 · 106 · 103 / busy max 239 · 245 · 265 MiB | 736 MiB (most at one second of T3, all pods) | informers 21 · at most 1745 during T3 | 33 ms (T3) | 0 of 806 (none) |
+| 1 | idle p90 113 / busy max in T3 416 MiB | 416 MiB (most at one second of T3, all pods) | informers 7 · at most 1731 during T3 | 17 ms (T3) | 0 of 656 (none) |
+| 2 | idle p90 112 · 109 / busy max in T3 322 · 289 MiB | 603 MiB (most at one second of T3, all pods) | informers 14 · at most 1738 during T3 | 31 ms (T3) | 0 of 730 (none) |
+| 3 | idle p90 107 · 106 · 103 / busy max in T3 239 · 245 · 265 MiB | 736 MiB (most at one second of T3, all pods) | informers 21 · at most 1745 during T3 | 33 ms (T3) | 0 of 806 (none) |
