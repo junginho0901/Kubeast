@@ -1447,9 +1447,7 @@ test.describe('number check — list screens', () => {
       await test.step('the picker: the namespace from the address, every namespace offered, the next choice kept on reload', async () => {
         await expect.soft(page.getByTestId('helm-namespace'), 'the address picks the namespace').toHaveText(NS)
         await page.getByTestId('helm-namespace').click()
-        // the picker and kubectl read together in each try, as a namespace an earlier test deleted without waiting may
-        // still go; the picker's list is read when the page loads (kept 30 s, Releases.tsx), so after a few seconds of
-        // disagreeing the page is loaded again. What differs is the answer: none once they agree
+        // the picker's list is read when the page loads (kept 30 s): reloaded after 5 s of disagreeing
         let loaded = Date.now()
         await expect.configure({ soft: true }).poll(async () => {
           if (Date.now() - loaded > 5_000) {
@@ -1461,6 +1459,7 @@ test.describe('number check — list screens', () => {
             els.map((el) => el.getAttribute('data-testid')!.replace('helm-namespace-opt-', '')).filter((n) => n !== 'all').sort())
           const all = k.kubectl(`get namespaces -o jsonpath='{range .items[*]}{.metadata.name}{"\\n"}{end}'`).split('\n').filter(Boolean).sort()
           return [
+            ...offered.filter((n, i) => offered.indexOf(n) !== i).map((n) => `offered twice: ${n}`),
             ...offered.filter((n) => !all.includes(n)).map((n) => `offered, not listed by kubectl: ${n}`),
             ...all.filter((n) => !offered.includes(n)).map((n) => `listed by kubectl, not offered: ${n}`),
           ]

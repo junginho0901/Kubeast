@@ -16,9 +16,8 @@ async function totalOf(page: Page, cluster: string): Promise<number> {
   return (await res.json()).total as number
 }
 
-// the footer's total once it is the API's total read right after it: both are read again each time, since an earlier
-// test's namespace may still be going away (its delete does not wait) and the number moves on both
-async function footerTotal(page: Page, cluster: string): Promise<number> {
+// read with the API's total in each try: an earlier test's namespace may still be going away
+async function settledFooterTotal(page: Page, cluster: string): Promise<number> {
   let total = NaN
   await expect(async () => {
     const shown = (await pagerRange(page, 'list-pager', { uncounted: 'nan' })).total
@@ -77,13 +76,13 @@ test.describe('the Pods list footer', () => {
     } finally {
       await held.release()
     }
-    expect(await footerTotal(page, 'self'), 'the total the footer settles on').toBeGreaterThan(0)
+    expect(await settledFooterTotal(page, 'self'), 'the total the footer settles on').toBeGreaterThan(0)
     expect(rangeTexts(await footerSeen(page)).filter((s) => s === 'Showing 0 of 0'), 'a 0 nobody counted').toEqual([])
   })
 
   test('says it has not counted while the cluster just picked is read, not the total of the cluster before', async ({ page }) => {
     await page.goto('/workloads/pods?cluster=self')
-    const self = await footerTotal(page, 'self')
+    const self = await settledFooterTotal(page, 'self')
     await page.evaluate(recordFooter)
     const held = await hold(page, 'default')
     try {
@@ -96,7 +95,7 @@ test.describe('the Pods list footer', () => {
     } finally {
       await held.release()
     }
-    const other = await footerTotal(page, 'default')
+    const other = await settledFooterTotal(page, 'default')
     const seen = rangeTexts(await footerSeen(page))
     expect(seen.filter((s) => s === 'Showing 0 of 0'), 'a 0 nobody counted').toEqual([])
     test.skip(self === other, `self and default both hold ${self} pods: the footer could not tell them apart`)

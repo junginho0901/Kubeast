@@ -59,8 +59,7 @@ test.describe('Pods list paged by the server', () => {
     await page.goto(`/workloads/pods?cluster=${CLUSTER}`)
     await expect(rows(page).first()).toBeVisible()
 
-    // the cluster's pods (tried again: a pod may come or go between the two reads), the footer's total and the cards
-    // all held to the same kubectl list
+    // the footer's total and the cards against one kubectl list, read again in each try (a pod may come or go)
     let pods: KPod[] = []
     await expect(async () => {
       pods = clusterPods()

@@ -21,8 +21,7 @@ async function apiPods(page: Page, cluster: string): Promise<number | null> {
   return (await res.json()).total_pods as number
 }
 
-// the Pods stat once it is the API's total of the cluster read right after it: both are read again each time, since an
-// earlier test's namespace may still be going away (its delete does not wait) and the number moves on both
+// read with the API's total in each try: the cluster's pod count may still move
 async function settledPodsTotal(page: Page, cluster: string): Promise<number> {
   let total = NaN
   await expect(async () => {

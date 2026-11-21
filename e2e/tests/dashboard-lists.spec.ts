@@ -296,6 +296,7 @@ test.describe('Dashboard lists', () => {
   })
 
   test('the Namespaces window counts each namespace’s pods, Services and Deployments as kubectl lists them, and a search says how many of how many', async ({ page }) => {
+    test.setTimeout(90_000)
     const k = kubectlFor('kubeast')
     const perNs = (kind: string) => {
       const m = new Map<string, number>()
@@ -306,9 +307,7 @@ test.describe('Dashboard lists', () => {
     await page.goto('/?cluster=self')
     await page.getByTestId('stat-namespaces').click()
     const rows = page.getByTestId('resource-modal-namespace-counts')
-    // pods come and go while the suite runs, and a namespace an earlier test deleted without waiting may still go: read
-    // kubectl and the window again until they agree. The window reads its lists when it opens, so after a few seconds
-    // of disagreeing it is opened again
+    // the window reads its lists when it opens: reopened after 5 s of disagreeing
     let opened = Date.now()
     await expect(async () => {
       if (Date.now() - opened > 5_000) {
@@ -328,8 +327,7 @@ test.describe('Dashboard lists', () => {
       expect(Object.fromEntries(seen), 'pods, Services and Deployments per namespace').toEqual(want)
     }).toPass({ timeout: 60_000 })
 
-    // a search keeps some of them: the header says how many of how many, as the pager does (of the namespaces of the
-    // try that agreed, which the window shows)
+    // a search keeps some: the header says how many of how many (the names of the try that agreed)
     await page.getByPlaceholder(/Search|검색/).last().fill('kube')
     const kept = names.filter((n) => n.includes('kube')).length
     expect(kept).toBeGreaterThan(0)

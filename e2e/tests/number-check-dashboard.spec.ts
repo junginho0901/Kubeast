@@ -95,8 +95,7 @@ test.describe('Number check — dashboard counts as the user may list them', () 
     // the bindings take a moment, and the identity's answers are kept 60 s
     await expect.poll(async () => (await overview()).status, { timeout: 90_000, intervals: [3_000] }).toBe(200)
 
-    // what kubectl as the identity lists, read again in each try with the overview: a namespace (and its Services) an
-    // earlier test deleted without waiting may still be going away
+    // what kubectl as the identity lists, read again with the overview in each try (namespaces may still be going away)
     const listed = () => {
       const w: Record<string, number | null> = { total_namespaces: asTheUser('namespaces', false) }
       for (const k of KINDS) w[k.key] = asTheUser(k.resource, k.namespaced)
