@@ -265,3 +265,36 @@ tests:
             subPath: accesslog.conf
         template: gateway.yaml
         documentIndex: 1
+
+  - it: names no pod in an answer unless gateway.servedByHeader is on, and keeps add_header out of every location
+    asserts:
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'X-Kubeast-Gateway|\$hostname'
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: '\n\s*location [^{]*\{[^}]*add_header'
+        template: gateway.yaml
+        documentIndex: 0
+
+  - it: with gateway.servedByHeader, names the pod in X-Kubeast-Gateway on every answer, after the six headers as they were
+    set:
+      gateway.servedByHeader: true
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: '\n        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;\n        add_header X-Content-Type-Options nosniff always;\n        add_header X-Frame-Options DENY always;\n        add_header Referrer-Policy strict-origin-when-cross-origin always;\n        add_header Permissions-Policy "camera=\(\), microphone=\(\), geolocation=\(\)" always;\n        add_header Content-Security-Policy "[^"\n]*" always;\n        add_header X-Kubeast-Gateway \$hostname always;\n\n'
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'X-Kubeast-Gateway[\s\S]*X-Kubeast-Gateway'
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: '\n\s*location [^{]*\{[^}]*add_header'
+        template: gateway.yaml
+        documentIndex: 0
