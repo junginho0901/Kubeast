@@ -56,15 +56,35 @@ async function adminToken(request: APIRequestContext): Promise<string> {
 }
 
 // The kind cluster kubeast's database, for a row no route writes any more. The kubeconfig comes from `kind get
-// kubeconfig`, never from the shell's KUBECONFIG; null when there is no such cluster.
-function kindPsql(): ((sql: string) => string) | null {
+// kubeconfig` into a directory of its own, never from the shell's KUBECONFIG, and close() removes it; null when there is
+// no such cluster or its postgres does not answer.
+type KindPsql = { run: (sql: string) => string; close: () => void }
+function kindPsql(): KindPsql | null {
+  let dir = ''
+  const close = () => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true })
+  }
   try {
-    const kc = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-oidc-')), 'kubeconfig')
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-oidc-'))
+    const kc = path.join(dir, 'kubeconfig')
     fs.writeFileSync(kc, execFileSync('kind', ['get', 'kubeconfig', '--name', 'kubeast'], { encoding: 'utf8' }), { mode: 0o600 })
-    return (sql) => execFileSync('kubectl', ['--kubeconfig', kc, '--context', 'kind-kubeast', '-n', 'kubeast', 'exec', 'deploy/postgres', '--',
+    const run = (sql: string) => execFileSync('kubectl', ['--kubeconfig', kc, '--context', 'kind-kubeast', '-n', 'kubeast', 'exec', 'deploy/postgres', '--',
       'psql', '-U', 'kubeast', '-d', 'kubeast', '-tAc', sql], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+    run('SELECT 1')
+    return { run, close }
   } catch {
+    close()
     return null
+  }
+}
+
+// run on db, skipping the test with the reason when psql fails there.
+function psqlOrSkip(db: KindPsql, sql: string): string {
+  try {
+    return db.run(sql)
+  } catch (err) {
+    test.skip(true, `psql in the kind cluster kubeast failed: ${String(err).split('\n')[0]}`)
+    return ''
   }
 }
 
@@ -205,29 +225,36 @@ test.describe('OIDC sign-in', () => {
 
   test('a password an account the provider made holds does not sign it in', async ({ page, request }) => {
     const db = kindPsql()
-    test.skip(!db, 'no kind cluster kubeast: the password is put on the account in the database')
-    const psql = db!
-    const email = newEmail('grace')
-    const twin = newEmail('grace-twin')
-    const password = 'E2e-sso-twin-sign-in-0791!'
-    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
-    await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
-    const headers = { Authorization: `Bearer ${await adminToken(request)}` }
-    const made = await request.post('/api/v1/auth/admin/users', { headers, data: { name: 'E2E SSO twin', email: twin, password } })
-    expect(made.status(), await made.text()).toBe(201)
+    test.skip(!db, 'no kind cluster kubeast whose postgres answers: the password is put on the account in the database')
+    try {
+      const psql = (sql: string) => psqlOrSkip(db!, sql)
+      const email = newEmail('grace')
+      const twin = newEmail('grace-twin')
+      const password = 'E2e-sso-twin-sign-in-0791!'
+      await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
+      await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
+      // The account the sign-in made is in this database only when the run's address is that kind cluster's gateway.
+      test.skip(psql(`SELECT count(*) FROM auth_users WHERE email = '${email}'`) !== '1',
+        'the kind cluster kubeast is not the install this run signs in to: its database has no row of the account just made')
+      const headers = { Authorization: `Bearer ${await adminToken(request)}` }
+      const made = await request.post('/api/v1/auth/admin/users', { headers, data: { name: 'E2E SSO twin', email: twin, password } })
+      expect(made.status(), await made.text()).toBe(201)
 
-    // An admin's reset gave such accounts a password in an earlier version and is refused now: the twin's hash is copied in.
-    psql(`UPDATE auth_users SET password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}') WHERE email = '${email}' AND auth_source = 'oidc'`)
-    expect(psql(`SELECT count(*) FROM auth_users WHERE email = '${email}' AND auth_source = 'oidc' AND password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}')`)).toBe('1')
-    const own = await request.post('/api/v1/auth/login', { data: { email: twin, password }, failOnStatusCode: false })
-    expect(own.status(), 'the password signs in the account made with it').toBe(200)
+      // An admin's reset gave such accounts a password in an earlier version and is refused now: the twin's hash is copied in.
+      psql(`UPDATE auth_users SET password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}') WHERE email = '${email}' AND auth_source = 'oidc'`)
+      expect(psql(`SELECT count(*) FROM auth_users WHERE email = '${email}' AND auth_source = 'oidc' AND password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}')`)).toBe('1')
+      const own = await request.post('/api/v1/auth/login', { data: { email: twin, password }, failOnStatusCode: false })
+      expect(own.status(), 'the password signs in the account made with it').toBe(200)
 
-    const res = await request.post('/api/v1/auth/login', { data: { email, password }, failOnStatusCode: false })
-    expect(res.status()).toBe(401)
-    expect((await res.json()).detail).toBe('Invalid credentials')
-    const rows = await signInFailures(request, headers, email)
-    expect(rows.map((r) => [r.Error, r.After?.auth_source])).toEqual([['single_sign_on_account', 'oidc']])
-    expect(psql(`SELECT failed_logins FROM auth_users WHERE email = '${email}'`), 'no failure counted toward the lockout').toBe('0')
+      const res = await request.post('/api/v1/auth/login', { data: { email, password }, failOnStatusCode: false })
+      expect(res.status()).toBe(401)
+      expect((await res.json()).detail).toBe('Invalid credentials')
+      const rows = await signInFailures(request, headers, email)
+      expect(rows.map((r) => [r.Error, r.After?.auth_source])).toEqual([['single_sign_on_account', 'oidc']])
+      expect(psql(`SELECT failed_logins FROM auth_users WHERE email = '${email}'`), 'no failure counted toward the lockout').toBe('0')
+    } finally {
+      db!.close()
+    }
   })
 
   test('an admin password reset gives a provisioned account no password', async ({ page, request }) => {
@@ -251,15 +278,14 @@ test.describe('OIDC sign-in', () => {
   })
 
   test('a self sign-up the provider reached signs in only through it', async ({ page, request }) => {
+    const cfg = await (await request.get('/api/v1/auth/oidc/config')).json()
+    test.skip(!cfg.registration, 'self sign-up is off (auth.allowRegistration): the account is made through the sign-up form')
     const email = newEmail('heidi')
     const password = 'E2e-self-sign-up-0791!'
     const headers = { Authorization: `Bearer ${await adminToken(request)}` }
-    // A self sign-up is a password account waiting for approval; registration is off here, so the admin API makes the same row.
-    const roles = await (await request.get('/api/v1/auth/roles', { headers })).json()
-    const pending = (Array.isArray(roles) ? roles : roles.roles || roles.items || []).find((r: { name: string }) => String(r.name).toLowerCase() === 'pending')
-    expect(pending, 'a Pending role exists').toBeTruthy()
-    const made = await request.post('/api/v1/auth/admin/users', { headers, data: { name: 'E2E self sign-up', email, password, role_id: pending.id } })
-    expect(made.status(), await made.text()).toBe(201)
+    // The sign-up form, as a person who signs up: a password account waiting for approval, marked as a self sign-up.
+    const made = await request.post('/api/v1/auth/register', { data: { name: 'E2E self sign-up', email, password }, failOnStatusCode: false })
+    expect(made.status(), await made.text()).toBe(200)
     const id = (await made.json()).id as string
     const before = await request.post('/api/v1/auth/login', { data: { email, password }, failOnStatusCode: false })
     expect(before.status(), 'its password signs it in before the provider reaches it').toBe(200)
@@ -283,6 +309,28 @@ test.describe('OIDC sign-in', () => {
     const links = ((Array.isArray(audit) ? audit : audit.items) || []) as Array<{ TargetEmail?: string; Before?: { auth_source?: string }; After?: { auth_source?: string; password_removed?: boolean } }>
     expect(links.filter((r) => r.TargetEmail === email).map((r) => [r.Before?.auth_source, r.After?.auth_source, r.After?.password_removed]))
       .toEqual([['password', 'oidc', true]])
+  })
+
+  test('an account an admin made waiting for approval keeps its password through the provider', async ({ page, request }) => {
+    const email = newEmail('ivan')
+    const password = 'E2e-admin-made-pending-0791!'
+    const headers = { Authorization: `Bearer ${await adminToken(request)}` }
+    const roles = await (await request.get('/api/v1/auth/roles', { headers })).json()
+    const pending = (Array.isArray(roles) ? roles : roles.roles || roles.items || []).find((r: { name: string }) => r.name === 'Pending')
+    expect(pending, 'a Pending role exists').toBeTruthy()
+    const made = await request.post('/api/v1/auth/admin/users', { headers, data: { name: 'E2E made Pending', email, password, role_id: pending.id } })
+    expect(made.status(), await made.text()).toBe(201)
+
+    // No groups claim, so the sign-in leaves the account level as it is.
+    await signInWithMock(page, { email, email_verified: true })
+    await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
+    expect((await me(page)).body.auth_source, 'an account an admin made stays a password account').toBe('password')
+
+    const res = await request.post('/api/v1/auth/login', { data: { email, password }, failOnStatusCode: false })
+    expect(res.status(), 'the password the admin gave still signs it in').toBe(200)
+    const audit = await (await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { action: 'user.account.link', limit: 200 } })).json()
+    const links = ((Array.isArray(audit) ? audit : audit.items) || []) as Array<{ TargetEmail?: string }>
+    expect(links.filter((r) => r.TargetEmail === email)).toEqual([])
   })
 
   test('audit rows: provision, role sync, and login success/failure name the OIDC path', async ({ page, request }) => {
