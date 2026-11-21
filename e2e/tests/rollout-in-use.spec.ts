@@ -76,7 +76,7 @@ async function within(ms: number, ok: () => boolean | Promise<boolean>): Promise
 type PodItem = {
   metadata: { name: string; deletionTimestamp?: string; labels?: Record<string, string> }
   spec?: { nodeName?: string }
-  status?:{ containerStatuses?: { name: string; state?: { terminated?: { exitCode: number; reason?: string } } }[] }
+  status?: { containerStatuses?: { name: string; state?: { terminated?: { exitCode: number; reason?: string } } }[] }
 }
 
 async function podsIn(selector: string[]): Promise<PodItem[]> {
@@ -207,9 +207,10 @@ function watchStreams() {
 
 // The pod names each node's own view in Cluster View (?node=) shows, page by page: a box of the overview draws at most 12.
 const nodeViews = new Map<string, Page>()
-async function gridNames(page: Page, nodes: string[]): Promise<string[]> {
+async function gridNames(page: Page, listed: { names: string[]; nodes: string[] }): Promise<string[]> {
   const names: string[] = []
-  for (const node of nodes) {
+  const most = Math.ceil(listed.names.length / 60) + 2
+  for (const node of listed.nodes) {
     let view = nodeViews.get(node)
     if (!view) {
       view = nodeViews.size === 0 ? page : await page.context().newPage()
@@ -220,17 +221,19 @@ async function gridNames(page: Page, nodes: string[]): Promise<string[]> {
     if ((await pager.count()) === 0) continue
     const turn = async (button: Locator) => {
       const was = await pager.innerText()
-      await button.click()
-      await within(5_000, async () => (await pager.innerText()) !== was)
+      await button.click({ timeout: 5_000 })
+      return within(5_000, async () => (await pager.innerText()) !== was)
     }
     const prev = pager.getByRole('button', { name: /Prev|이전/ })
     const next = pager.getByRole('button', { name: /Next|다음/ })
-    while (await prev.isEnabled()) await turn(prev)
-    for (;;) {
+    let moved = true
+    for (let i = 0; moved && await prev.isEnabled(); i++) moved = i < most && await turn(prev)
+    for (let i = 0; moved; i++) {
       names.push(...await view.locator('[data-testid="cluster-view-node"] [data-testid="cluster-view-pod"]').evaluateAll((cards) => cards.map((c) => c.querySelector('[title]')?.getAttribute('title') ?? '')))
       if (!(await next.isEnabled())) break
-      await turn(next)
+      moved = i < most && await turn(next)
     }
+    if (!moved) names.push(`(the pages of ${node} did not turn)`)
   }
   return names
 }
@@ -243,7 +246,7 @@ async function listAgainstKubectl(page: Page): Promise<ListSeen> {
   let seen: ListSeen = { shown: [], listed: [], settledMs: null }
   await within(LIST_SETTLE_MS, async () => {
     const listed = await kubeastPods()
-    const shown = await gridNames(page, listed.nodes)
+    const shown = await gridNames(page, listed)
     seen = { shown, listed: listed.names, settledMs: sameOnce(shown, listed.names) ? Date.now() - from : null }
     return seen.settledMs !== null
   })
@@ -403,7 +406,7 @@ test.describe('rolling the install\'s services while it is in use', () => {
       await page.addInitScript(watchSockets)
       await expect.poll(async () => {
         const listed = await kubeastPods()
-        return sameOnce(await gridNames(page, listed.nodes), listed.names)
+        return sameOnce(await gridNames(page, listed), listed.names)
       }, { message: 'the boxes show the kubeast pods', timeout: 30_000 }).toBe(true)
 
       // the followed log: the Logs tab of the pod's card
