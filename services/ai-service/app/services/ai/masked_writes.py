@@ -8,11 +8,14 @@ import json
 import re
 from typing import Any, List, Optional
 
+from app.services.redact import numbered_on
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
 _SHOWN = 5
 # A masked value (its name may hold spaces: a key's name, k8s_diff's "new value") and a personal-data address (REDACTION_PII).
 _PLACEHOLDER = re.compile(r"""(?:<|\\u003[cC])(REDACTED:[^<>"'\\\r\n]*|EMAIL_[0-9]+)(?:>|\\u003[eE])""")
+# With REDACTION_NUMBERED, every numbered personal-data value (redact.NUMBERED_KINDS).
+_NUMBERED_PLACEHOLDER = re.compile(r"""(?:<|\\u003[cC])(REDACTED:[^<>"'\\\r\n]*|(?:EMAIL|PHONE|RRN|CARD)_[0-9]+)(?:>|\\u003[eE])""")
 _ENCODED_TOKEN = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
 # k8s-service's Secret mask means nothing outside a Secret, where three stars may be a value. A SecretList's items without a
 # kind of their own are Secrets to kubectl.
@@ -52,6 +55,7 @@ def _argument_texts(args: dict) -> List[str]:
 
 def _placeholders(args: dict) -> List[str]:
     names_secret = _names_secrets(args.get("resource_type"))
+    placeholder = _NUMBERED_PLACEHOLDER if numbered_on() else _PLACEHOLDER
     found: List[str] = []
 
     def add(word: str) -> None:
@@ -59,14 +63,14 @@ def _placeholders(args: dict) -> List[str]:
             found.append(word)
 
     for text in _argument_texts(args):
-        for word in _PLACEHOLDER.findall(text):
+        for word in placeholder.findall(text):
             add(f"<{word}>")
         for token in _ENCODED_TOKEN.findall(text):
             try:
                 decoded = base64.b64decode(token, validate=True).decode("utf-8", "ignore")
             except (binascii.Error, ValueError):
                 continue
-            for word in _PLACEHOLDER.findall(decoded):
+            for word in placeholder.findall(decoded):
                 add(f"<{word}>")
         for document in text.split("\n---"):
             if not (names_secret or _SECRET_KIND_YAML.search(document) or _SECRET_KIND_JSON.search(document)):

@@ -15,6 +15,7 @@ Kubeast's MCP server (`/api/v1/ai/mcp`, [Streamable HTTP](https://modelcontextpr
 The agent connects with **one API key** and uses the same **read tools** as the chat, **only with that person's permissions** (per-cluster roles, impersonation).
 
 - Results are masked before they go to the model. Secret values are always removed.
+- With `ai.redaction.pii` on, an e-mail address reads `<EMAIL_1>` (the same number for the same address within one text) and a phone number, resident registration number or card number `<REDACTED:phone>`, `<REDACTED:rrn>`, `<REDACTED:card>`; with `ai.redaction.numbered` on as well (off by default), each of them reads as its kind and a number (`<EMAIL_1>`, `<PHONE_1>`), the same number for the same value within one call. Free text with no fixed shape, such as a person's name or a street address, is not masked: keep it out of logs and attributes where they are collected.
 - Every call leaves an `ai.mcp.call` entry in the audit log, and a call is refused when the audit row cannot be written.
 - There are no write tools by default. When the operator turns them on (`mcp.writeTools`), they are open only to keys whose ceiling is Write.
 
@@ -70,6 +71,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
 - **Investigation**: one worker processes queued alerts one at a time (only once, even with multiple replicas).
   - Before it starts one, it checks again: an investigation whose kind was switched off since, that a provider pause began after, or whose kind's daily budget the runs before it spent is recorded as `skipped` instead. Runs count against a budget once they finish, so the budget holds to within the one run that crosses it (per replica).
   - A run that fails after model calls keeps the tokens they used, in its row and its audit row (with an API key; Claude Code reports usage only when its turn ends).
+  - With `ai.redaction.pii` and `ai.redaction.numbered` on, the alert and every tool result of one investigation number personal values from one table, kept in memory for that run only: the same address has one number in the alert's labels and in each log line, so the model can tie them without reading it. A new value takes a number past every one the alert or a tool result already holds (an earlier report it reads, say), so a number never stands for two people; the same value in another investigation gets another number. The report and the audit rows keep the placeholders.
   - auth-service issues an **investigation-only token** for that cluster, valid for 10 minutes.
     - It holds permissions for the 52 read tools plus `resource.objects.read`, which the lists and details ask for, and `resource.pod.read`, which log store search asks for. It lacks the permissions of the Helm, policy report, cost, log file, NetworkPolicy, network flow, network drop and top talker tools, so the investigation does not see them.
     - When the alert has a `namespace` label, the token is limited to the alert's Namespace.
