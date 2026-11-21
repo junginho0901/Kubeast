@@ -579,8 +579,9 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 	if h.refuseCeiling(w, r, payload, target, h.accountCeiling(r.Context(), payload, target), auditEvent{action: "user.password.reset"}) {
 		return
 	}
-	// An account single sign-on made signs in at the provider: a password would be a second way in beside it.
-	if target.AuthSource != model.AuthSourcePassword {
+	// An account the password form refuses signs in at the provider: a password would be a second way in beside it.
+	// The chart's admin account is not refused, whatever made it: the form opens it.
+	if !SignsInWithPassword(h.cfg, target) {
 		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.password.reset", targetType: "user", targetID: target.ID, targetEmail: target.Email,
 			before: map[string]any{"auth_source": target.AuthSource}, err: errors.New(resetRefusedSingleSignOn)})
 		response.Error(w, http.StatusBadRequest, "Cannot reset the password of an account that signs in through single sign-on")

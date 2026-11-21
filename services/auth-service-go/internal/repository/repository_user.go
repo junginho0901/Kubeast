@@ -228,6 +228,16 @@ func (r *Repository) UpdateUserPassword(ctx context.Context, id, passwordHash st
 	return err
 }
 
+// MoveToSingleSignOn takes the account's password away and makes it one that signs in through the provider
+// (auth_source oidc), in one statement.
+func (r *Repository) MoveToSingleSignOn(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE auth_users SET password_hash = $1, auth_source = $2, updated_at = $3 WHERE id = $4`,
+		"", model.AuthSourceOIDC, time.Now().UTC(), id,
+	)
+	return err
+}
+
 // UpdateUserPasswordEndingTokens sets the password and ends the tokens issued so far in one statement: a password
 // changed to shut someone out never stands while their token still works.
 func (r *Repository) UpdateUserPasswordEndingTokens(ctx context.Context, id, passwordHash string) error {

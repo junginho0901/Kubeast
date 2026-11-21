@@ -36,7 +36,7 @@ type User struct {
 	FailedLogins    int        `json:"-"`
 	LastFailedLogin *time.Time `json:"-"`
 	LockedUntil     *time.Time `json:"-"`
-	AuthSource      string     `json:"auth_source"`       // "password" or "oidc" (how the account was created)
+	AuthSource      string     `json:"auth_source"`       // "password" or "oidc" (made by the provider, or a self sign-up it took over)
 	LastLoginAt     *time.Time `json:"last_login_at"`     // last successful sign-in; nil = never
 	DormantLockedAt *time.Time `json:"dormant_locked_at"` // set by the dormant-account sweeper; nil = not locked
 	CreatedAt       time.Time  `json:"created_at"`

@@ -145,8 +145,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// An account the provider made signs in there, and a password it holds (an admin's reset gave it one before 0.7.9)
-	// does not open it. The answer is a wrong password's after the same hashing work, so it tells no one which accounts
+	// An account the provider made or took over from a self sign-up signs in there, and a password it holds (an
+	// admin's reset gave it one before 0.7.9) does not open it. The answer is a wrong password's after the same hashing work, so it tells no one which accounts
 	// sign in through the provider, and no failure is counted toward the lockout, which guards only this form.
 	if h.refusesForSingleSignOn(req.Password, user) {
 		reason := jsonRaw(map[string]interface{}{"reason": signInRefusedSingleSignOn, "auth_source": user.AuthSource})

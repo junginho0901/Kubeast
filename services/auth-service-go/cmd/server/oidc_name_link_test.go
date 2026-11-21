@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/handler"
@@ -18,7 +19,7 @@ import (
 )
 
 // linkProvider is a provider with discovery, keys and a token endpoint, and the real login and callback routes on a
-// fake database holding one account.
+// fake database holding one account, or on the test's own database (startLinkProviderOn).
 type linkProvider struct {
 	t      *testing.T
 	srv    *httptest.Server
@@ -28,6 +29,7 @@ type linkProvider struct {
 	db     *fakePG
 	store  *recordedAudit
 	mgr    *security.JWTManager
+	auth   *handler.AuthHandler
 	router http.Handler
 }
 
@@ -44,6 +46,22 @@ func storedLinkAccountHolding(passwordHash, email, source, roleName string) pgRu
 }
 
 func startLinkProvider(t *testing.T, settings func(*config.OIDCConfig), rules ...pgRule) *linkProvider {
+	t.Helper()
+	db, pool := startFakePG(t, append(rules,
+		sessionState(0),
+		pgRule{match: "SELECT token_version FROM auth_users", oids: []uint32{integerOID}, rows: [][]any{{0}}},
+		pgRule{match: "FROM roles WHERE name",
+			oids: []uint32{integerOID, textOID, textOID, booleanOID, stampOID, stampOID},
+			rows: [][]any{{roleMember, "Member", "", "t", pgNow(), pgNow()}}},
+	)...)
+	p := startLinkProviderOn(t, pool, settings, config.Config{})
+	p.db = db
+	return p
+}
+
+// startLinkProviderOn is startLinkProvider on the test's own database, the handler made from cfg with the provider's
+// settings and a five-minute token.
+func startLinkProviderOn(t *testing.T, pool *pgxpool.Pool, settings func(*config.OIDCConfig), cfg config.Config) *linkProvider {
 	t.Helper()
 	p := &linkProvider{t: t, store: &recordedAudit{}}
 	writeJSON := func(w http.ResponseWriter, v any) {
@@ -80,14 +98,6 @@ func startLinkProvider(t *testing.T, settings func(*config.OIDCConfig), rules ..
 	if p.mgr, err = security.NewJWTManager(t.TempDir(), "iss", "aud", 5); err != nil {
 		t.Fatal(err)
 	}
-	db, pool := startFakePG(t, append(rules,
-		sessionState(0),
-		pgRule{match: "SELECT token_version FROM auth_users", oids: []uint32{integerOID}, rows: [][]any{{0}}},
-		pgRule{match: "FROM roles WHERE name",
-			oids: []uint32{integerOID, textOID, textOID, booleanOID, stampOID, stampOID},
-			rows: [][]any{{roleMember, "Member", "", "t", pgNow(), pgNow()}}},
-	)...)
-	p.db = db
 	oidc := config.OIDCConfig{
 		Enabled: true, IssuerURL: p.srv.URL, ClientID: "kubeast", ClientSecret: "not-a-real-secret",
 		RedirectURL: "http://kubeast.test/api/v1/auth/oidc/callback", Scopes: []string{"openid", "email"},
@@ -96,10 +106,11 @@ func startLinkProvider(t *testing.T, settings func(*config.OIDCConfig), rules ..
 	if settings != nil {
 		settings(&oidc)
 	}
-	h := handler.NewAuthHandler(repository.New(pool), p.mgr, config.Config{AuthCookieName: "kubeast.token", OIDC: oidc, JWTExpiresMinutes: 5}, p.store)
+	cfg.AuthCookieName, cfg.OIDC, cfg.JWTExpiresMinutes = "kubeast.token", oidc, 5
+	p.auth = handler.NewAuthHandler(repository.New(pool), p.mgr, cfg, p.store)
 	r := chi.NewRouter()
-	r.Get("/oidc/login", h.OIDCLogin)
-	r.Get("/oidc/callback", h.OIDCCallback)
+	r.Get("/oidc/login", p.auth.OIDCLogin)
+	r.Get("/oidc/callback", p.auth.OIDCCallback)
 	p.router = r
 	return p
 }

@@ -295,10 +295,12 @@ func passwordLoginAllowed(cfg config.Config, email string) bool {
 // sign-on.
 const signInRefusedSingleSignOn = "single_sign_on_account"
 
-// SignsInWithPassword says whether the password form may open the account: one made with a password, or the chart's
-// admin account (DEFAULT_ADMIN_EMAIL, the break-glass path while the provider is down) whatever made it, as reset-admin
-// gives it a password without changing how it was made. reset-admin reads it to say how the account it recovered
-// signs in.
+// SignsInWithPassword says whether the password form may open the account: a password account (auth_source password),
+// or the chart's admin account (DEFAULT_ADMIN_EMAIL, the break-glass path while the provider is down) whatever made
+// it, as reset-admin gives it a password without changing how it was made. An account the provider made, or a self
+// sign-up a provider's sign-in reached while it waited for approval (endSelfSignUpCredentials, and a migration for
+// those reached by builds that left them password accounts), is oidc. It is the one answer of the password form
+// (refusesForSingleSignOn), an admin's reset (AdminResetPassword) and reset-admin's last line.
 func SignsInWithPassword(cfg config.Config, user *model.User) bool {
 	return user.AuthSource == model.AuthSourcePassword || strings.EqualFold(user.Email, cfg.DefaultAdminEmail)
 }
@@ -543,7 +545,7 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 	if err != nil {
 		return nil, err
 	}
-	if user != nil && user.RoleName == "Pending" && user.PasswordHash != "" {
+	if user != nil && selfSignUpToMove(user) {
 		if err := h.endSelfSignUpCredentials(r, user); err != nil {
 			return nil, err
 		}
@@ -609,20 +611,37 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 	return user, nil
 }
 
-// endSelfSignUpCredentials is for a provider's sign-in reaching an account still
-// waiting for approval: a sign-up proved nothing about the address, so whoever
+// selfSignUpToMove says whether a provider's sign-in takes the account over from a self sign-up: one still waiting
+// for approval with a password, or a password account holding none, which only that sign-in leaves (a build before
+// this one took the password away and kept the account a password account, a rolling upgrade's old pod among them).
+// An account an admin made or approved keeps its password and stays a password account.
+func selfSignUpToMove(user *model.User) bool {
+	return (user.RoleName == "Pending" && user.PasswordHash != "") ||
+		(user.AuthSource == model.AuthSourcePassword && user.PasswordHash == "")
+}
+
+// endSelfSignUpCredentials is for a provider's sign-in reaching an account
+// selfSignUpToMove names: a sign-up proved nothing about the address, so whoever
 // made it must not keep a password or a token that a later approval or role sync
-// would widen. The provider has just proved who owns the address.
+// would widen. The provider has just proved who owns the address, and the account
+// signs in there from now on (auth_source oidc), so neither the password form nor
+// an admin's reset gives it a password way in again. The tokens end only when a
+// password was taken away: one held by no password was issued by the provider.
 func (h *AuthHandler) endSelfSignUpCredentials(r *http.Request, user *model.User) error {
 	ctx := r.Context()
-	if err := h.repo.UpdateUserPassword(ctx, user.ID, ""); err != nil {
+	before := map[string]any{"auth_source": user.AuthSource}
+	removed := user.PasswordHash != ""
+	if err := h.repo.MoveToSingleSignOn(ctx, user.ID); err != nil {
 		return err
 	}
-	if err := h.endTokens(ctx, user); err != nil {
-		return err
+	if removed {
+		if err := h.endTokens(ctx, user); err != nil {
+			return err
+		}
 	}
-	user.PasswordHash = ""
-	h.writeAuditLog(r, "user.account.link", &user.ID, &user.Email, &user.ID, &user.Email, nil, jsonRaw(map[string]any{"method": "oidc", "password_removed": true}))
+	user.PasswordHash, user.AuthSource = "", model.AuthSourceOIDC
+	h.writeAuditLog(r, "user.account.link", &user.ID, &user.Email, &user.ID, &user.Email, jsonRaw(before),
+		jsonRaw(map[string]any{"method": "oidc", "password_removed": removed, "auth_source": model.AuthSourceOIDC}))
 	return nil
 }
 
