@@ -393,12 +393,67 @@ startupProbe:
 {{- end -}}
 
 {{- define "kubeast.preStop" -}}
-{{- $s := int (include "kubeast.preStopSeconds" .) -}}
-{{- if gt $s 0 -}}
+{{- include "kubeast.preStopSleep" (int (include "kubeast.preStopSeconds" .)) -}}
+{{- end -}}
+
+{{/* A preStop sleep of the seconds given as the context, none at 0. */}}
+{{- define "kubeast.preStopSleep" -}}
+{{- if gt (int .) 0 -}}
 lifecycle:
   preStop:
     sleep:
-      seconds: {{ $s }}
+      seconds: {{ int . }}
+{{- end -}}
+{{- end -}}
+
+{{/* "true" when the AWS Load Balancer Controller sends to the gateway pods' IPs: the chart's Ingress is on and its
+     annotation alb.ingress.kubernetes.io/target-type is ip. The controller's default, instance, sends to the nodes'
+     ports, and a gateway pod that leaves is then taken out by kube-proxy as behind any Service. Not read here: a
+     targetType in an IngressClassParams, annotations on the gateway Service, a TargetGroupBinding of your own. */}}
+{{- define "kubeast.albPodTargets" -}}
+{{- if and .Values.ingress.enabled (eq (toString (index (.Values.ingress.annotations | default dict) "alb.ingress.kubernetes.io/target-type")) "ip") -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/* The gateway's preStop wait: gateway.preStopSeconds when set; unset (null), podShutdown.preStopSeconds, raised to
+     25 s behind an AWS ALB that sends to pod IPs (kubeast.albPodTargets) while that wait is on. There the load balancer
+     still sent new requests to a leaving gateway pod for up to about 8 s after the pod was deleted, its target already
+     draining; with 25 s and a 20 s deregistration delay (kubeast.ingressAnnotations) none of 18 replacements failed
+     (EKS 1.35, AWS Load Balancer Controller v3.6.2). The other services are reached through the gateway and a Service. */}}
+{{- define "kubeast.gatewayPreStopSeconds" -}}
+{{- $s := .Values.gateway.preStopSeconds -}}
+{{- if kindIs "invalid" $s -}}
+{{- $all := int (include "kubeast.preStopSeconds" .) -}}
+{{- if and (gt $all 0) (include "kubeast.albPodTargets" .) -}}
+{{- max $all 25 -}}
+{{- else -}}
+{{- $all -}}
+{{- end -}}
+{{- else -}}
+{{- if or (not (or (kindIs "float64" $s) (kindIs "int64" $s) (kindIs "int" $s))) (lt (float64 $s) 0.0) (ne (float64 $s) (float64 (int $s))) -}}
+{{- fail (printf "gateway.preStopSeconds must be a whole number of seconds, 0 or more (0 = no wait), or null for podShutdown.preStopSeconds (25 at least behind an AWS ALB that sends to pod IPs): %v" $s) -}}
+{{- end -}}
+{{- int $s -}}
+{{- end -}}
+{{- end -}}
+
+{{/* The Ingress's annotations as YAML, empty when there are none: ingress.annotations, and behind an AWS ALB that sends
+     to pod IPs (kubeast.albPodTargets) a target group deregistration delay of 20 s, under the gateway's 25 s wait, so the
+     load balancer is done with a leaving pod before the pod closes its connections. A deregistration_delay.timeout_seconds
+     already in alb.ingress.kubernetes.io/target-group-attributes is left as written; other attributes there stay, and the
+     delay goes after them. */}}
+{{- define "kubeast.ingressAnnotations" -}}
+{{- $a := .Values.ingress.annotations | default dict -}}
+{{- if include "kubeast.albPodTargets" . -}}
+{{- $key := "alb.ingress.kubernetes.io/target-group-attributes" -}}
+{{- $set := trimAll ", " (toString (index $a $key | default "")) -}}
+{{- if not (regexMatch "(^|,)\\s*deregistration_delay\\.timeout_seconds\\s*=" $set) -}}
+{{- $a = set (deepCopy $a) $key (trimPrefix "," (printf "%s,deregistration_delay.timeout_seconds=20" $set)) -}}
+{{- end -}}
+{{- end -}}
+{{- if $a -}}
+{{- toYaml $a -}}
 {{- end -}}
 {{- end -}}
 

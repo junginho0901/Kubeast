@@ -751,7 +751,7 @@ autoscaling:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
-# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (AWS ALB: 25 with a 20 s deregistration delay).
+# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (the gateway's own wait is gateway.preStopSeconds: behind an AWS ALB that sends to pod IPs the chart gives it 25 s and the target group a 20 s deregistration delay; 25 here and the delay written by hand, as 0.7.8 asked, can stay, and a delay written is kept as written).
 # Stage: beta, tested: Kubernetes 1.29 refuses the preStop wait, set 0 there (docs/configuration.md "Stages of new values").
 podShutdown:
   preStopSeconds: 5
@@ -857,8 +857,21 @@ gateway:
   # (docs/configuration.md "Stages of new values").
   accessLog:
     upstreamTimes: false
+  # Seconds the gateway pods keep answering before SIGTERM, in place of podShutdown.preStopSeconds (grace period =
+  # this + 30; 0 = no wait). null: podShutdown.preStopSeconds, raised to 25 while it is above 0 when an AWS
+  # Application Load Balancer sends to the gateway pods' IPs (ingress.enabled with the annotation
+  # alb.ingress.kubernetes.io/target-type: ip). The chart then also gives the Ingress
+  # alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=20, added after the
+  # attributes that annotation already holds, unless it names deregistration_delay.timeout_seconds itself. With
+  # 25 s and 20 s, set by hand, no request failed in 18 gateway pod replacements on EKS 1.35; with 5 s and the
+  # load balancer's default delay of 300 s, requests failed in 3 of 30 (docs/high-availability.md).
+  # Stage: beta, not run yet: the chart's own 25 s and 20 s behind an AWS ALB (docs/configuration.md "Stages of new
+  # values").
+  preStopSeconds: null
 
 # --- Ingress (optional) ---
+# annotations: the Ingress's annotations as written. With alb.ingress.kubernetes.io/target-type: ip among them the
+# chart adds a 20 s deregistration delay to alb.ingress.kubernetes.io/target-group-attributes (gateway.preStopSeconds).
 ingress:
   enabled: false
   className: ""
