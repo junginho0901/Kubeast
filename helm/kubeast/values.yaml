@@ -858,11 +858,12 @@ gateway:
   accessLog:
     upstreamTimes: false
   # Seconds the gateway pods keep answering before SIGTERM, in place of podShutdown.preStopSeconds (grace period =
-  # this + 30; 0 = no wait). null: podShutdown.preStopSeconds, raised to 25 while it is above 0 when an AWS
-  # Application Load Balancer sends to the gateway pods' IPs (ingress.enabled with the annotation
-  # alb.ingress.kubernetes.io/target-type: ip). The chart then also gives the Ingress
-  # alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=20, added after the
-  # attributes that annotation already holds, unless it names deregistration_delay.timeout_seconds itself. With
+  # this + 30; 0 = no wait; above 0 it is a preStop sleep, which needs Kubernetes 1.30 or later). null:
+  # podShutdown.preStopSeconds, raised to 25 while it is above 0 when an AWS Application Load Balancer sends to the
+  # gateway pods' IPs (ingress.enabled with the annotation alb.ingress.kubernetes.io/target-type: ip). With that
+  # annotation the chart also gives the Ingress alb.ingress.kubernetes.io/target-group-attributes:
+  # deregistration_delay.timeout_seconds=20 whatever the gateway's wait (null, 0 or a number set here), added after
+  # the attributes that annotation already holds, unless it names deregistration_delay.timeout_seconds itself. With
   # 25 s and 20 s, set by hand, no request failed in 18 gateway pod replacements on EKS 1.35; with 5 s and the
   # load balancer's default delay of 300 s, requests failed in 3 of 30 (docs/high-availability.md).
   # Stage: beta, not run yet: the chart's own 25 s and 20 s behind an AWS ALB (docs/configuration.md "Stages of new

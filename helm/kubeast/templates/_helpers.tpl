@@ -409,7 +409,8 @@ lifecycle:
 {{/* "true" when the AWS Load Balancer Controller sends to the gateway pods' IPs: the chart's Ingress is on and its
      annotation alb.ingress.kubernetes.io/target-type is ip. The controller's default, instance, sends to the nodes'
      ports, and a gateway pod that leaves is then taken out by kube-proxy as behind any Service. Not read here: a
-     targetType in an IngressClassParams, annotations on the gateway Service, a TargetGroupBinding of your own. */}}
+     targetType in an IngressClassParams, the controller's --default-target-type flag, annotations on the gateway
+     Service, a TargetGroupBinding of your own. */}}
 {{- define "kubeast.albPodTargets" -}}
 {{- if and .Values.ingress.enabled (eq (toString (index (.Values.ingress.annotations | default dict) "alb.ingress.kubernetes.io/target-type")) "ip") -}}
 true
