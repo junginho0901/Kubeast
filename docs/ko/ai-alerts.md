@@ -79,6 +79,7 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   - 모델은 `model`(ModelConfig 이름) 또는 기본 모델을 쓰고, 모델 호출은 `maxSteps`(8)번까지, 전체 시간은 `timeoutSeconds`(300)까지입니다. 마지막 호출에는 도구를 주지 않으므로 답이 돌아옵니다.
   - 알림의 라벨·주석은 프롬프트에서 "신뢰하지 않는 데이터"로 분리합니다.
 - **보고서**: 요약 · 확인한 것 · 가능한 원인 · 다음에 볼 것으로 구성됩니다(`language`, 기본 en).
+  - `ai.toolResultDetails`(기본 꺼짐)를 켜면 조사가 읽는 도구 결과에 잘린 결과에서 받은 양, 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭, 결과가 가리키는 오브젝트의 콘솔 경로가 붙고, 보고서는 그 경로를 링크로 쓸 수 있습니다(상대 경로라 보고서를 읽는 그 콘솔에서 열림). [기능](features.md) 참고.
   - API는 `GET /api/v1/ai/investigations`(목록, `status`·`cluster`로 거르기)와 `/{id}`(상세: 보고서·도구 호출·토큰)이고, 권한은 `admin.investigations.read`입니다.
   - 상세에는 파드 로그가 인용될 수 있어 열람할 때마다 `ai.investigation.view`로 남깁니다.
   - 보존 기간은 `retention.investigationDays`(90일)입니다.

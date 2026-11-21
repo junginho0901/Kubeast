@@ -80,6 +80,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
   - The model is `model` (a ModelConfig name) or the default model. It makes up to `maxSteps` (8) calls, within `timeoutSeconds` (300) overall. The last call gets no tools, so an answer comes back.
   - The alert's labels and annotations are kept apart in the prompt as "untrusted data".
 - **Report**: sections Summary, What I checked, Likely cause and Next steps, written in `language` (default en).
+  - With `ai.toolResultDetails` (off by default) the tool results the investigator reads carry how much of a cut result it got, the window read when it named none, why an empty result may be empty, and the console paths of the objects they name, which the report can link (relative paths: they open in the console the report is read in). See [Features](features.md).
   - API (permission `admin.investigations.read`): `GET /api/v1/ai/investigations` lists them (filter by `status` and `cluster`), and `/{id}` returns the details (report, tool calls, tokens).
   - Opening the details is recorded as `ai.investigation.view`, since pod logs may be quoted.
   - Retention: `retention.investigationDays` (90 days).

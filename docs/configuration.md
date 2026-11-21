@@ -198,6 +198,8 @@ ai:
   baseUrlAllowedHosts: []  # register a host here when a model setting's base_url is a private address
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
+  toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
+                           # one may be empty and the console paths of the objects they name, from what they hold (features.md); off: as before
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica

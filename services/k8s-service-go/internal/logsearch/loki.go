@@ -49,6 +49,8 @@ type Result struct {
 	ResultType  string   `json:"resultType,omitempty"`
 	Series      []Series `json:"series,omitempty"`
 	StepSeconds int64    `json:"stepSeconds,omitempty"`
+	// SeriesTotal is how many series the store answered a metric query with, Series' length or more when Truncated.
+	SeriesTotal int `json:"seriesTotal,omitempty"`
 }
 
 // Series is one series of a metric query, in the shape of a Prometheus range
