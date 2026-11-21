@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
-import { sessionToken } from './session-token'
+import { SESSION_COOKIE, sessionToken } from './session-token'
 
 // A terminal, a followed log and a live list are authenticated once, when they open. They end when the session behind
 // them stops standing (services/pkg/auth LiveSessions), within one check of 30 seconds and one cached answer, and say
@@ -178,7 +178,7 @@ test.describe.serial('open connections and what a global key opens', () => {
     users.push(id)
     expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Admin' } })).ok()).toBeTruthy()
     const page = await signIn(browser, email)
-    const copied = (await page.context().cookies()).find((c) => c.name === 'kubeast.token')?.value ?? ''
+    const copied = (await page.context().cookies()).find((c) => c.name === SESSION_COOKIE)?.value ?? ''
     expect(copied, 'the sign-in left its cookie').not.toBe('')
     // The second page of the same browser: a file of the same origin, so no screen answers the end for it.
     const other = await page.context().newPage()

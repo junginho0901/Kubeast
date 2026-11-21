@@ -6,6 +6,9 @@ import type { APIResponse } from '@playwright/test'
 const fromEnv = process.env.AUTH_COOKIE_NAME
 const NAMES = [...(fromEnv ? [`__Host-${fromEnv}`, fromEnv] : []), '__Host-kubeast.token', 'kubeast.token']
 
+// The name of the cookie auth-service sets and a browser context keeps: AUTH_COOKIE_NAME, kubeast.token when unset.
+export const SESSION_COOKIE = fromEnv || 'kubeast.token'
+
 export function sessionToken(res: APIResponse): string {
   const set = new Map<string, string>()
   for (const { name, value } of res.headersArray()) {

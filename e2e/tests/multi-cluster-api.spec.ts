@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
-import { sessionToken } from './session-token'
+import { SESSION_COOKIE, sessionToken } from './session-token'
 
 // Multi-cluster cluster CRUD API — step 07.
 //
@@ -359,7 +359,7 @@ test.describe('one role on several clusters (sign-in token size)', () => {
       await page.locator('input[type="password"]').fill(password)
       await page.locator('button[type="submit"]').first().click()
       await expect(page.locator('input[autocomplete="email"]')).toHaveCount(0, { timeout: 20_000 })
-      expect((await ctx.cookies()).some((c) => c.name === 'kubeast.token')).toBe(true)
+      expect((await ctx.cookies()).some((c) => c.name === SESSION_COOKIE)).toBe(true)
       await ctx.close()
     } finally {
       await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: auth, failOnStatusCode: false })
