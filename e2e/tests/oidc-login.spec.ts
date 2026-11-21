@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
 // OpenID Connect sign-in against a mock provider (e2e/scripts/oidc-mock.sh up).
@@ -54,12 +55,17 @@ async function adminToken(request: APIRequestContext): Promise<string> {
   return (await res.json()).access_token
 }
 
-// The kind cluster's database, for a row no route writes any more (never the shell's default kubeconfig).
-const LOCAL_KUBECONFIG = path.resolve(__dirname, '../../.kubeconfig-kind')
-const KUBECONFIG = process.env.KUBECONFIG || (fs.existsSync(LOCAL_KUBECONFIG) ? LOCAL_KUBECONFIG : '')
-function psql(sql: string): string {
-  return execFileSync('kubectl', ['-n', 'kubeast', 'exec', 'deploy/postgres', '--', 'psql', '-U', 'kubeast', '-d', 'kubeast', '-tAc', sql],
-    { env: { ...process.env, KUBECONFIG }, encoding: 'utf8' }).trim()
+// The kind cluster kubeast's database, for a row no route writes any more. The kubeconfig comes from `kind get
+// kubeconfig`, never from the shell's KUBECONFIG; null when there is no such cluster.
+function kindPsql(): ((sql: string) => string) | null {
+  try {
+    const kc = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-oidc-')), 'kubeconfig')
+    fs.writeFileSync(kc, execFileSync('kind', ['get', 'kubeconfig', '--name', 'kubeast'], { encoding: 'utf8' }), { mode: 0o600 })
+    return (sql) => execFileSync('kubectl', ['--kubeconfig', kc, '--context', 'kind-kubeast', '-n', 'kubeast', 'exec', 'deploy/postgres', '--',
+      'psql', '-U', 'kubeast', '-d', 'kubeast', '-tAc', sql], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+  } catch {
+    return null
+  }
 }
 
 // The user.login.failed rows of one account, newest first.
@@ -198,7 +204,9 @@ test.describe('OIDC sign-in', () => {
   })
 
   test('a password an account the provider made holds does not sign it in', async ({ page, request }) => {
-    test.skip(!KUBECONFIG, 'KUBECONFIG is unset and .kubeconfig-kind is missing: the password is put on the account in the database')
+    const db = kindPsql()
+    test.skip(!db, 'no kind cluster kubeast: the password is put on the account in the database')
+    const psql = db!
     const email = newEmail('grace')
     const twin = newEmail('grace-twin')
     const password = 'E2e-sso-twin-sign-in-0791!'
@@ -208,7 +216,7 @@ test.describe('OIDC sign-in', () => {
     const made = await request.post('/api/v1/auth/admin/users', { headers, data: { name: 'E2E SSO twin', email: twin, password } })
     expect(made.status(), await made.text()).toBe(201)
 
-    // An admin's reset gave such accounts a password before 0.7.9 and is refused now: the twin's hash is copied in.
+    // An admin's reset gave such accounts a password in an earlier version and is refused now: the twin's hash is copied in.
     psql(`UPDATE auth_users SET password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}') WHERE email = '${email}' AND auth_source = 'oidc'`)
     expect(psql(`SELECT count(*) FROM auth_users WHERE email = '${email}' AND auth_source = 'oidc' AND password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}')`)).toBe('1')
     const own = await request.post('/api/v1/auth/login', { data: { email: twin, password }, failOnStatusCode: false })

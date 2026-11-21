@@ -37,7 +37,7 @@ func setsASession(w *httptest.ResponseRecorder) bool {
 	return false
 }
 
-// A password an account the provider made was given (an admin's reset before 0.7.9) does not sign it in. The answer is
+// A password an account the provider made was given (a reset in an earlier version) does not sign it in. The answer is
 // a wrong password's, the row says why, and no failure is counted toward the lockout.
 func TestPasswordSignInRefusesAnAccountThatSignsInThroughSingleSignOn(t *testing.T) {
 	wrong := newAuthAPI(t, pendingRequest{owner: "requester"}, signInAccount(t, "pw@example.com", "password"))
