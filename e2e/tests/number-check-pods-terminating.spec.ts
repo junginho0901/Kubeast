@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The Pods list while pods are being deleted, on cluster self: the Status and READY columns are what kubectl prints,
 // each pod is in one state card so that the cards add up to the total (Restarted is what a pod went through, not a
@@ -115,7 +116,7 @@ const screenRows = (page: Page) => page.locator('table tbody tr.cursor-pointer')
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('Pods being deleted', () => {

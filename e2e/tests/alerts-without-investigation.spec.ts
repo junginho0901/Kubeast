@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The Alerts page with alert investigation off and the alert store on (cluster default in the dev values, silences on).
 // The inbox is ai-service's and answers only with investigation on, so the page asks nothing of it, says why in one
@@ -22,7 +23,7 @@ const either = (key: string) => new RegExp(`^(${esc(EN.alertInbox[key])}|${esc(K
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // the features as the server answers them, with the change on top

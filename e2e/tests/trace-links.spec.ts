@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Trace links (features.tracing) against scripts/kind-logsearch.sh + scripts/kind-tracing.sh: Loki and Jaeger in
 // the second cluster. A Job there sends a span to Jaeger and an OTLP log with the same trace ID to Loki (the
@@ -30,7 +31,7 @@ function storeKubectl(args: string): string {
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `admin login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 const attr = (key: string, value: string) => ({ key, value: { stringValue: value } })

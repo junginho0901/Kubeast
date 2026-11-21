@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // The audit database is a precondition for sensitive actions (AUDIT_FAIL_CLOSED,
 // default on): while Postgres cannot store the row, a Secret reveal, a pod log
@@ -34,7 +35,7 @@ function kubectl(args: string[], input?: string): string {
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 const secretYamlUrl = `/api/v1/cluster/namespaces/${NS}/secrets/${SECRET}/yaml?cluster=${CLUSTER}`

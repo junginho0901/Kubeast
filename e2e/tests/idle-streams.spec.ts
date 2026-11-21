@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A terminal and the Cluster View Logs tab left quiet past 60 s (nginx's and AWS ALB's idle cut) through the kind
 // gateway: both still work afterwards, the tab shows each line once and as kubectl logs prints it, and the followed
@@ -27,7 +28,7 @@ type Row = { Action: string; TargetID: string; After: Record<string, unknown> | 
 async function auditRows(request: APIRequestContext, action: string, since: string): Promise<Row[]> {
   const login = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(login.ok(), 'admin login').toBeTruthy()
-  const headers = { Authorization: `Bearer ${(await login.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  const headers = { Authorization: `Bearer ${sessionToken(login)}`, 'X-Requested-With': 'XMLHttpRequest' }
   const res = await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { cluster: '', limit: '100', action, since } })
   expect(res.ok()).toBeTruthy()
   return ((await res.json()).items || []) as Row[]

@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A cluster's Prometheus that is set but does not answer: cluster `default` is pointed at its own Prometheus Service on a
 // port nothing serves, so each query is the server's 502 with its reason. The dashboard's Cluster Resource Utilization
@@ -32,7 +33,7 @@ function kubectlFor(kindName: string) {
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('a Prometheus that is set but does not answer', () => {
@@ -173,7 +174,7 @@ test.describe('a Prometheus that is set but does not answer', () => {
       moved = true
       const signedIn = await request.post('/api/v1/auth/login', { data: { email, password } })
       expect(signedIn.ok(), `login ${email}`).toBeTruthy()
-      const asUser = bearer((await signedIn.json()).access_token as string)
+      const asUser = bearer(sessionToken(signedIn))
       // what the screens read: the list answers the user, the metrics read is refused to the user and answers the admin
       expect((await request.get(`/api/v1/cluster/gpu/dashboard?cluster=${CLUSTER}`, { headers: asUser })).status(), 'the GPU list').toBe(200)
       await expect.poll(async () => (await request.get(`/api/v1/cluster/gpu/metrics?cluster=${CLUSTER}`, { headers: asUser, failOnStatusCode: false })).status(), { timeout: 30_000 }).toBe(403)

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The feature tools read Kubeast's own APIs through tool-server as the caller: issues (the dashboard's issue
 // check), prometheus_query (PromQL through the cluster's Prometheus) and logsearch (the log store). They are
@@ -13,7 +14,7 @@ const RPC = { Accept: 'application/json, text/event-stream', 'Content-Type': 'ap
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })

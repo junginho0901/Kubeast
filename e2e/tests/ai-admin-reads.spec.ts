@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The Admin reads of what spans Kubeast (access_review, ai_usage, access_requests, audit_integrity) and a cluster's
 // hygiene sign-offs (hygiene_history), called over MCP with no model and held to the API the same screen reads, value
@@ -22,7 +23,7 @@ const rfc3339 = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 
 async function login(request: APIRequestContext, email = EMAIL, password = PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function rpc(request: APIRequestContext, token: string, method: string, params?: object): Promise<Obj> {

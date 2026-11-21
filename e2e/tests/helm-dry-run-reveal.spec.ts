@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A Helm rollback preview (dryRun) shows a manifest diff, which can carry Secret data: it follows the revision
 // diff's rules — in full only with resource.secret.reveal, and then recorded as helm.release.reveal with the
@@ -12,7 +13,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test('a rollback preview is a recorded reveal and leaves the release as it is', async ({ request }) => {

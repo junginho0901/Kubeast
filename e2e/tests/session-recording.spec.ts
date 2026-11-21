@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Terminal session recording: with sessionRecording on (the dev kind install
 // records into the S3 stand-in), a pod exec prints a "recorded" notice with
@@ -78,7 +79,7 @@ async function firstPod(request: APIRequestContext, namespace: string, prefix: s
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 const bearer = (t: string) => ({ Authorization: `Bearer ${t}`, 'X-Requested-With': 'XMLHttpRequest' })
 

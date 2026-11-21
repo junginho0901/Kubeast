@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { coveredByChatButton, pageScroll, pagerRange, readEveryPage, underChatButton } from './list-pages'
+import { sessionToken } from './session-token'
 
 // The lists of Change History, a Helm release's History and Resources tabs and Monitoring's two tabs are a page at a
 // time in a box sized to the screen (1440×900, the project's viewport): the page itself does not scroll, the footer
@@ -14,7 +15,7 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function headers(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 // the page does not scroll, the footer's bottom is inside the window, the rows on screen are the footer's range and

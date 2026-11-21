@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { turnToRow } from './list-pages'
+import { sessionToken } from './session-token'
 
 // Create, edit and confirm windows share one frame (re-QA #19 #38 #53 #66 #68):
 // Escape closes them, Tab stays inside, system objects ask for their name
@@ -13,7 +14,7 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok()).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 const topDialog = (page: Page) => page.locator('[role="dialog"]').last()

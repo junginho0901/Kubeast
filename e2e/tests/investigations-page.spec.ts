@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // Admin → Investigations (features.alertInvestigation on in the dev values): the reports listed, one opened in the
 // dialog (report, alert labels, tool calls), the ?id= link the audit summary carries, and nothing for a Read user.
@@ -23,7 +24,7 @@ function webhookToken(): string {
 async function login(request: APIRequestContext, email = ADMIN_EMAIL, password = ADMIN_PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function loginUI(page: Page, email = ADMIN_EMAIL, password = ADMIN_PASSWORD) {

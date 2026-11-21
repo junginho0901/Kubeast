@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A Secret's editor without resource.secret.reveal reads its values as a mask. What the YAML window's save sends for them
 // stands for the values: they stay in the cluster, on the screen's save and on the API's, and the edit around them goes
@@ -48,7 +49,7 @@ const editorKey = async (page: Page, key: 'start' | 'end' | 'deleteLine') => {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function mcpOn(request: APIRequestContext, token: string) {

@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Cluster → Resource Graph (React Flow + ELK layout) on the dev cluster itself:
 // the graph renders with its minimap and controls, namespace grouping keeps every
@@ -30,7 +31,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // A throwaway Member with the Read role on `self`; the caller deletes it.

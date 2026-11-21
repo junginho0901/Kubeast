@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 import { gzipSync } from 'node:zlib'
+import { sessionToken } from './session-token'
 
 // Secret values must follow one rule on every read path, not only the
 // dedicated /namespaces/{ns}/secrets/{name}/{yaml,describe} endpoints:
@@ -45,7 +46,7 @@ const relCfgPassword = `cfg-${secretValue}`
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 async function createYAML(request: APIRequestContext, headers: Record<string, string>, yaml: string) {

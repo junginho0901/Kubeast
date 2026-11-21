@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A model's own limits — the answer length (options.max_tokens) and the tool result length (options.tool_result_chars)
 // — and what each config is used for (used_for, by ai-service's own rules). The configs here are economy-tier endpoints
@@ -40,7 +41,7 @@ function selfKubectl(): ((...args: string[]) => string) | null {
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 test.describe('AI model limits', () => {

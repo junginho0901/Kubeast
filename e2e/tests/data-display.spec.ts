@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Numbers and values on screen are the ones the cluster reports (re-QA #30
 // #31 #32 #33 #35 #36 #40 #59): each test reads the same thing through
@@ -19,7 +20,7 @@ type Headers = Record<string, string>
 async function login(request: APIRequestContext): Promise<Headers> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok()).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 // kubectl against the kind cluster behind `self`, through its own kubeconfig

@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 import { hasStandIn, STAND_IN, STAND_IN_ADDRESS, STAND_IN_SKIP } from './model-address-standin'
+import { sessionToken } from './session-token'
 
 // M19: a model config may only read the key variables meant for it, send
 // them to public endpoints (or allow-listed hosts) and carry no auth
@@ -11,7 +12,7 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 test.describe('model config policy (M19)', () => {

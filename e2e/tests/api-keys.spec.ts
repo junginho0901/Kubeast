@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // API keys: a user issues a key (scoped to clusters, capped at a role, with an
 // expiry) and exchanges it for a short access token; the token never grants
@@ -20,7 +21,7 @@ const onCluster = (token: string, cluster: string) => ({ Authorization: `Bearer 
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()} ${await res.text()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function roleId(request: APIRequestContext, admin: string, name: string): Promise<number> {

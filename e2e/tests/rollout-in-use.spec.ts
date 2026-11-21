@@ -5,6 +5,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 
 import { test, expect, type APIRequestContext, type Locator, type Page, type TestStepInfo } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // On `self`, k8s-service, then auth-service, then the gateway are rolled (kubectl rollout restart, each waited for) while
 // a page holds a live list of the kubeast pods (Cluster View's node boxes watch them; the Pods page polls), a terminal and
@@ -340,7 +341,7 @@ type Row = { Action: string; TargetID: string; After: Record<string, unknown> | 
 async function auditRows(request: APIRequestContext, action: string, since: string): Promise<Row[]> {
   const login = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(login.ok(), 'admin login').toBeTruthy()
-  const headers = { Authorization: `Bearer ${(await login.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  const headers = { Authorization: `Bearer ${sessionToken(login)}`, 'X-Requested-With': 'XMLHttpRequest' }
   const res = await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { cluster: '', limit: '100', action, since } })
   expect(res.ok()).toBeTruthy()
   return ((await res.json()).items || []) as Row[]

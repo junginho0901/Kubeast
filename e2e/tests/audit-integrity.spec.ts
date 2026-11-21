@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // Audit log integrity: auth-service seals every audit row into a hash chain
 // (chain_seq / prev_hash / row_hash) and anchors the chain head as a digest in
@@ -32,7 +33,7 @@ const psql = (sql: string) => kubectl(['-n', 'kubeast', 'exec', 'deploy/postgres
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function verify(request: APIRequestContext, admin: string, body: Record<string, unknown>) {

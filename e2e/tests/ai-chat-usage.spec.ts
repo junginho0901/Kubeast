@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Turn tokens under an answer: ai-service keeps the turn's sums on the assistant message (messages.usage, the same
 // numbers as the turn's ai.chat.complete audit row) and the AI chat page shows them under the answer, also after
@@ -11,7 +12,7 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 test.describe('AI chat turn tokens', () => {

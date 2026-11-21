@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Chat history summary (ai.chat.summary.enabled): the last AI_CHAT_HISTORY_MESSAGES (dev: 10) user/assistant
 // messages go to the model verbatim and the ones before them are folded into one running summary, rebuilt only
@@ -13,7 +14,7 @@ const stamp = () => Date.now().toString(36)
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function chatTurn(request: APIRequestContext, token: string, sessionId: string, message: string): Promise<string> {

@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Two AI tools called through the MCP endpoint, so the checks are exact and no model runs:
 // - clusters_list: what the cluster picker lists (GET /api/v1/clusters?accessibleOnly=true) and, for a holder of
@@ -38,7 +39,7 @@ const psql = (sql: string) => kubectl(['-n', 'kubeast', 'exec', 'deploy/postgres
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function call(request: APIRequestContext, token: string, name: string, args: Obj): Promise<{ isError: boolean; text: string }> {

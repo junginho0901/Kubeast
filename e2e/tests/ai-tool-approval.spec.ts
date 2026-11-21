@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // H2: a write tool the model picks is never executed straight away. The chat
 // shows an approval card; nothing changes until the user approves, and a
@@ -20,7 +21,7 @@ const SCALE_QUERY = 'test2 클러스터의 f3approve 네임스페이스에 있�
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return (await res.json()).access_token as string
+  return sessionToken(res)
 }
 
 async function replicas(request: APIRequestContext, auth: Record<string, string>): Promise<number | null> {

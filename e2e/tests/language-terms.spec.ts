@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The agreed terms in the Korean UI: Kubernetes kinds, screen names, field names, condition values and
 // identifiers stay English; what Kubeast itself writes (summary states, column and card names, notices)
@@ -13,7 +14,7 @@ const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function bearer(request: APIRequestContext): Promise<Record<string, string>> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), 'admin login — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 const lookup = (key: string): unknown =>

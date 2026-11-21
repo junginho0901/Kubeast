@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { pagerRange, readEveryPage } from './list-pages'
+import { sessionToken } from './session-token'
 
 // Lists that open the resource drawer from a row and search and page their rows: Monitoring's two tabs, Cost,
 // Cluster hygiene, the dashboard's Optimization window, the Nodes page's top-usage cards and the admin Access
@@ -19,7 +20,7 @@ type CostRow = { name: string; namespace: string; kind?: string }
 async function headers(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 // A pod without init containers (kind's kube-system sets no pod-level limit): its containers' limits add up to the

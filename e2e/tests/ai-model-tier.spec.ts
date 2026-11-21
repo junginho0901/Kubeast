@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Model config tier: with an enabled economy-tier config the floating assistant runs on it and the chat stays on
 // the active (default) config; each stream names its tier in model_info. The economy config here is an Ollama
@@ -13,7 +14,7 @@ const STUB = 'http://model-stub.kubeast-devtools.svc.cluster.local:8090/ok'
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 async function modelInfo(request: APIRequestContext, headers: Record<string, string>, path: string, message: string) {

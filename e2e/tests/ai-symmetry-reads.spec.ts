@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // What a screen knows, the AI reads the same way: get_cluster_overview answers the dashboard's numbers, hygiene_history its
 // settings, a pod's log keeps its newest lines, can_i asks about one object as a drawer's Delete button does, cost's totals
@@ -30,7 +31,7 @@ function kubectlFor(kindName: string) {
 async function login(request: APIRequestContext, email = EMAIL, password = PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createReadUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

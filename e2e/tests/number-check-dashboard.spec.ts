@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Number check of the dashboard's count cards on self: each count is what the user's own identity in the cluster
 // lists, as kubectl as that identity — a custom role whose group the cluster lets list namespaces and services only
@@ -52,7 +53,7 @@ function asTheUser(resource: string, namespaced: boolean): number | null {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('Number check — dashboard counts as the user may list them', () => {

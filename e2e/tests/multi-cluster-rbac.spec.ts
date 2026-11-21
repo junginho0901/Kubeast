@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Per-cluster RBAC UI (step 12): the ClusterRoleMatrix in a user's detail grants
 // a per-cluster role (step-08 API), and AdminAudit can filter by cluster.
@@ -9,7 +10,7 @@ const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok()).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('multi-cluster RBAC UI (step 12)', () => {

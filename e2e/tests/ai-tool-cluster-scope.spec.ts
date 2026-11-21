@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // C1: AI tool permissions are decided per cluster. A user with the Write role
 // (ai.tool.*) on `test2` and only Read on `self` gets tool calls on both — the
@@ -16,7 +17,7 @@ const LIST_PODS_QUERY = 'kube-system 네임스페이스의 파드 목록을 보�
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return (await res.json()).access_token as string
+  return sessionToken(res)
 }
 
 // The chat screen makes a conversation for the first question on a page just opened, one per chatReply. Only its

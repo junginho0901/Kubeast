@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The AI's Prometheus discovery tools — prometheus_metrics, prometheus_labels, prometheus_rules,
 // prometheus_targets — driven through the MCP endpoint so the checks are exact. Cluster `default` reads its
@@ -31,7 +32,7 @@ const promAPI = (p: string) =>
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function call(request: APIRequestContext, token: string, name: string, args: Record<string, unknown>) {

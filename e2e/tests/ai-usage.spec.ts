@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Every chat turn leaves an ai.chat.complete audit record (tokens, tool calls,
 // duration) and the admin AI-usage view aggregates them per user. Depends on
@@ -12,7 +13,7 @@ const SEND_RE = /^전송$|^send$/i
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // The conversation the chat screen makes for its first question, and its removal after the test, passed or not.

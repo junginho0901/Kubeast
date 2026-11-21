@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // M1: every watch subscription is authorized against the clusterId it names,
 // not only the ?cluster= the socket was opened with. A user granted only on
@@ -10,7 +11,7 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return (await res.json()).access_token as string
+  return sessionToken(res)
 }
 
 test.describe('ws multiplexer — per-subscription cluster gate (M1)', () => {

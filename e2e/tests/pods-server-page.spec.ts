@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The Pods list is paged by k8s-service (pods_page.go): the browser gets one block of rows, the count, the cards and a
 // revision, never every pod. What it shows must still be what the cluster has — compared here with kubectl on cluster
@@ -45,7 +46,7 @@ const search = (page: Page) => page.getByPlaceholder(/Search pods|파드/i)
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('Pods list paged by the server', () => {

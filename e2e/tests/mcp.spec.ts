@@ -6,6 +6,7 @@ import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { sessionToken } from './session-token'
 
 // The MCP server (/api/v1/ai/mcp, chart mcp.enabled — on in the dev values): an external AI agent connects with a
 // Kubeast API key and gets the chat's read tools, run as that user on the cluster it names, masked, and audited as
@@ -39,7 +40,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

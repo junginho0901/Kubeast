@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The Admin reads of Kubeast's own records (investigations, ai_models, session_recordings) and an alert window's report
 // (alerts_inbox with with_report), called over MCP with no model and held to the API the same screen reads, value by
@@ -53,7 +54,7 @@ function expectLinksAsExpression(answer: Obj, route: Obj) {
 async function login(request: APIRequestContext, email = EMAIL, password = PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function rpc(request: APIRequestContext, token: string, method: string, params?: object): Promise<Obj> {

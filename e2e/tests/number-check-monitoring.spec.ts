@@ -5,6 +5,7 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
 import { readEveryPage } from './list-pages'
+import { sessionToken } from './session-token'
 
 // Number check of the node usage numbers (Monitoring's Nodes tab, the dashboard's top nodes): each node's CPU,
 // memory and their percents are what `kubectl top nodes` prints from the same metrics — CPU rounded up to a
@@ -85,7 +86,7 @@ function cgroupLimits(node: string, uid: string) {
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login ${res.status()}`).toBe(true)
-  return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 // `kubectl top nodes --no-headers`: NAME CPU(cores) CPU(%) MEMORY(bytes) MEMORY(%); a node without a sample is

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
 import { everyPage, pagesOf } from './drawer-pages'
+import { sessionToken } from './session-token'
 
 // Top talkers from the Network Flow Monitor stand-in of deploy/kind/devtools.yaml (nfm-stub), which the dev
 // values make cluster self's monitor kubeast-monitor. The spec gives it rows that name this install's own pods —
@@ -37,7 +38,7 @@ function selfKubectl(): ((...args: string[]) => string) | null {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 type End = { namespace?: string; pod?: string; workload?: { kind: string; name: string }; service?: string; service_address?: boolean; ip?: string; az?: string }

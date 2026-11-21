@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // Audit rows that used to be missing or mislabelled, checked against the audit
 // log itself: a live log stream is a recorded sensitive read, a refused sign-in
@@ -18,7 +19,7 @@ type Row = { Action: string; Result: string; Error: string; TargetID: string; Ac
 async function login(request: APIRequestContext, email: string, password: string): Promise<Headers> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 async function rows(request: APIRequestContext, admin: Headers, params: Record<string, string>): Promise<Row[]> {

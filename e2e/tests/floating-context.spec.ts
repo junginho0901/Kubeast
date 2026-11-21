@@ -1,6 +1,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { aiLayerScreens, clusterFor, prepareScreen, visitUrl } from './ai-layer-screens'
 import { turnToRow } from './list-pages'
+import { sessionToken } from './session-token'
 
 // The floating chat sends what is on screen (page_context) with each question. These tests stop the request in the
 // browser and read that body: no session is created and no model is called.
@@ -171,7 +172,7 @@ test.describe('floating chat screen data', () => {
 
   test('a Secret drawer sends its annotations by name and none of its values', async ({ page, request }) => {
     const login = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
-    const headers = { Authorization: `Bearer ${(await login.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+    const headers = { Authorization: `Bearer ${sessionToken(login)}`, 'X-Requested-With': 'XMLHttpRequest' }
     const stamp = Date.now()
     const name = withUndo(`e2e-floating-secret-${stamp}`, (n) => request.delete(`/api/v1/cluster/namespaces/default/secrets/${n}?cluster=self`, { headers }))
     const value = `fake-floating-value-${stamp}`
@@ -298,7 +299,7 @@ test.describe('floating chat — windows and admin screens', () => {
 
   test('a confirmation on an admin screen sends nothing', async ({ page, request }) => {
     const login = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
-    const headers = { Authorization: `Bearer ${(await login.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+    const headers = { Authorization: `Bearer ${sessionToken(login)}`, 'X-Requested-With': 'XMLHttpRequest' }
     const name = withUndo(`E2EFloatingRole${Date.now()}`, async (n) => { const role = ((await (await request.get('/api/v1/auth/roles', { headers })).json()) as Array<{ id: number; name: string }>).find((r) => r.name === n); if (role) await request.delete(`/api/v1/auth/admin/roles/${role.id}`, { headers }) })
     const created = await request.post('/api/v1/auth/admin/roles', { headers, data: { name, description: 'floating-context.spec', permissions: ['menu.dashboard'] } })
     expect(created.ok(), await created.text()).toBeTruthy()
@@ -407,7 +408,7 @@ test.describe('floating chat — signing out', () => {
   test('signing out forgets the tab\'s floating conversation', async ({ page, request }) => {
     const signIn = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
     expect(signIn.ok()).toBeTruthy()
-    const admin = { Authorization: `Bearer ${(await signIn.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+    const admin = { Authorization: `Bearer ${sessionToken(signIn)}`, 'X-Requested-With': 'XMLHttpRequest' }
     const roles = (await (await request.get('/api/v1/auth/roles', { headers: admin })).json()) as { id: number; name: string }[]
     const email = `e2e-floating-signout-${Date.now().toString(36)}@kubeast.local`
     const password = 'E2e-floating-signout-throwaway-1!'

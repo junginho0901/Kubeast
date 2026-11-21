@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Re-QA PR-5: the console says what really happened instead of "no … found"
 // or a blank page —
@@ -32,7 +33,7 @@ const CREATE_BUTTON = 'button.btn-primary:has(svg.lucide-plus)'
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 function kubectl(args: string, input?: string) {

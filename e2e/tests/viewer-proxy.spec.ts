@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // D6: the Read group (kubeast:viewer) may GET the cluster's Prometheus and OpenCost through the API server proxy and
 // nothing else. The dev second cluster lists monitoring/prometheus:9090 and opencost/opencost:9003 in
@@ -40,7 +41,7 @@ const proxy = (ns: string, svc: string, suffix: string) => `/api/v1/namespaces/$
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('Read reaches the listed Prometheus and OpenCost through the proxy, read-only', () => {

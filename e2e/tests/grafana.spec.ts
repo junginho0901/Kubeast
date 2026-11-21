@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Reading the stores through Grafana and taking Grafana's alerts (scripts/kind-grafana.sh: a Grafana 13 in the second
 // cluster with its Prometheus and the log-search Loki as data sources, a Viewer service account token in the Secret
@@ -46,7 +47,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 const get = async (request: APIRequestContext, admin: string, url: string) => {

@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { turnToRow } from './list-pages'
+import { sessionToken } from './session-token'
 
 // Admin edges the v0.7.3 edge QA found: a role with some admin permissions opens those pages only; nobody changes
 // their own cluster access; a role still held is not deleted, and says why; deleting a team clears it from its
@@ -26,7 +27,7 @@ async function login(request: APIRequestContext, email: string, password: string
 async function bearer(request: APIRequestContext, email: string, password: string): Promise<H> {
   const res = await login(request, email, password)
   expect(res.status(), `login ${email}`).toBe(200)
-  return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 async function roleId(request: APIRequestContext, name: string): Promise<number> {
   const raw = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()

@@ -6,6 +6,7 @@ import path from 'node:path'
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
 
 import { waitUntilListed } from './number-check.cr-shared'
+import { sessionToken } from './session-token'
 
 // What an open window and a list keep up with by themselves, on cluster `self` in a namespace of this run's, and what that
 // costs the server: an Ingress drawer follows its object on the read it already makes, a workload's Events move on their
@@ -431,7 +432,7 @@ test.describe('what keeps up by itself', () => {
     const login = async (r: APIRequestContext, email: string, password: string) => {
       const res = await r.post('/api/v1/auth/login', { data: { email, password } })
       expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-      return (await res.json()).access_token as string
+      return sessionToken(res)
     }
     const signIn = async (b: Browser, email: string) => {
       const ctx = await b.newContext({ baseURL: BASE, storageState: { cookies: [], origins: [] }, viewport: { width: 1440, height: 900 }, locale: 'en-US' })

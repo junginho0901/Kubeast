@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The Resource Graph's traffic lines on the Cilium kind cluster that scripts/kind-cilium.sh up registers
 // (kubeast-cilium: the traffic of deploy/kind/cilium-demo.yaml — client reaches web on port 80, stranger is dropped
@@ -32,7 +33,7 @@ function ciliumKubectl(): ((args: string) => string) | null {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 type End = { namespace?: string; kind?: string; name?: string; outside?: string; unnamed?: boolean }

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Second-review P2 bundle, the parts observable through the API:
 // - /auth/login accepts only application/json bodies (login CSRF, L17)
@@ -12,7 +13,7 @@ const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
 
@@ -50,7 +51,7 @@ test.describe('P2 security bundle', () => {
     try {
       const login = await request.post('/api/v1/auth/login', { data: { email, password } })
       expect(login.status(), 'a pending account can still sign in').toBe(200)
-      const token = (await login.json()).access_token
+      const token = sessionToken(login)
 
       expect((await request.get('/api/v1/auth/me', { headers: bearer(token) })).status()).toBe(200)
       expect((await request.get('/api/v1/sessions', { headers: bearer(token) })).status()).toBe(403)

@@ -6,6 +6,7 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { readEveryPage } from './list-pages'
+import { sessionToken } from './session-token'
 
 // AMD's and Intel's GPUs on the GPU Dashboard, GPU Nodes, GPU Pods, the Node drawer and in the floating chat, counted
 // by the rules NVIDIA's are (number-check-gpu.spec.ts): the GPU resources of the three companies Kubernetes' "Schedule
@@ -257,7 +258,7 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
   const admin = async (request: APIRequestContext) => {
     const res = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
     expect(res.ok(), `admin login: ${res.status()}`).toBeTruthy()
-    return { Authorization: `Bearer ${(await res.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+    return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
   }
   async function prepare(page: Page) {
     test.skip(!prepared, `needs the fake NVIDIA GPUs of scripts/kind-gpu.sh up on ${CLUSTER}`)

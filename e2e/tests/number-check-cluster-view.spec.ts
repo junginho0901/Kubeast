@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Number check of Cluster View on cluster `self`: the map's legend adds up to the cluster's pods; with a namespace
 // chosen each node's cell, box badge and the Unscheduled box are the pods kubectl lists on that node, in the colours
@@ -235,7 +236,7 @@ test.describe('Cluster View — number check', () => {
     const login = async (email: string, password: string) => {
       const res = await request.post('/api/v1/auth/login', { data: { email, password } })
       expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-      return (await res.json()).access_token as string
+      return sessionToken(res)
     }
     const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
     const adminToken = await login(admin, process.env.E2E_USER_PASSWORD || '')

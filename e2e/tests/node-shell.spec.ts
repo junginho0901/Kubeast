@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // H3: the node shell runs only allow-listed images, in the dedicated
 // privileged namespace, never in the namespace/image the client asks for.
@@ -33,7 +34,7 @@ async function firstNodeName(request: APIRequestContext): Promise<string> {
 async function adminHeaders(request: APIRequestContext): Promise<Headers> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 // The node's shell rows since `since` for one image (each test uses its own).

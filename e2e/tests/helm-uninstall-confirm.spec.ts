@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // DELETE /api/v1/helm/releases/{ns}/{name} needs ?confirm=<release name> unless
 // dryRun=true; the server checks it before looking the release up. Using a
@@ -13,7 +14,7 @@ const RELEASE = 'no-such-release-l5'
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('helm uninstall needs confirm=<release> (L5)', () => {

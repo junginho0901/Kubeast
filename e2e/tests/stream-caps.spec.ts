@@ -7,6 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // One account holds at most multicluster.maxTerminalsPerAccount terminals and maxFollowedLogsPerAccount followed logs
 // open on a k8s-service at once. With that many open, the next one is refused before it opens — the socket closes
@@ -58,7 +59,7 @@ type Row = { TargetID: string; Result?: string; Error?: string }
 async function accessToken(request: APIRequestContext): Promise<string> {
   const login = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(login.ok(), 'admin login').toBeTruthy()
-  return (await login.json()).access_token as string
+  return sessionToken(login)
 }
 
 // The failed rows of action about this run's pod, whose name is the run's own (no time bound: the server keeps its own

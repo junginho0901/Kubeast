@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Per-cluster Access modal (cluster-management page): the inverse of the
 // user-detail ClusterRoleMatrix — open a cluster's "Access" modal, grant a user
@@ -10,7 +11,7 @@ const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok()).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test('cluster Access modal grants + revokes a per-cluster role', async ({ page, request }) => {

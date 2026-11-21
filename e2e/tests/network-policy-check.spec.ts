@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The NetworkPolicy check against what the cluster's network plugin does: kind's kindnet enforces
 // NetworkPolicy, so every definite answer Kubeast gives for the fixture below is compared with a real
@@ -58,7 +59,7 @@ spec:
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 type Check = { result: string; notes: string[]; checks: Array<{ port: number; result: string; egress?: any; ingress?: any; notes: string[] }>; source: any; destination: any; unevaluated: unknown[] }

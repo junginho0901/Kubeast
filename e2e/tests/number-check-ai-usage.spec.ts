@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page, type Response } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Number check of two of Kubeast's own screens against the API and the database:
 // - AI Usage: for each grouping (user, model, cluster) the rows on every page are the answer's, the answer's group
@@ -51,7 +52,7 @@ const psql = (sql: string) =>
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 const atPath = (r: Response, p: string) => new URL(r.url()).pathname === p && r.request().method() === 'GET'

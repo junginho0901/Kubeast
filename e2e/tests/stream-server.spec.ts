@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // streams.enabled: the terminals and followed logs go to k8s-service-stream (SERVER_ROLE stream), the rest to
 // k8s-service (SERVER_ROLE api). A replaced stream server ends the followed log at once — the tab reconnects and goes
@@ -46,7 +47,7 @@ type Row = { Action: string; TargetID: string; After: Record<string, unknown> | 
 async function auditRows(request: APIRequestContext, action: string, since: string): Promise<Row[]> {
   const login = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(login.ok(), 'admin login').toBeTruthy()
-  const headers = { Authorization: `Bearer ${(await login.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+  const headers = { Authorization: `Bearer ${sessionToken(login)}`, 'X-Requested-With': 'XMLHttpRequest' }
   const res = await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { cluster: '', limit: '100', action, since } })
   expect(res.ok()).toBeTruthy()
   return ((await res.json()).items || []) as Row[]

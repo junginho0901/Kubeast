@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // VictoriaMetrics as a cluster's metrics store (scripts/kind-victoriametrics.sh: a single node and a cluster in the
 // second kind cluster, scraping with that cluster's Prometheus config). Cluster `default` is pointed at each in turn —
@@ -32,7 +33,7 @@ const kubectlSecond = kubectlFor('kubeast-b')
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function tool(request: APIRequestContext, token: string, name: string, args: Record<string, unknown>) {

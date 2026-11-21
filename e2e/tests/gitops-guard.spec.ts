@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Argo CD guard (chart gitops.argocd, on in block mode in the dev values). The
 // fixture Deployment e2e-argo-managed carries a tracking annotation that names
@@ -13,7 +14,7 @@ const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 async function login(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 test.describe('Argo CD guard', () => {
@@ -127,7 +128,7 @@ test.describe('Argo CD guard', () => {
       expect(granted.ok(), await granted.text()).toBeTruthy()
       const signedIn = await request.post('/api/v1/auth/login', { data: { email, password } })
       expect(signedIn.ok(), 'reader login').toBeTruthy()
-      const reader = { Authorization: `Bearer ${(await signedIn.json()).access_token as string}` }
+      const reader = { Authorization: `Bearer ${sessionToken(signedIn)}` }
       const refused = await request.post(apply, { headers: reader, data: bodies[0], failOnStatusCode: false })
       const text = await refused.text()
       expect(refused.status(), text).toBe(403)

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Dashboard quick actions after the rework: "Check issues" shows the rows of
 // /api/v1/cluster/issues (deploy/kind/fixtures.yaml leaves an unschedulable
@@ -12,7 +13,7 @@ const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
-  const token = (await res.json()).access_token as string
+  const token = sessionToken(res)
   return { Authorization: `Bearer ${token}` }
 }
 

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Log files view (chart features.logFiles): Kubeast lists and reads files
 // inside a container with a fixed ls / tail through the user's pods/exec.
@@ -18,7 +19,7 @@ type Headers = Record<string, string>
 async function login(request: APIRequestContext, email: string, password: string): Promise<Headers> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 // The writer pod's name, or null when the feature or the fixture is missing.

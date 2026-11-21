@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { hasStandIn, STAND_IN, STAND_IN_ADDRESS, STAND_IN_SKIP } from './model-address-standin'
+import { sessionToken } from './session-token'
 
 // A model provider's refusals reach the user as what they are — no credit, too many requests, a refused key, an
 // outage — named in the screen language with who acts on it. The model endpoint is the refusing stand-in in
@@ -15,7 +16,7 @@ const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok()).toBeTruthy()
-  return { ...XRW, Authorization: `Bearer ${(await res.json()).access_token}` }
+  return { ...XRW, Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 type ErrorEvent = { error: string; error_key: string; error_args: Record<string, string> }

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Gateway → Policies lists every policy kind the cluster serves — labelled
 // CRDs (GEP-713), the Envoy Gateway / Istio built-in table, configured
@@ -13,7 +14,7 @@ const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 test.describe('gateway policies', () => {

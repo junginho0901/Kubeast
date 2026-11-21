@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The query tools shrink a list before it reaches the model (k8s_jq_query, k8s_tabular_query, k8s_count) and
 // k8s_diff previews a manifest with a server dry run — nothing applied, offered only to users who may write.
@@ -36,7 +37,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email = EMAIL, password = PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createReadUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

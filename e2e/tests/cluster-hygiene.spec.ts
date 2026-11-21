@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // Cluster hygiene report (Admin → Cluster hygiene): the spec makes a namespace
 // on the dev cluster `self` with a pod that breaks several checks and a TLS
@@ -32,7 +33,7 @@ function kubectl(args: string[], input?: string): string {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 type Finding = { check: string; severity: string; kind: string; namespace?: string; name: string; message: string; exempt?: boolean; exempt_reason?: string }

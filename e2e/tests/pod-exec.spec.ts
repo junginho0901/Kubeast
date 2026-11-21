@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Browser, type Page } from '@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // The pod exec socket runs on the cluster named by ?cluster= and is authorized
 // as the signed-in user: an admin gets a shell on the pod, a viewer is refused
@@ -97,7 +98,7 @@ async function firstPod(request: APIRequestContext, cluster: string, namespace: 
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 async function viewerPage(browser: Browser, request: APIRequestContext, admin: Record<string, string>) {

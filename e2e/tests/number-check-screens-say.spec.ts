@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // What the screens know, said as it is, on cluster self: a pod being deleted reads Terminating in every drawer's pod
 // table (its command ignores SIGTERM under a long grace period, so it stays that way), a crashing pod's Status tile is
@@ -86,7 +87,7 @@ function kubectlAllocated(node: string): string[][] {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token as string
+  return sessionToken(res)
 }
 
 // what the page sends the floating chat about what is on screen, the request stopped before any model
