@@ -224,7 +224,7 @@ func readEventWindow(ctx context.Context, client kubernetes.Interface, namespace
 
 // eventReviews says, for each of namespaces, whether the caller's identity may list every event there
 // (SelfSubjectAccessReview through mayList, 60 s), the reviews asked side by side, listFanOutWorkers at a time, so a
-// grant of 30 namespaces waits for about one round trip, not 30 in a row. None is asked without a cache identity, for a
+// grant of 30 namespaces waits for about four round trips, not 30 in a row. None is asked without a cache identity, for a
 // limit of all, or of a namespace kubeast:cache was refused within the last minute: eventWindowFor would not share them.
 // A review the cluster did not answer says nothing of the caller's rights: that namespace reads as the caller, as before
 // the review, and the others still read once for everyone.
