@@ -35,7 +35,7 @@ type windowCluster struct {
 	list func(user, namespace string) bool
 	// cacheRefused refuses the events to kubeast:cache; reviewFails answers every review 500, failReview those of the
 	// namespaces it names; hold holds kubeast:cache's first pages until closed; reviewsTogether holds each review until
-	// that many are under way at once, or a second has passed
+	// that many are under way at once, or five seconds have passed
 	cacheRefused    bool
 	reviewFails     bool
 	failReview      func(namespace string) bool
@@ -126,7 +126,7 @@ func (a *windowCluster) serve(w http.ResponseWriter, r *http.Request) {
 		if a.reviewsTogether > 0 {
 			select {
 			case <-together:
-			case <-time.After(time.Second):
+			case <-time.After(5 * time.Second):
 			case <-r.Context().Done():
 				return
 			}
