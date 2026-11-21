@@ -1,0 +1,41 @@
+{
+ "id": "16_past_outage",
+ "title": "A five-minute outage in the past, normal now",
+ "group": "past",
+ "cluster": "default",
+ "namespace": "shop-16",
+ "question": "default 클러스터 shop-16에서 아까 몇 분 동안 주문이 안 됐다는데 원인이 뭐였어? 지금은 된대.",
+ "question_vague": "default 클러스터 shop-16에서 아까 잠깐 장애가 있었다는데 뭐였는지 알아봐 줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "payments"
+  ],
+  [
+   "scale",
+   "스케일",
+   "replica",
+   "레플리카",
+   "복제본",
+   "엔드포인트",
+   "endpoint"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/payments deploy/catalog deploy/storefront --timeout=10s",
+ "wait_seconds": 240,
+ "baseline_seconds": 300,
+ "inject_cmds": [
+  "kubectl -n $NS scale deploy/payments --replicas=0"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/storefront --since=20s | grep 'request failed' | grep -q 'upstream=payments'",
+ "inject_wait_seconds": 60,
+ "fault_duration_seconds": 300,
+ "undo_cmds": [
+  "kubectl -n $NS scale deploy/payments --replicas=1",
+  "kubectl -n $NS wait --for=condition=Available deploy/payments --timeout=120s"
+ ],
+ "ask_after_seconds": [360, 4200],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420
+}

@@ -1,0 +1,40 @@
+{
+ "id": "15_control_hpa_load",
+ "title": "Control: traffic rises and the HPA scales out as designed",
+ "group": "control",
+ "cluster": "default",
+ "namespace": "shop-15",
+ "question": "default 클러스터 shop-15에서 api 응답이 좀 느려졌다는데 원인이 뭐야?",
+ "question_vague": "default 클러스터 shop-15 괜찮아? 문제가 있으면 원인까지 알려줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "문제(가|는)? ?(없|보이지|확인되지)",
+   "이상(이|은)? ?(없|보이지|확인되지)",
+   "정상",
+   "HPA.{0,40}(늘|확장|스케일|scale)"
+  ]
+ ],
+ "tools": [],
+ "setup_cmds": [
+  "kubectl create namespace edge --dry-run=client -o yaml | kubectl apply -f - && kubectl -n edge apply -f $CASE_DIR/edge.yaml"
+ ],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/api --timeout=10s && kubectl -n edge wait --for=condition=Available deploy/gateway --timeout=10s && kubectl -n $NS get hpa api -o jsonpath='{.status.currentMetrics[0].resource.current.averageUtilization}' | grep -q .",
+ "wait_seconds": 300,
+ "baseline_seconds": 300,
+ "inject_cmds": [
+  "kubectl -n edge scale deploy/gateway --replicas=5"
+ ],
+ "inject_wait": "test \"$(kubectl -n $NS get hpa api -o jsonpath='{.status.desiredReplicas}')\" -ge 2",
+ "inject_wait_seconds": 300,
+ "ask_after_seconds": [480],
+ "undo_cmds": [
+  "kubectl -n edge scale deploy/gateway --replicas=1"
+ ],
+ "cleanup_cmds": [
+  "kubectl delete namespace edge --ignore-not-found --wait=false"
+ ],
+ "cooldown_seconds": 60,
+ "hidden": true,
+ "timeout_seconds": 420
+}

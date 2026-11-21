@@ -100,6 +100,22 @@ Prerequisites (without them, the spec does not fail but skips and records the re
 
 It is not part of the default run. Run it with `E2E_ACTIONS=1 npx playwright test --project=actions`. Prerequisites are in [e2e/actions/README.md](../e2e/actions/README.md).
 
+### Faults and demo services for the AI evaluation
+
+The harder cases of `scripts/ai-eval.py` need faults and services that call each other. Two scripts put them on the second cluster; neither is an e2e prerequisite.
+
+- `scripts/kind-chaos.sh up|down`: Chaos Mesh 2.8.8 (pod kill and failure, network delay, loss and partition, DNS errors, CPU and memory stress).
+  - The chart is rendered with `deploy/kind/chaos-values.yaml` (the kind node's containerd runtime and socket) and applied server-side, so `default` keeps no Helm release.
+  - `up` again with the same version and values does nothing. `down` deletes every experiment first, then what `up` made.
+- `scripts/kind-otel-demo.sh up|down`: the OpenTelemetry Demo, chart 0.42.6, in namespace `otel-demo`.
+  - Run `scripts/kind-logsearch.sh up` and `scripts/kind-tracing.sh up` first.
+  - The demo's own Jaeger, Grafana, Prometheus and OpenSearch are off. Its collector writes traces to that Tempo, logs to that Loki and metrics to the second cluster's Prometheus (`OTELDEMO_METRICS=0` keeps the metrics out).
+  - The first `up` refuses when the Docker VM has less memory available than the sum of the render's memory limits (about 6.7 GiB). The lighter fallback, Online Boutique, is described at the top of the script.
+  - A line a service both prints and sends over OTLP is in Loki twice.
+  - With metrics on, `up` also puts the demo's alert rules (`deploy/kind/otel-demo-rules.json`: error rate, 95th percentile latency, restarts) into that Prometheus, and `down` takes them out. Their alerts carry `kubeast_eval="otel-demo"`, the only ones that Prometheus sends to Alertmanager, which posts them to the webhook for `default`. An older dev install needs `deploy/kind/second-cluster.yaml` applied again first.
+- Behind a TLS-inspecting proxy, set `CHAOS_NODE_HOOK` or `OTELDEMO_NODE_HOOK` as for `CILIUM_NODE_HOOK`: a command that gets the cluster name, run before the images are pulled.
+- The case fields, the run order and the sixteen cases of `evals/ai-hard/` are in [evals/ai/README.md](../evals/ai/README.md) "Hard cases".
+
 ### Project site (`site/`)
 
 [https://junginho0901.github.io/Kubeast/](https://junginho0901.github.io/Kubeast/) is `site/`, a static page in English with a Korean switch: `index.html`, `style.css`, `app.js` and `particles.js`.

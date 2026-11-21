@@ -1,0 +1,38 @@
+{
+ "groups": [
+  {
+   "name": "kubeast-eval-otel-demo",
+   "rules": [
+    {
+     "alert": "OtelDemoErrorRate",
+     "expr": "(sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\", status_code=\"STATUS_CODE_ERROR\", service_name!=\"flagd\"}[2m])) / sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\", service_name!=\"flagd\"}[2m]))) > 0.05 and sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind=\"SPAN_KIND_SERVER\", service_name!=\"flagd\"}[2m])) > 0.05",
+     "for": "2m",
+     "labels": {"severity": "warning", "namespace": "otel-demo", "kubeast_eval": "otel-demo"},
+     "annotations": {
+      "summary": "{{ $labels.service_name }}: {{ $value | humanizePercentage }} of its requests fail",
+      "description": "Server spans of {{ $labels.service_name }} with status ERROR, over the last 2 minutes (span metrics of the demo's collector)."
+     }
+    },
+    {
+     "alert": "OtelDemoLatencyP95",
+     "expr": "histogram_quantile(0.95, sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_kind=\"SPAN_KIND_SERVER\", service_name!=\"flagd\"}[5m]))) > 1000",
+     "for": "3m",
+     "labels": {"severity": "warning", "namespace": "otel-demo", "kubeast_eval": "otel-demo"},
+     "annotations": {
+      "summary": "{{ $labels.service_name }}: 95th percentile {{ $value | humanize }} ms",
+      "description": "95th percentile duration of the server spans of {{ $labels.service_name }} over the last 5 minutes, above 1000 ms (span metrics of the demo's collector)."
+     }
+    },
+    {
+     "alert": "OtelDemoPodRestarts",
+     "expr": "sum by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace=\"otel-demo\"}[10m])) > 0",
+     "labels": {"severity": "warning", "namespace": "otel-demo", "kubeast_eval": "otel-demo"},
+     "annotations": {
+      "summary": "{{ $labels.pod }}/{{ $labels.container }} restarted in the last 10 minutes",
+      "description": "kube-state-metrics' restart count of container {{ $labels.container }} in pod {{ $labels.pod }} went up."
+     }
+    }
+   ]
+  }
+ ]
+}
