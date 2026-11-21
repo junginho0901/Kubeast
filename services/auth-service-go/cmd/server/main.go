@@ -89,7 +89,8 @@ func main() {
 		"lock_timeout", sessionLimits.LockTimeout, "idle_in_transaction_session_timeout", sessionLimits.IdleInTransaction)
 
 	// SIGINT/SIGTERM cancels ctx: the background workers stop and give back their connections (the audit sinks
-	// hold one for their leader lock), so pool.Close returns instead of waiting out the pod's grace period.
+	// hold one for their leader lock, a retention run one for its turn, unlocked within 5 s), so pool.Close returns
+	// instead of waiting out the pod's grace period.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
@@ -140,8 +141,9 @@ func main() {
 	slog.Info("audit writer ready", "stdout", audit.StdoutEnabled(), "fail_closed", audit.FailClosedEnabled())
 
 	// Data retention: delete audit / chat rows past their window, once now and
-	// then daily; every run is audited as admin.retention.purge. Off unless a
-	// window is set (RETENTION_AUDIT_DAYS / RETENTION_CHAT_DAYS).
+	// then daily, one replica at a time (advisory lock); every run is audited as
+	// admin.retention.purge. Off unless a window is set (RETENTION_AUDIT_DAYS /
+	// RETENTION_CHAT_DAYS).
 	// Audit sinks: copies of the audit rows to S3 / webhooks / mail / a file,
 	// sent by one replica (advisory lock) from each sink's cursor. A bad sinks
 	// file stops the service — a silently missing archive is worse.
@@ -172,7 +174,7 @@ func main() {
 		if names := sinks.Names(); len(names) > 0 {
 			purger.AuditFloor = func(ctx context.Context) (int64, error) { return auditsink.Floor(ctx, pool, names) }
 		}
-		go retention.Run(ctx, purger, 24*time.Hour)
+		go retention.Run(ctx, purger, retention.PGLock{Pool: pool}, 24*time.Hour)
 	}
 
 	// Temporary grants from approved access requests end on time: restore the

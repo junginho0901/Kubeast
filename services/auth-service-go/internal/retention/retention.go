@@ -122,12 +122,14 @@ type Purger struct {
 	AuditFloor func(ctx context.Context) (int64, error)
 }
 
-// Run purges once immediately and then every `every`, until ctx is done.
-func Run(ctx context.Context, p Purger, every time.Duration) {
+// Run purges once immediately and then every `every`, until ctx is done. Each
+// run is a turn taken through lock (turn): of several replicas one purges at a
+// time, and a replica whose turn comes while another's run goes leaves it.
+func Run(ctx context.Context, p Purger, lock Locker, every time.Duration) {
 	if !p.Cfg.Enabled() {
 		return
 	}
-	p.RunOnce(ctx)
+	p.turn(ctx, lock)
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -135,13 +137,13 @@ func Run(ctx context.Context, p Purger, every time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			p.RunOnce(ctx)
+			p.turn(ctx, lock)
 		}
 	}
 }
 
 // RunOnce purges once and records the run in the audit log; errors are logged,
-// never fatal for the service.
+// never fatal for the service. It takes no lock: Run calls it through turn.
 func (p Purger) RunOnce(ctx context.Context) Result {
 	now := time.Now()
 	if p.Now != nil {

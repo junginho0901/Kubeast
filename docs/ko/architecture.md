@@ -120,7 +120,7 @@ ghcr.io/junginho0901/kubeast-model-config-controller-go
 - auth-service
   - 10초마다 감사 기록 봉인(`audit.integrity.sealSeconds`)
   - 1분마다 만료된 권한 요청 되돌리기
-  - 24시간마다 보관 기간이 지난 기록 정리(켜질 때도 1회)
+  - 24시간마다 보관 기간이 지난 기록 정리(켜질 때도 1회). 한 번에 서버 한 대만 돎(풀의 연결 하나에 실행 동안 쥐는 PostgreSQL advisory lock). 다른 서버가 도는 동안 차례가 온 서버는 건너뜀
   - `dormantAccounts`를 켜면 24시간마다 휴면 계정 잠금
   - S3 싱크를 지정했다면 24시간마다 감사 앵커
 - k8s-service

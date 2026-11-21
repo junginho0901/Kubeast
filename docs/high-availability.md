@@ -11,7 +11,7 @@ This page says which services can run more, what they need, how to set the count
 | --- | --- | --- | --- |
 | gateway | yes | nothing; a WebSocket stays on the upstream connection it opened | — |
 | frontend | yes | nothing (static files) | — |
-| auth-service | yes | nothing; its background jobs take turns through database locks, and retention finds nothing left after another pod's run | `migrations.mode: job` (below) |
+| auth-service | yes | nothing; its background jobs take turns through database locks. Retention runs on one pod at a time: a run holds a PostgreSQL advisory lock on a connection of the pod's pool until its `admin.retention.purge` row is written, a pod whose daily turn comes meanwhile skips it, and a run after another pod's finds nothing left | `migrations.mode: job` (below) |
 | session-service | yes | nothing; sessions and messages are in the database | — |
 | ai-service | yes | its answer streams; a queued alert investigation is a database row one pod takes; Claude Code runs have a cap per pod (`ai.providers.claudeCode.maxConcurrent`) and one for the install | — |
 | k8s-service | yes, with Redis | the lists and watches of the clusters it serves, in its own memory; the list, YAML and Helm caches are in Redis; a cluster's change reaches every pod within 10 s; a node drain's progress is in the database | `redis.enabled: true` |

@@ -11,7 +11,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 | --- | --- | --- | --- |
 | gateway | 됨 | 없음. WebSocket은 처음 연 업스트림 연결에 계속 붙어 있습니다 | — |
 | frontend | 됨 | 없음(정적 파일) | — |
-| auth-service | 됨 | 없음. 배경 작업은 데이터베이스 잠금으로 차례를 정하고, 보존 기간 정리는 다른 파드가 먼저 돌았으면 지울 것이 없습니다 | `migrations.mode: job`(아래) |
+| auth-service | 됨 | 없음. 배경 작업은 데이터베이스 잠금으로 차례를 정합니다. 보존 기간 정리는 한 번에 한 파드만 돕니다. 도는 파드는 `admin.retention.purge` 행을 쓸 때까지 자기 풀의 연결 하나에 PostgreSQL advisory lock을 쥐고, 그동안 하루 차례가 온 파드는 그 차례를 건너뜁니다. 다른 파드가 먼저 돌았으면 지울 것이 없습니다 | `migrations.mode: job`(아래) |
 | session-service | 됨 | 없음. 세션과 메시지는 데이터베이스에 있습니다 | — |
 | ai-service | 됨 | 답 스트림. 대기 중인 알림 조사는 데이터베이스 행이고 한 파드가 가져갑니다. Claude Code 실행 수에는 파드당 상한(`ai.providers.claudeCode.maxConcurrent`)과 설치 전체 상한이 있습니다 | — |
 | k8s-service | Redis가 있으면 됨 | 맡은 클러스터의 목록과 감시(자기 메모리). 목록 · YAML · Helm 캐시는 Redis에 있습니다. 클러스터가 바뀌면 10초 안에 모든 파드가 압니다. 노드 드레인 진행은 데이터베이스에 있습니다 | `redis.enabled: true` |

@@ -179,5 +179,8 @@ retention:
 Pick the audit window from your regulatory baseline (for example, Korea's
 personal-information safety standard requires access records to be kept for
 at least one year, two years for some processors). With more than one
-auth-service replica, every replica runs the purge. The deletes are idempotent,
-so the only effect is one audit record per replica per day.
+auth-service replica, each replica purges on its own daily schedule, one at a
+time: a run holds a PostgreSQL advisory lock until its audit record is written,
+and a replica whose turn comes while another runs skips that turn. A run after
+another replica's finds nothing left, so there is at most one audit record per
+replica per day, and one run's counts are never split over two records.
