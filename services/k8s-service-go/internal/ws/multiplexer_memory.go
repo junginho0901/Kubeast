@@ -7,10 +7,11 @@ import (
 	"time"
 )
 
-// watchMemoryShare is the share of the collector's limit (GOMEMLIMIT, which services/pkg/memlimit sets to 90 % of the
+// watchMemoryShare is the share of the collector's limit (GOMEMLIMIT, which k8s-service sets to 85 % of the
 // container's) past which the memory the next collection cannot give back lets no new watch open. A watch decodes every
 // object there is as it opens, which the server's opening places (defaultWatchOpeningsAtOnce) keep to what fits between
-// this share and the 0.94 at which W2's 700 people ran out of memory; with their screens open they held 0.56-0.62.
+// this share and 0.94 of the limit, at which W2's 700 people ran out of memory when it was 90 % of the container's; with
+// their screens open they held 258-286 MiB, 0.59-0.66 of the 435 MiB it is now.
 const watchMemoryShare = 0.8
 
 // memoryShortMessage is the limit frame's message for a watch that waits for memory.
