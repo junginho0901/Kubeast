@@ -72,7 +72,7 @@ func TestATurnHoldsTheLockUntilItsRowIsWritten(t *testing.T) {
 }
 
 // A lock that cannot be asked (the database down) is a failed run with the lock's error, in a row of the same fields
-// as any run's, and no purge.
+// as any run's with no failed window, and no purge.
 func TestATurnWhoseLockCannotBeAskedIsARecordedFailure(t *testing.T) {
 	now := time.Date(2026, 11, 21, 3, 0, 0, 0, time.UTC)
 	cfg := Config{AuditDays: 365, ChatDays: 180, ReviewDays: 1095, InvestigationDays: 90}
@@ -101,6 +101,9 @@ func TestATurnWhoseLockCannotBeAskedIsARecordedFailure(t *testing.T) {
 	}
 	if got, want := slices.Sorted(maps.Keys(lockRow)), slices.Sorted(maps.Keys(runRow)); !slices.Equal(got, want) {
 		t.Fatalf("fields = %v, want a run's %v", got, want)
+	}
+	if got, ok := lockRow["failed_windows"].([]any); !ok || len(got) != 0 {
+		t.Fatalf("failed_windows = %#v, want [] (no window ran)", lockRow["failed_windows"])
 	}
 }
 

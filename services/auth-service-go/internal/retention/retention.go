@@ -252,10 +252,10 @@ func (p Purger) purgeAudit(ctx context.Context, cutoff time.Time, res *Result) e
 func (p Purger) purgeChat(ctx context.Context, cutoff time.Time, res *Result) error {
 	n, err := deleteApprovalsBatched(ctx, p.Pool, res,
 		`DELETE FROM tool_approvals WHERE id IN (SELECT id FROM tool_approvals WHERE created_at < $1 ORDER BY id LIMIT $2)`+approvalReturning, cutoff)
+	res.ToolApprovals += n
 	if err != nil {
 		return fmt.Errorf("tool approvals: %w", err)
 	}
-	res.ToolApprovals += n
 	sessions, approvals, err := deleteExpiredSessions(ctx, p.Pool, res, cutoff)
 	res.Sessions += sessions
 	res.ToolApprovals += approvals

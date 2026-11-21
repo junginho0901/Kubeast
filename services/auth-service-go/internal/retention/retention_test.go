@@ -224,14 +224,16 @@ func TestExpiredSessionsGoAfterEveryTableThatNamesThem(t *testing.T) {
 }
 
 // fakeDB answers every statement, keeping them in the order they came: a statement holding "DELETE FROM <table> "
-// of a table in fail returns that error, one of a table in deleted says it deleted that many rows, one holding a key
-// of returns deletes those rows (and returns them with approvalReturning; none otherwise), and a batch of
-// conversations finds one.
+// of a table in fail returns that error (after answering as usual passes[table] times), one of a table in deleted
+// says it deleted that many rows, one holding a key of returns deletes those rows (and returns them with
+// approvalReturning; none otherwise), and a batch of conversations finds one. A transaction's commit returns commitErr.
 type fakeDB struct {
-	fail    map[string]error
-	deleted map[string]int64
-	returns map[string][]returnedApproval
-	ran     []string
+	fail      map[string]error
+	passes    map[string]int
+	deleted   map[string]int64
+	returns   map[string][]returnedApproval
+	commitErr error
+	ran       []string
 }
 
 // returnedApproval is a row of a tool approvals' delete with approvalReturning.
@@ -244,6 +246,10 @@ func (f *fakeDB) answer(sql string) (int64, error) {
 	f.ran = append(f.ran, sql)
 	for table, err := range f.fail {
 		if strings.Contains(sql, "DELETE FROM "+table+" ") {
+			if f.passes[table] > 0 {
+				f.passes[table]--
+				break
+			}
 			return 0, err
 		}
 	}
@@ -320,7 +326,7 @@ func (t fakeTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.Comma
 	return t.db.Exec(ctx, sql, args...)
 }
 
-func (fakeTx) Commit(context.Context) error   { return nil }
+func (t fakeTx) Commit(context.Context) error { return t.db.commitErr }
 func (fakeTx) Rollback(context.Context) error { return nil }
 
 type fakeRows struct {
@@ -447,7 +453,8 @@ func TestRunOnceNamesTheFailedWindowsInItsRecord(t *testing.T) {
 }
 
 // The run's record names the tool approvals the chat window deleted while approved, by their age and with their
-// expired conversation; a batch of conversations that did not commit names none of its approvals, which are still there.
+// expired conversation; a batch of conversations that did not commit (a statement refused, or the commit itself)
+// names none of its approvals, which are still there.
 func TestTheChatWindowNamesTheApprovalsItDeletedWhileApproved(t *testing.T) {
 	now := time.Date(2026, 11, 20, 3, 0, 0, 0, time.UTC)
 	old, recent := now.AddDate(0, 0, -200), now.AddDate(0, 0, -1)
@@ -463,15 +470,17 @@ func TestTheChatWindowNamesTheApprovalsItDeletedWhileApproved(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		fail      map[string]error
+		commitErr error
 		approvals int64
 		named     []string
 		failed    []string
 	}{
-		{"committed", nil, 4, []string{"a-old-approved", "a-idle-approved"}, []string{}},
-		{"conversations refused", map[string]error{"sessions": sessionsStillNamed}, 2, []string{"a-old-approved"}, []string{"chat"}},
+		{"committed", nil, nil, 4, []string{"a-old-approved", "a-idle-approved"}, []string{}},
+		{"conversations refused", map[string]error{"sessions": sessionsStillNamed}, nil, 2, []string{"a-old-approved"}, []string{"chat"}},
+		{"conversations' commit failed", nil, errors.New("commit failed"), 2, []string{"a-old-approved"}, []string{"chat"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			db := &fakeDB{fail: tc.fail, returns: map[string][]returnedApproval{"tool_approvals WHERE created_at < $1": byAge, "tool_approvals WHERE session_id = ANY($1)": withSession}}
+			db := &fakeDB{fail: tc.fail, commitErr: tc.commitErr, returns: map[string][]returnedApproval{"tool_approvals WHERE created_at < $1": byAge, "tool_approvals WHERE session_id = ANY($1)": withSession}}
 			w := &captureWriter{}
 			res := Purger{Pool: db, Cfg: Config{ChatDays: 180}, Audit: w, Now: func() time.Time { return now }}.RunOnce(context.Background())
 			if res.ToolApprovals != tc.approvals {
@@ -502,5 +511,44 @@ func TestTheChatWindowNamesTheApprovalsItDeletedWhileApproved(t *testing.T) {
 				t.Fatalf("open_approvals names %v, want %v", named, tc.named)
 			}
 		})
+	}
+}
+
+// The tool approvals' delete by age that fails after a full batch counts that batch: its rows are gone and those of
+// them deleted while approved are named, so the record never names more approvals than it counts.
+func TestAnApprovalsDeleteByAgeThatFailsAfterABatchCountsThatBatch(t *testing.T) {
+	now := time.Date(2026, 11, 21, 3, 0, 0, 0, time.UTC)
+	old := now.AddDate(0, 0, -200)
+	batch := make([]returnedApproval, BatchSize)
+	for i := range batch {
+		batch[i] = returnedApproval{OpenApproval{ID: fmt.Sprintf("a-%d", i), SessionID: "s-live", Tool: "k8s_scale", Cluster: "self", ApprovedAt: &old}, "executed"}
+	}
+	batch[0].status = "approved"
+	db := &fakeDB{
+		fail:    map[string]error{"tool_approvals": errors.New("approvals refused")},
+		passes:  map[string]int{"tool_approvals": 1},
+		returns: map[string][]returnedApproval{"tool_approvals WHERE created_at < $1": batch},
+	}
+	w := &captureWriter{}
+	res := Purger{Pool: db, Cfg: Config{ChatDays: 180}, Audit: w, Now: func() time.Time { return now }}.RunOnce(context.Background())
+	if res.ToolApprovals != BatchSize {
+		t.Fatalf("tool_approvals = %d, want %d (the batch deleted before the failure)", res.ToolApprovals, BatchSize)
+	}
+	if len(w.recs) != 1 {
+		t.Fatalf("want one audit record, got %d", len(w.recs))
+	}
+	var after struct {
+		ToolApprovals int64          `json:"tool_approvals"`
+		OpenApprovals []OpenApproval `json:"open_approvals"`
+		Failed        []string       `json:"failed_windows"`
+	}
+	if err := json.Unmarshal(w.recs[0].After, &after); err != nil {
+		t.Fatal(err)
+	}
+	if after.ToolApprovals != BatchSize || len(after.OpenApprovals) != 1 || after.OpenApprovals[0].ID != "a-0" {
+		t.Fatalf("tool_approvals = %d, open_approvals = %+v; want %d and a-0", after.ToolApprovals, after.OpenApprovals, BatchSize)
+	}
+	if !slices.Equal(after.Failed, []string{"chat"}) || !strings.Contains(w.recs[0].Error, "tool approvals: approvals refused") {
+		t.Fatalf("failed_windows = %v, error = %q; want [chat] and the approvals' error", after.Failed, w.recs[0].Error)
 	}
 }

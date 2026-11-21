@@ -53,12 +53,13 @@ func (p Purger) turn(ctx context.Context, lock Locker) {
 
 // PGLock is the Locker over the shared database: pg_try_advisory_lock on a connection of its own, made with the
 // pool's settings for the run and closed when it ends, outside the pool as k8s-service's internal/pglock. The purge's
-// statements, the sink floor and the run's audit row go through the pool, each batch a statement of its own, so no
-// transaction stays open for the run, and a pool of one connection (postgresql.pool.authService.maxConns: 1, or 2
-// beside the audit sinks' leader lock) still has that connection for them while the lock is held. The lock ends with
-// its connection's session: a replica stopped mid-run (SIGTERM, a crash) gives it back as the run ends or its
-// connection closes; one whose node is gone holds it until PostgreSQL drops that connection, and the turns that come
-// meanwhile are left to it, the next day's run deleting what they would have.
+// statements, the sink floor and the run's audit row go through the pool, a batch of conversations in one short
+// transaction and every other batch a statement of its own, so no transaction stays open for the run, and a pool of
+// one connection (postgresql.pool.authService.maxConns: 1, or 2 beside the audit sinks' leader lock) still has that
+// connection for them while the lock is held. The lock ends with its connection's session: a replica stopped mid-run
+// (SIGTERM, a crash) gives it back as the run ends or its connection closes; one whose node is gone holds it until
+// PostgreSQL drops that connection, and the turns that come meanwhile are left to it, the next day's run deleting what
+// they would have.
 type PGLock struct{ Pool *pgxpool.Pool }
 
 // TryLock takes the lock on a new connection; ok is false while another session holds it, and that connection is
