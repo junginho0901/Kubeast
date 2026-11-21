@@ -72,7 +72,7 @@ test.describe('API keys', () => {
     // cluster's `edit` binding; creating a Namespace stays forbidden for Write
     // by the cluster's own RBAC). The ConfigMaps come from the admin.
     const cmRead = `e2e-apikey-r-${stamp()}`
-    const cmWrite = `e2e-apikey-w-${stamp()}`
+    const cmWrite = withUndo(`e2e-apikey-w-${stamp()}`, async (w) => { await deleteCM(admin, cmRead); await deleteCM(admin, w) })
     const createCM = (name: string) =>
       request.post(`/api/v1/cluster/resources/yaml/create?cluster=${CLUSTER}`, {
         headers: bearer(admin),
@@ -238,7 +238,7 @@ test.describe('API keys', () => {
     const run = stamp()
     const customRole = `e2e-apikey-custom-${run}`
     const auditorRole = `e2e-apikey-auditor-${run}`
-    const roleIds: number[] = []
+    const roleIds = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: bearer(admin), failOnStatusCode: false }) })
     const userIds: string[] = []
     const groupsFor = async (token: string): Promise<string[]> => {
       const res = await request.get(`/api/v1/cluster/namespaces/kube-system/pods?cluster=${CLUSTER}`, { headers: onCluster(token, CLUSTER), failOnStatusCode: false })
@@ -355,4 +355,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

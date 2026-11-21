@@ -107,8 +107,8 @@ test.describe('log search', () => {
   test('a grant limited to namespaces searches where the cluster lets it, not every namespace', async ({ request }) => {
     const id = Date.now().toString(36)
     const email = `e2e-logsearch-${id}@kubeast.local`
-    const ns = `e2e-logsearch-${id}`
-    const rbac = `e2e-logsearch-${id}`
+    const ns = withUndo(`e2e-logsearch-${id}`, (n) => tryKubectl(`delete namespace ${n} --wait=false`))
+    const rbac = withUndo(`e2e-logsearch-${id}`, (r) => { tryKubectl(`delete clusterrolebinding ${r}-imp`); tryKubectl(`delete clusterrole ${r}-imp`) })
     let userId = ''
     try {
       kubectl(`create namespace ${ns}`)
@@ -153,4 +153,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

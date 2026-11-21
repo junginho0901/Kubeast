@@ -83,7 +83,7 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       const roles = (await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()) as { id: number; name: string }[]
       for (const r of roles.filter((r) => r.name.startsWith(PREFIX))) await request.delete(`/api/v1/auth/admin/roles/${r.id}`, { headers: bearer(admin), failOnStatusCode: false })
     }
-    await cleanup()
+    withUndo(await cleanup(), () => cleanup())
     try {
       const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: roleName, description: 'e2e audit pages', permissions: ['admin.audit.read'] } })
       expect(role.status(), await role.text()).toBeLessThan(300)
@@ -232,7 +232,7 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
     test.setTimeout(120_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const run = Date.now().toString(36)
-    const ids = [`${PREFIX}rec-${run}-1`, `${PREFIX}rec-${run}-2`]
+    const ids = withUndo([`${PREFIX}rec-${run}-1`, `${PREFIX}rec-${run}-2`], () => psql(`DELETE FROM session_recordings WHERE id LIKE '${PREFIX}rec-%'`))
     const typed = `${run}-a_b`
     psql(`DELETE FROM session_recordings WHERE id LIKE '${PREFIX}rec-%'`)
     try {
@@ -478,7 +478,7 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
     const title = `${PREFIX}long-${Date.now().toString(36)}`
     const created = await request.post(`/api/v1/sessions?cluster=${CHAT.cluster}`, { headers: bearer(admin), data: { title } })
     expect(created.ok(), await created.text()).toBeTruthy()
-    const id = (await created.json()).id as string
+    const id = withUndo((await created.json()).id as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
     const N = 205
     try {
       for (let from = 0; from < N; from += 50) {
@@ -524,7 +524,7 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
   test('AI chat: each session card counts the messages the session API holds', async ({ page, request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const run = Date.now().toString(36)
-    const made: { id: string; title: string; n: number }[] = []
+    const made = withUndo<{ id: string; title: string; n: number }[]>([], async (list) => { for (const s of list) await request.delete(`/api/v1/sessions/${s.id}`, { headers: bearer(admin), failOnStatusCode: false }) })
     try {
       for (const n of [3, 1]) {
         const title = `${PREFIX}msg${n}-${run}`
@@ -559,4 +559,17 @@ test.describe('number check: audit logs, session recordings, clusters, AI chat',
       for (const s of made) await request.delete(`/api/v1/sessions/${s.id}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
