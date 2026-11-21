@@ -1,0 +1,34 @@
+{
+ "id": "12_decoy_quiet_config",
+ "title": "An old crash-looping pod as a decoy, a quiet ConfigMap edit as the cause",
+ "group": "trap",
+ "cluster": "self",
+ "namespace": "shop-12",
+ "question": "self 클러스터 shop-12에서 장바구니 담기가 안 된대. 원인이 뭐야?",
+ "question_vague": "self 클러스터 shop-12 사이트에 문제가 있다는데 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "storefront-config"
+  ],
+  [
+   "/api/v2/cart",
+   "v2"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/storefront deploy/cart deploy/catalog --timeout=10s",
+ "wait_seconds": 240,
+ "baseline_seconds": 600,
+ "inject_cmds": [
+  "kubectl -n $NS patch configmap storefront-config --type=merge --patch-file $CASE_DIR/inject-patch.yaml"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/storefront --since=20s | grep 'request failed' | grep -q 'upstream=cart'",
+ "inject_wait_seconds": 240,
+ "ask_after_seconds": [300],
+ "undo_cmds": [
+  "kubectl -n $NS apply -f $CASE_DIR/setup.yaml"
+ ],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420
+}

@@ -1,0 +1,19 @@
+# Chaos Mesh on kind (scripts/kind-chaos.sh): chart chaos-mesh/chaos-mesh 2.8.8 (app v2.8.8) rendered with
+# `helm template --include-crds` and applied server-side in the second cluster (kubeast-b), so that cluster keeps no
+# Helm release (helm-cluster-switch.spec.ts, multi-cluster-helm.spec.ts). A kind node runs containerd: runtime and
+# socket path as on Chaos Mesh's "Install Chaos Mesh using Helm" page (2.8.8, Containerd tab). One controller instead
+# of three and no dashboard (experiments are applied as objects); the DNS server stays for DNSChaos. PodChaos
+# pod-failure puts the pause image the e2e specs use in place of a container, not the chart's unpinned
+# gcr.io/google-containers/pause:latest.
+controllerManager:
+  replicaCount: 1
+  podChaos:
+    podFailure:
+      pauseImage: registry.k8s.io/pause:3.10
+chaosDaemon:
+  runtime: containerd
+  socketPath: /run/containerd/containerd.sock
+dashboard:
+  create: false
+dnsServer:
+  create: true
