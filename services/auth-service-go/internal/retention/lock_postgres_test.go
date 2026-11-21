@@ -98,8 +98,46 @@ func TestPostgresATurnTakenDuringAnotherRunLeavesItToThatRun(t *testing.T) {
 	}
 }
 
+// lockSessionName is the application_name of namedLock's connections.
+const lockSessionName = "kubeast-retention-lock-test"
+
+// namedLock is a PGLock whose connections the test database lists as lockSessionName: they are made with the settings
+// of a pool that opens none of its own, so its sessions are counted apart from the pool's.
+func namedLock(t *testing.T, pool *pgxpool.Pool) PGLock {
+	t.Helper()
+	cfg := pool.Config()
+	cfg.MinConns, cfg.MinIdleConns = 0, 0
+	cfg.ConnConfig.RuntimeParams["application_name"] = lockSessionName
+	named, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(named.Close)
+	return PGLock{Pool: named}
+}
+
+// lockSessions counts the test database's sessions named lockSessionName, asking again for up to 2 s until there are
+// want of them: a session ends on the server shortly after its client closes the connection.
+func lockSessions(t *testing.T, pool *pgxpool.Pool, want int64) int64 {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		var n int64
+		if err := pool.QueryRow(context.Background(),
+			`SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND application_name = $1`,
+			lockSessionName).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n == want || time.Now().After(deadline) {
+			return n
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // While another session holds LockKey a turn deletes nothing and writes no row; once it is free the turn runs, and
-// gives the lock back when it ends.
+// gives the lock back when it ends. Either way the turn closes the connection it took the lock on: the test database
+// has as many sessions of that connection's name after each turn as before it.
 func TestPostgresATurnWhileTheLockIsHeldElsewhereDeletesNothing(t *testing.T) {
 	pool := freshMigratedDatabase(t)
 	ctx := context.Background()
@@ -116,19 +154,34 @@ func TestPostgresATurnWhileTheLockIsHeldElsewhereDeletesNothing(t *testing.T) {
 		t.Fatalf("pg_try_advisory_lock = %v, %v", held, err)
 	}
 
+	lock := namedLock(t, pool)
+	before := lockSessions(t, pool, 0)
+
 	w := &captureWriter{}
 	p := Purger{Pool: pool, Cfg: Config{AuditDays: 30}, Audit: w, Now: func() time.Time { return now }}
-	p.turn(ctx, PGLock{Pool: pool})
+	p.turn(ctx, lock)
 	if n := count(t, pool, "auth_audit_logs"); n != 3 || len(w.recs) != 0 {
 		t.Fatalf("with the lock held elsewhere: %d rows left, %d records; want 3 and 0", n, len(w.recs))
+	}
+	if n := lockSessions(t, pool, before); n != before {
+		t.Fatalf("sessions of the lock's connection: %d after a turn left to another session, %d before it", n, before)
 	}
 
 	if _, err := other.Exec(ctx, `SELECT pg_advisory_unlock($1)`, LockKey); err != nil {
 		t.Fatal(err)
 	}
-	p.turn(ctx, PGLock{Pool: pool})
+	var during int64
+	p.AuditFloor = func(context.Context) (int64, error) {
+		during = lockSessions(t, pool, before+1)
+		return math.MaxInt64, nil
+	}
+	p.turn(ctx, lock)
 	if n := count(t, pool, "auth_audit_logs"); n != 0 || len(w.recs) != 1 || w.recs[0].Result != audit.ResultSuccess {
 		t.Fatalf("with the lock free: %d rows left, records %+v; want 0 and one success", n, w.recs)
+	}
+	if n := lockSessions(t, pool, before); during != before+1 || n != before {
+		t.Fatalf("sessions of the lock's connection: %d before the turn, %d during its run, %d after it; want %d, %d, %d",
+			before, during, n, before, before+1, before)
 	}
 	if !mayTakeLock(t, other) {
 		t.Fatal("the lock is still held after the turn ended")
