@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: search-indexes}
+data:
+  INDEXES: "products:30 reviews:36"
+---
+apiVersion: v1
+kind: Service
+metadata: {name: search-peers}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector: {app: search}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: search}
+spec:
+  selector: {app: search}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: search}
+spec:
+  serviceName: search-peers
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector: {matchLabels: {app: search}}
+  template:
+    metadata: {labels: {app: search}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: {name: search-indexes}
+          env:
+            - {name: NODES, value: "3"}
+            - {name: STARTUP_SECONDS, value: "10"}
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cat > /www/cgi-bin/state <<'EOF'
+              #!/bin/sh
+              printf 'Content-Type: text/plain\r\n\r\n'
+              if [ -f /tmp/loaded ]; then echo loaded; else echo starting; fi
+              EOF
+              cat > /www/cgi-bin/health <<'EOF'
+              #!/bin/sh
+              if [ -f /tmp/loaded ]; then printf 'Content-Type: text/plain\r\n\r\nok\n'; else printf 'Status: 503 Service Unavailable\r\nContent-Type: text/plain\r\n\r\nshards not allocated\n'; fi
+              EOF
+              cat > /www/cgi-bin/search <<'EOF'
+              #!/bin/sh
+              if [ ! -f /tmp/loaded ]; then printf 'Status: 503 Service Unavailable\r\nContent-Type: text/plain\r\n\r\nshards not allocated\n'; exit 0; fi
+              printf 'Content-Type: application/json\r\n\r\n{"hits":[101,104,117],"took_ms":4}\n'
+              EOF
+              chmod 755 /www/cgi-bin/state /www/cgi-bin/health /www/cgi-bin/search
+              httpd -f -p 8080 -h /www &
+              me=$(hostname)
+              total=0
+              for ix in $INDEXES; do total=$((total + ${ix#*:})); done
+              echo "level=info msg=\"node starting\" node=$me indexes=\"$INDEXES\" index_mb=$total"
+              sleep "$STARTUP_SECONDS"
+              held=0; nodes_before=0
+              while true; do
+                members=1; alive=1; i=0
+                while [ $i -lt "$NODES" ]; do
+                  peer="search-$i"
+                  if [ "$peer" != "$me" ]; then
+                    s=$(wget -q -T 1 -O- "http://$peer.search-peers:8080/cgi-bin/state" 2>/dev/null)
+                    [ "$s" = loaded ] && members=$((members + 1))
+                    [ -n "$s" ] && alive=$((alive + 1))
+                  fi
+                  i=$((i + 1))
+                done
+                if [ -f /tmp/loaded ] || [ $members -gt 1 ]; then nodes=$members; else nodes=$alive; fi
+                want=$(( (total + nodes - 1) / nodes ))
+                if [ $nodes -lt $nodes_before ]; then
+                  echo "level=warn msg=\"node left, taking over its shards\" node=$me nodes=$nodes shard_memory_mb=$want"
+                elif [ $nodes -ne $nodes_before ]; then
+                  echo "level=info msg=\"shards allocated\" node=$me nodes=$nodes shard_memory_mb=$want"
+                fi
+                nodes_before=$nodes
+                while [ $held -lt $want ]; do held=$((held + 1)); eval "shard_$held=\$(head -c 1048576 /dev/zero | tr '\\000' x)"; done
+                while [ $held -gt $want ]; do unset "shard_$held"; held=$((held - 1)); done
+                touch /tmp/loaded
+                sleep 5
+              done
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /cgi-bin/health, port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 20m, memory: 48Mi}, limits: {cpu: 200m, memory: 48Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: storefront}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: storefront}}
+  template:
+    metadata: {labels: {app: storefront}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: SEARCH_URL, value: "http://search:8080/cgi-bin/search?q=shoes"}
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              echo "level=info msg=\"storefront started\""
+              while true; do
+                t0=$(now_cs)
+                if out=$(wget -q -T 3 -O /dev/null "$SEARCH_URL" 2>&1); then
+                  echo "level=info msg=\"upstream ok\" upstream=search duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"upstream request failed\" upstream=search duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+                sleep 2
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: report-builder}
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 60
+      template:
+        metadata: {labels: {app: report-builder}}
+        spec:
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 1
+          containers:
+            - name: main
+              image: docker.io/library/busybox:1.38.0
+              imagePullPolicy: IfNotPresent
+              command: [sh, -c]
+              args:
+                - |
+                  if out=$(wget -q -T 5 -O- "http://search:8080/cgi-bin/search?q=*&agg=brand&size=0" 2>&1); then
+                    echo "level=info msg=\"brand report built\" buckets=24"
+                  else
+                    echo "level=error msg=\"brand report failed\" err=\"$(echo $out)\""
+                    exit 1
+                  fi
+              resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}

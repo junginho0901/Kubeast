@@ -1,0 +1,27 @@
+{
+ "id": "22_workers_over_memory",
+ "control": false,
+ "symptom": "visitor's calls to shop-api fail for stretches every few minutes; both shop-api pods restart again and again with OOMKilled about a minute and a half after each start",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "ConfigMap/shop-22/shop-api-settings",
+   "kind": "config_change",
+   "accept_resources": ["shop-api-settings", "WEB_WORKERS"],
+   "accept_kinds": ["rollout"]
+  }
+ ],
+ "path": [
+  {"resource": "ConfigMap/shop-22/shop-api-settings", "role": "cause", "required": true, "accept": ["shop-api-settings", "WEB_WORKERS"], "note": "WEB_WORKERS 3 → 6; each worker's page cache grows to 12 MB, six of them do not fit in 64Mi"},
+  {"resource": "Deployment/shop-22/shop-api", "role": "via", "required": true, "accept": ["^(deployment|replicaset|pod)/(shop-22/)?shop-api(-[a-z0-9]{6,10})?(-[a-z0-9]{5})?$", "^shop-api$"], "note": "one worker's OOM kill stops the whole container; it warms up again and is killed again"},
+  {"resource": "Deployment/shop-22/visitor", "role": "symptom", "required": true, "accept": ["visitor", "service/(shop-22/)?shop-api"]}
+ ],
+ "also_ok": ["Deployment/shop-22/shop-api", "ReplicaSet/shop-22/shop-api-<hash>", "Pod/shop-22/shop-api-<hash>", "Service/shop-22/shop-api"],
+ "decoys": [
+  {"resource": "Deployment/shop-22/session-cache", "why": "the pod closest to its memory limit (about 80 %) the whole time, before and after; never killed"},
+  {"resource": "Deployment/shop-22/visitor", "why": "the caller"},
+  {"resource": "Node/*", "why": "the node has free memory; the kills are the pod's own limit"}
+ ]
+}

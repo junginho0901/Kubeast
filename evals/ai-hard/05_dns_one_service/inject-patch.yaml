@@ -1,0 +1,9 @@
+spec:
+  template:
+    spec:
+      dnsPolicy: None
+      dnsConfig:
+        nameservers: [KUBE_DNS_IP]
+        searches: [svc.cluster.local, cluster.local]
+        options:
+          - {name: ndots, value: "2"}
