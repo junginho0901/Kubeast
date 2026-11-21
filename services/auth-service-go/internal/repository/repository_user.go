@@ -18,9 +18,9 @@ func (r *Repository) CreateUser(ctx context.Context, u *model.User) error {
 		u.AuthSource = model.AuthSourcePassword
 	}
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO auth_users (id, name, email, team, role_id, password_hash, auth_source, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		u.ID, u.Name, u.Email, u.Team, u.RoleID, u.PasswordHash, u.AuthSource, u.CreatedAt, u.UpdatedAt,
+		`INSERT INTO auth_users (id, name, email, team, role_id, password_hash, auth_source, created_at, updated_at, self_signed_up)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		u.ID, u.Name, u.Email, u.Team, u.RoleID, u.PasswordHash, u.AuthSource, u.CreatedAt, u.UpdatedAt, u.SelfSignedUp,
 	)
 	return err
 }
@@ -29,10 +29,10 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*model.U
 	var u model.User
 	err := r.pool.QueryRow(ctx,
 		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.token_version, u.auth_source, u.created_at, u.updated_at,
-		        u.failed_logins, u.last_failed_login, u.locked_until, u.last_login_at, u.dormant_locked_at
+		        u.failed_logins, u.last_failed_login, u.locked_until, u.last_login_at, u.dormant_locked_at, u.self_signed_up
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.email = $1`, email,
 	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.TokenVersion, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt,
-		&u.FailedLogins, &u.LastFailedLogin, &u.LockedUntil, &u.LastLoginAt, &u.DormantLockedAt)
+		&u.FailedLogins, &u.LastFailedLogin, &u.LockedUntil, &u.LastLoginAt, &u.DormantLockedAt, &u.SelfSignedUp)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -43,10 +43,10 @@ func (r *Repository) GetUserByID(ctx context.Context, id string) (*model.User, e
 	var u model.User
 	err := r.pool.QueryRow(ctx,
 		`SELECT u.id, u.name, u.email, u.team, u.role_id, r.name, u.password_hash, u.token_version, u.auth_source, u.created_at, u.updated_at,
-		        u.last_login_at, u.locked_until, u.dormant_locked_at
+		        u.last_login_at, u.locked_until, u.dormant_locked_at, u.self_signed_up
 		 FROM auth_users u JOIN roles r ON r.id = u.role_id WHERE u.id = $1`, id,
 	).Scan(&u.ID, &u.Name, &u.Email, &u.Team, &u.RoleID, &u.RoleName, &u.PasswordHash, &u.TokenVersion, &u.AuthSource, &u.CreatedAt, &u.UpdatedAt,
-		&u.LastLoginAt, &u.LockedUntil, &u.DormantLockedAt)
+		&u.LastLoginAt, &u.LockedUntil, &u.DormantLockedAt, &u.SelfSignedUp)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -228,14 +228,39 @@ func (r *Repository) UpdateUserPassword(ctx context.Context, id, passwordHash st
 	return err
 }
 
-// MoveToSingleSignOn takes the account's password away and makes it one that signs in through the provider
-// (auth_source oidc), in one statement.
-func (r *Repository) MoveToSingleSignOn(ctx context.Context, id string) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE auth_users SET password_hash = $1, auth_source = $2, updated_at = $3 WHERE id = $4`,
-		"", model.AuthSourceOIDC, time.Now().UTC(), id,
-	)
-	return err
+// SingleSignOnMove is what MoveToSingleSignOn did to the account.
+type SingleSignOnMove struct {
+	Moved           bool // it was still a self sign-up to take over, and now signs in through the provider
+	PasswordRemoved bool // it held a password, which went with every token issued before
+	TokenVersion    int  // its token_version after the statement, when Moved
+}
+
+// MoveToSingleSignOn takes over a self sign-up a provider's sign-in reached, in one statement that asks the row again
+// under its lock: an account the sign-up form made (self_signed_up) that is still a password account and waits for
+// approval or holds no password. The statement takes the password away, makes the account one that signs in through
+// the provider (auth_source oidc) and, when it took a password away, ends the tokens issued so far (token_version + 1).
+// An account that is no longer such a self sign-up is left as it is (Moved false): another sign-in took it over first,
+// or an admin approved it while it held a password.
+func (r *Repository) MoveToSingleSignOn(ctx context.Context, id string) (SingleSignOnMove, error) {
+	var move SingleSignOnMove
+	err := r.pool.QueryRow(ctx,
+		`UPDATE auth_users u
+		    SET password_hash = $1, auth_source = $2, updated_at = $3,
+		        token_version = u.token_version + CASE WHEN o.password_hash <> '' THEN 1 ELSE 0 END
+		   FROM (SELECT id, password_hash FROM auth_users WHERE id = $4 FOR UPDATE) o
+		  WHERE u.id = o.id AND u.auth_source = $5 AND u.self_signed_up
+		    AND (u.password_hash = '' OR u.role_id IN (SELECT ro.id FROM roles ro WHERE ro.name = $6))
+		RETURNING u.token_version, o.password_hash <> ''`,
+		"", model.AuthSourceOIDC, time.Now().UTC(), id, model.AuthSourcePassword, "Pending",
+	).Scan(&move.TokenVersion, &move.PasswordRemoved)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SingleSignOnMove{}, nil
+	}
+	if err != nil {
+		return SingleSignOnMove{}, err
+	}
+	move.Moved = true
+	return move, nil
 }
 
 // UpdateUserPasswordEndingTokens sets the password and ends the tokens issued so far in one statement: a password

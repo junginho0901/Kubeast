@@ -37,25 +37,29 @@ func setsASession(w *httptest.ResponseRecorder) bool {
 	return false
 }
 
-// A password an account the provider made was given (a reset in an earlier version) does not sign it in. The answer is
-// a wrong password's, the row says why, and no failure is counted toward the lockout.
+// A password an account the provider made was given (a reset in an earlier version) does not sign it in, also when
+// admin.email names its address in other letters: the chart's admin account is the one stored as written. The answer
+// is a wrong password's, the row says why, and no failure is counted toward the lockout.
 func TestPasswordSignInRefusesAnAccountThatSignsInThroughSingleSignOn(t *testing.T) {
 	wrong := newAuthAPI(t, pendingRequest{owner: "requester"}, signInAccount(t, "pw@example.com", "password"))
 	wrongAnswer := signInWith(wrong, "pw@example.com", "not-the-password-1")
 	locked := signInAccount(t, "sso@example.com", "oidc")
 	locked.rows[0][13] = time.Now().Add(time.Hour).UTC().Format(pgTimestamp) // locked_until, from failures before the upgrade
+	otherLetters := func(c *config.Config) { c.DefaultAdminEmail = "Sso@Example.com" }
 	for _, c := range []struct {
 		name     string
+		settings func(*config.Config)
 		account  pgRule
 		password string
 	}{
-		{"the password it was given", signInAccount(t, "sso@example.com", "oidc"), testPassword},
-		{"a wrong password", signInAccount(t, "sso@example.com", "oidc"), "not-the-password-1"},
-		{"no password", signInAccount(t, "sso@example.com", "oidc"), ""},
-		{"while a lock from earlier failures stands", locked, testPassword},
+		{"the password it was given", nil, signInAccount(t, "sso@example.com", "oidc"), testPassword},
+		{"a wrong password", nil, signInAccount(t, "sso@example.com", "oidc"), "not-the-password-1"},
+		{"no password", nil, signInAccount(t, "sso@example.com", "oidc"), ""},
+		{"while a lock from earlier failures stands", nil, locked, testPassword},
+		{"admin.email naming its address in other letters", otherLetters, signInAccount(t, "sso@example.com", "oidc"), testPassword},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			api := newAuthAPI(t, pendingRequest{owner: "requester"}, c.account)
+			api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, c.settings, c.account)
 			w := signInWith(api, "sso@example.com", c.password)
 			if w.Code != wrongAnswer.Code || w.Body.String() != wrongAnswer.Body.String() {
 				t.Fatalf("%d %s, want a wrong password's answer %d %s", w.Code, w.Body.String(), wrongAnswer.Code, wrongAnswer.Body.String())
@@ -92,7 +96,7 @@ func TestPasswordSignInStillOpensPasswordAccountsAndTheChartAdmin(t *testing.T) 
 		typed    string
 	}{
 		{"a password account", nil, signInAccount(t, "pw@example.com", "password"), "pw@example.com"},
-		{"the chart's admin made by the provider", chartAdmin("Ops@Example.com", "on"), signInAccount(t, "ops@example.com", "oidc"), "ops@example.com"},
+		{"the chart's admin made by the provider", chartAdmin("ops@example.com", "on"), signInAccount(t, "ops@example.com", "oidc"), "ops@example.com"},
 		{"the same with only the admin's password sign-in", chartAdmin("ops@example.com", "admin-only"), signInAccount(t, "ops@example.com", "oidc"), "ops@example.com"},
 		{"the chart's admin under its default name", chartAdmin("admin", "on"), signInAccount(t, "admin", "oidc"), "admin"},
 	} {

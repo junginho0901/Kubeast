@@ -85,6 +85,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		RoleID:       pendingRole.ID,
 		RoleName:     pendingRole.Name,
 		PasswordHash: hash,
+		SelfSignedUp: true, // a provider's sign-in reaching it while it waits takes it over (selfSignUpToMove)
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}

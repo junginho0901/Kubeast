@@ -40,8 +40,8 @@ func storedLinkAccount(email, source string, roleName string) pgRule {
 func storedLinkAccountHolding(passwordHash, email, source, roleName string) pgRule {
 	return pgRule{
 		match: "WHERE u.email =",
-		oids:  []uint32{textOID, textOID, textOID, textOID, integerOID, textOID, textOID, integerOID, textOID, stampOID, stampOID, integerOID, stampOID, stampOID, stampOID, stampOID},
-		rows:  [][]any{{"stored", "Stored", email, nil, roleAdmin, roleName, passwordHash, 0, source, pgNow(), pgNow(), 0, nil, nil, nil, nil}},
+		oids:  []uint32{textOID, textOID, textOID, textOID, integerOID, textOID, textOID, integerOID, textOID, stampOID, stampOID, integerOID, stampOID, stampOID, stampOID, stampOID, booleanOID},
+		rows:  [][]any{{"stored", "Stored", email, nil, roleAdmin, roleName, passwordHash, 0, source, pgNow(), pgNow(), 0, nil, nil, nil, nil, "f"}},
 	}
 }
 

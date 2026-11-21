@@ -9,41 +9,89 @@ import (
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
 )
 
-// movedToSingleSignOn is the statement that makes an account one the provider took over.
+// movedToSingleSignOn is the part of the statement that makes an account one the provider took over.
 const movedToSingleSignOn = "auth_source =  'oidc'"
 
-// A provider's sign-in that reaches a self sign-up takes it over: the account becomes oidc in the statement that takes
-// its password away, so the password form refuses it and an admin's reset gives it no password from then on. A
-// password account holding no password, which only that sign-in leaves (a build before this one kept it a password
-// account), is taken over at its next such sign-in, with its tokens kept: no password held them. An account an admin
-// approved keeps its password and stays a password account.
+// times counts the statements containing text that reached the database.
+func (f *fakePG) times(text string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, sql := range f.seen {
+		if strings.Contains(sql, text) {
+			n++
+		}
+	}
+	return n
+}
+
+// A provider's sign-in that reaches a self sign-up takes it over: one statement makes the account oidc, takes its
+// password away and ends its tokens when it held one, so the password form refuses it and an admin's reset gives it no
+// password from then on. A self sign-up holding no password, which only that sign-in leaves (a build before this one
+// kept it a password account), is taken over at its next such sign-in, its tokens kept: no password held them. The
+// sign-in's token carries the version the statement left. An account an admin made, Pending or not, a self sign-up an
+// admin approved and the chart's admin account keep their passwords, and the statement is not sent for them. When the
+// statement finds the account no longer to take over (another sign-in took it over first), the sign-in reads the
+// account again and goes on from it, writing no row.
 func TestProviderSigningInToASelfSignUpMakesItAnOIDCAccount(t *testing.T) {
-	currentVersion := pgRule{match: "SELECT token_version FROM auth_users WHERE id", oids: []uint32{integerOID}, rows: [][]any{{4}}}
+	const email = "someone@example.com"
 	for _, c := range []struct {
-		name                    string
-		role, hash              string
-		moved, removed, tokened bool
+		name     string
+		admin    string // admin.email
+		account  pgRule
+		answer   *pgRule // the statement's answer; nil = no row, as for an account no longer to take over
+		sent     bool    // the statement reached the database
+		moved    bool
+		removed  bool
+		reads    int // lookups of the account by address
+		tokenVer float64
 	}{
-		{"waiting for approval with its sign-up's password", "Pending", "stored-hash", true, true, true},
-		{"taken over by a build before, approved since", "Member", "", true, false, false},
-		{"taken over by a build before, still waiting", "Pending", "", true, false, false},
-		{"approved with its own password", "Member", "stored-hash", false, false, false},
+		{"waiting for approval with its sign-up's password", "", storedSelfSignUp(email, "Pending", "stored-hash"), ptrRule(takenOver(5, true)), true, true, true, 1, 5},
+		{"taken over by a build before, approved since", "", storedSelfSignUp(email, "Member", ""), ptrRule(takenOver(0, false)), true, true, false, 1, 0},
+		{"taken over by a build before, still waiting", "", storedSelfSignUp(email, "Pending", ""), ptrRule(takenOver(0, false)), true, true, false, 1, 0},
+		{"a self sign-up approved with its own password", "", storedSelfSignUp(email, "Member", "stored-hash"), nil, false, false, false, 1, 0},
+		{"an account an admin made, waiting", "", storedAccount(email, "Pending", "stored-hash"), nil, false, false, false, 1, 0},
+		{"an account an admin made, holding no password", "", storedAccount(email, "Member", ""), nil, false, false, false, 1, 0},
+		{"the chart's admin account, waiting", email, storedSelfSignUp(email, "Pending", "stored-hash"), nil, false, false, false, 1, 0},
+		{"the chart's admin address in other letters, waiting", "Someone@Example.com", storedSelfSignUp(email, "Pending", "stored-hash"), ptrRule(takenOver(1, true)), true, true, true, 1, 1},
+		{"taken over by another sign-in first", "", storedSelfSignUp(email, "Pending", "stored-hash"), nil, true, false, false, 2, 0},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			p := startOIDCProvider(t)
-			api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, p.settings, currentVersion, storedAccount("someone@example.com", c.role, c.hash))
-			to, session := p.signIn(api, map[string]any{"email": "someone@example.com", "email_verified": true})
+			settings := func(cfg *config.Config) {
+				p.settings(cfg)
+				if c.admin != "" {
+					cfg.DefaultAdminEmail = c.admin
+				}
+			}
+			rules := []pgRule{c.account}
+			if c.answer != nil {
+				rules = append([]pgRule{*c.answer}, rules...)
+			}
+			api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, settings, rules...)
+			to, session := p.signIn(api, map[string]any{"email": email, "email_verified": true})
 			if to != "/" || session == nil {
 				t.Fatalf("sent to %q with session %v, want a session", to, session)
 			}
-			if got := api.db.ran(movedToSingleSignOn); got != c.moved {
-				t.Errorf("made an oidc account = %v, want %v (%s)", got, c.moved, api.db.statement("auth_source ="))
+			statement := api.db.statement(movesToSingleSignOn)
+			if got := statement != ""; got != c.sent {
+				t.Errorf("statement sent = %v, want %v", got, c.sent)
 			}
-			if got := api.db.ran(clearedPassword); got != c.moved {
-				t.Errorf("password statement ran = %v, want %v", got, c.moved)
+			if c.sent {
+				for _, part := range []string{movedToSingleSignOn, clearedPassword, "u.self_signed_up", "u.auth_source =  'password'", "ro.name =  'Pending'", "FOR UPDATE"} {
+					if !strings.Contains(statement, part) {
+						t.Errorf("statement %q does not hold %q", statement, part)
+					}
+				}
 			}
-			if got := api.db.ran(bumpStatement); got != c.tokened {
-				t.Errorf("tokens ended = %v, want %v", got, c.tokened)
+			if api.db.ran(bumpStatement) {
+				t.Error("tokens ended by a statement of their own")
+			}
+			if n := api.db.times("u.role_id WHERE u.email ="); n != c.reads {
+				t.Errorf("%d lookups by address, want %d", n, c.reads)
+			}
+			if session["tv"] != c.tokenVer {
+				t.Errorf("session token version %v, want %v", session["tv"], c.tokenVer)
 			}
 			rows := api.store.successes("user.account.link")
 			if !c.moved {
@@ -65,18 +113,24 @@ func TestProviderSigningInToASelfSignUpMakesItAnOIDCAccount(t *testing.T) {
 	}
 }
 
+func ptrRule(r pgRule) *pgRule { return &r }
+
 // An admin's reset asks what the password form asks (SignsInWithPassword): the chart's admin account, which the form
-// opens whatever made it, gets a password as a password account does; under another address the same account is
+// opens whatever made it, gets a password as a password account does. The chart's admin account is the one stored under
+// admin.email as written: under another address, or one that differs from it only in letter case, the same account is
 // refused as one that signs in through single sign-on.
 func TestPasswordResetAsksWhatThePasswordFormAsks(t *testing.T) {
-	chartAdmin := func(c *config.Config) { c.DefaultAdminEmail = "Chart@Example.com" }
+	adminEmail := func(email string) func(*config.Config) {
+		return func(c *config.Config) { c.DefaultAdminEmail = email }
+	}
 	for _, c := range []struct {
 		name     string
 		settings func(*config.Config)
 		status   int
 	}{
-		{"the chart's admin account the provider made", chartAdmin, http.StatusOK},
+		{"the chart's admin account the provider made", adminEmail("chart@example.com"), http.StatusOK},
 		{"the same account when admin.email names another", nil, http.StatusBadRequest},
+		{"the same account when admin.email names it in other letters", adminEmail("Chart@Example.com"), http.StatusBadRequest},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, c.settings, append(ssoAccountRules("chart", roleAdmin, "Admin"), accountFixture()...)...)
