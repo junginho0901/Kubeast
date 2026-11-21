@@ -237,7 +237,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
   -n kubeast --reset-values -f my-values.yaml
 ```
 
-기본값 그대로 두면 되는 새 값은 `podShutdown.preStopSeconds`(5), `pdb.maxUnavailable`(1), `streams.*`(꺼짐), `autoscaling.<service>`(꺼짐), `redis.acl.*`(켜짐), `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections`(300), `ai.providers.claudeCode.maxConcurrentTotal`(0), `queueWaitSeconds`(60), `memoryLimit`(2Gi), `gateway.accessLog.upstreamTimes`(꺼짐), `multicluster.wsWatchOpeningConcurrency`(8), `multicluster.wsWatchStreamWindowKiB`(1024), `auth.impersonation.sharedReadChecks.*`(꺼짐)입니다. 각 값의 설명은 [설정](configuration.md)에 있습니다.
+기본값 그대로 두면 되는 새 값은 `podShutdown.preStopSeconds`(5, AWS Application Load Balancer 뒤라면 위 표의 행), `pdb.maxUnavailable`(1), `streams.*`(꺼짐), `autoscaling.<service>`(꺼짐), `redis.acl.*`(켜짐), `postgresql.sessionLimits.*`, `postgresql.pool.<service>.maxConns`, `postgresql.maxConnections`(300), `ai.providers.claudeCode.maxConcurrentTotal`(0), `queueWaitSeconds`(60), `memoryLimit`(2Gi), `gateway.accessLog.upstreamTimes`(꺼짐), `multicluster.wsWatchOpeningConcurrency`(8), `multicluster.wsWatchStreamWindowKiB`(1024), `auth.impersonation.sharedReadChecks.*`(꺼짐)입니다. 각 값의 설명은 [설정](configuration.md)에 있습니다.
 
 ## 4. 저절로 바뀌는 것
 
