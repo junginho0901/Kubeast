@@ -40,7 +40,7 @@ func (p Purger) turn(ctx context.Context, lock Locker) {
 		}
 		err = fmt.Errorf("retention: lock: %w", err)
 		slog.Error("retention: purge not run", "error", err)
-		p.record(ctx, now, Result{}, err)
+		p.record(ctx, now, Result{}, nil, err)
 		return
 	}
 	if !ok {
