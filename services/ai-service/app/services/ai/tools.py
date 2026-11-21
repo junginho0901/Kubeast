@@ -10,6 +10,19 @@
 
 from typing import Dict, List
 
+from app.services import switch
+
+# resource_graph's call parameters, offered only where the cluster has features.callGraph on (features.PARAM_GATES), and
+# in the MCP server's list only with CALL_GRAPH_ENABLED (offer_call_graph).
+CALLS_PARAM = "include"
+CALLS_SINCE_PARAM = "since"
+CALLS_PARAMS = (CALLS_PARAM, CALLS_SINCE_PARAM)
+CALLS_DESCRIPTION = (
+    " With include [\"calls\"] it adds who calls whom over since — requests, errors and p90 latency from the traces, connections "
+    "and drops from the network — with the failing workloads that call nothing failing first and the cause → … → symptom paths "
+    "between them: when several services fail together, read it before blaming the one that shows the errors."
+)
+
 K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
@@ -1008,11 +1021,18 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "volume and config references (Pod → ConfigMap/Secret/PVC), Ingress → Service — as nodes and edges plus counts by kind. "
                 "Use it to answer \"what depends on Service X\", \"which pods does this ConfigMap feed\", \"what would break if I delete Y\". "
                 "Large namespaces are cut at 200 nodes and 400 edges; narrow with k8s_get_resources when the answer needs one object's neighbours."
+                + CALLS_DESCRIPTION
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "namespace": {"type": "string", "description": "The namespace to map"},
+                    CALLS_PARAM: {
+                        "type": "array",
+                        "items": {"type": "string", "enum": ["calls"]},
+                        "description": "[\"calls\"] adds the calls between the workloads (traces and network) over since",
+                    },
+                    CALLS_SINCE_PARAM: {"type": "string", "description": "With include calls: the range, e.g. 15m, 1h or 6h (1m to 24h, default 1h)"},
                 },
                 "required": ["namespace"],
             },
@@ -1840,3 +1860,29 @@ def get_tools_definition(service) -> List[Dict]:
     tools.extend(ACTION_TOOLS)
     tools.extend(K8S_WRITE_TOOLS)
     return service._filter_tools_by_role(tools)
+
+
+def without_params(tool: Dict, params: tuple, words: str) -> Dict:
+    """tool without these parameters and the words of its description about them."""
+    fn = dict(tool.get("function") or {})
+    parameters = dict(fn.get("parameters") or {})
+    parameters["properties"] = {k: v for k, v in (parameters.get("properties") or {}).items() if k not in params}
+    fn["parameters"] = parameters
+    if words and isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(words, "")
+    return {**tool, "function": fn}
+
+
+def call_graph_on() -> bool:
+    """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads), read with
+    the one switch rule (app/services/switch.py)."""
+    return switch.env_on("CALL_GRAPH_ENABLED")
+
+
+def offer_call_graph(tools: List[Dict]) -> List[Dict]:
+    """tools for a list that names no cluster (the MCP server's read tools): with CALL_GRAPH_ENABLED off, resource_graph
+    without its call parameters and their words, as features.PARAM_GATES gives a cluster without callGraph."""
+    if call_graph_on():
+        return tools
+    return [without_params(t, CALLS_PARAMS, CALLS_DESCRIPTION) if ((t or {}).get("function") or {}).get("name") == "resource_graph" else t
+            for t in tools]

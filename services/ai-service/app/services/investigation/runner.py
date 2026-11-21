@@ -164,7 +164,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     tools = await feature_gate.gate_tools(readonly_tool_filter(service._get_tools_definition()), service)
     context = ToolContext(session_id=f"investigation:{row.id}")
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language)},
+        {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language, call_paths=cfg.call_paths)},
         {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row))},
     ]
     tool_log: list[dict[str, Any]] = []

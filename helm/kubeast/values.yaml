@@ -1182,6 +1182,21 @@ features:
     timeout: 15s
     perUserPerMinute: 20
     egress: []
+  # Who calls whom for the AI (off by default): resource_graph with include
+  # calls adds the calls between a namespace's workloads over a range (1m-24h)
+  # from the traces' service graph metrics (traces_service_graph_request_total,
+  # _failed_total, _server_seconds — Tempo's metrics-generator or the
+  # servicegraph connector of the OpenTelemetry Collector or Alloy, written to
+  # the cluster's Prometheus) and the Hubble metrics the Resource Graph's lines
+  # read, with the failing workloads that call nothing failing first and the
+  # paths from them to their failing callers; alert investigations are told to
+  # read it when several workloads fail and to write the cause → … → symptom
+  # path with the step of each link. Read as the user: the traces need a grant
+  # on the whole cluster (as the Prometheus reads), the Hubble lines
+  # resource.networkflow.read. Off: include calls reads nothing and says so,
+  # and the AI (the chat, investigations and the MCP tool list) is not offered it.
+  callGraph:
+    enabled: false
   # Alert store reads for the AI's alerts_list (off by default): an
   # Alertmanager's API v2 at url (http://alertmanager.monitoring:9093), a
   # Grafana data source proxy to one (https://<grafana>/api/datasources/proxy/uid/<Alertmanager UID>)

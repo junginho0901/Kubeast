@@ -62,6 +62,11 @@ type Config struct {
 	// runs it; it needs AI on.
 	AlertInvestigationEnabled bool
 
+	// Who calls whom on a namespace's graph (chart features.callGraph, the AI tool resource_graph with include calls):
+	// the traces' service graph metrics and the Hubble metrics in the cluster's Prometheus. Off = include calls reads
+	// nothing and answers that it is off.
+	CallGraphEnabled bool
+
 	// Log files inside containers (chart features.logFiles). Off = the routes
 	// answer 404. Only files matching LogFilesPaths (absolute, glob in the file
 	// name only) can be listed or read; with LogFilesNamespaces set, only pods
@@ -188,6 +193,8 @@ func Load() Config {
 		AIEnabled: pkgconfig.GetEnvBool("AI_ENABLED", true),
 
 		AlertInvestigationEnabled: pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false),
+
+		CallGraphEnabled: pkgconfig.EnvSwitch("CALL_GRAPH_ENABLED"),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

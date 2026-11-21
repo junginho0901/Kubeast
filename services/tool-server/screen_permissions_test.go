@@ -89,6 +89,9 @@ func screenPermissionCases() []screenCase {
 	add("k8s_get_resources", args{"resource_type": "secrets"}, objectsReadKey)
 	add("k8s_get_resources", args{"resource_type": "all"}, objectsReadKey)
 	add("k8s_describe_resource", args{"resource_type": "secret", "resource_name": "x"}, objectsReadKey)
+	// Who calls whom: the graph's route asks what it asks; its Hubble lines need resource.networkflow.read, which
+	// k8s-service checks itself and leaves out without (the source says permission), as it does for a namespace grant.
+	add("resource_graph", args{"namespace": "shop", "include": []interface{}{"calls"}, "since": "1h"}, objectsReadKey)
 
 	// Reads a screen's route asks a permission for.
 	add("k8s_get_pod_logs", args{"pod_name": "web"}, "resource.pod.read")

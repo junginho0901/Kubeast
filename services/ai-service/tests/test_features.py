@@ -196,3 +196,39 @@ async def test_gate_tools_when_k8s_service_fails_drops_feature_tools():
     assert k8s.get_features.await_count == 1
     await features.gate_tools(_tools("prometheus_query"), service)
     assert k8s.get_features.await_count == 2
+
+
+def _resource_graph():
+    return [t for t in K8S_READONLY_TOOLS if t["function"]["name"] == "resource_graph"]
+
+
+@pytest.mark.asyncio
+async def test_resource_graph_offers_its_calls_only_where_the_call_graph_is_on():
+    tool = _resource_graph()
+    full = tool[0]["function"]
+    assert {"include", "since"} <= set(full["parameters"]["properties"]) and "include [\"calls\"]" in full["description"]
+    for feats in ({}, {"callGraph": {"enabled": False}}, None):
+        fn = features.filter_tools(tool, feats, "self")[0]["function"]
+        assert set(fn["parameters"]["properties"]) == {"namespace"}, feats
+        assert "calls" not in fn["description"] and fn["description"].endswith("one object's neighbours."), feats
+        assert fn["parameters"]["required"] == ["namespace"]
+    on = features.filter_tools(tool, {"callGraph": {"enabled": True}}, "self")[0]["function"]
+    assert on == full
+    # the static definition is not changed by a cut copy
+    assert {"include", "since"} <= set(_resource_graph()[0]["function"]["parameters"]["properties"])
+    # the chat's list asks the features for it
+    k8s = SimpleNamespace(get_features=AsyncMock(return_value={"callGraph": {"enabled": True}}))
+    out = await features.gate_tools(tool, SimpleNamespace(cluster_name="c1", k8s_service=k8s))
+    assert "include" in out[0]["function"]["parameters"]["properties"]
+    assert k8s.get_features.await_count == 1
+
+
+def test_the_mcp_read_tools_offer_resource_graphs_calls_only_with_call_graph_enabled(monkeypatch):
+    from app import mcp_server
+
+    monkeypatch.delenv("CALL_GRAPH_ENABLED", raising=False)
+    off = mcp_server._read_tools()["resource_graph"]
+    assert set(off.input_schema["properties"]) == {"namespace", "cluster"} and "calls" not in off.description
+    monkeypatch.setenv("CALL_GRAPH_ENABLED", "true")
+    on = mcp_server._read_tools()["resource_graph"]
+    assert {"include", "since"} <= set(on.input_schema["properties"]) and "include [\"calls\"]" in on.description

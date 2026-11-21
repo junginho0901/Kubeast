@@ -15,7 +15,7 @@ LANGUAGES = {"en": "English", "ko": "Korean"}
 REPORT_HEADINGS = ("Summary", "What I checked", "Likely cause", "Next steps")
 
 
-def system_prompt(*, cluster: str, namespace: str, language: str) -> str:
+def system_prompt(*, cluster: str, namespace: str, language: str, call_paths: bool = False) -> str:
     lang = LANGUAGES.get(language, language or "English")
     scope = f'the namespace "{namespace}" of cluster "{cluster}"' if namespace else f'cluster "{cluster}"'
     headings = "\n".join(f"## {h}" for h in REPORT_HEADINGS)
@@ -38,7 +38,8 @@ def system_prompt(*, cluster: str, namespace: str, language: str) -> str:
         "from a log line directly.\n"
         "- When alerts_list is offered, check which other alerts of the cluster fire at the same time (state=firing) — one cause often "
         "fires several — and whether related ones are silenced.\n"
-        "- When prometheus_rules is offered, call it first with the alert name to read the rule's expression and threshold, and check that "
+        + (_CALL_PATHS if call_paths else "")
+        + "- When prometheus_rules is offered, call it first with the alert name to read the rule's expression and threshold, and check that "
         "expression with prometheus_query; find metric and label names with prometheus_metrics and prometheus_labels instead of guessing.\n"
         "- A tool result with status not_found lists similar names: use one of them or call k8s_find_resource once, then stop looking and report what was searched. "
         "Status unavailable means the cluster lacks that feature (for example metrics-server): say so and use the alternative named in the result.\n"
@@ -48,6 +49,22 @@ def system_prompt(*, cluster: str, namespace: str, language: str) -> str:
         f"{headings}\n"
         "Under \"What I checked\", one bullet per tool call: what you looked at and what it showed."
     )
+
+
+# features.callGraph: read who calls whom when several workloads fail, and write the cause → … → symptom path with the
+# call behind each link.
+_CALL_PATHS = (
+    "- When several workloads fail, or the failing one calls others, call resource_graph with include [\"calls\"] and since set to "
+    "the time since the alert started (at least 15m) to see who calls whom. A failing workload whose callees are all well (first "
+    "in calls.suspects) is where the failure more likely starts; one that calls a failing workload is more often its victim than "
+    "its cause, even when it shows the errors. calls.paths lists such chains cause first. With failing_outside on a suspect, the "
+    "cause may be outside the graph (a database, another namespace).\n"
+    "- Find what changed at a path's first workload just before (a rollout, config, a restart, traffic) with timeline, and name that "
+    "change as the root cause.\n"
+    "- Under \"Likely cause\", write the path from the cause to the alert's symptom as cause → … → symptom, each link followed by "
+    "the number of the tool call that showed it, counting your calls from 1 (for example: api (call 4) → web (call 2) → the "
+    "alert). A link no call showed is marked as a guess; a path the calls do not support is not written.\n"
+)
 
 
 def alert_message(*, cluster: str, alert: dict[str, Any]) -> str:
