@@ -9,7 +9,7 @@ import (
 )
 
 // After Up, the statements that run on every new approval card and on a chat's delete read tool_approvals through
-// the indexes of 00032, not the whole table: 3 000 decided rows, 4 waiting and 2 approved, as an install keeps them
+// the indexes of 00033, not the whole table: 3 000 decided rows, 4 waiting and 2 approved, as an install keeps them
 // with retention.chatDays 0. The SQL is what ai-service (app/database.py, SQLAlchemy) and session-service
 // (DeleteSession) send.
 func TestPostgresToolApprovalQueriesUseTheirIndexes(t *testing.T) {
