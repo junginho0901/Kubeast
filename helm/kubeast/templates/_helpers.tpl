@@ -544,7 +544,10 @@ the server's Content-Security-Policy line; tests/gateway_test.yaml fails on a lo
 {{- $conf = replace "        location /api/v1/nodes {\n" (print $nodeShell "        location /api/v1/nodes {\n") $conf -}}
 {{- end -}}
 {{- if eq (toString (dig "servedByHeader" false .Values.gateway)) "true" -}}
-{{- $conf = regexReplaceAll `(?m)^([ \t]*)(add_header Content-Security-Policy .*\n)` $conf "${1}${2}${1}add_header X-Kubeast-Gateway $$hostname always;\n" -}}
+{{- $conf = regexReplaceAll `(?m)^([ \t]*)(add_header Content-Security-Policy "[^"\n]*"[^\n]*\n)` $conf "${1}${2}${1}add_header X-Kubeast-Gateway $$hostname always;\n" -}}
+{{- if not (contains "add_header X-Kubeast-Gateway" $conf) -}}
+{{- fail "gateway.servedByHeader: files/nginx.conf has no one-line add_header Content-Security-Policy to put X-Kubeast-Gateway after" -}}
+{{- end -}}
 {{- end -}}
 {{- $conf -}}
 {{- end -}}

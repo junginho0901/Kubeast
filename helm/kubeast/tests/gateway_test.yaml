@@ -275,7 +275,7 @@ tests:
         documentIndex: 0
       - notMatchRegex:
           path: data["nginx.conf"]
-          pattern: '\n\s*location [^{]*\{[^}]*add_header'
+          pattern: '\n\s*location [\s\S]*\n\s*add_header '
         template: gateway.yaml
         documentIndex: 0
 
@@ -295,6 +295,42 @@ tests:
         documentIndex: 0
       - notMatchRegex:
           path: data["nginx.conf"]
-          pattern: '\n\s*location [^{]*\{[^}]*add_header'
+          pattern: '\n\s*location [\s\S]*\n\s*add_header '
+        template: gateway.yaml
+        documentIndex: 0
+
+  - it: names no pod in an answer from values without gateway.servedByHeader (an earlier release's, kept by --reuse-values)
+    set:
+      gateway.servedByHeader: null
+    asserts:
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'X-Kubeast-Gateway|\$hostname'
+        template: gateway.yaml
+        documentIndex: 0
+
+  - it: with gateway.servedByHeader and streams.enabled, names the pod once after the Content-Security-Policy line beside the node shell location
+    set:
+      gateway.servedByHeader: true
+      streams.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: '\n        add_header Content-Security-Policy "[^"\n]*" always;\n        add_header X-Kubeast-Gateway \$hostname always;\n\n'
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'X-Kubeast-Gateway[\s\S]*X-Kubeast-Gateway'
+        template: gateway.yaml
+        documentIndex: 0
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location ~ \^/api/v1/nodes/\[\^/\]\+/debug-shell/ws\$ \{\s+proxy_pass http://k8s-service-stream;'
+        template: gateway.yaml
+        documentIndex: 0
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: '\n\s*location [\s\S]*\n\s*add_header '
         template: gateway.yaml
         documentIndex: 0
