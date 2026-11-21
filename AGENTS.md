@@ -69,7 +69,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 ### 예외 없는 원칙
 
 - **성공뿐 아니라 실패도 기록**. 실패 시 `Result = audit.ResultFailure`, `Error` 필드 채움.
-- **DB 감사 행은 민감 동작의 선행 조건, stdout 미러만 best-effort.** 감사 DB에 기록할 수 없으면
+- **행을 받을 수 있는 DB가 민감 동작의 선행 조건, stdout 미러만 best-effort.** 감사 DB에 기록할 수 없으면
   쓰기·민감 읽기(Secret/Helm reveal, exec, 노드 셸, 로그, 컨테이너 로그 파일, kubeconfig, AI 쓰기 툴)는 **503 `audit unavailable`**로
   거부한다(`AUDIT_FAIL_CLOSED`, 기본 true; 차트 `audit.failClosed`). 목록·조회는 계속된다.
   구현 = 변경 라우트는 `audit.RequireWritable` 미들웨어, 감사가 조건부인 GET 핸들러는 동작 전 `h.auditReady(r)` +

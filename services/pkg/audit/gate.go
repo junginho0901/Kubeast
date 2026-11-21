@@ -91,9 +91,9 @@ type Statuser interface {
 	Status(ctx context.Context) Status
 }
 
-// WriteGrace is how long a write through Guarded may go on after its caller's
-// context is cancelled, from then or the write's start, whichever comes last.
-// While the caller stays, it has its deadline, if any, and the store's limits.
+// WriteGrace is how long a write through Guarded may go on after its caller's context
+// is cancelled, from then or the write's start, whichever comes last. While the
+// caller stays, the write has the caller's deadline, if any, and the store's limits.
 const WriteGrace = 5 * time.Second
 
 // errWriteGraceOver is the cause of a write whose grace (WriteGrace) ran out
