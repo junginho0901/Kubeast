@@ -26,6 +26,7 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 | `kubeast_k8s_client_rate_waits_total` | counter | `service`, `limiter` | 그 속도를 조금이라도 기다린 클러스터 요청 수(차례를 받았든 못 받았든) |
 | `kubeast_k8s_access_reviews_total` | counter | `service`, `asked_as` | k8s-service가 1분 기억하는 접근 확인(화면의 list·get 확인)에 보낸 SelfSubjectAccessReview 수, 클러스터를 합친 값. `asked_as`는 `person`, 또는 리뷰 하나로 그 사람의 그룹을 가진 모두에게 답한 읽기 확인이면 `groups`(`auth.impersonation.sharedReadChecks`, [클러스터 요구 사항](cluster-requirements.md) §1). can-i, 로그 검색, 흐름, Top Talkers는 그 사람으로 따로 보내며 여기 세지 않습니다 |
 | `kubeast_shared_writes_without_place_total` | counter | `service` | 256 KiB 넘는 노드 목록 · 노드 칸 답과 묶인 읽기 답 가운데 쓰기 자리 16개를 기다린 시간이 합쳐 1초에 닿아 남은 본문을 자리 없이 쓴 수, 시작한 뒤로([아키텍처](architecture.md)). 자리가 1초 안에 내보낼 수 있는 것보다 큰 몰림 때와, 차례 기다림이 합쳐 1초가 된 느린 읽는 이 때 오릅니다. 조용할 때 오르면 자리를 쥔 채 읽지 않는 읽는 이가 있다는 뜻입니다 |
+| `kubeast_shared_write_place_wait_seconds` | histogram | `service`, `places` | 그 답이 자기 k8s-service의 쓰기 자리 16개 중 하나를 받을 때마다 기다린 시간입니다(버킷 1 ms~60 s, 자리가 비어 있으면 몇 마이크로초). `places`는 `big_write`입니다. 본문은 첫 덩어리 전에 자리를 받고, 100 ms를 넘게 걸려 자리를 내놓은 덩어리 뒤마다 다시 받으므로 느린 읽는 이의 본문은 여러 번 셉니다. 본문 하나의 기다림은 시작부터 1초를 함께 쓰며, 거기 닿은 받기(남은 것은 자리 없이 씀)와 요청이 떠난 받기도 기다린 시간만큼 셉니다 |
 | `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | 감사 싱크(`audit.sinks`)가 아직 보내지 않은 감사 행 수. 전송을 맡은 auth-service 레플리카만 냅니다 |
 | `kubeast_audit_sink_failures_total` | counter | 같음 | 그 레플리카가 전송을 시작한 뒤 실패한 전송 수 |
 | `kubeast_audit_sink_last_success_timestamp_seconds` | gauge | 같음 | 싱크 커서가 마지막으로 앞으로 나아간 시각(처음 값은 전송을 시작한 시각) |
@@ -71,6 +72,7 @@ Operator 없이 Prometheus를 쓴다면 `kubernetes_sd_configs`(role `endpoints`
 
 - 서비스별 요청률 `sum by (service) (rate(kubeast_http_requests_total[5m]))`
 - 라우트별 p95 `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`
+- 큰 묶인 답의 쓰기 자리 대기 p95 `histogram_quantile(0.95, sum by (le) (rate(kubeast_shared_write_place_wait_seconds_bucket[5m])))`. 0에 가까우면 노드 목록, 노드 칸, 묶인 읽기를 늦추는 것은 쓰기 자리가 아닙니다. 본문 하나의 기다림은 시작하고 1초 뒤 멈추고, 남은 것은 자리 없이 갑니다(`kubeast_shared_writes_without_place_total`)
 - 클러스터로 가는 클라이언트 속도 대기 p95 `histogram_quantile(0.95, sum by (limiter, le) (rate(kubeast_k8s_client_rate_wait_seconds_bucket[5m])))`. 0에 가까우면 화면을 늦추는 것은 이 속도가 아닙니다. API 서버가 429 없이 답하는데 몇 초씩 나오면 `multicluster.clientQPS`·`clientBurst`(접근 확인이면 `reviewQPS`)를 보세요
 
 ## 확인

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -14,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 )
@@ -179,6 +182,86 @@ func TestABigBodyIsWrittenWithoutAPlaceWhenNoneComesInTime(t *testing.T) {
 	}
 	if n := places.InUse(); n != bigWritePlaces {
 		t.Errorf("%d places taken, want the %d held before: the write took one", n, bigWritePlaces)
+	}
+}
+
+// writeWaits reads the write place wait histogram as a scrape would, failing on any label but service and places.
+func writeWaits(t *testing.T) (uint64, float64) {
+	t.Helper()
+	reg := prometheus.NewPedanticRegistry()
+	reg.MustRegister(BigWriteWaitCollectors()...)
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(families) != 1 || len(families[0].GetMetric()) != 1 {
+		t.Fatalf("%d families gathered, want the one series", len(families))
+	}
+	s := families[0].GetMetric()[0]
+	labels := map[string]string{}
+	for _, l := range s.GetLabel() {
+		labels[l.GetName()] = l.GetValue()
+	}
+	if name := families[0].GetName(); name != "kubeast_shared_write_place_wait_seconds" ||
+		!maps.Equal(labels, map[string]string{"service": "k8s", "places": "big_write"}) {
+		t.Fatalf("%s labelled %v", name, labels)
+	}
+	return s.GetHistogram().GetSampleCount(), s.GetHistogram().GetSampleSum()
+}
+
+// Each take of a write place is one observation of its wait, a take that stopped waiting too: none for a body one
+// socket's kernel queue holds, about 0 when a place was free, the wait until a place was given back, the wait until the
+// deadline before a body written without a place, and one for each part of a reader slower than the turn, which gives
+// its place back after each part and takes one again for the next.
+func TestEachTakeOfAWritePlaceIsObserved(t *testing.T) {
+	ctx := context.Background()
+	since := func(count uint64, sum float64) (uint64, float64) {
+		c, s := writeWaits(t)
+		return c - count, s - sum
+	}
+
+	count, sum := writeWaits(t)
+	small := make([]byte, bigSharedBody)
+	if err := writeInTurns(ctx, &paced{total: len(small)}, small, limits.NewSlots("test", 1), bigWriteTurn, bigWriteWait); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := since(count, sum); n != 0 {
+		t.Errorf("a body of %d bytes took a place %d times, want none", len(small), n)
+	}
+	body := nodeListSized()
+	places := limits.NewSlots("test", 1)
+	if err := writeInTurns(ctx, &paced{total: len(body)}, body, places, time.Minute, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if n, s := since(count, sum); n != 1 || s > 0.5 {
+		t.Errorf("a big body with a place free: %d observations summing %.3f s, want 1 of about 0", n, s)
+	}
+
+	// the one place held: a body waits 50 ms and is written without one, the next gets it given back after 100 ms
+	give, err := places.Take(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, sum = writeWaits(t)
+	if err := writeInTurns(ctx, &paced{total: len(body)}, body, places, time.Minute, 50*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	time.AfterFunc(100*time.Millisecond, give)
+	if err := writeInTurns(ctx, &paced{total: len(body)}, body, places, time.Minute, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if n, s := since(count, sum); n != 2 || s < 0.14 || s > 2 {
+		t.Errorf("%d observations summing %.3f s, want 2 summing about 0.15", n, s)
+	}
+
+	const turn = time.Millisecond
+	parts := (len(body) + bigWritePart - 1) / bigWritePart
+	count, sum = writeWaits(t)
+	if err := writeInTurns(ctx, &paced{pause: 2 * turn, total: len(body)}, body, places, turn, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := since(count, sum); n != uint64(parts) {
+		t.Errorf("a reader slower than the turn: %d observations, want one for each of its %d parts", n, parts)
 	}
 }
 
