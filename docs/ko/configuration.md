@@ -152,7 +152,7 @@ podSecurity:
 # 가용성 — replicas를 2 이상으로 올렸거나 autoscaling의 minReplicas가 2 이상인 Deployment에는 PodDisruptionBudget이 생깁니다(pdb.maxUnavailable, 1 · pdb.enabled: false면 만들지 않음). 판을 올릴 때는 새 파드를 먼저 띄우고, 새 파드가 준비된 뒤에 옛 파드를 멈춥니다(postgres·redis는 옛 파드를 먼저 내리기 시작)
 # 그래서 sessionRecording.fileVolume(storage: file)은 k8s-service 파드가 바뀌는 동안 파드 둘이 붙입니다. ReadWriteOnce 볼륨은 한 번에 한 노드에만 붙으니, 노드가 여럿이면 ReadWriteMany 볼륨을 주거나 storage s3·database를 쓰세요(docs/ko/operations.md)
 # 프로브 — liveness는 /livez(다른 것은 안 봄), readiness는 /readyz(SIGTERM부터 503, DB는 보지 않음 — 모두가 쓰는 DB가 죽으면 모든 파드가 한꺼번에 빠지므로). DB 상태는 auth-service·session-service의 /health와 k8s-service의 kubeast_audit_store_up에서 봅니다
-# podShutdown.preStopSeconds: Service 뒤의 파드는(번들 PostgreSQL과 Redis는 빼고 — 둘은 preStop 기다림이 없고 Kubernetes 기본 종료 유예 30초) 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다(터미널을 맡은 서버는 드레인 대기와 닫기 대기만큼 더). 파드 IP로 보내는 로드 밸런서 뒤라면 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요(AWS Application Load Balancer 뒤에서는 25초와 대상 그룹 등록 해제 지연 20초: 이 값으로는 게이트웨이 파드를 18번 바꾸는 동안 실패한 요청이 없었고, 기본 5초와 기본 해제 지연 300초로는 30번 중 3번에서 요청이 실패했습니다. docs/ko/high-availability.md 참고)
+# podShutdown.preStopSeconds: Service 뒤의 파드는(번들 PostgreSQL과 Redis는 빼고 — 둘은 preStop 기다림이 없고 Kubernetes 기본 종료 유예 30초) 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다(터미널을 맡은 서버는 드레인 대기와 닫기 대기만큼 더). 파드 IP로 보내는 로드 밸런서 뒤라면 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요(AWS Application Load Balancer 뒤에서는 25초와 대상 그룹 등록 해제 지연 20초: 이 값으로는 게이트웨이 파드를 18번 바꾸는 동안 실패한 요청이 없었고, 기본 5초와 기본 해제 지연 300초로는 18번 중 3번에서 요청이 실패했고, 파드 준비 게이트를 켜고 12번 더 바꿀 때는 실패가 없었습니다. docs/ko/high-availability.md 참고)
 replicas:
   gateway: 1
 # 서비스마다 HPA 하나, 기본 꺼짐. k8sService · toolServer를 2대 이상으로 하려면 redis.enabled가 필요(docs/ko/high-availability.md)
