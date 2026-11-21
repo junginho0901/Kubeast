@@ -91,13 +91,13 @@ type Statuser interface {
 	Status(ctx context.Context) Status
 }
 
-// WriteGrace is how long a write through Guarded may go on once its caller's
-// context is cancelled. While that context stands, the write has its deadline,
-// if any, and the store's own limits.
+// WriteGrace is how long a write through Guarded may go on after its caller's
+// context is cancelled, from then or the write's start, whichever comes last.
+// While the caller stays, it has its deadline, if any, and the store's limits.
 const WriteGrace = 5 * time.Second
 
-// errWriteGraceOver is the cause of a write ended WriteGrace after its caller's
-// context was cancelled.
+// errWriteGraceOver is the cause of a write whose grace (WriteGrace) ran out
+// after its caller's context was cancelled.
 var errWriteGraceOver = errors.New("audit: write went on past its grace after the caller's context was cancelled")
 
 // Guarded wraps a Store for fail-closed operation: it counts write failures,
@@ -143,8 +143,8 @@ func Guard(store Store, pinger Pinger, failClosed bool) *Guarded {
 // keeps ctx's values and deadline but not its cancellation: a request whose
 // client went away after its change ran (net/http cancels the request's
 // context when the connection closes) still gets its row, the write going on
-// at most writeGrace after ctx was cancelled. A step of a shutdown keeps its
-// deadline.
+// at most writeGrace from ctx's cancellation or its own start, whichever comes
+// last. A step of a shutdown keeps its deadline.
 func (g *Guarded) Write(ctx context.Context, rec Record) (int64, error) {
 	wctx, cancel := writeContext(ctx, g.writeGrace)
 	defer cancel()
@@ -169,10 +169,10 @@ func (g *Guarded) Write(ctx context.Context, rec Record) (int64, error) {
 }
 
 // writeContext is ctx without its cancellation: it keeps ctx's values and
-// deadline and ends grace after ctx is cancelled (WriteGrace when grace is 0 or
-// less, as in a Guarded made without Guard). A ctx ended by its deadline ends
-// it at that deadline, which it holds as its own. The CancelFunc stops the
-// AfterFunc and cancels both contexts.
+// deadline and ends grace after ctx is cancelled, or after this call if it
+// already is (WriteGrace when grace is 0 or less, as in a Guarded made without
+// Guard). A ctx ended by its deadline ends it at that deadline, which it holds
+// as its own. The CancelFunc stops the AfterFunc and cancels both contexts.
 func writeContext(ctx context.Context, grace time.Duration) (context.Context, context.CancelFunc) {
 	if grace <= 0 {
 		grace = WriteGrace

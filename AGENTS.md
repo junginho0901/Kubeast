@@ -75,7 +75,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   구현 = 변경 라우트는 `audit.RequireWritable` 미들웨어, 감사가 조건부인 GET 핸들러는 동작 전 `h.auditReady(r)` +
   `recordAudit*` 반환 오류 확인(`h.refuseUnaudited`). 이미 실행된 변경의 사후 쓰기 실패는 `audit.Guarded`가 세고
   ERROR 로그로 남기며 응답은 그대로다 — 그 뒤로는 준비 확인이 시험 쓰기(넣었다 되돌림)로 바뀌어 감사 표가 다시
-  행을 받을 때까지 거부한다. `audit.Guarded.Write`는 호출한 쪽 컨텍스트의 값과 마감은 잇고 취소는 잇지 않는다 — 호출한 쪽 컨텍스트가 취소된 뒤로는 최대 `audit.WriteGrace`(5 s)만 더 쓰고, 호출한 쪽이 있는 동안은 예전처럼 기다린다. 요청 컨텍스트를 그대로 넘긴다. auth-service는 관리자 쓰기만 거부(로그인·로그아웃·토큰 갱신·본인 비밀번호 변경은 계속),
+  행을 받을 때까지 거부한다. `audit.Guarded.Write`는 호출한 쪽 컨텍스트의 값과 마감은 잇고 취소는 잇지 않는다 — 호출한 쪽이 떠나면 쓰기 시작과 호출한 쪽 컨텍스트 취소 중 늦은 때부터 최대 `audit.WriteGrace`(5 s)까지 쓰고, 호출한 쪽이 있는 동안은 예전처럼 기다린다. 요청 컨텍스트를 그대로 넘긴다. auth-service는 관리자 쓰기만 거부(로그인·로그아웃·토큰 갱신·본인 비밀번호 변경은 계속),
   AI 채팅 도구·알림 조사도 실행 전에 확인한다. 읽기 도구는 행을 못 남기면 답을 버리고(`audit_unavailable`: 채팅·MCP·알림 조사, `test_audit_after_read.py`), 이미 실행된 쓰기 도구는 답을 그대로 준다. 모델 연결 시험과 공급자 모델 목록은 서버 키를 쓰므로 시작 전에 503으로 거부한다(`model_config_audit.ready_or_503`). 부팅 때 DB가 없으면 기다렸다가 종료한다(k8s-service = `AUDIT_DB_WAIT_SEC` 90 s · auth-service와 session-service = DB 60 s(핑마다 5 s, `audit.WaitReady`) + 스키마 60 s, 차트의 startupProbe 180 s가 이 기다림을 liveness에서 지킴) —
   로그 전용 폴백은 없다.
 - 민감 필드(password, secret, token, apikey 등)는 **`audit.MaskSensitive(...)` 적용 후** 저장. 문자열 안은 읽지 못하므로 YAML·JSON 글은 행에 넣지 말고 길이나 요약만 남긴다(`yaml_len`, `helmValuesAudit`).
