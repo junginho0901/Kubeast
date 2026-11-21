@@ -120,7 +120,7 @@ Work that always runs:
 - auth-service:
   - seals audit records every 10 seconds (`audit.integrity.sealSeconds`)
   - reverts expired access requests every minute
-  - cleans up records past retention every 24 hours, and once at startup, one replica at a time (a PostgreSQL advisory lock held for the run on a connection of its pool; a replica whose turn comes during another's run skips it)
+  - cleans up records past retention every 24 hours, and once at startup, one replica at a time (a PostgreSQL advisory lock held for the run on a connection of its own, outside the pool; a replica whose turn comes during another's run skips it)
   - with `dormantAccounts` on, locks dormant accounts every 24 hours
   - when an S3 sink is set, writes the audit anchor every 24 hours
 - k8s-service:

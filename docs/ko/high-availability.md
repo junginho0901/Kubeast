@@ -11,7 +11,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 | --- | --- | --- | --- |
 | gateway | 됨 | 없음. WebSocket은 처음 연 업스트림 연결에 계속 붙어 있습니다 | — |
 | frontend | 됨 | 없음(정적 파일) | — |
-| auth-service | 됨 | 없음. 배경 작업은 데이터베이스 잠금으로 차례를 정합니다. 보존 기간 정리는 한 번에 한 파드만 돕니다. 도는 파드는 `admin.retention.purge` 행을 쓸 때까지 자기 풀의 연결 하나에 PostgreSQL advisory lock을 쥐고, 그동안 하루 차례가 온 파드는 그 차례를 건너뜁니다. 다른 파드가 먼저 돌았으면 지울 것이 없습니다 | `migrations.mode: job`(아래) |
+| auth-service | 됨 | 없음. 배경 작업은 데이터베이스 잠금으로 차례를 정합니다. 보존 기간 정리는 한 번에 한 파드만 돕니다. 도는 파드는 `admin.retention.purge` 행을 쓸 때까지 풀 밖의 자기 연결 하나에 PostgreSQL advisory lock을 쥐고, 그동안 하루 차례가 온 파드는 그 차례를 건너뜁니다. 다른 파드가 먼저 돌았으면 지울 것이 없습니다 | `migrations.mode: job`(아래) |
 | session-service | 됨 | 없음. 세션과 메시지는 데이터베이스에 있습니다 | — |
 | ai-service | 됨 | 답 스트림. 대기 중인 알림 조사는 데이터베이스 행이고 한 파드가 가져갑니다. Claude Code 실행 수에는 파드당 상한(`ai.providers.claudeCode.maxConcurrent`)과 설치 전체 상한이 있습니다 | — |
 | k8s-service | Redis가 있으면 됨 | 맡은 클러스터의 목록과 감시(자기 메모리). 목록 · YAML · Helm 캐시는 Redis에 있습니다. 클러스터가 바뀌면 10초 안에 모든 파드가 압니다. 노드 드레인 진행은 데이터베이스에 있습니다 | `redis.enabled: true` |
@@ -34,7 +34,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 
 | 서비스 | 파드당 연결, 최대 | 수의 근거 |
 | --- | --- | --- |
-| auth-service | 20 | `postgresql.pool.authService.maxConns` |
+| auth-service | 20, 더하기 1 | `postgresql.pool.authService.maxConns`와, 정리가 도는 동안 풀 밖에서 연결을 따로 하나 쥐는 보존 기간 정리 잠금(`internal/retention`) |
 | session-service | 20 | `postgresql.pool.sessionService.maxConns` |
 | k8s-service | 10, 더하기 1 | `postgresql.pool.k8sService.maxConns`와, 풀 밖에서 연결을 따로 하나 쥐는 상태 확인 잠금(`internal/pglock`). k8s-service-stream은 풀만 |
 | ai-service | 15 | `postgresql.pool.aiService.maxConns` |
@@ -44,7 +44,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 
 차트 내장 postgres는 `max_connections`를 `postgresql.maxConnections`(300)로 두고, 파드들이 그보다 많이 쥘 수 있으면 설치가 멈춥니다. 셈은 풀마다 배포 중의 파드 수(Deployment마다 `maxSurge`가 1이라 개수에 하나 더함, autoscaling을 켰으면 `maxReplicas`에 하나 더함)를 곱해 더하고, 마이그레이션 4와 psql·PostgreSQL superuser 몫 10을 더합니다(`templates/checks/db-connections.yaml`).
 바깥 데이터베이스는 자기 한도를 쓰고, 차트는 그 값을 읽지 못합니다. NOTES가 같은 합을 적어 주니 그 값과 견주세요. Kubeast 사용자가 superuser가 아니면 그중 3개는 기본으로 superuser 몫입니다.
-예: 서비스마다 1대면 배포 중의 여분 파드까지 최대 154개, 서비스마다 3대면 286개입니다. `streams.enabled`를 켜면 스트림 서버와 그 여분 파드 몫으로 k8s-service 풀이 더해져(기본 20) 서비스마다 3대면 306개로 기본 300을 넘습니다.
+예: 서비스마다 1대면 배포 중의 여분 파드까지 최대 156개, 서비스마다 3대면 290개입니다. `streams.enabled`를 켜면 스트림 서버와 그 여분 파드 몫으로 k8s-service 풀이 더해져(기본 20) 서비스마다 3대면 310개로 기본 300을 넘습니다.
 `postgresql.maxConnections`를 올리거나, 풀이나 파드 수를 줄이거나, 연결을 더 받는 데이터베이스를 쓰세요.
 
 ## 대수 정하기

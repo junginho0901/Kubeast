@@ -11,7 +11,7 @@ This page says which services can run more, what they need, how to set the count
 | --- | --- | --- | --- |
 | gateway | yes | nothing; a WebSocket stays on the upstream connection it opened | — |
 | frontend | yes | nothing (static files) | — |
-| auth-service | yes | nothing; its background jobs take turns through database locks. Retention runs on one pod at a time: a run holds a PostgreSQL advisory lock on a connection of the pod's pool until its `admin.retention.purge` row is written, a pod whose daily turn comes meanwhile skips it, and a run after another pod's finds nothing left | `migrations.mode: job` (below) |
+| auth-service | yes | nothing; its background jobs take turns through database locks. Retention runs on one pod at a time: a run holds a PostgreSQL advisory lock on a connection of its own, outside the pod's pool, until its `admin.retention.purge` row is written, a pod whose daily turn comes meanwhile skips it, and a run after another pod's finds nothing left | `migrations.mode: job` (below) |
 | session-service | yes | nothing; sessions and messages are in the database | — |
 | ai-service | yes | its answer streams; a queued alert investigation is a database row one pod takes; Claude Code runs have a cap per pod (`ai.providers.claudeCode.maxConcurrent`) and one for the install | — |
 | k8s-service | yes, with Redis | the lists and watches of the clusters it serves, in its own memory; the list, YAML and Helm caches are in Redis; a cluster's change reaches every pod within 10 s; a node drain's progress is in the database | `redis.enabled: true` |
@@ -34,7 +34,7 @@ It refuses more than one k8s-service pod (`replicas.k8sService` above 1, or `aut
 
 | Service | Connections per pod, at most | Where the number comes from |
 | --- | --- | --- |
-| auth-service | 20 | `postgresql.pool.authService.maxConns` |
+| auth-service | 20, plus 1 | `postgresql.pool.authService.maxConns`, and the retention lock (`internal/retention`), which holds a connection of its own outside the pool while a purge runs |
 | session-service | 20 | `postgresql.pool.sessionService.maxConns` |
 | k8s-service | 10, plus 1 | `postgresql.pool.k8sService.maxConns`, and the health status lock (`internal/pglock`), which holds a connection of its own outside the pool; k8s-service-stream has the pool only |
 | ai-service | 15 | `postgresql.pool.aiService.maxConns` |
@@ -44,7 +44,7 @@ It refuses more than one k8s-service pod (`replicas.k8sService` above 1, or `aut
 
 The chart's postgres sets `max_connections` to `postgresql.maxConnections` (300), and an install stops when the pods could hold more: each pool times the pods while a rollout runs (one more than the count, each Deployment's `maxSurge` being 1, and autoscaling's `maxReplicas` where it is on), plus 4 for the migrations and 10 kept for psql and PostgreSQL's superuser slots (`templates/checks/db-connections.yaml`).
 An external database has its own limit, which the chart cannot read: NOTES prints the same sum to compare with it. When the Kubeast user is not a superuser, 3 of its connections are kept for superusers by default.
-For example, one pod of each service can hold up to 154 connections with a rollout's extra pod counted, and three pods of each 286; `streams.enabled` adds k8s-service's pool for the stream server and its rollout's extra pod (20 by default), 306 with three pods of each, past the default 300.
+For example, one pod of each service can hold up to 156 connections with a rollout's extra pod counted, and three pods of each 290; `streams.enabled` adds k8s-service's pool for the stream server and its rollout's extra pod (20 by default), 310 with three pods of each, past the default 300.
 Raise `postgresql.maxConnections`, lower the pools or the pod counts, or use a database that takes more connections.
 
 ## Set the count

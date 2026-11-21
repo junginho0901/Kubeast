@@ -89,8 +89,8 @@ func main() {
 		"lock_timeout", sessionLimits.LockTimeout, "idle_in_transaction_session_timeout", sessionLimits.IdleInTransaction)
 
 	// SIGINT/SIGTERM cancels ctx: the background workers stop and give back their connections (the audit sinks
-	// hold one for their leader lock, a retention run one for its turn, unlocked within 5 s), so pool.Close returns
-	// instead of waiting out the pod's grace period.
+	// hold one for their leader lock; a retention run's lock has a connection of its own, closed within 5 s), so
+	// pool.Close returns instead of waiting out the pod's grace period.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)

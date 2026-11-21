@@ -1083,7 +1083,7 @@ connection_sum() { printf '%s' "$ERR" | sed -n 's/.*can hold up to \([0-9][0-9]*
 # kubeast.dbConnections). That count comes from the chart's own sum: each at 1, 2, … replicas, up to 12, rendered with
 # postgresql.maxConnections=20 so the check prints the sum, against the limit the upgrade takes (the release's
 # postgresql.maxConnections, else the checkout's values.yaml; --plan: the merged values). With the default values 4
-# (319) and 3 (264), with AI off 6 (316) and 5 (276); streams.enabled and autoscaling's maxReplicas add to the sum, so
+# (324) and 3 (268), with AI off 6 (323) and 5 (282); streams.enabled and autoscaling's maxReplicas add to the sum, so
 # the count can be lower. With an external database the chart does not stop and NOTES.txt prints the sum at 4 (6 with AI
 # off).
 db_connection_checks() {

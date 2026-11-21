@@ -163,3 +163,54 @@ func TestPostgresARunStoppedPartWayLeavesNoLockBehind(t *testing.T) {
 		t.Fatal("the lock is still held after the stopped run")
 	}
 }
+
+// poolWriter writes a row after a statement on its pool, as the service's audit store writes through the service's
+// pool.
+type poolWriter struct {
+	pool *pgxpool.Pool
+	recs []audit.Record
+}
+
+func (w *poolWriter) Write(ctx context.Context, rec audit.Record) (int64, error) {
+	if _, err := w.pool.Exec(ctx, `SELECT 1`); err != nil {
+		return 0, err
+	}
+	w.recs = append(w.recs, rec)
+	return int64(len(w.recs)), nil
+}
+
+// With a pool of one connection (postgresql.pool.authService.maxConns: 1) a turn runs to its row: the lock is held on
+// a connection of its own, so the chain floor, the sink floor, the deletes and the row each get the pool's one
+// connection. A lock held on that connection would leave them waiting for it until the deadline below.
+func TestPostgresATurnWithAPoolOfOneConnectionRunsToItsRow(t *testing.T) {
+	pool := freshMigratedDatabase(t)
+	now := time.Date(2026, 11, 21, 3, 0, 0, 0, time.UTC)
+	seedRows(t, pool, now.AddDate(0, 0, -100),
+		`INSERT INTO auth_audit_logs (service, action, created_at) VALUES ('auth', 'x', $1), ('auth', 'x', $1)`)
+	cfg := pool.Config()
+	cfg.MaxConns, cfg.MinConns = 1, 0
+	one, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(one.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	w := &poolWriter{pool: one}
+	Purger{Pool: one, Cfg: Config{AuditDays: 30}, Audit: w, Now: func() time.Time { return now },
+		AuditFloor: func(ctx context.Context) (int64, error) {
+			_, err := one.Exec(ctx, `SELECT 1`) // auditsink.Floor reads the sinks' cursors through the pool
+			return math.MaxInt64, err
+		}}.turn(ctx, PGLock{Pool: one})
+
+	if ctx.Err() != nil {
+		t.Fatalf("the turn ran into its 10 s deadline (records %+v): its statements waited for the pool's one connection", w.recs)
+	}
+	if len(w.recs) != 1 || w.recs[0].Result != audit.ResultSuccess {
+		t.Fatalf("records = %+v, want one success", w.recs)
+	}
+	if n := count(t, pool, "auth_audit_logs"); n != 0 {
+		t.Fatalf("auth_audit_logs left = %d, want 0", n)
+	}
+}
