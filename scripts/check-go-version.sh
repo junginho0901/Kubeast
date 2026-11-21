@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # CI check (the gofmt job): the Go minor every Dockerfile builds with (FROM ... golang:X.Y...) is the go-version of
 # every setup-go in .github/workflows/ci.yaml, so CI tests with the images' Go. dependabot's base-images PR moves the
-# Dockerfiles alone; this fails it, naming each line to change, until the same pull request moves ci.yaml too.
+# Dockerfiles alone; this fails it, naming each line to change, until the same pull request moves ci.yaml too. The one
+# setup-go left out is go-version "stable" in the gofmt job (the job key `  gofmt:` above the line).
 # The go.mod `go` lines are minimums and are not read here (1.26.x; services/tool-server/kubectl has 1.27).
 # Usage: scripts/check-go-version.sh
 set -euo pipefail
@@ -37,7 +38,9 @@ setups=0
 while IFS= read -r hit; do
   [ -n "${hit}" ] || continue
   line=${hit%%:*}
-  text=${hit#*:}
+  rest=${hit#*:}
+  job=${rest%%:*}
+  text=${rest#*:}
   value=$(printf '%s\n' "${text}" | sed -E 's/^[[:space:]]*go-version(-file)?:[[:space:]]*//; s/[[:space:]]+#.*$//' | tr -d "\"'")
   case "${text}" in
     *go-version-file:*)
@@ -45,8 +48,8 @@ while IFS= read -r hit; do
       failed=1
       ;;
     *)
-      # The gofmt job formats with the newest Go on purpose.
-      if [ "${value}" = stable ]; then
+      # The gofmt job formats with the newest Go on purpose; "stable" in any other job fails below.
+      if [ "${value}" = stable ] && [ "${job}" = gofmt ]; then
         continue
       fi
       if [ "${value}" != "${want}" ]; then
@@ -57,7 +60,8 @@ while IFS= read -r hit; do
       fi
       ;;
   esac
-done <<<"$(grep -nE '^[[:space:]]*go-version(-file)?:' "${workflow}" || true)"
+done <<<"$(awk '/^  [A-Za-z0-9_-]+:[ \t]*(#.*)?$/ { job = $1; sub(/:$/, "", job) }
+  /^[ \t]*go-version(-file)?:/ { print NR ":" job ":" $0 }' "${workflow}")"
 
 if [ "${failed}" -eq 0 ] && [ "${setups}" -eq 0 ]; then
   echo "${workflow}: no setup-go step with go-version \"${want}\"" >&2
