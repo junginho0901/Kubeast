@@ -403,6 +403,7 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  toolResultsJSON: false  # true: the model reads each tool result as one JSON object naming its tool, cluster text as JSON strings (docs/ai-alerts.md "Planted instructions")
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).

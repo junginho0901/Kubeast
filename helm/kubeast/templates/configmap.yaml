@@ -134,6 +134,7 @@ data:
   REDACTION_PII: {{ .Values.ai.redaction.pii | quote }}
   REDACTION_DISABLE: {{ join "," .Values.ai.redaction.disable | quote }}
   AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
+  AI_TOOL_RESULTS_JSON: {{ dig "toolResultsJSON" false .Values.ai | quote }}
   AI_CHAT_HISTORY_MESSAGES: {{ .Values.ai.chat.historyMessages | quote }}
   AI_CHAT_SUMMARY_ENABLED: {{ .Values.ai.chat.summary.enabled | quote }}
   AI_CHAT_SUMMARY_MAX_CHARS: {{ .Values.ai.chat.summary.maxChars | quote }}
