@@ -13,6 +13,7 @@ The authoritative description of the values is `auth.oidc` in [`helm/kubeast/val
 - If `email_verified` is `false`, the sign-in is refused. If `allowedDomains` is set, only mail addresses in those domains are accepted.
 - The account is created at the first sign-in (no password). If an account with the same email already exists, the person signs in to that account.
 - An admin's password reset is refused for an account the provider made (400): a reset gives it no password.
+- An account the provider made does not sign in with a password, also one an admin's reset gave it before 0.7.9: the answer is a wrong password's `Invalid credentials` (401) and the audit row says `single_sign_on_account`. The chart's `admin` account (`admin.email`) signs in with its password whatever made it, so it stays the way in while the provider is down (`auth.passwordLogin: admin-only` included).
 - A name that is not an address (`claims.email` set to a username claim) does not reach an account made with a password, such as the chart's `admin`: the sign-in is refused with `oidc_account_conflict`. Accounts the provider made, and addresses in any claim, sign in as before.
 - If `claims.email` is a claim people can change themselves at the provider, set `allowedDomains`. An address is taken as the provider's word, whichever claim holds it, and that list is what limits which addresses count.
 - Both success and failure are recorded in the audit log: `user.login.success`, or `user.login.failed` with a reason code (§6).

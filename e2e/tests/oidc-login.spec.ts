@@ -1,4 +1,7 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 
 // OpenID Connect sign-in against a mock provider (e2e/scripts/oidc-mock.sh up).
 // The provider is reached as host.docker.internal:8080 by both auth-service
@@ -49,6 +52,21 @@ async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
   return (await res.json()).access_token
+}
+
+// The kind cluster's database, for a row no route writes any more (never the shell's default kubeconfig).
+const LOCAL_KUBECONFIG = path.resolve(__dirname, '../../.kubeconfig-kind')
+const KUBECONFIG = process.env.KUBECONFIG || (fs.existsSync(LOCAL_KUBECONFIG) ? LOCAL_KUBECONFIG : '')
+function psql(sql: string): string {
+  return execFileSync('kubectl', ['-n', 'kubeast', 'exec', 'deploy/postgres', '--', 'psql', '-U', 'kubeast', '-d', 'kubeast', '-tAc', sql],
+    { env: { ...process.env, KUBECONFIG }, encoding: 'utf8' }).trim()
+}
+
+// The user.login.failed rows of one account, newest first.
+async function signInFailures(request: APIRequestContext, headers: Record<string, string>, email: string) {
+  const audit = await (await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { action: 'user.login.failed', limit: 200 } })).json()
+  const rows = ((Array.isArray(audit) ? audit : audit.items) || []) as Array<{ TargetEmail?: string; Error?: string; After?: { reason?: string; auth_source?: string } }>
+  return rows.filter((r) => r.TargetEmail === email)
 }
 
 test.describe('OIDC sign-in', () => {
@@ -174,6 +192,34 @@ test.describe('OIDC sign-in', () => {
     expect(res.status()).toBe(401)
     const res2 = await request.post('/api/v1/auth/login', { data: { email, password: 'anything-at-all-123' } })
     expect(res2.status()).toBe(401)
+    // Refused for how the account signs in, not counted as a wrong password.
+    const rows = await signInFailures(request, { Authorization: `Bearer ${await adminToken(request)}` }, email)
+    expect(rows.map((r) => r.Error)).toEqual(['single_sign_on_account', 'single_sign_on_account'])
+  })
+
+  test('a password an account the provider made holds does not sign it in', async ({ page, request }) => {
+    test.skip(!KUBECONFIG, 'KUBECONFIG is unset and .kubeconfig-kind is missing: the password is put on the account in the database')
+    const email = newEmail('grace')
+    const twin = newEmail('grace-twin')
+    const password = 'E2e-sso-twin-sign-in-0791!'
+    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
+    await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
+    const headers = { Authorization: `Bearer ${await adminToken(request)}` }
+    const made = await request.post('/api/v1/auth/admin/users', { headers, data: { name: 'E2E SSO twin', email: twin, password } })
+    expect(made.status(), await made.text()).toBe(201)
+
+    // An admin's reset gave such accounts a password before 0.7.9 and is refused now: the twin's hash is copied in.
+    psql(`UPDATE auth_users SET password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}') WHERE email = '${email}' AND auth_source = 'oidc'`)
+    expect(psql(`SELECT count(*) FROM auth_users WHERE email = '${email}' AND auth_source = 'oidc' AND password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}')`)).toBe('1')
+    const own = await request.post('/api/v1/auth/login', { data: { email: twin, password }, failOnStatusCode: false })
+    expect(own.status(), 'the password signs in the account made with it').toBe(200)
+
+    const res = await request.post('/api/v1/auth/login', { data: { email, password }, failOnStatusCode: false })
+    expect(res.status()).toBe(401)
+    expect((await res.json()).detail).toBe('Invalid credentials')
+    const rows = await signInFailures(request, headers, email)
+    expect(rows.map((r) => [r.Error, r.After?.auth_source])).toEqual([['single_sign_on_account', 'oidc']])
+    expect(psql(`SELECT failed_logins FROM auth_users WHERE email = '${email}'`), 'no failure counted toward the lockout').toBe('0')
   })
 
   test('an admin password reset gives a provisioned account no password', async ({ page, request }) => {

@@ -291,6 +291,17 @@ func passwordLoginAllowed(cfg config.Config, email string) bool {
 	return true
 }
 
+// signInRefusedSingleSignOn is the reason of a password sign-in refused for an account that signs in through single
+// sign-on.
+const signInRefusedSingleSignOn = "single_sign_on_account"
+
+// signsInWithPassword says whether the password form may open the account: one made with a password, or the chart's
+// admin account (DEFAULT_ADMIN_EMAIL, the break-glass path while the provider is down) whatever made it, as reset-admin
+// gives it a password without changing how it was made.
+func signsInWithPassword(cfg config.Config, user *model.User) bool {
+	return user.AuthSource == model.AuthSourcePassword || strings.EqualFold(user.Email, cfg.DefaultAdminEmail)
+}
+
 // --- handlers ---------------------------------------------------------------
 
 // OIDCConfig handles GET /auth/oidc/config — what the login page needs to

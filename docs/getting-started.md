@@ -239,7 +239,7 @@ kubectl -n kubeast exec deploy/auth-service -- /app/server reset-admin
 docker compose exec auth-service /app/server reset-admin
 ```
 
-`--email <account>` recovers another account than `admin`. To use a new password instead of the generated one, change it first (`helm upgrade … --reset-then-reuse-values --set admin.password=<new>`, or `DEFAULT_ADMIN_PASSWORD` in `.env`), restart auth-service (`kubectl -n kubeast rollout restart deploy/auth-service`, or `docker compose up -d auth-service`), then run `reset-admin`.
+`--email <account>` recovers another account than `admin`; an account the provider made gets the Admin role and its locks cleared but still signs in through the provider, since the password form refuses it (only the `admin.email` account signs in with a password whatever made it). To use a new password instead of the generated one, change it first (`helm upgrade … --reset-then-reuse-values --set admin.password=<new>`, or `DEFAULT_ADMIN_PASSWORD` in `.env`), restart auth-service (`kubectl -n kubeast rollout restart deploy/auth-service`, or `docker compose up -d auth-service`), then run `reset-admin`.
 
 ### 3. Log in and connect a cluster (Connect your cluster)
 

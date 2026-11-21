@@ -145,6 +145,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// An account the provider made signs in there, and a password it holds (an admin's reset gave it one before 0.7.9)
+	// does not open it. The answer is a wrong password's after the same hashing work, so it tells no one which accounts
+	// sign in through the provider, and no failure is counted toward the lockout, which guards only this form.
+	if !signsInWithPassword(h.cfg, user) {
+		security.VerifyPassword(req.Password, h.dummyPasswordHash())
+		reason := jsonRaw(map[string]interface{}{"reason": signInRefusedSingleSignOn, "auth_source": user.AuthSource})
+		h.writeAuditFailure(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, signInRefusedSingleSignOn, reason)
+		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
 	// An account the dormant sweeper locked refuses the password until an
 	// admin unlocks it; same generic 401, the audit row carries the reason.
 	if user.DormantLockedAt != nil {
@@ -295,6 +306,8 @@ func (h *AuthHandler) clearAuthCookie(w http.ResponseWriter, _ *http.Request) {
 // browser session slides as long as the user stays active. The current token
 // must still be valid (the auth middleware checks signature, expiry and tv)
 // and its sign-in not signed out (the middleware marks it, security.SignedOut).
+// It does not ask how the account signs in, as Login does: a token names no
+// sign-in method, and an account the provider made gets its sessions there.
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	payload, ok := auth.FromContext(r.Context())
 	if !ok {

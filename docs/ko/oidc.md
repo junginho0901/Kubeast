@@ -13,6 +13,7 @@ Kubeast는 OpenID Connect 공급자(Keycloak, Google, Entra ID, Okta 등) 하나
 - `email_verified`가 `false`면 로그인을 거부합니다. `allowedDomains`를 설정하면 그 도메인의 메일 주소만 받습니다.
 - 계정은 첫 로그인 때 비밀번호 없이 만듭니다. 같은 이메일의 계정이 이미 있으면 그 계정으로 로그인합니다.
 - 공급자가 만든 계정은 관리자의 비밀번호 재설정을 거부합니다(400). 재설정으로 비밀번호를 받지 않습니다.
+- 공급자가 만든 계정은 비밀번호로 로그인하지 않습니다. 0.7.9 전에 관리자 재설정으로 받은 비밀번호도 같습니다. 답은 틀린 비밀번호와 같은 `Invalid credentials`(401)이고, 감사 행에는 `single_sign_on_account`가 남습니다. 차트의 `admin` 계정(`admin.email`)은 무엇이 만들었든 비밀번호로 로그인하므로, 공급자가 멈췄을 때 들어오는 길로 그대로 남습니다(`auth.passwordLogin: admin-only` 포함).
 - 주소 꼴이 아닌 이름(`claims.email`을 사용자 이름 클레임으로 둔 경우)은 차트의 `admin`처럼 비밀번호로 만든 계정에 닿지 않습니다. 로그인을 `oidc_account_conflict`로 거부합니다. 공급자가 만든 계정과, 어느 클레임이든 주소 꼴인 값은 전과 같이 로그인합니다.
 - `claims.email`을 사용자가 공급자에서 직접 고칠 수 있는 클레임으로 두면 `allowedDomains`를 설정하세요. 주소 꼴 값은 어느 클레임에 있든 공급자가 보증한 값으로 받으므로, 받을 주소를 좁히는 것은 이 목록입니다.
 - 성공과 실패 모두 감사 로그에 남습니다. 성공은 `user.login.success`, 실패는 `user.login.failed`와 사유 코드(§6)로 남습니다.
