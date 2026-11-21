@@ -31,7 +31,7 @@ type podShareKey struct {
 // text is the key as a flight key, its JSON. A key holding a string that is not UTF-8 is not shared: json.Marshal writes
 // those bytes as U+FFFD, which another key may hold, and how it writes them differs between Go releases.
 func (k podShareKey) text() (string, bool) {
-	if !allUTF8(reflect.ValueOf(k)) {
+	if !allUTF8(reflect.ValueOf(k), shareKeyDepth) {
 		return "", false
 	}
 	b, err := json.Marshal(k)
@@ -41,32 +41,38 @@ func (k podShareKey) text() (string, bool) {
 	return string(b), true
 }
 
-// allUTF8 says whether every string v holds, in its fields, elements, map keys and values and what it points to, is UTF-8.
-func allUTF8(v reflect.Value) bool {
+const shareKeyDepth = 32
+
+// allUTF8 says whether every string v holds, in its fields, elements, map keys and values and what it points to, is UTF-8;
+// a value more than depth levels deep, as one that holds itself, gives false.
+func allUTF8(v reflect.Value, depth int) bool {
+	if depth == 0 {
+		return false
+	}
 	switch v.Kind() {
 	case reflect.String:
 		return utf8.ValidString(v.String())
 	case reflect.Struct:
 		for i := range v.NumField() {
-			if !allUTF8(v.Field(i)) {
+			if !allUTF8(v.Field(i), depth-1) {
 				return false
 			}
 		}
 	case reflect.Slice, reflect.Array:
 		for i := range v.Len() {
-			if !allUTF8(v.Index(i)) {
+			if !allUTF8(v.Index(i), depth-1) {
 				return false
 			}
 		}
 	case reflect.Map:
 		for it := v.MapRange(); it.Next(); {
-			if !allUTF8(it.Key()) || !allUTF8(it.Value()) {
+			if !allUTF8(it.Key(), depth-1) || !allUTF8(it.Value(), depth-1) {
 				return false
 			}
 		}
 	case reflect.Interface, reflect.Pointer:
 		if !v.IsNil() {
-			return allUTF8(v.Elem())
+			return allUTF8(v.Elem(), depth-1)
 		}
 	}
 	return true
