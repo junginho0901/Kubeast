@@ -239,6 +239,32 @@ func (s *Service) PrometheusQuery(ctx context.Context, query string) ([]Promethe
 	return results, nil
 }
 
+// PrometheusQueryAt runs an instant query evaluated at at (the API's time parameter), parsed as PrometheusQuery parses.
+// Returns (nil, nil) if Prometheus is unavailable.
+func (s *Service) PrometheusQueryAt(ctx context.Context, query string, at time.Time) ([]PrometheusQueryResult, error) {
+	if !PrometheusFeatureEnabled() {
+		return nil, nil
+	}
+	src := s.getPromSource(ctx)
+	if src == nil {
+		return nil, nil
+	}
+	query, err := src.scoped(query)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := s.promFetch(ctx, src, "/api/v1/query?query="+url.QueryEscape(query)+"&time="+strconv.FormatInt(at.Unix(), 10))
+	if err != nil {
+		return nil, err
+	}
+	results := make([]PrometheusQueryResult, 0, len(raw))
+	for _, r := range raw {
+		metric, _ := r["metric"].(map[string]interface{})
+		results = append(results, PrometheusQueryResult{Metric: metric, Value: extractPrometheusValue(r)})
+	}
+	return results, nil
+}
+
 // PrometheusQueryRaw runs an instant query and returns raw Prometheus result maps.
 func (s *Service) PrometheusQueryRaw(ctx context.Context, query string) ([]map[string]interface{}, error) {
 	if !PrometheusFeatureEnabled() {

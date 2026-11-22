@@ -191,8 +191,12 @@ func windowParams(match string, since time.Duration, limit int) url.Values {
 		since = exploreWindow
 	}
 	end := time.Now()
+	return windowParamsBetween(match, end.Add(-since), end, limit)
+}
+
+func windowParamsBetween(match string, start, end time.Time, limit int) url.Values {
 	q := url.Values{}
-	q.Set("start", strconv.FormatInt(end.Add(-since).Unix(), 10))
+	q.Set("start", strconv.FormatInt(start.Unix(), 10))
 	q.Set("end", strconv.FormatInt(end.Unix(), 10))
 	if match != "" {
 		q.Set("match[]", match)
@@ -263,6 +267,15 @@ func (s *Service) PrometheusMetricNames(ctx context.Context, pattern string, lim
 // on the series selector matches within since, at most limit+1 (so the caller
 // can tell it was cut).
 func (s *Service) PrometheusLabels(ctx context.Context, label, selector string, since time.Duration, limit int) ([]string, error) {
+	return s.prometheusLabels(ctx, label, selector, func(match string) url.Values { return windowParams(match, since, limit+1) })
+}
+
+// PrometheusLabelsBetween is PrometheusLabels over start–end instead of since back from now.
+func (s *Service) PrometheusLabelsBetween(ctx context.Context, label, selector string, start, end time.Time, limit int) ([]string, error) {
+	return s.prometheusLabels(ctx, label, selector, func(match string) url.Values { return windowParamsBetween(match, start, end, limit+1) })
+}
+
+func (s *Service) prometheusLabels(ctx context.Context, label, selector string, params func(match string) url.Values) ([]string, error) {
 	src := s.getPromSource(ctx)
 	if src == nil {
 		return nil, nil
@@ -275,7 +288,7 @@ func (s *Service) PrometheusLabels(ctx context.Context, label, selector string, 
 	if label != "" {
 		path = "/api/v1/label/" + url.PathEscape(label) + "/values"
 	}
-	data, err := s.promGetData(ctx, src, path+"?"+windowParams(match, since, limit+1).Encode())
+	data, err := s.promGetData(ctx, src, path+"?"+params(match).Encode())
 	if err != nil {
 		return nil, err
 	}

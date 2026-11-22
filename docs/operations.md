@@ -308,6 +308,10 @@ Loki and the collector are set up separately ([docs/cluster-requirements.md §14
   - API: `GET /api/v1/[cluster/namespaces/{ns}/]logsearch/logql?q=&step=`, `…/logsearch/labels[?label=]` and `…/logsearch/patterns?q=<selector>`.
     - The same gate: Pod read + `get pods/log` + per-minute limit.
     - Audit `k8s.pod.logs.logql` (`kind`). Label lists are not audited.
+  - **Volume limit** (`features.logSearch.queryMaxBytes`, default 0 = off): with a number of bytes set, `loki_query` first asks Loki's `index/stats` how much the streams of each selector of the query hold over the range, as mcp-grafana's lokiguard does.
+    - Past the limit it answers 400 with the size and how to narrow it (a shorter range, more label matchers), and reads nothing. The audit row is a failure with `estimated_bytes`.
+    - Under it the answer carries `estimatedBytes`. A store without `index/stats` answers 404 while the limit is set.
+    - Off, the index is not asked and the answer and the row are as before.
   - Patterns need Loki's `pattern_ingester.enabled: true`. Without it, the AI gets "no patterns" and counts with `loki_query`.
   - Loki returns only patterns that appear in 30 or more lines within the window (a fixed value in 3.7).
 
