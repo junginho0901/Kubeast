@@ -1,0 +1,29 @@
+{
+ "id": "10_shared_db_stuck",
+ "control": false,
+ "symptom": "product lists, recommendations and checkouts fail or time out; product-catalog's queries wait, then its new connections are refused for the role's connection limit; accounting stops writing orders and its queue lag grows; the database's CPU stays low",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "Deployment/otel-demo/astronomy-db",
+   "kind": "dependency_slow",
+   "accept_resources": ["(deployment|replicaset|pod|service)/(otel-demo/)?astronomy-db", "^astronomy-db", "postgres"],
+   "accept_kinds": ["dependency_down", "config_change"]
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/otel-demo/astronomy-db", "role": "cause", "required": true, "accept": ["astronomy-db", "postgres"], "note": "a schema change holds both tables' locks inside one open transaction; every read of the products and every order insert waits"},
+  {"resource": "Deployment/otel-demo/product-catalog", "role": "via", "required": true, "accept": ["product-catalog", "(^|/)accounting$"], "note": "its waiting queries hold their connections; past the role's 15 the database refuses new ones"},
+  {"resource": "Deployment/otel-demo/frontend", "role": "symptom", "required": true, "accept": ["(^|/)(frontend|frontend-proxy|checkout|recommendation|load-generator)$"]}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/otel-demo/product-catalog", "why": "returns the errors; its code and settings did not change, its queries wait on the database"},
+  {"resource": "Deployment/otel-demo/frontend", "why": "shows the errors; it only passes product-catalog's on"},
+  {"resource": "Deployment/otel-demo/checkout", "why": "fails because its product lookups fail"},
+  {"resource": "Deployment/otel-demo/recommendation", "why": "fails because its product list fails"},
+  {"resource": "Deployment/otel-demo/accounting", "why": "its order inserts wait on the same database; its queue lag is a symptom"}
+ ]
+}

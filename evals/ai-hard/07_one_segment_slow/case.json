@@ -1,0 +1,50 @@
+{
+ "id": "07_one_segment_slow",
+ "title": "One call between two services slows down: both ends healthy, only traces show where",
+ "group": "hidden_cause",
+ "cluster": "default",
+ "namespace": "shop-07",
+ "question": "default 클러스터 otel-demo 네임스페이스 쇼핑몰에서 상품 페이지가 느려졌대. 원인이 뭐야?",
+ "question_vague": "default 클러스터 otel-demo 네임스페이스 쇼핑몰이 좀 이상하다는데 봐 줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "product-catalog"
+  ],
+  [
+   "frontend"
+  ],
+  [
+   "네트워크",
+   "network",
+   "구간",
+   "사이",
+   "between",
+   "client span",
+   "클라이언트 스팬"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n otel-demo wait --for=condition=Available deploy/frontend-proxy deploy/frontend deploy/product-catalog deploy/recommendation deploy/checkout deploy/load-generator --timeout=10s && kubectl -n chaos-mesh wait --for=condition=Available deploy/chaos-controller-manager --timeout=10s && kubectl -n $NS wait --for=condition=Available deploy/uptime-check --timeout=10s",
+ "wait_seconds": 300,
+ "baseline_seconds": 300,
+ "inject_cmds": [
+  "kubectl -n chaos-mesh apply -f $CASE_DIR/inject.yaml"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/uptime-check --since=40s | grep 'path=/api/products/' | grep -Eq 'duration_ms=([6-9][0-9]{2}|[0-9]{4,})'",
+ "inject_wait_seconds": 180,
+ "ask_after_seconds": [360],
+ "undo_cmds": [
+  "kubectl -n chaos-mesh delete -f $CASE_DIR/inject.yaml --ignore-not-found --timeout=120s"
+ ],
+ "cleanup_cmds": [
+  "kubectl -n chaos-mesh delete -f $CASE_DIR/inject.yaml --ignore-not-found --timeout=120s"
+ ],
+ "cooldown_seconds": 60,
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceSlow", "namespace": "otel-demo", "job": "uptime-check"},
+  "match": {"namespace": "otel-demo"},
+  "annotations": {"summary": "Product pages in the otel-demo shop are slow", "description": "uptime-check's product page requests to the shop in otel-demo have been much slower than usual for the last few minutes; none fails."}
+ }
+}

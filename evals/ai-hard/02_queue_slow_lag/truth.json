@@ -1,0 +1,27 @@
+{
+ "id": "02_queue_slow_lag",
+ "control": false,
+ "symptom": "mailer and points fall further behind every minute (oldest order minutes old), each fetch returning one order; no error anywhere; checkout publishes at the same rate as before",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "Deployment/shop-02/order-events",
+   "kind": "dependency_slow",
+   "accept_resources": ["(deployment|replicaset|pod|service)/(shop-02/)?order-events", "^order-events", "order-events-config"],
+   "accept_kinds": ["config_change"]
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/shop-02/order-events", "role": "cause", "required": true, "accept": ["order-events"], "note": "its topic config now caps a fetch at 1024 bytes, one order; each fetch still costs its segment read, so a consumer gets about ten orders a second while twenty come in"},
+  {"resource": "Deployment/shop-02/mailer", "role": "symptom", "required": true, "accept": ["(^|/)(mailer|points)$"]}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/shop-02/mailer", "why": "where the delay shows; it handles each order in milliseconds and waits on its fetches"},
+  {"resource": "Deployment/shop-02/points", "why": "lags the same way; it shares nothing with mailer but the queue"},
+  {"resource": "Deployment/shop-02/smtp-relay", "why": "mailer's mail server; answers in about 10 ms throughout"},
+  {"resource": "Deployment/shop-02/checkout", "why": "the producer; it publishes at the same rate before and after"}
+ ]
+}
