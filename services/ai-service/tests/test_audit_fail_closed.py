@@ -288,11 +288,9 @@ async def test_after_a_failed_write_readiness_probes_a_write(monkeypatch):
 
     state = {"insert_fails": True, "statements": [], "rollbacks": 0}
 
-    class _Trans:
-        async def rollback(self):
-            state["rollbacks"] += 1
-
     class _ProbeConn:
+        began = False  # as SQLAlchemy 2's AsyncConnection: the first execute begins the transaction
+
         async def __aenter__(self):
             return self
 
@@ -300,9 +298,16 @@ async def test_after_a_failed_write_readiness_probes_a_write(monkeypatch):
             return False
 
         async def begin(self):
-            return _Trans()
+            if self.began:
+                raise RuntimeError("a transaction is already begun on this connection")
+            self.began = True
+
+        async def rollback(self):
+            state["rollbacks"] += 1
+            self.began = False
 
         async def execute(self, stmt, *_a, **_k):
+            self.began = True
             sql = str(stmt).strip()
             state["statements"].append(sql.split()[0])
             if sql.startswith("INSERT") and state["insert_fails"]:
@@ -340,3 +345,46 @@ async def test_after_a_failed_write_readiness_probes_a_write(monkeypatch):
     assert await audit_writer.write_audit(action="ai.tool.call") is False and audit_writer._write_broken is True
     state["insert_fails"] = False
     assert await audit_writer.write_audit(action="ai.tool.call") is True and audit_writer._write_broken is False
+
+
+@pytest.mark.asyncio
+async def test_readiness_comes_back_on_a_real_connection_once_the_table_takes_rows(monkeypatch, tmp_path, capsys):
+    """The same on a SQLAlchemy connection (sqlite here, standing in under a postgresql URL; on PostgreSQL in
+    test_audit_ready_postgres.py): the probe's insert goes in the transaction SELECT 1 began, so readiness comes back
+    once a trigger stops refusing rows, and the probe leaves no row."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    import app.database
+
+    columns = ("service, action, actor_user_id, actor_email, target_user_id, target_email, target_type, target_id, "
+               "before, after, request_ip, user_agent, request_id, path, cluster, namespace, result, error")
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'audit.db'}")
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(f"CREATE TABLE auth_audit_logs (id INTEGER PRIMARY KEY, {columns})"))
+            await conn.execute(text("CREATE TRIGGER refuse BEFORE INSERT ON auth_audit_logs "
+                                    "BEGIN SELECT RAISE(ABORT, 'audit table refuses rows'); END"))
+
+        async def db():
+            return SimpleNamespace(database_url="postgresql+asyncpg://stand-in", engine=engine)
+
+        async def actions():
+            async with engine.connect() as conn:
+                return [r[0] for r in await conn.execute(text("SELECT action FROM auth_audit_logs ORDER BY id"))]
+
+        monkeypatch.setattr(app.database, "get_db_service", db)
+        assert await audit_writer.write_audit(action="ai.tool.call") is False
+        ok, err = await audit_writer.audit_ready()
+        assert ok is False and "refuses rows" in err
+
+        async with engine.begin() as conn:
+            await conn.execute(text("DROP TRIGGER refuse"))
+        audit_writer._ready_cache["at"] = 0.0
+        assert await audit_writer.audit_ready() == (True, None)
+        assert audit_writer._write_broken is False and await actions() == []
+        assert await audit_writer.write_audit(action="ai.tool.call") is True
+        assert await actions() == ["ai.tool.call"]
+    finally:
+        await engine.dispose()
+    capsys.readouterr()  # stdout mirror lines are not under test here

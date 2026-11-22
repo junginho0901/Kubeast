@@ -36,6 +36,9 @@ tests:
       - equal:
           path: data.AI_DEBUG_DUMP
           value: "false"
+      - equal:
+          path: data.AI_TOOL_RESULTS_JSON
+          value: "false"
       - notExists:
           path: data.TOOL_SERVER_URL_READ
       - notExists:
@@ -94,6 +97,7 @@ tests:
         - aws-keys
         - jwt
       ai.debugDump: true
+      ai.toolResultsJSON: true
     asserts:
       - equal:
           path: data.REDACTION_ENABLED
@@ -109,6 +113,9 @@ tests:
           value: aws-keys,jwt
       - equal:
           path: data.AI_DEBUG_DUMP
+          value: "true"
+      - equal:
+          path: data.AI_TOOL_RESULTS_JSON
           value: "true"
 
   - it: access request settings are handed to auth-service as env values

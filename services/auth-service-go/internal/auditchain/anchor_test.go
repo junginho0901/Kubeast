@@ -146,3 +146,43 @@ func TestRunOnceRecordsTheSystemAuditActionOnSuccessAndFailure(t *testing.T) {
 		t.Errorf("a failed put must not insert an anchor row: %d", len(f.anchors))
 	}
 }
+
+// flakyLastAnchor fails the first fails reads of the last anchor.
+type flakyLastAnchor struct {
+	*fakeStore
+	fails, calls int
+}
+
+func (f *flakyLastAnchor) LastAnchor(ctx context.Context) (*Anchor, error) {
+	f.calls++
+	if f.calls <= f.fails {
+		return nil, errors.New("database not ready")
+	}
+	return f.fakeStore.LastAnchor(ctx)
+}
+
+func TestRunReadsTheLastAnchorAgainWhenTheReadAtStartFails(t *testing.T) {
+	t0 := time.Date(2026, 11, 19, 6, 0, 0, 0, time.UTC)
+	last := t0.Add(-time.Hour)
+	f := chainOf(1)
+	f.anchors = []Anchor{{ID: 1, CreatedAt: last, Actor: scheduledActor}}
+	s := &flakyLastAnchor{fakeStore: f, fails: 2}
+	a := &Anchorer{Store: s, Objects: newFakeObjects(), Sink: "archive", Now: func() time.Time { return t0 }, readRetry: time.Millisecond}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { a.Run(ctx, 24*time.Hour); close(done) }()
+	for deadline := time.Now().Add(2 * time.Second); a.LastAt() == 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-done
+	if a.LastAt() != last.Unix() {
+		t.Errorf("LastAt = %d, want the last anchor's %d", a.LastAt(), last.Unix())
+	}
+	if s.calls != 3 {
+		t.Errorf("last anchor reads = %d, want 3 (two failures, then the read)", s.calls)
+	}
+	if len(f.anchors) != 1 {
+		t.Errorf("anchors = %d: the last anchor is less than a period old, nothing is due", len(f.anchors))
+	}
+}

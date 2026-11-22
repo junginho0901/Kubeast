@@ -1,0 +1,92 @@
+suite: multicluster.maxTerminalsPerAccount and maxFollowedLogsPerAccount — each account's open terminals and followed logs on each k8s-service
+templates:
+  - checks/stream-caps.yaml
+  - deployments.yaml
+  - configmap.yaml
+  - secret.yaml
+tests:
+  - it: refuses nothing on the chart's defaults, nor 0
+    set:
+      multicluster.maxFollowedLogsPerAccount: 0
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/stream-caps.yaml
+
+  - it: refuses a cap below 0 instead of turning it off without a word
+    set:
+      multicluster.maxTerminalsPerAccount: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: "multicluster.maxTerminalsPerAccount must be a whole number, 0 \\(no cap\\) or more \\(got -1\\)"
+        template: checks/stream-caps.yaml
+
+  - it: refuses a cap that is not a whole number
+    set:
+      multicluster.maxFollowedLogsPerAccount: 2.5
+    asserts:
+      - failedTemplate:
+          errorPattern: "multicluster.maxFollowedLogsPerAccount must be a whole number, 0 \\(no cap\\) or more \\(got 2.5\\)"
+        template: checks/stream-caps.yaml
+
+  - it: gives k8s-service 20 of each by default
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_TERMINALS_PER_ACCOUNT, value: "20"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_FOLLOWED_LOGS_PER_ACCOUNT, value: "20"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: hands the values to k8s-service, 0 as 0 (no cap), not as the default
+    set:
+      multicluster.maxTerminalsPerAccount: 3
+      multicluster.maxFollowedLogsPerAccount: 0
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_TERMINALS_PER_ACCOUNT, value: "3"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_FOLLOWED_LOGS_PER_ACCOUNT, value: "0"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: renders the defaults on the values of a release before them (--reuse-values)
+    set:
+      multicluster.maxTerminalsPerAccount: null
+      multicluster.maxFollowedLogsPerAccount: null
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_TERMINALS_PER_ACCOUNT, value: "20"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_FOLLOWED_LOGS_PER_ACCOUNT, value: "20"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: gives the stream server, which opens the terminals and followed logs with streams on, the same caps
+    set:
+      streams.enabled: true
+      multicluster.maxTerminalsPerAccount: 5
+      multicluster.maxFollowedLogsPerAccount: 7
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_TERMINALS_PER_ACCOUNT, value: "5"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service-stream}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_FOLLOWED_LOGS_PER_ACCOUNT, value: "7"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service-stream}

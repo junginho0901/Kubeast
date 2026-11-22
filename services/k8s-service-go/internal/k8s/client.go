@@ -74,6 +74,15 @@ type clientBundle struct {
 	// events is one read of an object's events as kubeast:cache for everyone asking; eventsRefused the namespaces it was refused, until when
 	events        flight.Group[*corev1.EventList]
 	eventsRefused sync.Map
+	// eventWindows is one read of a namespace's or the cluster's events as kubeast:cache for everyone asking (events_stream.go)
+	eventWindows flight.Group[*eventWindow]
+	// deploymentWindows, replicaSetWindows and revisionWindows are one read of a namespace's or the cluster's kind of
+	// those the Timeline's rollouts read as kubeast:cache for everyone asking (timeline_rollouts.go); rolloutsRefused the
+	// kinds and namespaces it was refused, until when
+	deploymentWindows flight.Group[map[string]bool]
+	replicaSetWindows flight.Group[[]rolloutRS]
+	revisionWindows   flight.Group[[]rolloutCR]
+	rolloutsRefused   sync.Map
 	// metricsServed is this cluster's answer to whether it serves metrics.k8s.io and when it was taken; metricsServedRead
 	// is one read of it for everyone asking (metrics.go)
 	metricsServed     atomic.Pointer[metricsVerdict]

@@ -107,7 +107,7 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
                 })
                 setPreview(r)
               } catch (err: any) {
-                setPreview(failedPreview(err))
+                setPreview(failedPreview(err, t('helmReleaseDetail.upgrade.dryRunFailed', 'dry-run failed')))
               } finally {
                 setPreviewing(false)
               }

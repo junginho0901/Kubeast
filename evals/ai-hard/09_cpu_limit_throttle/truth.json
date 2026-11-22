@@ -1,0 +1,26 @@
+{
+ "id": "09_cpu_limit_throttle",
+ "control": false,
+ "symptom": "storefront's catalog calls take about a second or more (reviews calls take milliseconds); no errors anywhere",
+ "fault_start": "{{SETUP_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 180,
+ "causes": [
+  {
+   "resource": "Deployment/shop-09/catalog",
+   "kind": "resource_limit",
+   "accept_resources": ["(deployment|replicaset|pod)/(shop-09/)?catalog", "^catalog"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/shop-09/catalog", "role": "cause", "required": true, "accept": ["catalog"], "note": "CPU limit 25m; cAdvisor shows most CFS periods throttled"},
+  {"resource": "Deployment/shop-09/storefront", "role": "symptom", "required": true, "accept": ["storefront"]}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/shop-09/recommender", "why": "the pod using the most CPU in the namespace, but under its 1-CPU limit and not throttled"},
+  {"resource": "Node/*", "why": "the node has plenty of idle CPU"},
+  {"resource": "Deployment/shop-09/storefront", "why": "the caller; it only measures the slowness"}
+ ]
+}

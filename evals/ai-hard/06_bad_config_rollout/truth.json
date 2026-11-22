@@ -1,0 +1,27 @@
+{
+ "id": "06_bad_config_rollout",
+ "control": false,
+ "symptom": "about a third of checkout's pricing calls get HTTP 500; the rest succeed",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "ConfigMap/shop-06/pricing-settings-9b2c1",
+   "kind": "config_change",
+   "accept_resources": ["pricing-settings-9b2c1", "(deployment|replicaset)/(shop-06/)?pricing"],
+   "accept_kinds": ["rollout"]
+  }
+ ],
+ "path": [
+  {"resource": "ConfigMap/shop-06/pricing-settings-9b2c1", "role": "cause", "required": true, "accept": ["pricing-settings-9b2c1", "TAX_RATE_BP"]},
+  {"resource": "ReplicaSet/shop-06/pricing-<new>", "role": "via", "required": true, "accept": ["replicaset/(shop-06/)?pricing", "pricing"], "note": "only the two pods of the new ReplicaSet fail"},
+  {"resource": "Deployment/shop-06/checkout", "role": "symptom", "required": true, "accept": ["checkout"]}
+ ],
+ "also_ok": ["Deployment/shop-06/pricing"],
+ "decoys": [
+  {"resource": "Deployment/shop-06/checkout", "why": "the caller; it only reports the 500s"},
+  {"resource": "ConfigMap/shop-06/pricing-settings-7d4f8", "why": "the old, good settings the four old pods still use"}
+ ],
+ "variants_note": "At 3900 s the rollout events are gone (default event TTL 1 h); the two ReplicaSets, the paused Deployment, the new ConfigMap's creation time and the logs remain."
+}

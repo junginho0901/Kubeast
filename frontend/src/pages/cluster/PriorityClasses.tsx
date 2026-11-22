@@ -318,13 +318,7 @@ description: "Sample priority class"
                 >
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pc.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{pc.value}</td>
-                  <td className="py-3 px-4">
-                    {pc.global_default ? (
-                      <span className="badge badge-success">True</span>
-                    ) : (
-                      <span className="text-xs text-slate-400">False</span>
-                    )}
-                  </td>
+                  <td className="py-3 px-4 text-xs">{pc.global_default ? tr('common.yes', 'Yes') : tr('common.no', 'No')}</td>
                   <td className="col-optional py-3 px-4 text-xs font-mono">{pc.preemption_policy}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(pc.created_at)}</td>
                 </tr>

@@ -1,0 +1,27 @@
+{
+ "id": "18_moved_namespace_old_address",
+ "control": false,
+ "symptom": "sign-ins succeed, but web shows every signed-in visitor the sign-in form again; web logs user=anonymous and no error",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "ConfigMap/shop-18/web-settings",
+   "kind": "config_change",
+   "accept_resources": ["web-settings", "ACCOUNTS_INTERNAL_URL"],
+   "accept_kinds": ["dns", "dependency_down"]
+  }
+ ],
+ "path": [
+  {"resource": "ConfigMap/shop-18/web-settings", "role": "cause", "required": true, "accept": ["web-settings", "ACCOUNTS_INTERNAL_URL", "(^|/)members(/|$)", "accounts\\.members"], "note": "ACCOUNTS_INTERNAL_URL still names accounts.members.svc.cluster.local"},
+  {"resource": "Service/members/accounts", "role": "via", "required": false, "accept": ["(^|/)members(/|$)", "accounts\\.members"], "note": "the old home's Service, removed when the move finished; the name no longer resolves"},
+  {"resource": "Deployment/shop-18/web", "role": "symptom", "required": true, "accept": ["^(deployment|replicaset|pod|service)/(shop-18/)?web", "^web$", "visitor"]}
+ ],
+ "also_ok": ["Deployment/shop-18/web", "Pod/shop-18/web-<hash>", "Service/members/accounts", "Deployment/members/accounts", "Namespace/members"],
+ "decoys": [
+  {"resource": "Deployment/shop-18/accounts", "why": "the new home: Ready, every sign-in succeeds; it gets no session lookups because web never calls it"},
+  {"resource": "Deployment/kube-system/coredns", "why": "cluster DNS answers; the old name is gone because its Service is"}
+ ],
+ "variants_note": "web swallows the failed session lookup and logs no error. What is left: web's startup line and its ConfigMap name the old address, the namespace members holds no accounts any more (its deletion events stay an hour), and the new accounts logs sign-ins but no session lookups."
+}

@@ -122,7 +122,7 @@ export function OptimizationModal({
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
-  const na = tr('common.notAvailable', 'N/A')
+  const empty = tr('common.empty', '-')
 
   // "Apply without restart": the row's recommendation on the workload's running
   // pods through the pod resize subresource. Shown when the chart switch is on,
@@ -400,7 +400,7 @@ export function OptimizationModal({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="badge badge-info">
               {tr('dashboard.optimization.namespaceBadge', 'Namespace {{namespace}}', {
-                namespace: namespace || na,
+                namespace: namespace || empty,
               })}
             </span>
             {table && (

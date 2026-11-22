@@ -252,3 +252,52 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })
+
+// The examples and the expressions the search cannot read, on objects of a namespace of their own (made in the test,
+// deleted after it): a ConfigMap with data and one without, beside the kube-root-ca.crt the cluster puts in every namespace.
+const NS_DATA = 'e2e-search-d'
+const madeNamespaces: string[] = []
+test.afterEach(() => {
+  for (const ns of madeNamespaces.splice(0)) k?.(`delete namespace/${ns} --wait=false --ignore-not-found`)
+})
+
+test.describe('Advanced Search examples and expressions it cannot read', () => {
+  test.beforeEach(() => { test.skip(!k, 'kind cluster kubeast-b not found') })
+
+  test('the example "ConfigMaps that carry data" finds the ConfigMaps kubectl lists with data, and no other', async ({ page }) => {
+    test.setTimeout(180_000)
+    k!(`delete namespace/${NS_DATA} --ignore-not-found --timeout=120s`)
+    madeNamespaces.push(NS_DATA)
+    k!('apply -f -', [
+      `apiVersion: v1\nkind: Namespace\nmetadata: {name: ${NS_DATA}}`,
+      `apiVersion: v1\nkind: ConfigMap\nmetadata: {name: e2e-search-data, namespace: ${NS_DATA}}\ndata: {n: "1"}`,
+      `apiVersion: v1\nkind: ConfigMap\nmetadata: {name: e2e-search-empty, namespace: ${NS_DATA}}`,
+    ].join('\n---\n'))
+    const listed = () => JSON.parse(k!(`get configmaps -n ${NS_DATA} -o json`)).items as { metadata: { name: string }; data?: unknown }[]
+    await expect.poll(() => listed().map((c) => c.metadata.name).sort(), { timeout: 30_000 }).toEqual(['e2e-search-data', 'e2e-search-empty', 'kube-root-ca.crt'])
+    const withData = listed().filter((c) => c.data != null).map((c) => c.metadata.name).sort()
+    expect(withData, 'kubectl lists data on the ConfigMap made with it and on kube-root-ca.crt').toEqual(['e2e-search-data', 'kube-root-ca.crt'])
+
+    await open(page, ['configmaps'], NS_DATA)
+    await expect(page.getByText(loaded(3))).toHaveCount(1)
+    const example = page.locator('button').filter({ hasText: /ConfigMaps that carry data|data가 있는 ConfigMap/ })
+    await expect(example.locator('code')).toHaveText('data != null')
+    await example.click()
+    await expect(page.getByTestId('search-page-info')).toHaveText(new RegExp(` of ${withData.length}$|^${withData.length}개 중 `))
+    const found = Object.keys(await pageStatuses(page)).sort()
+    expect(found).toEqual(withData)
+    expect(found, 'the ConfigMap without data').not.toContain('e2e-search-empty')
+  })
+
+  test('an expression the search cannot compute says why in place of the results, with no count and no rows', async ({ page }) => {
+    await open(page, ['configmaps'])
+    await expect(page.getByText(loaded(count('configmaps')))).toHaveCount(1)
+    // simple-eval refuses a unary operator on a unary operator, whatever the objects hold
+    await typeQuery(page, '!!data')
+    await expect(page.getByTestId('search-unreadable')).toHaveText(/^(The expression could not be read|표현식을 읽지 못했습니다): Unexpected operator$/)
+    await expect(page.getByText(/\d+ results?\b|\d+건 결과/), 'no "N results" line').toHaveCount(0)
+    await expect(page.locator('table tbody tr'), 'no result rows').toHaveCount(0)
+    await expect(page.getByTestId('search-page-info')).toHaveCount(0)
+    await expect(page.getByText(/No resources match your query|쿼리에 일치하는 리소스가 없습니다/)).toHaveCount(0)
+  })
+})

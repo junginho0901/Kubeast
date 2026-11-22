@@ -518,7 +518,7 @@ export default function ResourceGraph() {
 
         {hasSelection && forbiddenKinds.length > 0 && (
           <div
-            className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-lg border border-amber-700/50 bg-amber-900/80 px-3 py-1.5 text-xs text-amber-100"
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 max-w-[calc(100%-24px)] rounded-lg border border-amber-700/50 bg-slate-800 px-3 py-1.5 text-xs text-amber-300 break-words shadow-sm"
             data-testid="resource-graph-forbidden"
           >
             <ShieldAlert className="h-4 w-4 shrink-0 text-amber-300" />
