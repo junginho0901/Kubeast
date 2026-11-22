@@ -1,6 +1,6 @@
-"""Hard cases for scripts/ai-eval.py: the answer block (rca_block_v0), its scoring, the per-run truth copy, the order
-of a case's steps and the case checks. Pure functions only — nothing here reaches a cluster or the API, so
-scripts/test_ai_eval_rca.py checks it with made-up answers.
+"""Hard cases for scripts/ai-eval.py: the answer block (rca_block_v0), its scoring, the free-text scoring of an alert
+investigation's report, the per-run truth copy, the order of a case's steps and the case checks. Pure functions only —
+nothing here reaches a cluster or the API, so scripts/test_ai_eval_rca.py checks it with made-up answers.
 """
 from __future__ import annotations
 
@@ -31,7 +31,71 @@ DEFAULT_INJECT_WAIT_SECONDS = 240
 # Fields that make a case run in stages (setup → baseline → inject → asks → undo); a case without any of them runs
 # exactly as the twelve easy cases always have.
 STAGED_FIELDS = ("question_vague", "answer_format", "baseline_seconds", "fault_start_at", "inject_cmds", "inject_wait",
-                 "fault_duration_seconds", "undo_cmds", "ask_after_seconds", "cooldown_seconds")
+                 "fault_duration_seconds", "undo_cmds", "ask_after_seconds", "cooldown_seconds", "alert")
+
+# A case's alert for the alert path (ai-eval.py --alerts, README "The alert path").
+ALERT_FIELDS = ("labels", "annotations", "rule", "match", "after_seconds", "fire_wait_seconds", "investigation_wait_seconds")
+DEFAULT_FIRE_WAIT_SECONDS = 600
+DEFAULT_INVESTIGATION_WAIT_SECONDS = 900
+
+# The free-text check of a report (score_text): words that say a cause of each kind, words that say there is no fault,
+# words that rule a named object out and words that blame one. Broad on purpose — the check only has to read the same
+# way with and without the rca block.
+KIND_WORDS = {
+    "crash": r"crash|exit(ed)? (code|with)|restart|panic|재시작|비정상 종료",
+    "oom": r"\boom|out of memory|memory limit|메모리 (부족|한도|제한)",
+    "image": r"imagepull|errimage|image pull|(image|tag) (is )?(missing|not found|wrong)|이미지",
+    "config_change": r"config|setting|environment variable|\benv\b|설정|환경 ?변수",
+    "rollout": r"rollout|rolled out|roll-out|new (revision|replicaset|release)|롤아웃|배포",
+    "network_policy": r"network ?polic|netpol|ingress rule|egress rule|네트워크 ?정책",
+    "dns": r"\bdns|ndots|resolv|name resolution|search domain|이름 (풀이|해석)|검색 ?도메인",
+    "resource_limit": r"(cpu|memory) limit|throttl|\bcfs\b|limits?\b|스로틀|리소스 (한도|제한)",
+    "quota": r"quota|쿼터|할당량",
+    "node": r"\bnode\b|notready|not ready|cordon|taint|saturat|\bbusy\b|\bpegged\b|\bmaxed\b|cpu pressure|\bcontention\b|노드|포화|경합",
+    "dependency_down": r"no (ready )?endpoints|scaled (down|to (0|zero))|replicas:? 0|connection refused|unavailable|\bdown\b|엔드포인트|중단",
+    "dependency_slow": r"slow(s|ed|ing)? down|slow|latency|timeout|timed out|느려|지연",
+    "storage": r"\bpvc|persistentvolume|volume|disk|storage|볼륨|디스크|스토리지",
+}
+_FAULT_NOUNS = r"(fault|problem|issue|outage|failure|incident|error|cause|evidence|sign|trace)s?"
+# There is no fault: in a clause that names no object of the truth, the report's answer; next to a name, that name ruled out.
+NO_FAULT_WORDS = re.compile(
+    r"\bno (current |ongoing |active |real |actual )?(fault|problem|issue|outage|failure|incident)s?\b"
+    rf"|\b(found|find|see|saw|shows?) no {_FAULT_NOUNS}\b|\bno (evidence|sign|trace)s? (of|for)\b"
+    rf"|\b(could not|couldn'?t|did not|didn'?t|cannot|can'?t) (find|see) (a |an |any )?{_FAULT_NOUNS}\b"
+    r"|\bnothing (is |was |seems |looks )?(wrong|broken|failing|abnormal)|\bnothing points (at|to)\b"
+    r"|\bno (action|fix) (is )?(needed|required)|\bfalse (positive|alarm)"
+    r"|찾지 못했|찾을 수 없|발견(하지 못|되지 않)|장애(가|는)? 없|고장(이|은)? 없|문제(가|는)? 없|이상(이|은)? 없|흔적(이|은)? 없", re.I)
+# A named object ruled out: unchanged, normal, unrelated, not the cause.
+CLEAR_WORDS = re.compile(
+    r"\bnot (the |a |an )?(cause|culprit|problem|issue|fault|reason|involved|related|changed|at fault)\b|\bisn'?t (the |a )?(cause|problem)"
+    r"|\b(did|does|do|has|have) not (cause|break|affect|make|touch)|\b(didn|doesn|don|hasn|haven)'t (cause|break|affect|make|touch)"
+    r"|\bunchanged\b|\bno( \w+)? change|\bunrelated\b|\bruled? (it |this |them )?out\b|\bharmless\b"
+    r"|\blooks? (normal|fine|healthy|ok|okay|good|correct|as expected)|\b(is|are|was|were|stays?|stayed) (normal|fine|healthy|correct|ok|okay)\b"
+    r"|\b(working|running|behaving|answering|serving|finished|completed?) (normally|as expected|fine|cleanly)|\bas expected\b"
+    r"|\bexpected behaviou?r|\bas (it|they) should\b"
+    r"|정상|무관|(관계|관련)(가|이)? 없|원인(이|은|과는)? 아니|원인 아님|바뀌지 않|변경(이|은|되지)? ?(없|않)|영향(이|은)? 없", re.I)
+# A no-fault clause about the others ("No problems elsewhere", "no issues in the other workloads") rules them out; it
+# does not say the report found no fault.
+OTHERS_WORDS = re.compile(r"\b(elsewhere|others?|rest|remaining)\b|나머지|다른|그 ?외", re.I)
+# A named object blamed: what it is said to have caused, not what happened to it ("restarted once" blames nothing).
+# CAUSE_WORDS blame the object named nearest before them ("X caused it", "X 때문에"), else after ("the culprit is X");
+# CAUSED_BY_WORDS the object nearest after them ("because of X"), else before; FAIL_WORDS what went wrong with the
+# object named nearest before them, which blames nothing in an object of the truth's path (its symptom: "so cart fails").
+CAUSE_WORDS = re.compile(r"\bcaus(e|es|ed|ing)\b(?!\s+by)|culprit|\bled to|\bleads? to|result(s|ed)? in"
+                         r"|\bmade\b[^.;]{0,40}\b(slow|fail|break)|원인|때문|탓", re.I)
+CAUSED_BY_WORDS = re.compile(r"\bcaused by\b|\bbecause( of)?\b|\bdue to\b|\bresult of\b|\bthanks to\b", re.I)
+FAIL_WORDS = re.compile(r"\bbr(o|ea)k|fail|\b(is|went|goes) down\b|실패|장애|느려지|망가", re.I)
+# A change said of a ConfigMap or Secret cause is its config_change ("raised WEB_WORKERS from 3 to 6").
+CHANGE_WORDS = re.compile(r"\b(changed?|changes|changing|edited|raised|lowered|increased|decreased|bumped|added|removed|replaced"
+                          r"|updated|modified|rewritten|rewrote|overwritten|overwrote|switched|set to)\b"
+                          r"|바뀌|바꾸|바꿨|수정|변경|올렸|올린|늘렸|늘린|줄였|줄인|추가", re.I)
+CONFIG_KINDS = frozenset({"configmap", "secret"})
+_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t#]*$", re.M)  # an ATX heading: a space after the #s
+_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?。])\s+|\n+")
+# Where a sentence's clauses part: ';', ',', while, but, and, though, and Korean -고, -지만, -며.
+_CLAUSE_BREAK = re.compile(r"[;,]|\s(?:while|whereas|but|and|although|though)\s|(?<=[가-힣])(?:고|지만|으며|며)\s", re.I)
+_BULLET = re.compile(r"^\s*(?:[-*+•]|\d+[.)])\s+")
 
 _KIND_ALIASES = {
     "deploy": "deployment", "deployments": "deployment", "rs": "replicaset", "replicasets": "replicaset",
@@ -127,7 +191,84 @@ def check_case(case: dict, has_truth: bool) -> list[str]:
     for key in ("setup_cmds", "inject_cmds", "undo_cmds", "cleanup_cmds"):
         if not isinstance(case.get(key, []), list):
             problems.append(f"{key} is not a list")
+    return problems + check_alert(case, has_truth)
+
+
+def check_alert(case: dict, has_truth: bool) -> list[str]:
+    """What is wrong with a case's alert (empty when it has none)."""
+    alert = case.get("alert")
+    if alert is None:
+        return []
+    if not isinstance(alert, dict):
+        return ["alert is not an object"]
+    problems = [f"alert has unknown field {k!r}" for k in alert if k not in ALERT_FIELDS]
+    for key in ("labels", "annotations", "match"):
+        value = alert.get(key, {})
+        if not isinstance(value, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in value.items()):
+            problems.append(f"alert {key} is not an object of strings")
+    labels = alert.get("labels") if isinstance(alert.get("labels"), dict) else {}
+    rule = alert.get("rule")
+    if rule is not None and (not isinstance(rule, str) or not rule):
+        problems.append("alert rule is not a name")
+    if not labels.get("alertname") and not rule:
+        problems.append("alert has neither labels.alertname nor rule")
+    if rule and labels.get("alertname") and labels["alertname"] != rule:
+        problems.append("alert labels.alertname is not its rule's name")
+    for key in ("after_seconds", "fire_wait_seconds", "investigation_wait_seconds"):
+        v = alert.get(key)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0):
+            problems.append(f"alert {key} holds {v!r}")
+    if not has_truth:
+        problems.append("alert without truth.json")
     return problems
+
+
+# Kinds with no namespace: a cause of one of these is read through Prometheus and the cluster-wide reads whatever the
+# alert's namespace.
+CLUSTER_SCOPED_KINDS = frozenset({"node", "namespace", "persistentvolume", "storageclass", "clusterrole", "clusterrolebinding",
+                                  "priorityclass", "runtimeclass", "customresourcedefinition", "volumeattachment"})
+
+
+def alert_namespaces(case: dict) -> list[tuple[str, str]]:
+    """(where, namespace) an investigation of the case's alert is limited to — the webhook takes the alert's namespace
+    label for the investigator's token: the posted alert's label (the case's namespace unless labels give one; "" for
+    none), and with a rule the namespace match picks the fired alert by."""
+    alert = case.get("alert") or {}
+    out = [("labels", str((alert.get("labels") or {}).get("namespace", case.get("namespace", ""))))]
+    if alert.get("rule"):
+        out.append(("match", str((alert.get("match") or {}).get("namespace", case.get("namespace", "")))))
+    return out
+
+
+def check_alert_scope(case: dict, truth: dict | None) -> list[str]:
+    """A case whose alert would give the investigator a token for one namespace while a truth cause is in another: it
+    could not read that cause. A cause of a kind with no namespace, and an alert with no namespace, are not held."""
+    if not isinstance(case.get("alert"), dict) or not truth:
+        return []
+    problems = []
+    for where, ns in alert_namespaces(case):
+        if not ns:
+            continue
+        for tc in truth.get("causes") or []:
+            kind, cause_ns, _ = split_resource(tc["resource"])
+            if kind not in CLUSTER_SCOPED_KINDS and cause_ns and cause_ns != ns.lower():
+                problems.append(f"alert {where} namespace {ns!r}, but cause {tc['resource']} is in {cause_ns!r}: "
+                                "the investigator's token would read only the alert's namespace")
+    return problems
+
+
+def alert_name(case: dict) -> str:
+    alert = case.get("alert") or {}
+    return (alert.get("labels") or {}).get("alertname") or alert.get("rule") or ""
+
+
+def alert_after(case: dict) -> float:
+    """Seconds after the fault start a synthetic alert is posted: alert.after_seconds, else the case's first ask time."""
+    alert = case.get("alert") or {}
+    if alert.get("after_seconds") is not None:
+        return alert["after_seconds"]
+    first = ask_times(case)[0]
+    return 0 if first is None else first
 
 
 def fill_placeholders(obj, marks: dict):
@@ -312,7 +453,267 @@ def score_rca(answer: str, truth: dict, calls: list) -> dict:
     extra cause — the same resource named again under a kind its truth cause does not take is one too — and more than
     EXTRAS_ALLOWED extras fail. started_at, the path and the evidence are reported next to it, not folded into pass;
     pass_grounded is pass with every named cause pointing at a call that answered."""
-    block, status = extract_block(answer)
+    return score_block(*extract_block(answer), truth, calls)
+
+
+def block_of_result(result) -> tuple[dict | None, str]:
+    """An investigation's stored `result` (the rca block the server took off the report while
+    features.alertInvestigation.evidenceCheck or ledger is on) as (block, status) for score_block: each evidence
+    {call, tool} back to its call number. (None, "missing") when the row has no result."""
+    if not isinstance(result, dict):
+        return None, "missing"
+    status = result.get("status") or "ok"
+    if status != "ok":
+        return None, status
+    causes = []
+    for c in result.get("causes") or []:
+        if isinstance(c, dict):
+            calls = [e.get("call") for e in c.get("evidence") or [] if isinstance(e, dict)]
+            causes.append({**c, "evidence": [n for n in calls if isinstance(n, int)]})
+    return {"no_fault": result.get("no_fault"), "causes": causes, "path": result.get("path") or [],
+            "ruled_out": result.get("ruled_out") or []}, "ok"
+
+
+def likely_cause(report: str) -> tuple[str, str]:
+    """The report's "Likely cause" section (the investigator's four headings, investigation/prompt.py) and
+    "likely_cause"; the whole report and "whole" when it has no such heading. An rca block is left out."""
+    text = strip_blocks(report or "")
+    heads = list(_HEADING.finditer(text))
+    for i, m in enumerate(heads):
+        if m.group(1).strip().rstrip(":").lower() == "likely cause":
+            end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
+            return text[m.end():end].strip(), "likely_cause"
+    return text.strip(), "whole"
+
+
+def _text_names(text: str) -> set[str]:
+    """What in a text can name an object: each run of name characters, and its last part after a slash (a part of a URL
+    path, "/api/v1/cart", is found by no _name_at, so it names nothing)."""
+    out = set()
+    for m in _TOKEN.finditer(text):
+        t = m.group(0).strip("./-")
+        if t:
+            out.add(t)
+            out.add(t.rsplit("/", 1)[-1])
+    return out
+
+
+def _sentences(text: str) -> list[str]:
+    """The text's sentences; a line or a bullet is one too."""
+    out = []
+    for sentence in _SENTENCE_BREAK.split(text or ""):
+        sentence = _BULLET.sub("", sentence).strip()
+        if sentence:
+            out.append(sentence)
+    return out
+
+
+def _clauses(sentence: str, spans: list) -> list[tuple[int, int]]:
+    """(start, end) of a sentence's clauses, parted at _CLAUSE_BREAK; a part that names no object (spans: (start, end,
+    name) of the objects named) goes on the part before it: "restarted and caused the errors", "busier but unrelated",
+    "checkout and the nodes are fine"."""
+    parts, at = [], 0
+    for m in _CLAUSE_BREAK.finditer(sentence):
+        parts.append((at, m.start()))
+        at = m.end()
+    parts.append((at, len(sentence)))
+    out: list[tuple[int, int]] = []
+    for start, end in parts:
+        if out and not any(start <= a and b <= end for a, b, _ in spans):
+            out[-1] = (out[-1][0], end)
+        else:
+            out.append((start, end))
+    return out
+
+
+def _name_at(name: str) -> re.Pattern:
+    # a name ends at a character that cannot be part of it: an ASCII letter, digit, "_" or "-" continues it, Hangul does
+    # not, so "storefront-config가" holds the name and its particle
+    return re.compile(r"(?<![A-Za-z0-9_./-])" + re.escape(name) + r"(?![A-Za-z0-9_-])")
+
+
+def _nearest(start: int, end: int, spans: list, after_first: bool = False):
+    """The name of spans ((start, end, name)) nearest before start, else the one nearest after end; after_first: after,
+    else before. None when spans is empty."""
+    before = [s for s in spans if s[1] <= start]
+    after = [s for s in spans if s[0] >= end]
+    b = max(before, key=lambda s: s[1])[2] if before else None
+    a = min(after, key=lambda s: s[0])[2] if after else None
+    return (a or b) if after_first else (b or a)
+
+
+def _kind_spans(text: str) -> list[tuple[int, int, str]]:
+    """(start, end, kind) of the kind words in text, one kind to a stretch of it: at one place the longer match, then
+    KIND_WORDS' order ("memory limit" is oom, not oom and resource_limit)."""
+    found = sorted(((m.start(), m.end(), n, kind) for n, (kind, pattern) in enumerate(KIND_WORDS.items())
+                    for m in re.finditer(pattern, text, re.I) if m.end() > m.start()), key=lambda x: (x[0], x[0] - x[1], x[2]))
+    out, upto = [], -1
+    for start, end, _, kind in found:
+        if start >= upto:
+            out.append((start, end, kind))
+            upto = end
+    return out
+
+
+def _whose(at: int, places: dict) -> list:
+    """The causes a kind word at `at` speaks of: the cause named nearest before it ("images has a bad image"), else the
+    one named nearest after it ("a bad image in images")."""
+    before = {i: max(e for _, e in spans if e <= at) for i, spans in places.items() if any(e <= at for _, e in spans)}
+    if before:
+        best = max(before.values())
+        return [i for i, e in before.items() if e == best]
+    after = {i: min(b for b, _ in spans if b >= at) for i, spans in places.items() if any(b >= at for b, _ in spans)}
+    best = min(after.values(), default=None)
+    return [i for i, b in after.items() if b == best]
+
+
+def _whom(at: int, here: set, places: dict) -> list:
+    """The causes a kind word at `at` speaks of: the one its clause names (here), else _whose."""
+    return sorted(here) if len(here) == 1 else _whose(at, places)
+
+
+def score_text(report: str, truth: dict) -> dict:
+    """Score a report's words against a filled truth when it has no rca block (the alert path with v0.7.9's switches
+    off), clause by clause in its "Likely cause" section (else the whole report). A sentence — a line or a bullet is one
+    too — parts into clauses at _CLAUSE_BREAK, a part naming no object going on the one before it. In a clause, each
+    NO_FAULT_WORDS or CLEAR_WORDS rules out the one object named nearest before it (else after it); the other objects
+    named there stay. NO_FAULT_WORDS in a clause, or in its part before or after a colon, naming no object and not
+    speaking of the others (OTHERS_WORDS: "no problems elsewhere") is the report saying there is no fault (no_fault).
+    A blame word blames one object: CAUSE_WORDS and FAIL_WORDS the one named nearest before them, CAUSED_BY_WORDS the
+    one nearest after; FAIL_WORDS blame no object of the truth's path, whose failure is the symptom.
+
+    A fault case passes when the report does not say there is no fault, names each truth cause — its resource or an
+    accept_resources form — somewhere it is not ruled out, gives it a word of its kind or an accepted kind
+    (KIND_WORDS; for a ConfigMap or Secret cause a change, CHANGE_WORDS, is config_change), blames no decoy and holds no
+    more than EXTRAS_ALLOWED extras. A kind word counts in a sentence naming a cause, outside the clauses whose every
+    object is ruled out and outside the ruling-out words, with the objects' own names taken out; one stretch of words
+    is one kind; it speaks of one cause: the one its clause names, else the one named nearest before it, else after
+    it ("endpoints" a hop's accept takes stays a word). An extra, as in the block, is each other object (a decoy or a Kind/name, not one of the truth's causes, also_ok
+    or path) the section names without ruling it out, and each kind word a cause is given beyond its own kinds and one
+    more (the symptom's: "throttled, so it is slow"); each costs EXTRA_CAUSE_PENALTY.
+
+    A control passes when the report says there is no fault and blames no decoy and no other Kind/name object
+    (suspects). Weaker than the block's check; it is there so a run with the block and one without compare on one
+    measure."""
+    text, section = likely_cause(report)
+    truth_causes = truth.get("causes") or []
+    decoys, also_ok, path = truth.get("decoys") or [], truth.get("also_ok") or [], truth.get("path") or []
+
+    def of_truth(n):
+        return any(_is_truth_cause(tc, n) for tc in truth_causes)
+
+    def decoy(n):
+        return not of_truth(n) and any(resource_matches(d["resource"], n) for d in decoys)
+
+    def in_truth(n):  # a cause, a part of one, or a hop of its path (the symptom named beside its cause)
+        return (of_truth(n) or any(resource_matches(a, n) for a in also_ok)
+                or any(resource_matches(h["resource"], n) or _search_any(h.get("accept"), n) for h in path))
+
+    def other_object(n):
+        return not in_truth(n) and (decoy(n) or ("/" in n and split_resource(n)[0] in _KNOWN_KINDS))
+
+    def own_name(n):  # a name its object's words are taken out of before kind words are read; not a word a hop's accept takes
+        return ("/" in n or of_truth(n) or decoy(n) or any(resource_matches(a, n) for a in also_ok)
+                or any(resource_matches(h["resource"], n) for h in path))
+
+    def config_cause(i):
+        return split_resource(truth_causes[i]["resource"])[0] in CONFIG_KINDS
+
+    no_fault = False
+    named_as = {i: set() for i in range(len(truth_causes))}
+    ruled_out = {i: False for i in range(len(truth_causes))}
+    said = {i: set() for i in range(len(truth_causes))}
+    extra_objects, decoys_named, decoys_ruled_out, suspects = set(), set(), set(), set()
+    for sentence in _sentences(text):
+        objects = {n for n in _text_names(sentence) if in_truth(n) or other_object(n)}
+        spans = sorted((m.start(), m.end(), n) for n in objects for m in _name_at(n).finditer(sentence))
+        live_by_clause, places = [], {}
+        cleared_text = sentence
+        for cs, ce in _clauses(sentence, spans):
+            clause = sentence[cs:ce]
+            here = [(a, b, n) for a, b, n in spans if cs <= a and b <= ce]
+            clears = [m for w in (NO_FAULT_WORDS, CLEAR_WORDS) for m in w.finditer(clause)]
+            # "No fault found: thumbnailer restarted once" says so for the whole report: the part before a colon names nothing
+            part_at = 0
+            for part in clause.split(":"):
+                inside = [s for s in here if cs + part_at <= s[0] and s[1] <= cs + part_at + len(part)]
+                if NO_FAULT_WORDS.search(part) and not inside and not OTHERS_WORDS.search(part):
+                    no_fault = True
+                part_at += len(part) + 1
+            out = {_nearest(cs + m.start(), cs + m.end(), here) for m in clears} - {None}
+            for m in clears:
+                cleared_text = cleared_text[:cs + m.start()] + " " * (m.end() - m.start()) + cleared_text[cs + m.end():]
+            live = [s for s in here if s[2] not in out]
+            for n in out:
+                for i, tc in enumerate(truth_causes):
+                    if _is_truth_cause(tc, n):
+                        ruled_out[i] = True
+                if decoy(n):
+                    decoys_ruled_out.add(n)
+            in_clears = [(cs + m.start(), cs + m.end()) for m in clears]
+            for words, after_first, fails in ((CAUSE_WORDS, False, False), (CAUSED_BY_WORDS, True, False), (FAIL_WORDS, False, True)):
+                for m in words.finditer(clause):
+                    at, upto = cs + m.start(), cs + m.end()
+                    if any(a <= at < b for a, b in in_clears):
+                        continue  # "not the cause", "did not break"
+                    n = _nearest(at, upto, live, after_first)
+                    if n is None or of_truth(n) or (fails and in_truth(n)):
+                        continue
+                    if decoy(n):
+                        decoys_named.add(n)
+                    elif other_object(n):
+                        suspects.add(n)
+            extra_objects |= {n for _, _, n in live if other_object(n)}
+            causes_here = set()
+            for a, b, n in live:
+                for i, tc in enumerate(truth_causes):
+                    if _is_truth_cause(tc, n):
+                        named_as[i].add(n)
+                        causes_here.add(i)
+                        places.setdefault(i, []).append((a, b))
+            if live or not here:  # a clause whose every object is ruled out says nothing of a cause's kind
+                live_by_clause.append((cs, ce, causes_here))
+        if not places:
+            continue
+        words = _blank(cleared_text, {n for n in objects if own_name(n)})
+        for cs, ce, here in live_by_clause:
+            for a, _, kind in _kind_spans(words[cs:ce]):
+                for i in _whom(cs + a, here, places):
+                    said[i].add(kind)
+            for m in CHANGE_WORDS.finditer(words[cs:ce]):
+                for i in _whom(cs + m.start(), here, places):
+                    if config_cause(i):
+                        said[i].add("config_change")
+    causes, extras = [], len(extra_objects)
+    for i, tc in enumerate(truth_causes):
+        own = {tc["kind"], *(tc.get("accept_kinds") or [])}
+        other = sorted(said[i] - own)
+        extras += max(0, len(other) - 1)
+        kind_found = bool(said[i] & own)
+        causes.append({"resource": tc["resource"], "kind": tc["kind"], "resource_found": bool(named_as[i]),
+                       "kind_found": kind_found, "found": bool(named_as[i]) and kind_found, "other_kinds": other,
+                       "named_as": sorted(named_as[i])[:3], "ruled_out": ruled_out[i] and not named_as[i]})
+    if truth.get("control"):
+        ok, extras = no_fault and not decoys_named and not suspects, 0
+        score = 1.0 if ok else 0.0
+    else:
+        ok = (bool(causes) and not no_fault and all(c["found"] for c in causes) and not decoys_named
+              and extras <= EXTRAS_ALLOWED)
+        score = max(0.0, 1.0 - EXTRA_CAUSE_PENALTY * extras) if ok else 0.0
+    return {"section": section, "pass": ok, "score": score, "no_fault": no_fault, "causes": causes, "extras": extras,
+            "extra_objects": sorted(extra_objects), "decoys_named": sorted(decoys_named),
+            "decoys_ruled_out": sorted(decoys_ruled_out - decoys_named), "suspects": sorted(suspects)}
+
+
+def _blank(text: str, names) -> str:
+    """text with each name written over in spaces, so the places of the other words stay."""
+    for n in sorted(names, key=len, reverse=True):
+        text = _name_at(n).sub(lambda m: " " * len(m.group(0)), text)
+    return text
+
+
+def score_block(block: dict | None, status: str, truth: dict, calls: list) -> dict:
+    """score_rca for a block already read (from an answer, or an investigation's stored result)."""
     out = {"block": status, "pass": False, "pass_grounded": False, "score": 0.0, "no_fault": None, "causes": [], "extras": [],
            "decoys_taken": [], "also_ok_named": [], "time_ok": None, "path_ok": None, "path": [], "ungrounded": 0,
            "bad_evidence": [], "malformed": 0}

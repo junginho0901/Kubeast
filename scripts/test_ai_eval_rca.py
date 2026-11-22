@@ -295,6 +295,339 @@ def test_staged_and_case_checks():
     assert rca.check_case(dict(old, answer_format="other"), True)
 
 
+def report(likely: str, checked: str = "- k8s_get_resources: pods of shop-x") -> str:
+    """An investigation report under the investigator's four headings."""
+    return f"## Summary\nSomething fails.\n\n## What I checked\n{checked}\n\n## Likely cause\n{likely}\n\n## Next steps\n- Look again.\n"
+
+
+def test_text_names_the_cause_and_its_kind():
+    s = rca.score_text(report("The new ConfigMap `settings-b` changed a setting the pricing pods read."), TRUTH)
+    assert s["section"] == "likely_cause" and s["pass"] and s["score"] == 1.0
+    assert s["causes"][0]["named_as"] == ["settings-b"]
+
+
+def test_text_accepts_another_name_and_kind():
+    s = rca.score_text(report("deploy/shop-x/pricing was rolled out to a new revision."), TRUTH)
+    assert s["pass"] and s["causes"][0]["kind_found"]
+
+
+def test_text_needs_the_kind_too():
+    s = rca.score_text(report("settings-b is involved somehow."), TRUTH)
+    assert not s["pass"] and s["causes"][0]["resource_found"] and not s["causes"][0]["kind_found"]
+
+
+def test_text_reads_only_the_likely_cause_section():
+    s = rca.score_text(report("checkout's calls fail; the reason is unclear.", checked="- settings-b: a ConfigMap setting"), TRUTH)
+    assert not s["pass"] and not s["causes"][0]["resource_found"]
+
+
+def test_text_without_headings_reads_the_whole_report():
+    s = rca.score_text("The ConfigMap settings-b holds a bad setting.", TRUTH)
+    assert s["section"] == "whole" and s["pass"]
+
+
+def test_text_lists_decoys_ruled_out_and_blamed_without_failing_a_fault_case():
+    s = rca.score_text(report("The ConfigMap settings-b changed a setting; checkout and the nodes are fine."), TRUTH)
+    assert s["pass"] and s["decoys_named"] == [] and s["decoys_ruled_out"] == ["checkout"]  # "nodes" names no Node
+    s = rca.score_text(report("The ConfigMap settings-b changed a setting, so checkout fails."), TRUTH)
+    assert s["pass"] and s["decoys_named"] == [] and s["score"] == 1.0  # the symptom beside its cause: its failure blames it not
+    s = rca.score_text(report("Node/kind-worker ran out of memory and caused it."), TRUTH)
+    assert not s["pass"] and s["decoys_named"] == ["Node/kind-worker"]
+
+
+# The reviews' reports (kubeast/raw/20261115/review-eval/findings.md 4 and the second review), on truths shaped as the
+# shown cases 03, 09, 12, 13, 14, 19, 21 and 22, and made-up ones (shop-x): no hidden case's truth is written here.
+T12 = {"control": False, "causes": [{"resource": "ConfigMap/shop-12/storefront-config", "kind": "config_change", "accept_resources": [],
+                                     "accept_kinds": []}],
+       "also_ok": [], "decoys": [{"resource": "Deployment/shop-12/notifier"}, {"resource": "Deployment/shop-12/cart"}]}
+T12_PATH = dict(T12, path=[{"resource": "ConfigMap/shop-12/storefront-config", "role": "cause", "accept": ["storefront-config"]},
+                           {"resource": "Deployment/shop-12/cart", "role": "via", "accept": ["cart"]},
+                           {"resource": "Deployment/shop-12/storefront", "role": "symptom", "accept": ["storefront"]}])
+C13 = {"control": True, "causes": [], "also_ok": [],
+       "decoys": [{"resource": "Deployment/shop-13/thumbnailer"}, {"resource": "Deployment/shop-13/orders"}]}
+C14 = {"control": True, "causes": [], "also_ok": [],
+       "decoys": [{"resource": "Deployment/shop-14/orders"}, {"resource": "ReplicaSet/shop-14/orders-<new>"}]}
+TX = {"control": False, "causes": [{"resource": "ConfigMap/shop-x/gateway-settings", "kind": "config_change",
+                                    "accept_kinds": ["dns", "dependency_down"]}],
+      "also_ok": [], "decoys": [{"resource": "Deployment/shop-x/ledger"}]}
+T19 = {"control": False, "causes": [{"resource": "ConfigMap/shop-19/edge-routes", "kind": "config_change", "accept_kinds": []}],
+       "also_ok": ["Service/shop-19/frontdoor"], "decoys": [{"resource": "Deployment/shop-19/storefront"}]}
+
+
+def test_text_control_fails_when_it_names_a_decoy_as_the_cause():
+    for text, truth, blamed in [
+        ("The thumbnailer restart (exit 143) is what broke the orders. The other services are running normally.", C13, ["thumbnailer"]),
+        ("thumbnailer가 재시작(exit 143)하면서 주문이 실패했습니다. 나머지 서비스는 정상입니다.", C13, ["thumbnailer"]),
+        ("orders를 4.18.1로 롤아웃한 것이 느려진 원인입니다. 롤아웃 자체는 정상적으로 끝났습니다.", C14, ["orders"]),
+        ("The orders rollout made it slower. Nothing is broken.", C14, ["orders"]),
+    ]:
+        s = rca.score_text(report(text), truth)
+        assert not s["pass"] and s["decoys_named"] == blamed, (text, s)
+
+
+def test_text_control_passes_on_the_no_fault_words_it_missed():
+    for text, truth in [
+        ("Nothing points at a fault: the thumbnailer restarted once and has run since; orders answer every call.", C13),
+        ("주문 실패 흔적을 찾지 못했습니다. thumbnailer 재시작 1회는 주문 경로와 무관합니다.", C13),
+        ("I found no evidence of a fault. thumbnailer restarted once and orders answered every call.", C13),
+        ("No fault found: the orders rollout finished cleanly and latency stayed flat.", C14),
+        ("장애가 없습니다. thumbnailer는 한 번 재시작했을 뿐이고 orders는 모든 요청에 답합니다.", C13),
+    ]:
+        s = rca.score_text(report(text), truth)
+        assert s["pass"] and s["no_fault"] and s["decoys_named"] == [], (text, s)
+
+
+def test_text_fault_case_fails_when_its_cause_is_ruled_out():
+    for text, truth in [
+        ("storefront-config was not changed; I found no config change. cart is down.", T12),
+        ("storefront-config는 바뀌지 않았습니다. cart가 중단되었습니다.", T12),
+        ("edge-routes config looks normal; the 404 comes from storefront being down.", T19),
+    ]:
+        s = rca.score_text(report(text), truth)
+        assert not s["pass"] and not s["causes"][0]["resource_found"] and s["causes"][0]["ruled_out"], (text, s)
+
+
+def test_text_fault_case_fails_when_the_report_says_no_fault():
+    for text in ("No fault found. storefront-config and its settings look as expected.",
+                 "장애가 없습니다. storefront-config 설정을 바꾼 기록은 있습니다."):
+        s = rca.score_text(report(text), T12)
+        assert not s["pass"] and s["no_fault"], (text, s)
+
+
+def test_text_fault_case_with_the_rest_said_to_be_normal_passes():
+    for text in ("storefront-config's cart_url setting was edited in place; cart calls go to a dead address. The other services are running normally.",
+                 "storefront-config의 cart_url 설정이 바뀌어 장바구니 호출이 실패합니다. 나머지 서비스는 정상입니다.",
+                 "storefront-config changed the cart_url setting; notifier's restarts are unrelated.",
+                 "There is no problem with notifier; storefront-config changed the cart_url setting."):
+        s = rca.score_text(report(text), T12)
+        assert s["pass"] and not s["no_fault"], (text, s)
+
+
+def test_text_a_name_ends_at_hangul():
+    for text, truth in [("storefront-config가 원인입니다.", T12), ("storefront-config is the cause.", T12),
+                        ("gateway-settings를 확인해야 합니다.", TX), ("Check gateway-settings.", TX)]:
+        s = rca.score_text(report(text), truth)
+        assert not s["pass"] and s["causes"][0]["resource_found"] and not s["causes"][0]["kind_found"], (text, s)
+    assert rca.score_text(report("storefront-config가 원인입니다. 설정 값이 잘못됐습니다."), T12)["causes"][0]["kind_found"] is False
+    assert rca.score_text(report("storefront-config의 설정 값이 잘못됐습니다."), T12)["pass"]
+
+
+T09 = {"control": False, "causes": [{"resource": "Deployment/shop-09/catalog", "kind": "resource_limit", "accept_kinds": [],
+                                     "accept_resources": ["(deployment|replicaset|pod)/(shop-09/)?catalog", "^catalog"]}],
+       "path": [{"resource": "Deployment/shop-09/catalog", "role": "cause"}, {"resource": "Deployment/shop-09/storefront", "role": "symptom"}],
+       "also_ok": [], "decoys": [{"resource": "Deployment/shop-09/recommender"}, {"resource": "Node/*"},
+                                 {"resource": "Deployment/shop-09/storefront"}]}
+TWO = {"control": False, "causes": [
+           {"resource": "Deployment/shop-x/gallery", "kind": "image", "accept_kinds": ["rollout"],
+            "accept_resources": ["(deployment|replicaset|pod)/(shop-x/)?gallery", "^gallery"]},
+           {"resource": "Service/shop-x/stock", "kind": "config_change", "accept_kinds": ["dependency_down"],
+            "accept_resources": ["(service|endpoints|endpointslice)/(shop-x/)?stock", "^stock$"]}],
+       "path": [{"resource": "Deployment/shop-x/gallery", "role": "cause"}, {"resource": "Service/shop-x/stock", "role": "cause"},
+                {"resource": "Deployment/shop-x/basket", "role": "via"}, {"resource": "Deployment/shop-x/front", "role": "symptom"}],
+       "also_ok": [], "decoys": [{"resource": "Deployment/shop-x/front"}, {"resource": "Deployment/shop-x/basket"},
+                                 {"resource": "Deployment/shop-x/stock"}]}
+
+
+def test_text_a_shotgun_of_kinds_does_not_pass():
+    for text in ("catalog: maybe a config change, a restart, slow dependency, a limit or the node.",
+                 "catalog: 설정 변경, 재시작, 응답 지연, 리소스 한도 또는 노드 문제일 수 있습니다."):
+        s = rca.score_text(report(text), T09)
+        assert (s["pass"], s["score"], s["extras"]) == (False, 0.0, 3), (text, s)
+        assert s["causes"][0]["found"] and s["causes"][0]["other_kinds"] == ["config_change", "crash", "dependency_slow", "node"]
+
+
+def test_text_kind_words_listed_after_two_causes_speak_of_the_nearer_one():
+    for text in ("gallery and stock: image pull issue, config, endpoints down.",
+                 "gallery와 stock: 이미지 풀 문제, 설정, 엔드포인트 중단."):
+        s = rca.score_text(report(text), TWO)
+        assert (s["pass"], s["score"]) == (False, 0.0), (text, s)
+        assert [(c["resource_found"], c["kind_found"], c["other_kinds"]) for c in s["causes"]] == [(True, False, []), (True, True, ["image"])]
+    for text in ("gallery's new image tag is missing, and stock's selector config no longer matches its pods.",
+                 "gallery's image tag is missing; a selector config change hit stock.",  # a kind word goes to its own clause's cause
+                 "gallery는 이미지 태그가 잘못됐고 stock은 셀렉터 설정이 바뀌었습니다."):
+        s = rca.score_text(report(text), TWO)
+        assert (s["pass"], s["score"], s["extras"]) == (True, 1.0, 0), (text, s)
+
+
+def test_text_other_objects_named_as_causes_cost_points():
+    s = rca.score_text(report("catalog, recommender or Deployment/shop-09/orders-db could be the cause of the CPU limit."), T09)
+    assert (s["pass"], s["score"], s["extras"]) == (False, 0.0, 2)
+    assert s["extra_objects"] == ["Deployment/shop-09/orders-db", "recommender"]
+    s = rca.score_text(report("catalog hits its CPU limit and is throttled, and recommender adds load."), T09)
+    assert (s["pass"], s["score"], s["extras"], s["extra_objects"]) == (True, 0.75, 1, ["recommender"])
+    s = rca.score_text(report("catalog hits its CPU limit and is throttled; recommender is busier but unrelated."), T09)
+    assert (s["pass"], s["score"], s["extras"]) == (True, 1.0, 0)  # ruled out: no extra
+
+
+def test_text_the_symptom_and_one_more_kind_word_are_free():
+    for text in ("catalog runs at its 25m CPU limit, so its requests are throttled and storefront's product list is slow.",
+                 "catalog가 25m CPU 한도에 걸려 스로틀되고, 그래서 storefront의 상품 목록이 느려졌습니다."):
+        s = rca.score_text(report(text), T09)
+        assert (s["pass"], s["score"], s["extras"], s["extra_objects"]) == (True, 1.0, 0, []), (text, s)
+        assert s["causes"][0]["other_kinds"] == ["dependency_slow"]
+    s = rca.score_text(report("catalog runs at its CPU limit and is slow; it also restarted."), T09)
+    assert (s["pass"], s["score"], s["extras"]) == (True, 0.75, 1)
+
+
+def test_text_kind_words_only_in_the_sentence_naming_the_cause():
+    s = rca.score_text(report("storefront-config is the cause. notifier's settings changed too."), T12)
+    assert not s["pass"] and not s["causes"][0]["kind_found"]
+    s = rca.score_text("**Summary** cart down.\n**Likely cause** cart is down.\n**Ruled out** storefront-config: config unchanged.", T12)
+    assert s["section"] == "whole" and not s["pass"]
+
+
+def test_text_control_passes_only_when_it_says_no_fault():
+    assert rca.score_text(report("No fault found: orders work as expected; thumbnailer restarted once."), CONTROL)["pass"]
+    assert rca.score_text(report("문제가 없습니다. thumbnailer는 한 번 재시작했을 뿐입니다."), CONTROL)["pass"]
+    s = rca.score_text(report("thumbnailer crashed and broke the orders."), CONTROL)
+    assert not s["pass"] and s["decoys_named"] == ["thumbnailer"]
+
+
+def test_text_ignores_an_rca_block():
+    text = report("Unclear.") + "\n```rca\n" + json.dumps({"causes": [cause("ConfigMap/shop-x/settings-b")]}) + "\n```\n"
+    assert not rca.score_text(text, TRUTH)["pass"]
+
+
+T21 = {"control": False, "causes": [{"resource": "ConfigMap/shop-21/search-indexes-2", "kind": "config_change",
+                                     "accept_resources": ["search-indexes-2"], "accept_kinds": ["rollout"]}],
+       "path": [{"resource": "ConfigMap/shop-21/search-indexes-2", "role": "cause", "accept": ["search-indexes-2", "questions"]},
+                {"resource": "StatefulSet/shop-21/search", "role": "via", "accept": ["^(statefulset|pod)/(shop-21/)?search(-[0-9])?$", "^search(-[0-9])?$"]},
+                {"resource": "Deployment/shop-21/storefront", "role": "symptom", "accept": ["storefront"]}],
+       "also_ok": ["StatefulSet/shop-21/search", "Pod/shop-21/search-<n>", "Service/shop-21/search"],
+       "decoys": [{"resource": "CronJob/shop-21/report-builder"}, {"resource": "Deployment/shop-21/storefront"}, {"resource": "Node/*"}]}
+T22 = {"control": False, "causes": [{"resource": "ConfigMap/shop-22/shop-api-settings", "kind": "config_change",
+                                     "accept_resources": ["shop-api-settings", "WEB_WORKERS"], "accept_kinds": ["rollout"]}],
+       "path": [{"resource": "ConfigMap/shop-22/shop-api-settings", "role": "cause", "accept": ["shop-api-settings", "WEB_WORKERS"]},
+                {"resource": "Deployment/shop-22/shop-api", "role": "via",
+                 "accept": ["^(deployment|replicaset|pod)/(shop-22/)?shop-api(-[a-z0-9]{6,10})?(-[a-z0-9]{5})?$", "^shop-api$"]},
+                {"resource": "Deployment/shop-22/visitor", "role": "symptom", "accept": ["visitor", "service/(shop-22/)?shop-api"]}],
+       "also_ok": ["Deployment/shop-22/shop-api", "ReplicaSet/shop-22/shop-api-<hash>", "Pod/shop-22/shop-api-<hash>", "Service/shop-22/shop-api"],
+       "decoys": [{"resource": "Deployment/shop-22/session-cache"}, {"resource": "Deployment/shop-22/visitor"}, {"resource": "Node/*"}]}
+# 03 after the second review: the Job's namespace counts only with a kind or a path, not as the word "reports".
+T03 = {"control": False, "causes": [{"resource": "Node/kubeast-b-control-plane", "kind": "node", "accept_kinds": ["resource_limit"],
+                                     "accept_resources": ["^nodes?$", "control-plane", "monthly-report", "^namespace/reports$", "(^|/)reports/"]}],
+       "path": [{"resource": "Node/kubeast-b-control-plane", "role": "cause", "accept": ["^nodes?$", "control-plane", "monthly-report"]},
+                {"resource": "Deployment/shop-03/search", "role": "symptom", "accept": ["(^|/)(search|pricing|thumbnails|storefront|image-worker)$"]}],
+       "also_ok": [], "decoys": [{"resource": "Deployment/shop-03/search"}, {"resource": "Deployment/shop-03/thumbnails"},
+                                 {"resource": "Deployment/shop-03/storefront"}]}
+
+
+def test_text_a_shotgun_across_lines_or_sentences_does_not_pass():
+    """The second review's 2: candidates written one to a bullet or a sentence are read over the whole section."""
+    for text, truth, blamed in [
+        ("- storefront-config's cart_url setting changed\n- Deployment/shop-12/cart crashed\n"
+         "- Deployment/shop-12/notifier is failing and caused the errors\n- Node/kind-worker is NotReady\n- DNS resolution fails",
+         T12, ["Deployment/shop-12/notifier"]),
+        ("storefront-config's setting changed. Or notifier crashed and caused it. Or the node is out of memory. Or DNS is broken. "
+         "Or a NetworkPolicy blocks it.", T12, ["notifier"]),
+        ("- catalog is throttled at its CPU limit\n- recommender uses most CPU and causes the slowness\n"
+         "- Node/kind-worker is overloaded and causes it", T09, ["Node/kind-worker", "recommender"]),
+    ]:
+        s = rca.score_text(report(text), truth)
+        assert (s["pass"], s["score"]) == (False, 0.0) and s["decoys_named"] == blamed, (text, s)
+    s = rca.score_text(report("- storefront-config's cart_url setting changed\n- Deployment/shop-12/cart crashed\n- Node/kind-worker is NotReady"), T12)
+    assert (s["pass"], s["extras"], s["extra_objects"]) == (False, 2, ["Deployment/shop-12/cart", "Node/kind-worker"]), s
+
+
+def test_text_control_needs_no_fault_and_no_suspect():
+    """The second review's 3: each of these names a cause or a suspect, so a control does not pass."""
+    for text, truth in [
+        ("Deployment/shop-13/catalog's connection pool is exhausted, which causes the order failures. thumbnailer looks normal.", C13),
+        ("storefront 설정 변경 때문에 주문이 실패합니다. 나머지는 정상입니다.", C13),
+        ("thumbnailer restarted and caused the order failures, while orders itself is healthy.", C13),
+        ("thumbnailer 재시작 때문에 주문이 실패했고 orders는 정상입니다.", C13),
+        ("thumbnailer restarted (exit 143) right before the order errors. orders itself is healthy.", C13),
+        ("The orders rollout to 4.18.1 four minutes ago, then orders got slower. Other pods are fine.", C14),
+    ]:
+        s = rca.score_text(report(text), truth)
+        assert not s["pass"] and not s["no_fault"], (text, s)
+    for text in ("No fault found, thumbnailer only restarted once.", "장애는 없고 thumbnailer는 한 번 재시작했습니다."):
+        s = rca.score_text(report(text), C13)  # the no-fault words are a clause of their own, naming nothing
+        assert s["pass"] and s["no_fault"], (text, s)
+    s = rca.score_text(report("orders slowed because of thumbnailer's restart."), C13)
+    assert not s["pass"] and s["decoys_named"] == ["thumbnailer"], s  # "because of" blames the object after it
+    s = rca.score_text(report("No fault found. Deployment/shop-13/catalog's connection pool causes the order failures."), C13)
+    assert not s["pass"] and s["no_fault"] and s["suspects"] == ["Deployment/shop-13/catalog"], s
+    s = rca.score_text(report("thumbnailer restarted and caused the order failures, while orders itself is healthy."), C13)
+    assert s["decoys_named"] == ["thumbnailer"] and s["decoys_ruled_out"] == ["orders"], s
+
+
+def test_text_right_reports_the_second_review_read_as_wrong():
+    """The second review's 4: a normal word speaks of the nearest name only, a change is a ConfigMap's config_change,
+    one stretch of words is one kind, and "no problems elsewhere" rules the rest out."""
+    for text, truth, score in [
+        ("storefront-config의 cart_url 설정이 바뀌었고 notifier 재시작은 무관합니다.", T12, 1.0),
+        ("storefront-config changed the cart_url setting, while notifier's restarts are unrelated.", T12, 1.0),
+        ("storefront-config changed cart_url and notifier is unrelated.", T12, 1.0),
+        ("storefront-config의 cart_url 설정이 바뀌어서 장바구니 호출이 실패하는데 notifier 재시작은 무관합니다.", T12, 1.0),
+        ("storefront-config's cart_url changed: notifier is unrelated.", T12, 1.0),
+        ("cart answers 404 because of storefront-config's cart_url change.", T12_PATH, 1.0),
+        ("storefront-config's cart_url was edited in place from /api/v1/cart to /api/v2/cart; cart only serves /api/v1/cart and answers 404.",
+         T12_PATH, 1.0),
+        ("shop-api-settings raised WEB_WORKERS from 3 to 6, so shop-api is OOMKilled at its memory limit.", T22, 1.0),
+        ("The WEB_WORKERS setting in shop-api-settings was changed from 3 to 6, so shop-api is OOMKilled at its memory limit.", T22, 1.0),
+        ("ConfigMap/shop-22/shop-api-settings raised WEB_WORKERS from 3 to 6; each worker's cache grows, so "
+         "Pod/shop-22/shop-api-7f9c4d8b6-x2k4p hits its 64Mi memory limit and is OOMKilled, and visitor sees failures.", T22, 1.0),
+        ("search-indexes-2 added a third index (105 MB instead of 66); when the rolling update removed one search node the others "
+         "took its shards and hit the 48Mi memory limit, OOMKilled in turn.", T21, 0.75),  # "node": one kind too many
+        ("storefront-config's cart_url setting was edited in place, so cart calls get 404. No problems elsewhere.", T12_PATH, 1.0),
+        ("storefront-config's cart_url setting was edited in place, so cart calls get 404.\nNo issues found in the other workloads.", T12_PATH, 1.0),
+    ]:
+        s = rca.score_text(report(text), truth)
+        assert (s["pass"], s["score"], s["no_fault"]) == (True, score, False), (text, s)
+    s = rca.score_text(report("storefront-config's cart_url was edited from /api/v1/cart to /api/v2/cart."), T12)
+    assert (s["pass"], s["score"], s["extra_objects"]) == (True, 1.0, []), s  # a URL path names no object
+    s = rca.score_text(report("catalog runs at its memory limit."), T09)
+    assert s["causes"][0]["other_kinds"] == ["oom"]  # "memory limit" is one kind, not oom and resource_limit
+    s = rca.score_text(report("Deployment/shop-09/catalog was changed and is throttled at its CPU limit."), T09)
+    assert s["causes"][0]["other_kinds"] == []  # a change is config_change only for a ConfigMap or Secret
+
+
+def test_text_03_reads_the_job_by_its_name_and_the_node_by_what_it_does():
+    """The second review's 5: the word "reports" alone names no cause, and a busy, saturated node is the node kind."""
+    for text in ("storefront reports that search answers slowly; search may be hitting a CPU limit.",
+                 "As the alert reports, search is slow; its CPU is throttled.",
+                 "search, pricing and thumbnails all slowed at once; probably the node."):
+        s = rca.score_text(report(text), T03)
+        assert not s["pass"], (text, s)
+    for text in ("Job monthly-report-run in reports keeps the node's CPU busy, so search, pricing and thumbnails slow down together.",
+                 "The node's CPU is saturated by Job reports/monthly-report-run, which has no CPU limit.",
+                 "Namespace/reports runs a Job that keeps the node's CPU busy."):
+        s = rca.score_text(report(text), T03)
+        assert s["pass"] and s["score"] == 1.0, (text, s)
+
+
+def test_text_a_loose_json_block_left_in_the_report_is_not_read_as_words():
+    text = ("## Summary\nok\n## Likely cause\nNo fault found: thumbnailer restarted once.\n```json\n"
+            + json.dumps({"no_fault": True, "causes": [], "path": [], "ruled_out": ["Deployment/shop-13/thumbnailer"]}) + "\n```\n")
+    s = rca.score_text(text, C13)
+    assert s["pass"] and s["no_fault"] and s["decoys_named"] == [], s
+
+
+def test_stored_result_scores_as_the_block_it_came_from():
+    block = {"no_fault": False, "causes": [cause("ConfigMap/shop-x/settings-b", evidence=[1, 3])], "path": GOOD_PATH, "ruled_out": []}
+    result = {"version": 1, "status": "ok", "no_fault": False, "path": GOOD_PATH, "ruled_out": [], "hypotheses": [],
+              "causes": [{"resource": "ConfigMap/shop-x/settings-b", "kind": "config_change", "started_at": "2026-11-13T10:01:00Z",
+                          "evidence": [{"call": 1, "tool": "timeline"}, {"call": 3, "tool": "loki_query", "failed": True}]}]}
+    assert rca.score_block(*rca.block_of_result(result), TRUTH, CALLS) == rca.score_rca(answer(block), TRUTH, CALLS)
+    assert rca.block_of_result(None) == (None, "missing")
+    assert rca.block_of_result({"status": "invalid", "causes": []}) == (None, "invalid")
+    assert rca.score_block(*rca.block_of_result({"status": "missing"}), TRUTH, CALLS)["block"] == "missing"
+
+
+def test_alert_checks_and_send_time():
+    staged = {"id": "01", "cluster": "self", "namespace": "eval-01", "question": "q", "inject_cmds": ["true"], "ask_after_seconds": [300]}
+    good = dict(staged, alert={"labels": {"alertname": "ServiceSlow", "service": "web"}, "annotations": {"summary": "slow"}})
+    assert rca.check_case(good, True) == [] and rca.is_staged({"alert": {}})
+    assert rca.alert_name(good) == "ServiceSlow" and rca.alert_after(good) == 300
+    assert rca.alert_after(dict(good, alert=dict(good["alert"], after_seconds=60))) == 60
+    assert rca.alert_after({"alert": {"rule": "R"}}) == 0 and rca.alert_name({"alert": {"rule": "R"}}) == "R"
+    assert any("truth.json" in p for p in rca.check_case(good, False))
+    for alert in ({"annotations": {"summary": "x"}}, {"labels": {"alertname": "A"}, "rule": "B"}, {"labels": {"alertname": 3}},
+                  {"labels": {"alertname": "A"}, "after_seconds": -1}, {"labels": {"alertname": "A"}, "extra": 1}, "ServiceSlow"):
+        assert rca.check_case(dict(staged, alert=alert), True), alert
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = 0

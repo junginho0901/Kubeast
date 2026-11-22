@@ -30,5 +30,9 @@
  "ask_after_seconds": [420],
  "undo_cmds": [],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceSlow", "service": "storefront"},
+  "annotations": {"summary": "storefront's product list responses are slow", "description": "Product list responses from storefront have taken a second or more for the last few minutes; no request fails."}
+ }
 }

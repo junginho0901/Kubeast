@@ -38,5 +38,9 @@
   "kubectl -n $NS rollout undo deploy/pricing"
  ],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "checkout"},
+  "annotations": {"summary": "Some of checkout's price lookups fail", "description": "A share of checkout's requests for the payment amount has been failing for the last few minutes."}
+ }
 }

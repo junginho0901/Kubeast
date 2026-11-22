@@ -27,5 +27,9 @@
  "ask_after_seconds": [300],
  "undo_cmds": [],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "orders"},
+  "annotations": {"summary": "Some orders reportedly fail", "description": "Users report that orders in shop-13 sometimes fail."}
+ }
 }

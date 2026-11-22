@@ -26,5 +26,9 @@
   "kubectl -n $NS delete networkpolicy allow-from-gateway --ignore-not-found"
  ],
  "cooldown_seconds": 30,
- "timeout_seconds": 420
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "storefront"},
+  "annotations": {"summary": "storefront cannot load the product list", "description": "storefront's product list requests have been failing for the last few minutes."}
+ }
 }
