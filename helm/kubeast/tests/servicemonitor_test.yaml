@@ -76,6 +76,49 @@ tests:
       - matchRegex:
           path: spec.groups[0].rules[1].expr
           pattern: "> 0.1"
+      - notContains:
+          path: spec.groups[0].rules
+          content:
+            alert: KubeastAuditAnchorStalled
+          any: true
+
+  - it: adds the audit anchor alert at two anchor periods when an anchor sink is set
+    template: prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+      audit.sinks:
+        - {name: archive, type: s3, s3: {bucket: kubeast-audit, region: ap-northeast-2}}
+      audit.integrity.anchor.sink: archive
+      audit.integrity.anchor.hours: 6
+    asserts:
+      - lengthEqual:
+          path: spec.groups[0].rules
+          count: 6
+      - equal:
+          path: spec.groups[0].rules[5].alert
+          value: KubeastAuditAnchorStalled
+      - equal:
+          path: spec.groups[0].rules[5].expr
+          value: time() - max by (service) (kubeast_audit_anchor_last_timestamp_seconds) > 43200
+      - equal:
+          path: spec.groups[0].rules[5].for
+          value: 30m
+      - equal:
+          path: spec.groups[0].rules[5].labels.severity
+          value: warning
+
+  - it: leaves the audit anchor alert out with the audit chain off
+    template: prometheusrule.yaml
+    set:
+      metrics.prometheusRule.enabled: true
+      audit.integrity.enabled: false
+      audit.sinks:
+        - {name: archive, type: s3, s3: {bucket: kubeast-audit, region: ap-northeast-2}}
+      audit.integrity.anchor.sink: archive
+    asserts:
+      - lengthEqual:
+          path: spec.groups[0].rules
+          count: 5
 
   - it: opens the backend ports to the listed scrapers under the network policy
     template: networkpolicy.yaml

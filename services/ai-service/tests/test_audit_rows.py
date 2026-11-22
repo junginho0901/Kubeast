@@ -367,3 +367,103 @@ async def test_an_approved_write_that_fails_keeps_its_output_masked_and_short(mo
     assert "fake-failed-password" not in run["error"] and "boom" in run["error"] and len(run["error"]) <= 500, run["error"]
     assert "fake-failed-password" not in approval.result
     assert "fake-failed-password" not in repr(messages)
+
+
+class ConversationGone(Exception):
+    """What saving a message raises once its conversation was deleted (messages reference sessions)."""
+
+
+@pytest.mark.parametrize("tool,args,actions", [
+    ("k8s_scale", {"resource_type": "deployment", "resource_name": "web", "namespace": "shop", "replicas": 2},
+     ["ai.tool.approve", "ai.tool.execute"]),
+    ("k8s_execute_command", {"pod_name": "web-0", "namespace": "shop", "command": ["date"]},
+     ["ai.tool.approve", "ai.tool.execute", "k8s.pod.exec"]),
+], ids=["scale", "exec"])
+async def test_a_run_keeps_its_rows_when_its_conversation_was_deleted_during_it(monkeypatch, tool, args, actions):
+    import app.api as api
+
+    out = []
+
+    async def write(**kw):
+        out.append(kw)
+        return True
+
+    async def ready():
+        return None
+
+    approval = SimpleNamespace(id="ap4", user_id="u1", cluster="self", tool=tool, args=args, session_id="s-gone", result="",
+                               status="pending", created_at=None, expires_at=None, decided_at=None)
+
+    class DB:
+        async def transition_tool_approval(self, approval_id, from_status, **k):
+            if from_status == "approved":
+                return None  # the conversation and its approvals were deleted while the call ran
+            for key, value in k.items():
+                setattr(approval, key, value)
+            return approval
+
+        async def add_message(self, session_id, *a, **k):
+            raise ConversationGone(session_id)
+
+    async def load(approval_id, payload):
+        return DB(), approval
+
+    class Service:
+        tool_server = SimpleNamespace(last_access=None, last_requests=None)
+
+        async def _call_tool_server(self, tool, args, **kw):
+            return "done"
+
+    async def build(authorization, cluster_name=None):
+        return Service()
+
+    monkeypatch.setattr(audit_writer, "write_audit", write)
+    monkeypatch.setattr(audit_writer, "require_audit_ready", ready)
+    monkeypatch.setattr(api, "_load_own_pending_approval", load)
+    monkeypatch.setattr(api, "_caller", lambda auth: SimpleNamespace(user_id="u1", has_permission_for_cluster=lambda perm, cluster: True))
+    monkeypatch.setattr(api, "_extract_audit_meta", lambda request, auth: ({"user_id": "u1", "email": "dev@example.com"}, {}))
+    monkeypatch.setattr(api, "_build_ai_service", build)
+    monkeypatch.setattr("app.services.approval_token.sign", lambda *a, **k: "tok")
+    with pytest.raises(ConversationGone):
+        await api.approve_tool_approval("ap4", request=SimpleNamespace(), authorization="Bearer x")
+    assert [r["action"] for r in out] == actions
+    assert all(r["result"] == "success" for r in out[1:]), out
+    assert out[1]["after"]["approval_id"] == "ap4" and out[1]["after"]["session_id"] == "s-gone"
+
+
+async def test_a_rejection_keeps_its_row_when_its_conversation_was_deleted_meanwhile(monkeypatch):
+    import app.api as api
+
+    out = []
+
+    async def write(**kw):
+        out.append(kw)
+        return True
+
+    async def ready():
+        return None
+
+    approval = SimpleNamespace(id="ap5", user_id="u1", cluster="self", tool="k8s_scale", args={"resource_name": "web"},
+                               session_id="s-gone", result="", status="pending", created_at=None, expires_at=None, decided_at=None)
+
+    class DB:
+        async def transition_tool_approval(self, approval_id, from_status, **k):
+            for key, value in k.items():
+                setattr(approval, key, value)
+            return approval
+
+        async def add_message(self, session_id, *a, **k):
+            raise ConversationGone(session_id)
+
+    async def load(approval_id, payload):
+        return DB(), approval
+
+    monkeypatch.setattr(audit_writer, "write_audit", write)
+    monkeypatch.setattr(audit_writer, "require_audit_ready", ready)
+    monkeypatch.setattr(api, "_load_own_pending_approval", load)
+    monkeypatch.setattr(api, "_caller", lambda auth: SimpleNamespace(user_id="u1"))
+    monkeypatch.setattr(api, "_extract_audit_meta", lambda request, auth: ({"user_id": "u1", "email": "dev@example.com"}, {}))
+    with pytest.raises(ConversationGone):
+        await api.reject_tool_approval("ap5", request=SimpleNamespace(), authorization="Bearer x")
+    assert [r["action"] for r in out] == ["ai.tool.reject"]
+    assert out[0]["after"] == {"approval_id": "ap5", "session_id": "s-gone", "cluster": "self"}

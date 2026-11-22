@@ -13,6 +13,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => ({
   useQueryClient: () => ({ invalidateQueries: () => {} }),
 }))
 vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, o?: { defaultValue?: string }) => o?.defaultValue ?? key }) }))
 vi.mock('@/hooks/useProviderAvailability', () => ({ useProviderAvailability: () => ({}) }))
 
 import { api } from '@/services/api'

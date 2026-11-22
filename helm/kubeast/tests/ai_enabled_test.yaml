@@ -135,6 +135,6 @@ tests:
         documentIndex: 0
       - matchRegex:
           path: data["nginx.conf"]
-          pattern: 'proxy_connect_timeout 3s;'
+          pattern: '\n    proxy_connect_timeout 3s;\n'
         template: gateway.yaml
         documentIndex: 0

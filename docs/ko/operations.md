@@ -361,9 +361,10 @@ resources:
 
 - **k8s-service-stream이 교체될 때**(배포, 노드 비우기): 새 파드가 먼저 준비됩니다(`maxSurge: 1`, `maxUnavailable: 0`). 옛 파드는 `preStopSeconds`를 기다린 뒤 SIGTERM을 받으면 `/readyz`에 503으로 답하고, 실시간 로그를 바로 끝내며(브라우저가 다시 붙어 마지막으로 받은 줄 다음부터 이어 받습니다), 터미널마다 언제 닫히는지 적습니다. `drainSeconds`가 지나도 열려 있는 터미널은 그 까닭과 함께 닫히고(close code 1001, `server_shutdown`) 다시 연결 버튼이 나옵니다. `terminationGracePeriodSeconds`는 `preStopSeconds + drainSeconds + 35`(기본 105초)입니다. k8s-service(api)는 `podShutdown.preStopSeconds`를 기다리고 그 + 30입니다.
 - **같은 신원**: 두 Deployment 모두 `k8s-service` 서비스 계정을 쓰므로 IRSA 역할과 녹화 저장소 자격 증명(`sessionRecording.secret`)이 둘 다에 적용됩니다. 녹화는 stream 서버가 쓰고 k8s-service가 읽습니다. 스풀 볼륨은 stream 서버에만 붙습니다.
-- **함께 쓸 수 없는 값**: `sessionRecording.storage: file`(볼륨 하나를 파드 둘이 붙일 수 없음)과 1보다 큰 `streams.replicas`.
+- **함께 쓸 수 없는 값**: `sessionRecording.storage: file`(볼륨 하나를 파드 둘이 붙일 수 없음)과 1보다 큰 `streams.replicas`. streams를 켜든 끄든 k8s-service가 2대 이상이면 `file`을 쓸 수 없습니다(1보다 큰 `replicas.k8sService`, 또는 `maxReplicas`가 1보다 큰 `autoscaling.k8sService`).
+- **k8s-service 1대의 파일 저장소**: 배포할 때 `sessionRecording.fileVolume`을 붙인 새 파드가 뜬 뒤에 옛 파드가 멈추므로(`maxSurge: 1`, `maxUnavailable: 0`), 그동안은 파드 둘이 같은 볼륨을 붙입니다. ReadWriteOnce 볼륨은 한 번에 한 노드에만 붙습니다. 노드가 여럿이면 ReadWriteMany 볼륨을 주거나 `s3`나 `database`를 쓰세요.
 - **NetworkPolicy**: `k8s-service-stream`은 게이트웨이에서만 연결을 받고, 데이터베이스·Redis·auth-service·클러스터 API 서버·`sessionRecording.egress`로만 나갑니다.
-- **게이트웨이 앞단**: 게이트웨이 파드의 preStop 기다림(`podShutdown.preStopSeconds`)은 파드 IP로 보내는 로드밸런서가 그 파드에 새 요청을 그만 보낼 때까지 이어져야 하고(AWS ALB의 기본 등록 해제 지연 300초에서 기본 5초로 충분했습니다), 콘솔로 가는 Envoy Gateway 라우트는 요청 타임아웃(기본 15초)에 스트림을 끊지 않게 두세요.
+- **게이트웨이 앞단**: 게이트웨이 파드의 preStop 기다림(`podShutdown.preStopSeconds`)은 파드 IP로 보내는 로드밸런서가 그 파드에 새 요청을 그만 보낼 때까지 이어져야 하고(AWS ALB 뒤에서는 25초와 대상 그룹 등록 해제 지연 20초: 기본 5초와 기본 등록 해제 지연 300초로는 게이트웨이 파드를 바꾼 18번 중 3번에서 요청이 실패했고, 파드 준비 게이트를 켜고 12번 더 바꿀 때는 실패가 없었습니다. docs/ko/high-availability.md 참고), 콘솔로 가는 Envoy Gateway 라우트는 요청 타임아웃(기본 15초)에 스트림을 끊지 않게 두세요.
 - **지표**: 스트림 서버마다(k8s-service-stream, `streams.enabled`가 꺼져 있으면 k8s-service) `kubeast_terminals_open`, `kubeast_followed_logs_open`.
 
 ## 느린 요청이 기다린 곳 (게이트웨이 접근 로그)

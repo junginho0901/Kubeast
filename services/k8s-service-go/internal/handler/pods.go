@@ -132,7 +132,7 @@ func (h *Handler) GetPodsOnNode(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(raw)
+	writeShared(w, r, raw)
 }
 
 // GetPods handles GET /api/v1/namespaces/{namespace}/pods.
@@ -298,6 +298,13 @@ func (h *Handler) PodLogsSSE(w http.ResponseWriter, r *http.Request) {
 		read["tail_lines"] = tailLines
 	}
 	after, _ := json.Marshal(read)
+	releasePlace, ok := h.takeFollowedLog(w, r, func(err error) {
+		_ = h.recordAuditWithPayload(r, "k8s.pod.logs.read", "pod", name, namespace, err, nil, after)
+	})
+	if !ok {
+		return
+	}
+	defer releasePlace()
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")

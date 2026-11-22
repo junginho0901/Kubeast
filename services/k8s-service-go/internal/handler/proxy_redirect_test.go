@@ -1,0 +1,115 @@
+package handler
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
+	"github.com/junginho0901/kubeast/services/pkg/auth"
+)
+
+// A store behind an authenticating proxy, registered as a Service, answers the API server's proxy 401 itself (the
+// API server took Kubeast's credentials off the request). That is the store not answering, a 502 with its words —
+// before, k8s-service answered 401 and the console signed the person out. The same for OpenCost.
+func TestAStoresOwn401BehindTheProxyIsA502NotASignOut(t *testing.T) {
+	t.Setenv("PROMETHEUS_ENABLED", "true")
+	t.Setenv("PROMETHEUS_SERVICE", "monitoring/prometheus:9090")
+	t.Setenv("PROMETHEUS_CLUSTER_LABEL", "")
+	t.Setenv("COST_ENABLED", "true")
+	unauthorized := func(w http.ResponseWriter) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte("Unauthorized"))
+	}
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch p := r.URL.Path; {
+		case p == "/api/v1/namespaces/monitoring/services/prometheus:9090/proxy/api/v1/query":
+			unauthorized(w)
+		case p == "/api/v1/namespaces/opencost/services":
+			_, _ = w.Write([]byte(`{"kind":"ServiceList","apiVersion":"v1","items":[{"metadata":{"name":"opencost","namespace":"opencost"},"spec":{"ports":[{"port":9003}]}}]}`))
+		case strings.HasSuffix(p, "/services"):
+			_, _ = w.Write([]byte(`{"kind":"ServiceList","apiVersion":"v1","items":[]}`))
+		case p == "/api/v1/namespaces/opencost/services/opencost:9003/proxy/healthz":
+			_, _ = w.Write([]byte("ok"))
+		case p == "/api/v1/namespaces/opencost/services/opencost:9003/proxy/allocation/compute":
+			unauthorized(w)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"NotFound","code":404}`))
+		}
+	}))
+	defer api.Close()
+	h := metricsHandler(t, api.URL)
+	everything := auth.TokenPayload{UserID: "u1", Perms: auth.PermissionMatrix{"*": {"*"}}}
+	for target, read := range map[string]http.HandlerFunc{
+		"/api/v1/prometheus/query?query=up": h.PrometheusQuery,
+		"/api/v1/cost?window=24h":           h.GetCost,
+	} {
+		w := httptest.NewRecorder()
+		read(w, logSearchRequestAs(target, "c1", "", everything))
+		if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "itself: Unauthorized") {
+			t.Errorf("%s: %d %s", target, w.Code, w.Body)
+		}
+	}
+}
+
+// A flow read through the API server follows no redirect out of the Relay's or Whisker's Service: the request goes
+// with the cluster's credentials and the person's headers, which another host must never get. It is a 502 saying so.
+func TestNetworkFlowsThroughTheProxyFollowNoRedirectToAnotherHost(t *testing.T) {
+	var mu sync.Mutex
+	var reached []string
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		reached = append(reached, r.Method+" "+r.URL.Path)
+		mu.Unlock()
+	}))
+	defer other.Close()
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/namespaces/kube-system/services/https:hubble-relay:443/proxy/observer.Observer/GetFlows":
+			// a POST: 307 keeps its method and body
+			w.Header().Set("Location", other.URL+"/observer.Observer/GetFlows")
+			w.WriteHeader(http.StatusTemporaryRedirect)
+		case "/api/v1/namespaces/calico-system/services/https:whisker:8443/proxy/whisker-backend/flows":
+			w.Header().Set("Location", other.URL+"/whisker-backend/flows")
+			w.WriteHeader(http.StatusFound)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"NotFound","code":404}`))
+		}
+	}))
+	defer api.Close()
+	for name, target := range map[string]netflows.Target{
+		"Hubble Relay":   {Mode: "proxy", Relay: netflows.Relay{Namespace: "kube-system", Service: "hubble-relay", Port: 443}},
+		"Calico Whisker": {Mode: "proxy", Source: netflows.SourceCalico, Relay: netflows.DefaultWhisker},
+	} {
+		s, err := netflows.New(netflows.Config{
+			Clusters:     map[string]netflows.Target{"c1": target},
+			DefaultRange: time.Hour, MaxRange: time.Hour, MaxFlows: 50, GraphMaxFlows: 400, Timeout: 2 * time.Second, PerUserPerMinute: 5,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		h := metricsHandler(t, api.URL)
+		h.auditStore = &memAudit{}
+		h.SetNetworkFlows(s)
+		h.netflowsCanI = func(context.Context, netflows.Target) (bool, error) { return true, nil }
+		w := httptest.NewRecorder()
+		h.NetworkFlows(w, logSearchRequestAs("/api/v1/namespaces/demo/networkflows", "c1", "demo", flowReader))
+		if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "redirect not followed") || strings.Contains(w.Body.String(), other.URL) {
+			t.Errorf("%s: %d %s", name, w.Code, w.Body)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(reached) != 0 {
+		t.Fatalf("another host was sent %v", reached)
+	}
+}

@@ -19,8 +19,8 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// heavyFirstPage answers every pod list with a first page of perPage pods, each with a note of noteBytes, and a continue
-// token; the page after it waits for next. Every other list is empty. It counts the first pages it answered.
+// heavyFirstPage answers every pod and event list with a first page of perPage objects, each with a note of noteBytes,
+// and a continue token; the page after it waits for next. Every other list is empty. It counts the first pages it answered.
 type heavyFirstPage struct {
 	perPage, noteBytes int
 	next               chan struct{}
@@ -34,7 +34,8 @@ func (a *heavyFirstPage) client(t *testing.T) *kubernetes.Clientset {
 	note := strings.Repeat("x", a.noteBytes)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if !strings.HasSuffix(r.URL.Path, "/pods") {
+		events := strings.HasSuffix(r.URL.Path, "/events")
+		if !strings.HasSuffix(r.URL.Path, "/pods") && !events {
 			fmt.Fprint(w, `{"metadata":{},"items":[]}`)
 			return
 		}
@@ -44,7 +45,21 @@ func (a *heavyFirstPage) client(t *testing.T) *kubernetes.Clientset {
 			case <-r.Context().Done():
 				return
 			}
-			fmt.Fprint(w, `{"apiVersion":"v1","kind":"PodList","metadata":{},"items":[]}`)
+			kind := "PodList"
+			if events {
+				kind = "EventList"
+			}
+			fmt.Fprintf(w, `{"apiVersion":"v1","kind":%q,"metadata":{},"items":[]}`, kind)
+			return
+		}
+		if events {
+			items := make([]corev1.Event, a.perPage)
+			for i := range items {
+				items[i] = corev1.Event{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("e-%d", i), Namespace: "big"}, Message: note,
+					LastTimestamp: metav1.NewTime(time.Date(2026, 11, 20, 1, 0, i, 0, time.UTC))}
+			}
+			_ = json.NewEncoder(w).Encode(corev1.EventList{TypeMeta: metav1.TypeMeta{Kind: "EventList", APIVersion: "v1"}, ListMeta: metav1.ListMeta{Continue: "page-2"}, Items: items})
+			a.firstPages.Add(1)
 			return
 		}
 		items := make([]corev1.Pod, a.perPage)
@@ -108,8 +123,19 @@ func TestAReadWaitingForItsNextPageHoldsNoPageItAlreadyRead(t *testing.T) {
 			_, err := s.fetchResourceGraphData(ctx, nil)
 			return err
 		},
+		// the newest 10 kept: what a read keeps of its pages is its own, beyond the page
+		"events as the caller": func(ctx context.Context, k *kubernetes.Clientset) error {
+			s := &Service{}
+			s.defaultBundle.Store(&clientBundle{clientset: k})
+			_, _, err := s.newestEventsSince(ctx, "big", metav1.ListOptions{}, time.Time{}, 10, "")
+			return err
+		},
+		"events for everyone": func(ctx context.Context, k *kubernetes.Clientset) error {
+			_, err := readEventWindow(ctx, k, "big", metav1.ListOptions{}, 10, "")
+			return err
+		},
 	}
-	for _, name := range []string{"eachPod", "rollout pages", "issues", "cluster hygiene", "resource graph"} {
+	for _, name := range []string{"eachPod", "rollout pages", "issues", "cluster hygiene", "resource graph", "events as the caller", "events for everyone"} {
 		t.Run(name, func(t *testing.T) {
 			const waiting = 2
 			api := &heavyFirstPage{perPage: 256, noteBytes: 64 << 10, next: make(chan struct{})}

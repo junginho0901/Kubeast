@@ -22,7 +22,6 @@ export interface ClusterViewContextValue {
   // i18n helpers
   tr: (key: string, fallback: string, options?: Record<string, any>) => string
   locale: string
-  na: string
   emptyValue: string
 
   // namespace + search

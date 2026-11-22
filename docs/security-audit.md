@@ -137,7 +137,7 @@ To open the mail inbox, run `kubectl -n kubeast-devtools port-forward svc/mailpi
 This feature makes it possible to tell whether audit rows were changed or deleted later.
 
 - Every `audit.integrity.sealSeconds` (default 10 seconds), auth-service chains new rows with a sha256 that includes the previous row's hash (`chain_seq`, `prev_hash`, `row_hash`).
-- When `audit.integrity.anchor.sink` names an S3 sink, auth-service writes the chain head as a digest JSON to `<prefix>digests/` in that bucket every `anchor.hours` (default 24).
+- When `audit.integrity.anchor.sink` names an S3 sink, auth-service writes the chain head as a digest JSON to `<prefix>digests/` in that bucket every `anchor.hours` (whole hours, default 24).
 - The bar at the top of Admin → Audit Logs shows the seal position and the last anchor. It has a **Verify** button (by default from the last anchor, including a check against the sink objects) and an **Anchor now** button.
 - Both buttons are recorded as audit rows (`admin.audit.verify`, `admin.audit.anchor`). The periodic anchor is recorded as `audit.chain.anchor` (actor `system`).
 
@@ -218,7 +218,7 @@ Kubeast does not hide those lines: the hash also stands on the object in the clu
 
 Each AI tool call shows who the cluster saw it as and the cluster requests it made: the 🔐 line and "🧾 Cluster requests" in the chat's tool block, `after.access` and `after.requests` in its audit row.
 
-A write tool's arguments stay as written only while the call needs them. The answer the server saves, and the stream the page saves a stopped answer from, hold a masked copy with the same fields, so the tool block still says what was asked. The approval row holds the real arguments for the waiting card, and the same copy once the call has run, been rejected or expired. What cannot be read safely keeps its field and no value.
+A write tool's arguments stay as written only while the call needs them. The answer the server saves, and the stream the page saves a stopped answer from, hold a masked copy with the same fields, so the tool block still says what was asked. The approval row holds the real arguments for the waiting card, and the same copy once the call has run, been rejected or expired, or was ended as interrupted because its ai-service stopped during the run (`ai.tool.interrupt`, by the first ai-service to look once 10 minutes have passed since the approval: a new approval card, the card opened, or a process's first database use; until one looks, the row keeps the real arguments). What cannot be read safely keeps its field and no value.
 
 - Kubeast sends each request of a tool call with its own `Audit-ID` header: `kubeast-` and 32 hex characters.
 - The API server takes that value as the audit event's `auditID` and returns it in the response. ✓ next to a request means it came back.

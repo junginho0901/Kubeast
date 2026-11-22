@@ -23,7 +23,7 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
-  const na = tr('common.notAvailable', 'N/A')
+  const empty = tr('common.empty', '-')
 
   if (!Array.isArray(nodes) || nodes.length === 0) return null
   const shown = [...nodes].sort((a, b) => attention(a.status) - attention(b.status)).slice(0, SHOWN)
@@ -60,7 +60,7 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
             </div>
             <div className="space-y-1">
               <p className="text-xs text-slate-400">
-                <span className="font-medium">{tr('dashboard.nodeCard.versionLabel', 'Version')}:</span> {node.version || na}
+                <span className="font-medium">{tr('dashboard.nodeCard.versionLabel', 'Version')}:</span> {node.version || empty}
               </p>
               {node.roles && node.roles.length > 0 && (
                 <p className="text-xs text-slate-400">

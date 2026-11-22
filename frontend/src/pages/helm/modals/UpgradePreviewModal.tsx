@@ -38,7 +38,7 @@ export default function UpgradePreviewModal({
       onApplied()
     },
     onError: (err: any) => {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'upgrade failed')
+      setError(err?.response?.data?.detail ?? err?.message ?? t('helmReleaseDetail.upgrade.upgradeFailed', 'upgrade failed'))
     },
   })
 

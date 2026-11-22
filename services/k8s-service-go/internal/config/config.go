@@ -132,6 +132,10 @@ type Config struct {
 	WSWatchStartConcurrency   int
 	WSWatchOpeningConcurrency int
 	WSWatchStreamWindowKiB    int
+	// Terminals (pod exec, node shell) and followed logs one account may hold open at once on this server; 0 = no cap
+	// (internal/streamcap, chart multicluster.maxTerminalsPerAccount and maxFollowedLogsPerAccount).
+	MaxTerminalsPerAccount    int
+	MaxFollowedLogsPerAccount int
 	// MaxRequestBodyBytes caps every request body; YAML apply/create of large
 	// manifests fit well under the default 4 MiB.
 	MaxRequestBodyBytes int
@@ -231,6 +235,8 @@ func Load() Config {
 		WSWatchStartConcurrency:   pkgconfig.GetEnvInt("WS_WATCH_START_CONCURRENCY", 16),
 		WSWatchOpeningConcurrency: pkgconfig.GetEnvInt("WS_WATCH_OPENING_CONCURRENCY", 8),
 		WSWatchStreamWindowKiB:    pkgconfig.GetEnvInt("WS_WATCH_STREAM_WINDOW_KIB", 1024),
+		MaxTerminalsPerAccount:    pkgconfig.GetEnvInt("MAX_TERMINALS_PER_ACCOUNT", 20),
+		MaxFollowedLogsPerAccount: pkgconfig.GetEnvInt("MAX_FOLLOWED_LOGS_PER_ACCOUNT", 20),
 		MaxRequestBodyBytes:       pkgconfig.GetEnvInt("MAX_REQUEST_BODY_BYTES", 4<<20),
 
 		StreamDrainSeconds: pkgconfig.GetEnvInt("STREAM_DRAIN_SECONDS", -1),

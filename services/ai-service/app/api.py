@@ -297,7 +297,8 @@ def _caller(authorization: str):
 
 
 async def _expire_if_due(db, approval):
-    """A waiting call past its time can no longer run, so only a masked copy of its arguments stays."""
+    """A waiting call past its time can no longer run, so only a masked copy of its arguments stays. An approved one whose
+    run outlived its time was cut with its ai-service and ends failed (close_interrupted_tool_approvals)."""
     from app.database import utcnow
     from app.services.audit_target import kept_tool_args
 
@@ -305,6 +306,8 @@ async def _expire_if_due(db, approval):
         return await db.transition_tool_approval(
             approval.id, "pending", status="expired", decided_at=utcnow(), args=kept_tool_args(approval.args),
         ) or await db.get_tool_approval(approval.id)
+    if approval.status == "approved" and await db.close_interrupted_tool_approvals(approval_id=approval.id):
+        return await db.get_tool_approval(approval.id) or approval
     return approval
 
 
@@ -365,16 +368,17 @@ async def reject_tool_approval(
     approval = await db.transition_tool_approval(approval.id, "pending", status="rejected", decided_at=utcnow(), args=kept_tool_args(approval.args))
     if approval is None:
         raise HTTPException(status_code=409, detail="Approval is no longer pending")
-    await db.add_message(
-        approval.session_id, "assistant",
-        f"❌ `{approval.tool}` on `{approval.cluster}` was rejected by the user; nothing was changed.",
-    )
+    # The row before the chat message: the conversation may have been deleted meanwhile, and the message with it.
     actor, http = _extract_audit_meta(request, authorization)
     await write_audit(
         action="ai.tool.reject", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type="tool", target_id=approval.tool,
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
+    )
+    await db.add_message(
+        approval.session_id, "assistant",
+        f"❌ `{approval.tool}` on `{approval.cluster}` was rejected by the user; nothing was changed.",
     )
     _invalidate_caches()
     return _approval_dict(approval)
@@ -410,6 +414,10 @@ async def approve_tool_approval(
         # The reason names the database host; it stays in the log.
         logger.warning("audit: refusing unrecorded tool run (approval=%s tool=%s): %s", approval.id, approval.tool, e)
         raise HTTPException(status_code=503, detail="audit unavailable")
+    # Run with the stored arguments as the approving user: tool-server re-checks
+    # ai.tool.<name> in the cluster (C1) and sends the call as the user (C2). Built while
+    # the approval is pending: a model setting that cannot be used (503) leaves the card to approve later.
+    ai_service = await _build_ai_service(authorization, cluster_name=approval.cluster)
     # One statement moves pending → approved; a second click, or two clicks
     # racing, finds the row no longer pending and stops here.
     approval = await db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=utcnow())
@@ -431,9 +439,6 @@ async def approve_tool_approval(
         _invalidate_caches()
         raise HTTPException(status_code=503, detail="audit unavailable")
 
-    # Run with the stored arguments as the approving user: tool-server re-checks
-    # ai.tool.<name> in the cluster (C1) and impersonates the user (C2).
-    ai_service = await _build_ai_service(authorization, cluster_name=approval.cluster)
     args = dict(approval.args or {})
     status, error = "executed", None
     # A card from before the role lost the permission: tool-server would refuse too, this says why without calling it.
@@ -458,16 +463,7 @@ async def approve_tool_approval(
     approval = await db.transition_tool_approval(
         approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(), args=kept_args,
     ) or approval
-    icon = "✅" if status == "executed" else "⚠️"
-    access_line = tool_access.section(call_access, call_requests)
-    fence = formatters.code_fence(approval.result or "")
-    await db.add_message(
-        approval.session_id, "assistant",
-        f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n"
-        + (f"{access_line}\n\n" if access_line else "") + f"{fence}\n{approval.result}\n{fence}",
-        tool_calls=[{"function": approval.tool, "args": kept_args, "result": approval.result, "approval_id": approval.id, "approval_status": status,
-                     **({"access": call_access} if call_access else {}), **({"requests": call_requests} if call_requests else {})}],
-    )
+    # The rows before the chat message: the conversation may have been deleted during the call, and the message with it.
     target = tool_target(approval.tool, args)
     tool_input = write_tool_input(approval.tool, args)
     await write_audit(
@@ -484,6 +480,16 @@ async def approve_tool_approval(
             request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
             result="success" if status == "executed" else "failure", error=error[:500] if error else error,
         )
+    icon = "✅" if status == "executed" else "⚠️"
+    access_line = tool_access.section(call_access, call_requests)
+    fence = formatters.code_fence(approval.result or "")
+    await db.add_message(
+        approval.session_id, "assistant",
+        f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n"
+        + (f"{access_line}\n\n" if access_line else "") + f"{fence}\n{approval.result}\n{fence}",
+        tool_calls=[{"function": approval.tool, "args": kept_args, "result": approval.result, "approval_id": approval.id, "approval_status": status,
+                     **({"access": call_access} if call_access else {}), **({"requests": call_requests} if call_requests else {})}],
+    )
     _invalidate_caches()
     return _approval_dict(approval)
 
