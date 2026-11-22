@@ -81,6 +81,7 @@ func TestPostgresASelfSignUpTheProviderReachedSignsInOnlyThroughIt(t *testing.T)
 	if _, err := pool.Exec(ctx, `UPDATE auth_users SET role_id = $1 WHERE id = $2`, member, approved); err != nil { // approved before the provider reaches it
 		t.Fatal(err)
 	}
+	_, approvedHash, _ := stored(approved) // the hash the sign-up form stored, with a salt of its own
 	signIn := func(email, password string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(jsonBody(t, map[string]string{"email": email, "password": password})))
 		req.Header.Set("Content-Type", "application/json")
@@ -162,10 +163,13 @@ func TestPostgresASelfSignUpTheProviderReachedSignsInOnlyThroughIt(t *testing.T)
 		t.Fatalf("role of the account made Member after the sign-ins: %q, %v; want Pending (defaultRole)", syncedRole, err)
 	}
 	// token_version: the role sync to Pending ended the tokens of made-synced once, and nothing else did.
-	for id, wantVersion := range map[string]int{approved: 0, "made-pending": 0, "made-synced": 1} {
-		if source, password, version := stored(id); source != "password" || password != hash || version != wantVersion {
+	for id, want := range map[string]struct {
+		hash    string
+		version int
+	}{approved: {approvedHash, 0}, "made-pending": {hash, 0}, "made-synced": {hash, 1}} {
+		if source, password, version := stored(id); source != "password" || password == "" || password != want.hash || version != want.version {
 			t.Errorf("%s after the provider's sign-ins: auth_source %s, password kept %v, token_version %d; want password, kept, %d",
-				id, source, password == hash, version, wantVersion)
+				id, source, password != "" && password == want.hash, version, want.version)
 		}
 	}
 	if links := p.store.successes("user.account.link"); len(links) != 1 {
