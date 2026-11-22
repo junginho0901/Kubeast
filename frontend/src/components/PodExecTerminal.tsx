@@ -117,7 +117,11 @@ export default function PodExecTerminal({ podName, namespace, container, command
 
     const decoder = new TextDecoder()
 
-    ws.onopen = () => {
+    // Connected once the shell says something: a socket refused at the account's cap opens and closes at once.
+    let opened = false
+    const markOpen = () => {
+      if (opened) return
+      opened = true
       setStatus('connected')
       term.writeln(tRef.current('pods.exec.connected', { defaultValue: 'Connected.' }))
       term.focus()
@@ -134,6 +138,7 @@ export default function PodExecTerminal({ podName, namespace, container, command
       return true
     }
     ws.onmessage = (event) => {
+      markOpen()
       if (typeof event.data === 'string') {
         term.writeln(event.data)
         explainNoShell(event.data)

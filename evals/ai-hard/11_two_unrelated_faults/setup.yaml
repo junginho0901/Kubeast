@@ -1,0 +1,144 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: images}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: images}}
+  template:
+    metadata: {labels: {app: images}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/thumbs
+              for i in 101 102 103 104; do head -c 20000 /dev/urandom > /www/thumbs/$i.jpg; done
+              echo "level=info msg=\"images started\" thumbs=4"
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: images}
+spec:
+  selector: {app: images}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: inventory}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: inventory, version: v1}}
+  template:
+    metadata: {labels: {app: inventory, version: v1}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"sku":101,"in_stock":42}' > /www/api/v1/stock
+              echo "level=info msg=\"inventory started\" version=v1"
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: inventory}
+spec:
+  selector: {app: inventory, version: v1}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: orders}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: orders}}
+  template:
+    metadata: {labels: {app: orders}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: INVENTORY_URL, value: "http://inventory:8080/api/v1/stock"}
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cat > /www/cgi-bin/place <<'EOF'
+              #!/bin/sh
+              if out=$(wget -q -T 2 -O - "$INVENTORY_URL" 2>&1); then
+                echo "level=info msg=\"order accepted\" upstream=inventory" >&2
+                printf 'Content-Type: application/json\r\n\r\n{"order":"accepted"}\n'
+              else
+                echo "level=error msg=\"stock check failed\" upstream=inventory err=\"$(echo $out)\"" >&2
+                printf 'Status: 502 Bad Gateway\r\nContent-Type: application/json\r\n\r\n{"error":"stock check failed"}\n'
+              fi
+              EOF
+              chmod 755 /www/cgi-bin/place
+              echo "level=info msg=\"orders started\""
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: orders}
+spec:
+  selector: {app: orders}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: storefront}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: storefront}}
+  template:
+    metadata: {labels: {app: storefront}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              call() {
+                t0=$(now_cs)
+                if out=$(wget -q -T 3 -O /dev/null "$2" 2>&1); then
+                  echo "level=info msg=\"$3\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"request failed\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+              }
+              echo "level=info msg=\"storefront started\""
+              n=0
+              while true; do
+                n=$((n + 1))
+                call images "http://images:8080/thumbs/$((101 + n % 4)).jpg" "thumbnail loaded"
+                call orders "http://orders:8080/cgi-bin/place" "order placed"
+                sleep 3
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}

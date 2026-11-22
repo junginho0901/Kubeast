@@ -1,0 +1,46 @@
+{
+ "id": "17_periodic_full_scan",
+ "title": "A periodic job reads a whole table every minute: the database's disk queue slows every caller, CPU stays low",
+ "group": "trap",
+ "cluster": "default",
+ "namespace": "shop-17",
+ "question": "default 클러스터 shop-17에서 주문 내역이랑 청구서 화면이 둘 다 느려졌대. 원인이 뭐야?",
+ "question_vague": "default 클러스터 shop-17 서비스들이 전반적으로 느리다는데 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "reminder-sender"
+  ],
+  [
+   "LAST_SENT_ID",
+   "since_id",
+   "id > 0",
+   "전체 ?(스캔|조회|읽)",
+   "처음부터",
+   "full (table )?scan",
+   "whole table"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/orders-db deploy/storefront deploy/invoices deploy/feed-builder --timeout=10s && kubectl -n $NS get jobs -o jsonpath='{.items[*].status.succeeded}' | grep -q 1",
+ "wait_seconds": 300,
+ "baseline_seconds": 180,
+ "inject_cmds": [
+  "kubectl -n $NS apply -f $CASE_DIR/inject.yaml",
+  "kubectl -n $NS patch cronjob reminder-sender --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/jobTemplate/spec/template/spec/containers/0/envFrom/0/configMapRef/name\",\"value\":\"reminder-sender-v2\"}]'"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/orders-db --since=40s | grep -Eq 'disk_queue_depth=(1[6-9]|[2-9][0-9]|[0-9]{3})'",
+ "inject_wait_seconds": 300,
+ "ask_after_seconds": [480],
+ "undo_cmds": [
+  "kubectl -n $NS patch cronjob reminder-sender --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/jobTemplate/spec/template/spec/containers/0/envFrom/0/configMapRef/name\",\"value\":\"reminder-sender\"}]'",
+  "kubectl -n $NS delete jobs --all --wait=false",
+  "kubectl -n $NS rollout restart deploy/orders-db"
+ ],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceSlow", "service": "storefront"},
+  "annotations": {"summary": "storefront's order history responses are slow", "description": "Order history responses from storefront have taken one to two seconds for the last few minutes, up from tens of milliseconds."}
+ }
+}

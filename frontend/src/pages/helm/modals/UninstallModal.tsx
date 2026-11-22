@@ -37,7 +37,7 @@ export default function UninstallModal({
       setError(null)
     },
     onError: (err: any) => {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'dry-run failed')
+      setError(err?.response?.data?.detail ?? err?.message ?? t('helmReleaseDetail.uninstall.dryRunFailed', 'dry-run failed'))
     },
   })
 
@@ -53,7 +53,7 @@ export default function UninstallModal({
       navigate('/helm/releases')
     },
     onError: (err: any) => {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'uninstall failed')
+      setError(err?.response?.data?.detail ?? err?.message ?? t('helmReleaseDetail.uninstall.uninstallFailed', 'uninstall failed'))
     },
   })
 

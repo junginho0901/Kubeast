@@ -3,7 +3,7 @@ import { api, type PriorityClassInfo as PriorityClassRow } from '@/services/api'
 import { retryUnlessRefused } from '@/services/queryDefaults'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { applyPriorityClassWatchEvent } from '@/pages/cluster/priorityclasses/priorityClassWatchNormalize'
-import { InfoSection, InfoRow, InfoGrid, SummaryBadge, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
+import { InfoSection, InfoRow, InfoGrid, SummaryBadge, SummaryText, StatusBadge, KeyValueTags, EventsSection, Th, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
@@ -82,7 +82,7 @@ export default function PriorityClassInfo({ name }: Props) {
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Value" value={value} color={value > 0 ? 'green' : 'default'} />
-        <SummaryBadge label="Global Default" value={globalDefault ? 'Yes' : 'No'} />
+        <SummaryText label="Global Default" value={globalDefault ? 'Yes' : 'No'} />
         <SummaryBadge label="Preemption" value={preemption} color={preemption === 'PreemptLowerPriority' ? 'green' : 'default'} />
       </div>
 
@@ -112,7 +112,7 @@ export default function PriorityClassInfo({ name }: Props) {
             </div>
             <div className="flex flex-wrap gap-1">
               {[{ name } as { name: string }, ...collidingGlobalDefaults].map((pc) => (
-                <span key={pc.name} className={`inline-flex rounded-sm border px-1.5 py-0.5 text-[11px] font-mono ${pc.name === name ? 'border-amber-500/60 bg-amber-800/30 text-amber-100' : 'border-slate-700 bg-slate-800 text-slate-200'}`}>
+                <span key={pc.name} className={`inline-flex rounded-sm border px-1.5 py-0.5 text-[11px] font-mono ${pc.name === name ? 'border-amber-500/60 bg-amber-800/30 text-amber-200' : 'border-slate-700 bg-slate-800 text-slate-200'}`}>
                   {pc.name}
                 </span>
               ))}

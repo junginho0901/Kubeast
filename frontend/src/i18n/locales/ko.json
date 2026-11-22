@@ -138,7 +138,7 @@
         },
         "node": {
           "skew": "kubelet 버전 차이",
-          "cgroup-v1": "cgroup v1 계열 노드 OS(1.35 폐기)"
+          "cgroup-v1": "cgroup v1 계열 Node OS(1.35 폐기)"
         },
         "kube-proxy": {
           "ipvs": "kube-proxy ipvs 모드(1.35 폐기)"
@@ -198,13 +198,13 @@
       "webhookNoEndpoints": "fail-closed 웹훅의 Service {{service}} 뒤에 준비된 엔드포인트가 없음 — 매치되는 API 쓰기가 거부됩니다",
       "webhookCatchAll": "모든 리소스에 매치되는 fail-closed 웹훅: 백엔드가 멈추면 업그레이드 중 모든 API 쓰기가 멈춥니다",
       "webhookNoCA": "caBundle 없는 fail-closed 웹훅: API 서버가 백엔드를 신뢰할 수 없습니다",
-      "pdbBlocksDrain": "허용 중단 0 (Pod {{expected}}개, 정상 {{healthy}}개): 노드 드레인이 여기서 기다립니다",
+      "pdbBlocksDrain": "허용 중단 0 (Pod {{expected}}개, 정상 {{healthy}}개): Node 드레인이 여기서 기다립니다.",
       "nodeKubeletNewer": "kubelet {{kubelet}}이 API 서버 {{server}}보다 높음 (지원되지 않는 조합)",
-      "nodeKubeletBehind": "kubelet {{kubelet}}은 {{target}}보다 3 마이너 넘게 낮아짐: 컨트롤 플레인 전에 노드를 먼저 올리세요",
+      "nodeKubeletBehind": "kubelet {{kubelet}}은 {{target}}보다 마이너 버전이 3개 넘게 낮아집니다. 컨트롤 플레인 전에 Node를 먼저 올리세요.",
       "kubeProxyIPVS": "kube-proxy가 ipvs 모드로 동작 (v1.35부터 폐기): 제거되기 전에 nftables(또는 iptables)로 옮기세요",
       "serviceExternalIPs": "spec.externalIPs 사용 ({{ips}}), v1.36 폐기: LoadBalancer나 Ingress를 쓰세요",
       "schedulingV1alpha2": "scheduling.k8s.io/v1alpha2 객체: v1.37이 이 버전을 없앱니다 — 업그레이드 전에 v1alpha3/v1beta1로 다시 만드세요",
-      "nodeCgroupV1": "OS 이미지 {{os}}는 보통 cgroup v1: v1.35+ kubelet은 기본값(failCgroupV1)으로 시작을 거부합니다 — 노드에서 `stat -fc %T /sys/fs/cgroup/`로 확인하세요",
+      "nodeCgroupV1": "OS 이미지 {{os}}는 보통 cgroup v1을 씁니다. v1.35+ kubelet은 기본값(failCgroupV1)으로 그 위에서 시작을 거부합니다. Node에서 `stat -fc %T /sys/fs/cgroup/`로 확인하세요.",
       "gitRepoVolume": "볼륨 {{volume}}이 gitRepo 볼륨 (v1.36 기본 비활성): init 컨테이너에서 clone하세요"
     },
     "exemptNoReason": "(kubeast.io/hygiene-exempt는 있지만 kubeast.io/hygiene-exempt-reason 없음)"
@@ -262,7 +262,7 @@
       "flags": "플래그",
       "cluster": "클러스터",
       "role": "역할",
-      "namespaces": "네임스페이스",
+      "namespaces": "Namespace",
       "grantedVia": "부여 경로",
       "expires": "만료",
       "restoreRole": "복귀 역할",
@@ -385,10 +385,10 @@
       "reasonPlaceholder": "무엇을 왜 해야 하는지 (티켓, 장애, 배포 등)",
       "cancel": "취소",
       "submit": "요청 보내기",
-      "namespaces": "네임스페이스",
+      "namespaces": "Namespace",
       "namespacesPlaceholder": "비우면 클러스터 전체 — 한정하려면 쉼표로 나열",
       "namespacesScoped": "이 클러스터의 내 권한은 {{namespaces}}에 한정됩니다. 요청도 그 안에서만 됩니다.",
-      "namespacesHint": "적은 네임스페이스에서만 임시 역할이 적용됩니다."
+      "namespacesHint": "적은 Namespace에서만 임시 역할이 적용됩니다."
     },
     "durationMin": "{{m}}분",
     "durationH": "{{h}}시간",
@@ -497,7 +497,7 @@
       "customRole": "역할 \"{{role}}\"은(는) 이 클러스터에서 Kubernetes 그룹 {{group}}(으)로 동작합니다. 모든 페이지에 이 안내가 뜬다면 클러스터가 아직 이 그룹을 허용·바인딩하지 않은 것입니다(차트 auth.impersonation.customRoles).",
       "builtinName": "역할 \"{{role}}\"의 이름은 대소문자나 공백만 빼면 기본 역할의 이름과 같아서, 이 클러스터에서 어떤 역할 그룹으로도 동작하지 않고 클러스터가 읽기를 거부합니다. 관리자에게 이 클러스터의 기본 역할을 받거나 이 역할의 이름을 바꿔 달라고 요청하세요.",
       "readPermission": "이 클러스터에서 받은 역할에 resource.objects.read(목록·상세)도 resource.*.read(All resources: read)도 없어 Kubeast가 목록을 읽지 않습니다. 관리자에게 둘 중 하나를 더해 달라고 요청하세요.",
-      "namespaces": "이 클러스터에서는 네임스페이스 {{namespaces}}만 볼 수 있습니다. 클러스터 범위 화면과 다른 네임스페이스는 보이지 않습니다."
+      "namespaces": "이 클러스터에서는 Namespace {{namespaces}}만 볼 수 있습니다. 클러스터 범위 화면과 다른 Namespace는 보이지 않습니다."
     },
     "watchProblem": {
       "forbidden": "클러스터가 이 화면 일부의 실시간 갱신을 거절합니다. 행이 오래된 값일 수 있습니다. 새로고침하면 다시 읽습니다.",
@@ -1775,6 +1775,7 @@
       "approve": "승인하고 실행",
       "reject": "거부",
       "hint": "위에 보이는 인자 그대로, 본인 권한으로 실행됩니다.",
+      "requestFailed": "요청을 처리하지 못했습니다.",
       "status": {
         "pending": "승인 대기",
         "approved": "실행 중",
@@ -1881,12 +1882,12 @@
   },
   "netflows": {
     "intro": "클러스터의 Hubble Relay가 본 이 {{kind}}의 들어오고 나가는 연결입니다. 읽으면 감사 로그에 남습니다.",
-    "introCalico": "Calico의 Whisker가 본 이 {{kind}}의 들어오고 나가는 연결이며, 수는 패킷입니다. Calico는 한 ReplicaSet·Job의 파드를 묶어서 나타냅니다. 읽으면 감사 로그에 남습니다.",
+    "introCalico": "Calico의 Whisker가 본 이 {{kind}}의 들어오고 나가는 연결이며, 수는 패킷입니다. Calico는 한 ReplicaSet·Job의 Pod를 묶어서 나타냅니다. 읽으면 감사 로그에 남습니다.",
     "load": "흐름 보기",
     "window": "최근 {{w}}",
     "all": "전체",
     "droppedOnly": "차단만",
-    "refresh": "새로 고침",
+    "refresh": "새로고침",
     "verdict": "판정",
     "peer": "상대",
     "port": "포트",
@@ -1900,12 +1901,12 @@
     "deniedBy": "거부한 정책: {{list}}",
     "why": "왜?",
     "truncated": "Relay에 읽은 것({{n}}개)보다 흐름이 더 있습니다. 기간을 줄이면 최근 것만 봅니다.",
-    "redacted": "내 네임스페이스 밖의 상대는 네임스페이스와 주소만 보입니다.",
+    "redacted": "내 Namespace 밖의 상대는 Namespace와 주소만 보입니다.",
     "lost": "Hubble이 이벤트 {{n}}개를 잃었다고 알렸습니다. 일부 흐름이 빠졌을 수 있습니다."
   },
   "netdrops": {
     "range": "최근 {{w}}",
-    "refresh": "새로 고침",
+    "refresh": "새로고침",
     "totals": "최근 {{w}} 동안 들어옴 {{in}} · 나감 {{out}}",
     "none": "최근 {{w}} 동안 차단이 없습니다.",
     "peer": "상대",
@@ -1915,17 +1916,17 @@
     "out": "나감",
     "unknownPeer": "클러스터 밖 또는 알 수 없음",
     "why": "왜?",
-    "noLabels": "클러스터의 Hubble 차단 지표에 파드·워크로드 레이블이 없어 워크로드별로 보여 줄 수 없습니다. 클러스터 요구사항(Hubble 지표)을 확인하세요.",
-    "workloadLevel": "지표에 파드 레이블이 없어 {{workload}}의 차단 수를 보여 줍니다.",
-    "noWorkload": "이 파드는 워크로드가 없고 지표에 파드 레이블도 없어 차단 수를 따로 셀 수 없습니다.",
-    "podsTruncated": "앞의 파드 50개만 셉니다.",
-    "redacted": "내 네임스페이스 밖의 상대는 네임스페이스만 보입니다.",
+    "noLabels": "클러스터의 Hubble 차단 지표에 Pod·워크로드 레이블이 없어 워크로드별로 보여 줄 수 없습니다. 클러스터 요구사항(Hubble 지표)을 확인하세요.",
+    "workloadLevel": "지표에 Pod 레이블이 없어 {{workload}}의 차단 수를 보여 줍니다.",
+    "noWorkload": "이 Pod는 워크로드가 없고 지표에 Pod 레이블도 없어 차단 수를 따로 셀 수 없습니다.",
+    "podsTruncated": "앞의 Pod 50개만 셉니다.",
+    "redacted": "내 Namespace 밖의 상대는 Namespace만 보입니다.",
     "source": "Hubble 에이전트가 센 수입니다(Prometheus). 막힌 패킷마다 1입니다."
   },
   "toptalkers": {
     "intro": "클러스터의 Network Flow Monitor(AWS)가 잰, 이 {{kind}}와 가장 많이 주고받는 상대와 재전송이 나는 곳입니다. 읽으면 감사 로그에 남습니다.",
     "load": "상위 통신 보기",
-    "refresh": "새로 고침",
+    "refresh": "새로고침",
     "range": "최근 {{w}}",
     "view": {
       "cluster": "클러스터 안",
@@ -1947,8 +1948,8 @@
     "port": "포트",
     "zones": "가용 영역",
     "truncated": "Network Flow Monitor가 한 구분에서 요청한 만큼 줄을 돌려주었습니다. 이 {{kind}}의 줄이 더 있을 수 있습니다.",
-    "redacted": "파드를 볼 수 없는 네임스페이스의 상대는 네임스페이스와 주소만 보입니다.",
-    "source": "각 노드의 Network Flow Monitor 에이전트가 최근 {{w}} 동안 잰 값입니다(모니터 {{monitor}}). 양쪽 끝에서 잰 연결은 연결을 연 쪽에서 잰 한 줄로 보여 줍니다."
+    "redacted": "Pod를 볼 수 없는 Namespace의 상대는 Namespace와 주소만 보입니다.",
+    "source": "각 Node의 Network Flow Monitor 에이전트가 최근 {{w}} 동안 잰 값입니다(모니터 {{monitor}}). 양쪽 끝에서 잰 연결은 연결을 연 쪽에서 잰 한 줄로 보여 줍니다."
   },
   "netpolCheck": {
     "open": "연결 확인",
@@ -1967,14 +1968,14 @@
     "peer": {
       "ipBlock": "주소 {{cidr}}",
       "except": "({{list}} 제외)",
-      "podsHere": "이 네임스페이스의 파드 {{sel}}",
-      "allPodsHere": "이 네임스페이스의 모든 파드",
-      "namespaces": "네임스페이스 {{sel}}",
-      "allNamespaces": "모든 네임스페이스",
-      "podsIn": "{{where}}의 파드 {{sel}}",
-      "allPodsIn": "{{where}}의 모든 파드"
+      "podsHere": "이 Namespace의 Pod {{sel}}",
+      "allPodsHere": "이 Namespace의 모든 Pod",
+      "namespaces": "Namespace {{sel}}",
+      "allNamespaces": "전체 Namespace",
+      "podsIn": "{{where}}의 Pod {{sel}}",
+      "allPodsIn": "{{where}}의 모든 Pod"
     },
-    "hostNetwork": "이 파드는 호스트 네트워크를 씁니다. 정책이 적용되는지는 네트워크 플러그인에 따라 다릅니다.",
+    "hostNetwork": "이 Pod는 호스트 네트워크를 씁니다. 정책이 적용되는지는 네트워크 플러그인에 따라 다릅니다.",
     "unevaluated": "이 화면에 들어가지 않는 정책: {{list}}. 이 정책들도 연결을 허용하거나 막을 수 있습니다.",
     "unevaluatedCheck": "이 확인에 들어가지 않는 정책: {{list}}. 이 정책들도 연결을 허용하거나 막을 수 있습니다.",
     "countUnknown": "개수 모름",
@@ -1997,31 +1998,31 @@
       "allowed": "허용",
       "denied": "거부",
       "unknown": "알 수 없음",
-      "mixed": "포트·파드마다 다름"
+      "mixed": "포트·Pod마다 다름"
     },
     "reason": {
       "peer": "상대가 규칙 대상이 아님",
       "port": "포트·프로토콜이 규칙에 없음",
-      "namedPort": "도착 파드가 선언하지 않은 이름 포트를 씀",
+      "namedPort": "도착 Pod가 선언하지 않은 이름 포트를 씀",
       "noRules": "규칙 없음: 모두 거부",
-      "podIPBlock": "파드 IP를 포함하는 ipBlock으로만 허용 — 적용 여부는 네트워크 플러그인에 따라 다름",
-      "namespaceUnknown": "읽을 수 없는 네임스페이스 레이블로 고름"
+      "podIPBlock": "Pod IP를 포함하는 ipBlock으로만 허용 — 적용 여부는 네트워크 플러그인에 따라 다름",
+      "namespaceUnknown": "읽을 수 없는 Namespace 레이블로 고름"
     },
     "note": {
-      "samePod": "파드는 자기 자신에게 늘 연결됩니다.",
-      "hostNetwork": "호스트 네트워크 파드입니다. 네트워크 플러그인이 정합니다.",
-      "targetPortMissing": "이 파드들은 서비스의 대상 포트를 선언하지 않았습니다.",
-      "dnsEgressDenied": "출발 쪽이 클러스터 DNS(kube-system의 kube-dns, UDP 53)로 나갈 수 없어 서비스 이름이 풀리지 않습니다. 서비스 IP로는 됩니다."
+      "samePod": "Pod는 자기 자신에게 늘 연결됩니다.",
+      "hostNetwork": "호스트 네트워크 Pod입니다. 네트워크 플러그인이 정합니다.",
+      "targetPortMissing": "이 Pod들은 Service의 대상 포트를 선언하지 않았습니다.",
+      "dnsEgressDenied": "출발 쪽이 클러스터 DNS(kube-system의 kube-dns, UDP 53)로 나갈 수 없어 Service 이름이 풀리지 않습니다. Service IP로는 됩니다."
     },
     "sideNotIsolated": "격리 안 됨: 허용",
     "sideAllowedBy": "허용한 규칙: {{rules}}",
     "sideIsolatedBy": "격리한 정책: {{policies}}",
-    "servicePort": "서비스 포트 {{port}}",
-    "pods": "파드: {{pods}}",
+    "servicePort": "Service 포트 {{port}}",
+    "pods": "Pod: {{pods}}",
     "outgoingFrom": "{{name}}에서 나감",
     "incomingTo": "{{name}}로 들어옴",
-    "labelsUnknown": "권한이 없어 네임스페이스 {{namespace}}의 레이블을 읽지 못했습니다.",
-    "truncated": "파드는 처음 50개만 읽었습니다."
+    "labelsUnknown": "권한이 없어 Namespace {{namespace}}의 레이블을 읽지 못했습니다.",
+    "truncated": "Pod는 처음 50개만 읽었습니다."
   },
   "policyReports": {
     "title": "Policy Reports",
@@ -2151,6 +2152,8 @@
     "loadErrorEmptyNetworkReason": "{{resource}}: 불러오지 못했습니다(서버 응답 없음): {{reason}}",
     "retry": "다시 시도",
     "deleteKind": "{{kind}} 삭제",
+    "deleteNotSupported": "이 리소스는 삭제를 지원하지 않습니다.",
+    "deleteFailed": "리소스를 삭제하지 못했습니다.",
     "deleteKindConfirm": "{{kind}} \"{{name}}\" 삭제를 진행할까요?",
     "deleteKindConfirmNs": "\"{{namespace}}\" Namespace의 {{kind}} \"{{name}}\" 삭제를 진행할까요?",
     "unknown": "알 수 없음",
@@ -2325,7 +2328,7 @@
         "failed": "실패 {{count}}",
         "error": "적용 안 됨: {{error}}",
         "kindRefused": "{{kind}}에는 적용할 수 없습니다. 여기서 적용할 수 있는 종류: {{kinds}}.",
-        "guarded": "Kubeast가 보호하는 네임스페이스라 여기서는 적용할 수 없습니다."
+        "guarded": "Kubeast가 보호하는 Namespace라 여기서는 적용할 수 없습니다."
       }
     },
     "loading": "데이터를 불러오는 중...",
@@ -2416,7 +2419,7 @@
     },
     "nodes": {
       "title": "Node",
-      "viewAll": "노드 {{count}}개 모두 보기"
+      "viewAll": "Node {{count}}개 모두 보기"
     },
     "nodeCard": {
       "versionLabel": "버전",
@@ -2645,13 +2648,13 @@
       "matchCase": "대소문자 구분",
       "search": "검색",
       "summary": "최근 {{range}} · {{count}}줄 · {{bytes}} 읽음.",
-      "notice": "로그 저장소의 줄입니다(없어진 파드 포함). 검색마다 감사 로그에 남습니다.",
+      "notice": "로그 저장소의 줄입니다(없어진 Pod 포함). 검색마다 감사 로그에 남습니다.",
       "searching": "검색 중...",
       "noLines": "이 기간에 줄이 없습니다.",
       "older": "더 이전",
       "hide": "접기",
       "open": "로그 검색",
-      "workloadHint": "이 {{kind}}의 파드 로그를 로그 저장소에서 찾습니다(없어진 파드 포함).",
+      "workloadHint": "이 {{kind}}의 Pod 로그를 로그 저장소에서 찾습니다(없어진 Pod 포함).",
       "trace": "트레이스",
       "traceTitle": "새 탭에서 트레이스 {{id}}를 엽니다.",
       "traces": "트레이스",
@@ -2923,6 +2926,25 @@
         "tool_result_chars": "도구 결과 최대 길이는 1,000~200,000 사이의 정수로 입력하세요.",
         "in_json": "max_tokens와 tool_result_chars는 생성 옵션이 아니라 위 칸에서 정하세요."
       },
+      "optionsNotObject": "옵션은 JSON 객체로 입력하세요. 예: {\"temperature\": 0.7}",
+      "optionsInvalidJson": "JSON 형식이 올바르지 않습니다.",
+      "apiKeyEnvMissing": "API 키를 담고 있는 환경변수 이름을 입력하세요.",
+      "testFailed": "연결 테스트에 실패했습니다.",
+      "note": {
+        "deprecated": "지원 종료 예정",
+        "recommended": "권장",
+        "lowestCost": "비용이 가장 낮음",
+        "mostCapable": "성능이 가장 높음",
+        "usesTheLeast": "사용량이 가장 적음",
+        "legacy": "이전 모델",
+        "tools7b": "7b, 도구 지원",
+        "tools14b": "14b, 도구 지원"
+      },
+      "noTools": "도구 미지원",
+      "providerName": {
+        "ollama": "Ollama (로컬)",
+        "custom": "사용자 정의 / 기타"
+      },
       "usedFor": "쓰는 곳",
       "usedForNone": "지금 쓰는 곳 없음",
       "use": {
@@ -2989,7 +3011,7 @@
       "adminAll": "전역 admin — 모든 클러스터에 자동 접근합니다.",
       "none": "접근 없음",
       "noClusters": "등록된 클러스터가 없습니다.",
-      "namespacesNote": "역할은 네임스페이스로 한정할 수 있습니다(옆 칸, 비우면 클러스터 전체).",
+      "namespacesNote": "역할은 Namespace로 한정할 수 있습니다(옆 칸, 비우면 클러스터 전체).",
       "self": "내 계정입니다. 내 클러스터 권한은 다른 관리자가 바꾸거나 접근 요청으로 받습니다.",
       "readError": "이 사용자의 클러스터 접근 권한을 읽지 못했습니다: {{reason}}",
       "rolesError": "역할을 읽지 못해 고를 수 없습니다: {{reason}}",
@@ -3015,6 +3037,7 @@
     "sweepDone": "점검 완료: {{count}}개 계정을 잠갔습니다.",
     "sweepFailed": "점검에 실패했습니다: {{reason}}",
     "actionFailed": "작업에 실패했습니다.",
+    "updateFailed": "사용자 정보를 수정하지 못했습니다.",
     "loading": "불러오는 중...",
     "title": "User Management",
     "subtitle": "계정 등급(Pending·Member·Admin)을 바꿉니다. Read·Write는 클러스터마다 줍니다.",
@@ -3245,7 +3268,9 @@
     "terminalLost": "서버와의 연결이 끊겼습니다. 새 터미널을 열려면 다시 연결하세요.",
     "terminalUnchecked": "한동안 세션을 확인하지 못했습니다. 새 터미널을 열려면 다시 연결하세요.",
     "reconnect": "다시 연결",
-    "followStopped": "실시간 보기가 끝났습니다: 서버가 교체되었습니다. 이어서 보려면 실시간 보기를 다시 켜세요."
+    "followStopped": "실시간 보기가 끝났습니다: 서버가 교체되었습니다. 이어서 보려면 실시간 보기를 다시 켜세요.",
+    "terminalLimit": "이 계정은 이 서버에서 열 수 있는 만큼 터미널을 이미 열었습니다. 하나를 닫고 다시 연결하세요.",
+    "followLimit": "실시간 보기를 열지 않았습니다: 이 계정은 이 서버에서 열 수 있는 만큼 실시간 보기를 이미 열었습니다. 다른 곳의 실시간 보기 하나를 끄고 다시 여세요."
   },
   "login": {
     "sessionEnded": "세션이 끝났습니다. 계정이나 권한이 바뀌었거나 오래 사용하지 않아 로그아웃되었을 수 있습니다. 다시 로그인하세요.",
@@ -3332,7 +3357,7 @@
     "errors": {
       "failed": "설정 적용에 실패했습니다.",
       "timeout": "클러스터 연결 시간이 초과되었습니다. kubeconfig를 확인한 뒤 다시 시도해주세요.",
-      "timeoutInCluster": "이 클러스터 연결 시간이 초과되었습니다. Kubeast 파드가 실행 중인지 확인한 뒤 다시 시도하세요."
+      "timeoutInCluster": "이 클러스터 연결 시간이 초과되었습니다. Kubeast Pod가 실행 중인지 확인한 뒤 다시 시도하세요."
     },
     "wizard": {
       "cluster": "클러스터",
@@ -3402,8 +3427,8 @@
     "traffic": {
       "peerGroup": "이 그래프 밖",
       "peerPodOrWorkload": "Pod 또는 워크로드",
-      "peerOutside": "파드 밖",
-      "unplacedDrops": "클러스터의 차단 {{n}}건(최근 {{w}})은 양쪽 끝 모두 파드 이름이 없어 어느 줄에도 들어가지 않습니다.",
+      "peerOutside": "Pod 밖",
+      "unplacedDrops": "클러스터의 차단 {{n}}건(최근 {{w}})은 양쪽 끝 모두 Pod 이름이 없어 어느 줄에도 들어가지 않습니다.",
       "peerUnnamed": "지표에 이름이 없는 상대",
       "unnamed": "이름 없음",
       "viewLabel": "선이 보여 주는 것",
@@ -3434,9 +3459,9 @@
       "unavailable": {
         "no_prometheus": "이 클러스터에는 Kubeast가 읽을 수 있는 Prometheus가 없습니다.",
         "no_metrics": "클러스터 Prometheus에 Hubble TCP·차단 지표가 없습니다. 클러스터 요구사항(Hubble 지표)을 확인하세요.",
-        "no_context_labels": "클러스터의 Hubble 지표에 파드·워크로드 레이블이 없습니다. 클러스터 요구사항(Hubble 지표)을 확인하세요."
+        "no_context_labels": "클러스터의 Hubble 지표에 Pod·워크로드 레이블이 없습니다. 클러스터 요구사항(Hubble 지표)을 확인하세요."
       },
-      "none": "읽은 범위에서 이 네임스페이스들의 워크로드 사이 통신이 없습니다.",
+      "none": "읽은 범위에서 이 Namespace들의 워크로드 사이 통신이 없습니다.",
       "legend": {
         "allowed": "허용",
         "mixed": "일부 차단",
@@ -3454,10 +3479,10 @@
         "no_tcp_metric": "클러스터의 Hubble TCP 지표가 없거나 워크로드 레이블이 없어 차단만 그립니다.",
         "no_drop_metric": "클러스터의 Hubble 차단 지표가 없거나 워크로드 레이블이 없어 차단은 그리지 않습니다.",
         "counted_at_both_ends": "지표에 traffic_direction 레이블이 없어 양쪽 끝에서 본 연결은 두 번 셉니다.",
-        "pods_only_no_outside": "지표가 파드만 나타내 Service 주소와 파드 바깥 주소를 구별하지 못하므로, 이름 없는 주소로 나가는 연결은 그리지 않습니다.",
-        "drop_peer_unnamed": "차단 지표가 차단의 한쪽, 즉 그 차단을 본 노드의 파드만 나타냅니다(remote context를 끈 Retina). 그래서 다른 쪽은 파드 밖이 아니라 이름 없음으로 보입니다."
+        "pods_only_no_outside": "지표가 Pod만 나타내 Service 주소와 Pod 바깥 주소를 구별하지 못하므로, 이름 없는 주소로 나가는 연결은 그리지 않습니다.",
+        "drop_peer_unnamed": "차단 지표가 차단의 한쪽, 즉 그 차단을 본 Node의 Pod만 나타냅니다(remote context를 끈 Retina). 그래서 다른 쪽은 Pod 밖이 아니라 이름 없음으로 보입니다."
       },
-      "redacted": "내 네임스페이스 밖의 상대는 네임스페이스만 보입니다.",
+      "redacted": "내 Namespace 밖의 상대는 Namespace만 보입니다.",
       "selfLoops": "한 워크로드 안의 선 {{n}}개는 그리지 않습니다.",
       "lineCount": "통신 선 {{n}}개"
     },
@@ -3468,7 +3493,7 @@
       "error": "오류",
       "title": "{{kind}} 묶음",
       "inGraph": "그래프의 이 상자에 {{count}}개",
-      "searchPods": "이름·노드·IP 검색",
+      "searchPods": "이름·Node·IP 검색",
       "searchMembers": "이름 검색",
       "search": "이 묶음에서 검색",
       "expand": "그래프에 이 묶음 펼치기",
@@ -3503,6 +3528,7 @@
     "refresh": "새로고침",
     "noResults": "쿼리에 일치하는 리소스가 없습니다",
     "noResultsHint": "표현식 구문을 확인하거나 다른 쿼리를 시도하세요.",
+    "unreadable": "표현식을 읽지 못했습니다: {{reason}}",
     "noResources": "검색할 리소스 타입을 선택하세요.",
     "tooManyResults": "{{total}}건의 결과를 찾았습니다. 처음 {{max}}건만 표시합니다.",
     "examplesTitle": "쿼리 예시",
@@ -3510,7 +3536,7 @@
       "podsNotRunning": "Running 상태가 아닌 Pod 찾기",
       "labelApp": "app=nginx 레이블이 있는 모든 리소스",
       "replicasOver3": "레플리카가 3개 초과인 Deployment",
-      "restartsOver5": "재시작 5회 초과 Pod",
+      "restartsOver5": "첫 컨테이너의 재시작이 5회 초과인 Pod",
       "configMapWithData": "data가 있는 ConfigMap",
       "completedJobs": "완료된 Job(일시 중지 아님)",
       "loadBalancerServices": "LoadBalancer 타입 Service",
@@ -3532,7 +3558,7 @@
     "minute": "분",
     "minutes": "분",
     "save": "저장",
-    "truncated": "{{types}}: 앞의 {{limit}}개만 가져왔습니다 — 나머지는 네임스페이스를 골라 검색하세요",
+    "truncated": "{{types}}: 앞의 {{limit}}개만 가져왔습니다. 나머지는 Namespace를 골라 검색하세요.",
     "someErrors": "{{count}}개 실패",
     "stoppedAt": "{{count}}개를 읽은 뒤 멈춤: {{error}}",
     "close": "닫기",
@@ -3743,7 +3769,6 @@
     "dataKeys": "데이터 키 수",
     "data": "데이터",
     "searchKeys": "키 검색...",
-    "noData": "데이터 항목이 없습니다.",
     "ownerReferences": "소유자 참조",
     "maskedHint": "resource.secret.reveal 권한이 없으면 값이 숨겨집니다.",
     "yamlMaskedNote": "***로 보이는 값은 줄을 그대로 두면 저장해도 그대로입니다. 바꾸려면 그 자리에 새 값을 쓰고, 없애려면 그 줄을 지우세요.",
@@ -3984,7 +4009,7 @@
         "ai_tool_all": "모든 AI 도구(호출마다 그 화면이 묻는 권한도 필요)",
         "ai_tool_get_cluster_overview": "읽기 도구: 클러스터 개요",
         "ai_tool_get_pod_metrics": "읽기 도구: Pod 메트릭",
-        "ai_tool_get_node_metrics": "읽기 도구: 노드 메트릭",
+        "ai_tool_get_node_metrics": "읽기 도구: Node 메트릭",
         "ai_tool_k8s_get_resources": "읽기 도구: 리소스 목록",
         "ai_tool_k8s_get_resource_yaml": "읽기 도구: 리소스 YAML",
         "ai_tool_k8s_describe_resource": "읽기 도구: 리소스 describe",
@@ -4020,9 +4045,10 @@
         "ai_tool_network_flows": "읽기 도구: 최근 네트워크 흐름(Hubble)",
         "ai_tool_network_drops": "읽기 도구: 사유·상대별 네트워크 차단(Hubble 지표)",
         "ai_tool_network_top_flows": "읽기 도구: AWS Network Flow Monitor의 상위 통신",
-        "ai_tool_resource_graph": "읽기 도구: 네임스페이스 리소스 그래프",
+        "ai_tool_resource_graph": "읽기 도구: Namespace 리소스 그래프",
         "ai_tool_timeline": "읽기 도구: 변경 이력(이벤트·롤아웃)",
         "ai_tool_gpu": "읽기 도구: GPU·DRA 요약",
+        "ai_tool_anomaly_rank": "읽기 도구: 앞 구간과 달라진 것 순위",
         "ai_tool_hygiene": "관리자 도구: 클러스터 위생 점검 보고",
         "ai_tool_k8s_jq_query": "읽기 도구: 리소스 목록을 jq로 걸러 보기",
         "ai_tool_k8s_tabular_query": "읽기 도구: 고른 열만 표로 보기",
@@ -4030,16 +4056,16 @@
         "ai_tool_k8s_diff": "쓰기 도구: 매니페스트 변경 미리보기(서버 dry-run, 적용 없음)",
         "ai_tool_gitops_status": "읽기 도구: Argo CD 애플리케이션 상태(sync·health·operation·오류 조건)",
         "ai_tool_clusters_list": "읽기 도구: 사용자가 볼 수 있는 클러스터와 연결 상태",
-        "ai_tool_pod_rbac": "읽기 도구: 파드의 서비스 계정과 그 계정에 묶인 역할",
+        "ai_tool_pod_rbac": "읽기 도구: Pod의 ServiceAccount와 그 계정에 묶인 역할",
         "ai_tool_logfiles": "읽기 도구: 컨테이너 안 로그 파일 (컨테이너 안 로그 파일 읽기 권한도 필요)",
         "ai_tool_storage_summary": "읽기 도구: PVC·PV의 상태별 개수, 사용량, 연결",
-        "ai_tool_network_policy_effective": "읽기 도구: 파드나 워크로드를 고르는 NetworkPolicy",
+        "ai_tool_network_policy_effective": "읽기 도구: Pod나 워크로드를 고르는 NetworkPolicy",
         "ai_tool_limit_range_violations": "읽기 도구: LimitRange 범위를 벗어난 컨테이너",
         "ai_tool_alerts_inbox": "읽기 도구: 표시와 메모가 있는 Alerts 받은편지함",
-        "ai_tool_alert_investigate": "채팅에서 알림 AI 조사 시작(지금 조사 권한과 파드 읽기 권한도 필요)",
+        "ai_tool_alert_investigate": "채팅에서 알림 AI 조사 시작(지금 조사 권한과 Pod 읽기 권한도 필요)",
         "ai_tool_audit_search": "관리자 도구: Kubeast 감사 로그 검색",
-        "ai_tool_nodes_stats_summary": "관리자 도구: 노드 kubelet 통계 요약(CPU·메모리·fs·PSI·파드 상위)",
-        "ai_tool_nodes_log": "관리자 도구: 노드 kubelet·시스템 로그",
+        "ai_tool_nodes_stats_summary": "관리자 도구: Node kubelet 통계 요약(CPU·메모리·fs·PSI·Pod 상위)",
+        "ai_tool_nodes_log": "관리자 도구: Node kubelet·시스템 로그",
         "ai_tool_access_review": "관리자 도구: 누가 어떤 권한을 가졌는지(Access review 보고서와 지난 서명)",
         "ai_tool_ai_usage": "관리자 도구: 사용자·모델·클러스터별 AI 사용량",
         "ai_tool_access_requests": "관리자 도구: 접근 요청 읽기(결정은 화면에서)",
@@ -4049,7 +4075,7 @@
         "ai_tool_ai_models": "관리자 도구: AI 모델(키·주소 제외)",
         "ai_tool_session_recordings": "관리자 도구: 터미널 세션 녹화 정보(터미널에 나온 내용 제외)",
         "ai_tool_k8s_execute_command": "Pod에서 명령 실행(Pod Exec 권한도 필요)",
-        "ai_tool_k8s_cordon_node": "노드 cordon·uncordon(Cordon·uncordon 권한도 필요)",
+        "ai_tool_k8s_cordon_node": "Node cordon·uncordon(Cordon·uncordon 권한도 필요)",
         "ai_tool_k8s_cronjob_suspend": "CronJob 일시 정지·재개(CronJob 일시 정지 권한도 필요)",
         "ai_tool_k8s_cronjob_trigger": "CronJob 지금 실행(CronJob 지금 실행 권한도 필요)",
         "ai_mcp_use": "외부 AI 에이전트(MCP)를 이 클러스터에 연결",
@@ -4081,7 +4107,7 @@
         "admin_hygiene_read": "모든 클러스터의 위생 점검 보고서 보기",
         "admin_hygiene_export": "클러스터 위생 점검 내보내기(CSV·JSON)",
         "admin_hygiene_signoff": "클러스터 위생 점검 서명",
-        "admin_nodes_read": "API 서버 프록시로 노드 내부 읽기: kubelet 통계 요약·노드 로그",
+        "admin_nodes_read": "API 서버 프록시로 Node 내부 읽기: kubelet 통계 요약·Node 로그",
         "admin_investigations_read": "알림 조사 보고서 보기"
       }
     },
@@ -4143,7 +4169,7 @@
     "nameTakenOther": "다른 역할의 이름과 같은 그룹이 됩니다. 다른 이름을 고르세요.",
     "sameGroupNote": "이름이 \"{{role}}\" 역할과 대소문자·공백·기호만 달라 이제 클러스터에 부여하지 않습니다. 이미 있는 부여는 상대가 기본 역할이면 어떤 역할 그룹으로도 동작하지 않습니다. 이름을 바꾸세요.",
     "sameGroupHint": "부여 불가: 대소문자·공백만 빼면 {{role}}의 이름",
-    "sameGroupRefused": "\"{{role}}\" 역할은 클러스터에 부여하지 않습니다. 이름이 \"{{other}}\" 역할과 대소문자·공백·기호만 다릅니다. 먼저 역할 관리에서 이름을 바꾸세요."
+    "sameGroupRefused": "\"{{role}}\" 역할은 클러스터에 부여하지 않습니다. 이름이 \"{{other}}\" 역할과 대소문자·공백·기호만 다릅니다. 먼저 Role Management에서 이름을 바꾸세요."
   },
   "gpuDashboardPage": {
     "title": "GPU Dashboard",
@@ -4164,8 +4190,8 @@
       "pluginHealthy": "디바이스 플러그인 정상",
       "pluginUnhealthy": "디바이스 플러그인 비정상",
       "pluginNotFound": "디바이스 플러그인 찾지 못함",
-      "pluginNotFoundNote": "{{vendors}} 디바이스 플러그인: Kubeast가 찾는 이름에 없습니다. 다른 이름으로 실행 중일 수 있으며, GPU 수는 노드에서 읽습니다.",
-      "pluginNotFoundNoteAny": "디바이스 플러그인: Kubeast가 찾는 이름에 없습니다. 다른 이름으로 실행 중일 수 있으며, GPU 수는 노드에서 읽습니다.",
+      "pluginNotFoundNote": "{{vendors}} 디바이스 플러그인: Kubeast가 찾는 이름에 없습니다. 다른 이름으로 실행 중일 수 있으며, GPU 수는 Node에서 읽습니다.",
+      "pluginNotFoundNoteAny": "디바이스 플러그인: Kubeast가 찾는 이름에 없습니다. 다른 이름으로 실행 중일 수 있으며, GPU 수는 Node에서 읽습니다.",
       "pluginDetail": "플러그인",
       "migEnabled": "MIG 사용",
       "migDisabled": "MIG 미사용",
@@ -4446,7 +4472,9 @@
       "noChangeMasked": "볼 수 있는 범위에서 두 리비전의 manifest는 같습니다. 숨겨진 값은 여기서 비교하지 않습니다. 롤백해도 그 리비전의 values로 새 리비전이 기록됩니다.",
       "cancel": "취소",
       "apply": "롤백 실행",
-      "applying": "롤백 중..."
+      "applying": "롤백 중...",
+      "dryRunFailed": "변경 미리보기(dry-run)에 실패했습니다.",
+      "rollbackFailed": "롤백에 실패했습니다."
     },
     "upgrade": {
       "edit": "Values 편집",
@@ -4457,6 +4485,8 @@
       "noChange": "적용될 변경이 없습니다.",
       "apply": "업그레이드 실행",
       "applying": "업그레이드 중...",
+      "dryRunFailed": "변경 미리보기(dry-run)에 실패했습니다.",
+      "upgradeFailed": "업그레이드에 실패했습니다.",
       "maskedNote": "<REDACTED:…>로 보이는 값은 그 줄을 그대로 두면 유지됩니다. 바꾸려면 그 자리에 새 값을 쓰고, 없애려면 줄을 지우세요.",
       "keptMasked": "숨겨진 값은 그대로 둡니다: {{names}}",
       "changedMasked": "새 값을 쓰거나 지운 숨겨진 값: {{names}}",
@@ -4470,6 +4500,7 @@
       "passed": "모든 테스트 통과",
       "failed": "테스트 실패 - hook 별 상세는 아래 참조",
       "noHooks": "이 chart 에는 test hook 이 정의되어 있지 않습니다.",
+      "runFailed": "테스트를 실행하지 못했습니다.",
       "close": "닫기"
     },
     "uninstall": {
@@ -4480,10 +4511,12 @@
       "confirmLabel": "확인을 위해 Release 이름 \"{{name}}\"을 그대로 입력하세요.",
       "cancel": "취소",
       "apply": "삭제",
-      "applying": "삭제 중..."
+      "applying": "삭제 중...",
+      "dryRunFailed": "변경 미리보기(dry-run)에 실패했습니다.",
+      "uninstallFailed": "삭제에 실패했습니다."
     },
     "error": {
-      "notFound": "{{cluster}} 클러스터에는 {{namespace}} 네임스페이스의 {{name}} Release가 없습니다. 다른 클러스터를 고르거나 Release 목록에서 찾으세요.",
+      "notFound": "{{cluster}} 클러스터에는 {{namespace}} Namespace의 {{name}} Release가 없습니다. 다른 클러스터를 고르거나 Release 목록에서 찾으세요.",
       "openList": "{{cluster}}의 Release 목록",
       "forbidden": "Helm은 이 Release의 기록을 Secret에 둡니다. 이 클러스터에서 지금 역할로는 Secret을 읽을 수 없어(Read는 못 읽음) 볼 수 없습니다. Write 이상이나 Secret을 읽는 역할이 필요합니다.",
       "protected": "Helm은 이 Release의 기록을 Secret에 둡니다. 이 Namespace에는 Kubeast 자체 자격 증명이 있어 전역 관리자만 읽을 수 있습니다.",
@@ -5126,8 +5159,8 @@
     "Capacity / Allocatable": "용량 / 할당 가능",
     "Allocated Resources": "할당된 리소스",
     "Total limits may be over 100 percent, i.e., overcommitted.": "limits 합계는 100%를 넘을 수 있습니다(오버커밋).",
-    "Counts only the pods in your namespaces ({{namespaces}}).": "내 네임스페이스({{namespaces}})의 Pod만 셉니다.",
-    "Could not read the node's pods: {{error}}": "노드의 Pod를 읽지 못했습니다: {{error}}",
+    "Counts only the pods in your namespaces ({{namespaces}}).": "내 Namespace({{namespaces}})의 Pod만 셉니다.",
+    "Could not read the node's pods: {{error}}": "Node의 Pod를 읽지 못했습니다: {{error}}",
     "Last State": "마지막 상태",
     "exit code {{n}}": "종료 코드 {{n}}",
     "Allocation": "할당",
@@ -5365,7 +5398,8 @@
     "player": {
       "title": "세션 기록",
       "text": "텍스트",
-      "close": "닫기"
+      "close": "닫기",
+      "loadFailed": "재생기를 불러오지 못했습니다."
     }
   },
   "alertInbox": {
@@ -5374,7 +5408,7 @@
     "refresh": "새로고침",
     "disabled": "이 설치에서 알림 웹훅이 꺼져 있어(features.alertInvestigation.enabled) 알림이 들어오지 않습니다.",
     "disabledNoAI": "알림 웹훅은 AI가 있어야 하는 알림 조사의 일부인데, 이 설치에서는 AI가 꺼져 있어(ai.enabled) 알림이 들어오지 않습니다.",
-    "forbidden": "알림은 클러스터 전체에 걸쳐 있어, 이 클러스터를 네임스페이스 제한 없이 읽을 수 있는 사용자에게만 보입니다.",
+    "forbidden": "알림은 클러스터 전체에 걸쳐 있어, 이 클러스터를 Namespace 제한 없이 읽을 수 있는 사용자에게만 보입니다.",
     "storeLimited": "Alertmanager 상태를 잠시 못 읽었습니다(요청 한도). {{seconds}}초 뒤 다시 읽습니다.",
     "storeFailed": "Alertmanager 상태를 읽지 못했습니다: {{reason}}",
     "storeFailedShown": "Alertmanager 상태를 읽지 못했습니다: {{reason}}. {{time}}에 읽은 상태를 보여 줍니다.",
@@ -5405,7 +5439,7 @@
       "mine": "내 담당",
       "open": "조치 안 된 것"
     },
-    "searchPlaceholder": "알림 이름·네임스페이스·레이블·어노테이션·담당자로 검색...",
+    "searchPlaceholder": "알림 이름·Namespace·레이블·어노테이션·담당자로 검색...",
     "col": {
       "status": "상태",
       "alert": "알림",
@@ -5718,7 +5752,7 @@
     }
   },
   "namespaceScope": {
-    "placeholder": "전체 네임스페이스 — 한정하려면 쉼표로 나열",
-    "hint": "비우면 클러스터 전체. 최대 50개, 클러스터가 그 네임스페이스마다 역할을 묶어야 합니다(차트 auth.impersonation.customRoles)."
+    "placeholder": "전체 Namespace — 한정하려면 쉼표로 나열",
+    "hint": "비우면 클러스터 전체. 최대 50개, 클러스터가 그 Namespace마다 역할을 묶어야 합니다(차트 auth.impersonation.customRoles)."
   }
 }

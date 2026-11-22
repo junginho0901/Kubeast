@@ -1,6 +1,6 @@
 """The time windows of one investigation, counted from the alert's start (HolmesGPT's: metrics either side of it, logs
 from just before it, changes over the hours before it), and step 0: the timeline tool's changes view over the change
-window, read before the first model call."""
+window and anomaly_rank over the metrics window, read before the first model call."""
 
 from __future__ import annotations
 
@@ -11,6 +11,10 @@ from typing import Any, Optional
 
 CHANGES_TOOL = "timeline"
 CHANGES_VIEW = "changes"
+# features.alertInvestigation.narrowFirst: the narrowing over the metrics window, which anomaly_rank compares with the
+# window of the same length before it. Its window is 5 minutes to 24 hours on whole minutes (its trace checks need them).
+NARROW_TOOL = "anomaly_rank"
+NARROW_MIN = timedelta(minutes=5)
 LOGS_AFTER = timedelta(hours=1)  # the logs window's end after the start at the latest
 LOGS_MAX_RANGE = timedelta(hours=24)  # the log search's longest range by default (LOG_SEARCH_MAX_RANGE)
 
@@ -83,6 +87,30 @@ def changes_args(w: Windows, namespace: str) -> dict[str, Any]:
     if namespace:
         args["namespace"] = namespace
     return args
+
+
+def _minute(t: datetime) -> datetime:
+    return t.replace(second=0, microsecond=0)
+
+
+def narrow_args(w: Windows, namespace: str) -> dict[str, Any]:
+    """anomaly_rank over the metrics window, cut to whole minutes and at least NARROW_MIN long. A window that ends now leaves
+    until_time to the tool, which ends it at the minute, as changes_args leaves it."""
+    end = _minute(w.metrics.end)
+    start = min(_minute(w.metrics.start), end - NARROW_MIN)
+    args: dict[str, Any] = {"namespace": namespace, "since_time": stamp(start)}
+    if w.metrics.end != w.now:
+        args["until_time"] = stamp(end)
+    return args
+
+
+def is_narrowing_answer(raw: Any) -> bool:
+    """anomaly_rank's answer lists its findings and the checks it could not run."""
+    try:
+        data = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return False
+    return isinstance(data, dict) and isinstance(data.get("findings"), list) and isinstance(data.get("not_run"), list)
 
 
 def is_changes_answer(raw: Any) -> bool:

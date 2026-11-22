@@ -25,6 +25,9 @@ tests:
           path: data.REDACTION_PII
           value: "false"
       - equal:
+          path: data.REDACTION_NUMBERED
+          value: "false"
+      - equal:
           path: data.COOKIE_SECURE
           value: "true"
       - equal:
@@ -32,6 +35,9 @@ tests:
           value: ""
       - equal:
           path: data.AI_DEBUG_DUMP
+          value: "false"
+      - equal:
+          path: data.AI_TOOL_RESULTS_JSON
           value: "false"
       - notExists:
           path: data.TOOL_SERVER_URL_READ
@@ -86,10 +92,12 @@ tests:
     set:
       ai.redaction.enabled: false
       ai.redaction.pii: true
+      ai.redaction.numbered: true
       ai.redaction.disable:
         - aws-keys
         - jwt
       ai.debugDump: true
+      ai.toolResultsJSON: true
     asserts:
       - equal:
           path: data.REDACTION_ENABLED
@@ -98,10 +106,16 @@ tests:
           path: data.REDACTION_PII
           value: "true"
       - equal:
+          path: data.REDACTION_NUMBERED
+          value: "true"
+      - equal:
           path: data.REDACTION_DISABLE
           value: aws-keys,jwt
       - equal:
           path: data.AI_DEBUG_DUMP
+          value: "true"
+      - equal:
+          path: data.AI_TOOL_RESULTS_JSON
           value: "true"
 
   - it: access request settings are handed to auth-service as env values
@@ -656,6 +670,9 @@ tests:
           path: data.ALERT_INVESTIGATION_CHANGES_FIRST
           value: "false"
       - equal:
+          path: data.ALERT_INVESTIGATION_NARROW_FIRST
+          value: "false"
+      - equal:
           path: data.ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES
           value: "15"
       - equal:
@@ -669,6 +686,7 @@ tests:
     set:
       features.alertInvestigation.rules: true
       features.alertInvestigation.changesFirst: true
+      features.alertInvestigation.narrowFirst: true
       features.alertInvestigation.window:
         metricsMinutes: 30
         logsMinutes: 0
@@ -679,6 +697,9 @@ tests:
           value: "true"
       - equal:
           path: data.ALERT_INVESTIGATION_CHANGES_FIRST
+          value: "true"
+      - equal:
+          path: data.ALERT_INVESTIGATION_NARROW_FIRST
           value: "true"
       - equal:
           path: data.ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES
@@ -724,6 +745,48 @@ tests:
       - equal:
           path: data.CLUSTER_STORE_ALLOWED_HOSTS
           value: prom.monitoring.svc,.corp.example.com
+  - it: keeps the call graph off by default and takes it from features.callGraph
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_ENABLED
+          value: "false"
+  - it: turns the call graph on from features.callGraph.enabled
+    set:
+      features.callGraph.enabled: true
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_ENABLED
+          value: "true"
+
+  - it: keeps the step 0 narrowing off for values from a chart without it (--reuse-values)
+    set:
+      features.alertInvestigation.narrowFirst: null
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_NARROW_FIRST
+          value: "false"
+
+  - it: keeps timeline's changes view from the AI by default and takes it from ai.timelineChanges
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES
+          value: "false"
+  - it: offers timeline's changes view to the AI from ai.timelineChanges
+    set:
+      ai.timelineChanges: true
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES
+          value: "true"
+
+  - it: values without ai.redaction.numbered, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.redaction.pii: true
+      ai.redaction.numbered: null
+    asserts:
+      - equal:
+          path: data.REDACTION_NUMBERED
+          value: "false"
 
   - it: keeps the repeated read refusal and the investigation's evidence check off by default
     asserts:

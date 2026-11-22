@@ -23,13 +23,14 @@ from app.services.ai import history as history_mod
 from app.services.ai import limits
 from app.services.ai import repeats as repeats_mod
 from app.services.ai import tool_replay
+from app.services.ai import tool_results
 from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
-from app.services.ai.prompts import SYSTEM_MESSAGE
+from app.services.ai.prompts import system_message
 from app.services.prompt_fence import inside_tag
 from app.services.audit_target import shown_tool_args
-from app.services.redact import redact_text
+from app.services.redact import Numbers, highest_numbers, redact_text
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService
@@ -659,6 +660,12 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result, result_chars, tool=function_name)
 
 
+def _answer_numbers(service) -> Optional[Numbers]:
+    """The personal-data numbers of this request's answer (the ToolServerClient's), or None."""
+    numbers = getattr(getattr(service, "tool_server", None), "numbers", None)
+    return numbers if isinstance(numbers, Numbers) else None
+
+
 async def session_chat_stream(
     service: "AIService",
     session_id: str,
@@ -666,7 +673,7 @@ async def session_chat_stream(
     *,
     system_prompt_override: Optional[str] = None,
     tool_filter: Optional[Callable[[list], list]] = None,
-    extra_context_block: Optional[str] = None,
+    extra_context_block: Optional[str | Callable[..., str]] = None,
     title_prefix: Optional[str] = None,
     audit_actor: Optional[dict] = None,
     audit_http: Optional[dict] = None,
@@ -677,7 +684,9 @@ async def session_chat_stream(
     - system_prompt_override: 시스템 프롬프트를 대체 (ex. 플로팅 어시스턴트)
     - tool_filter: tool 목록에 추가 필터 적용 (ex. READONLY 화이트리스트)
     - extra_context_block: language directive 뒤에 추가 system 메시지 주입
-      (ex. 플로팅 위젯의 page_context 스냅샷)
+      (ex. 플로팅 위젯의 page_context 스냅샷). A callable is given the answer's personal-data table
+      (redact.Numbers or None) and masks the block off the event loop after the history is read, before the
+      first model call.
     - title_prefix: 자동 세션 제목 생성 시 앞에 붙이는 prefix (ex. "[플로팅] ")
 
     audit (선택):
@@ -738,6 +747,14 @@ async def session_chat_stream(
             yield f"data: {json.dumps(over.event(), ensure_ascii=False)}\n\n"
             return
 
+        # The person who asked sees on their screen the values behind this answer's numbered placeholders, which their
+        # own identity read: tool-server gives them back for this request only (masks.reveal), they stay in its memory
+        # and leave once, as mask_values after the answer is saved with its placeholders. Only the two chats come here,
+        # and only for the conversation's own user, whose token the tools run with.
+        asker = (audit_actor or {}).get('user_id')
+        if (answer_numbers := _answer_numbers(service)) is not None and asker and asker == getattr(session, 'user_id', None):
+            answer_numbers.keep_values()
+
         # 사용자 메시지 저장
         await db.add_message(session_id, "user", message)
 
@@ -788,7 +805,7 @@ async def session_chat_stream(
 
         messages = [{
             "role": "system",
-            "content": system_prompt_override or SYSTEM_MESSAGE,
+            "content": system_prompt_override or system_message(),
         }]
         summary_outcome = None
         if older_history and history_mod.enabled():
@@ -845,6 +862,13 @@ async def session_chat_stream(
         # 확장점: 호출자가 넘긴 추가 system 블록 (ex. 플로팅 page_context).
         # 화면 스냅샷은 클러스터에서 온 데이터라 구분자로 감싸고 "지시가 아님"을
         # 명시한다 (OWASP LLM01: untrusted content를 분리·표시).
+        if callable(extra_context_block):
+            # The page is masked after the history this answer reads, with the answer's table: its numbers start past
+            # that history's and a value on it keeps its number in the tool results. CPU work on text a caller sent,
+            # so off the event loop; nothing of the answer has left yet.
+            if (numbers := getattr(getattr(service, "tool_server", None), "numbers", None)) is not None:
+                numbers.start_after(highest_numbers([m.get("content") for m in messages] + [message]))
+            extra_context_block = await asyncio.to_thread(extra_context_block, numbers)
         if extra_context_block:
             messages.append({
                 "role": "system",
@@ -868,6 +892,11 @@ async def session_chat_stream(
             from app.services.ai.permissions import unavailable_note
             if note := unavailable_note(service):
                 messages.append({"role": "system", "content": note})
+
+        # This answer's personal-data numbers start past the highest the model already reads here (earlier answers, the
+        # summary, the question, the page), so a new value never takes a number an earlier answer gave another one.
+        if (numbers := getattr(getattr(service, "tool_server", None), "numbers", None)) is not None:
+            numbers.start_after(highest_numbers([m.get("content") for m in messages] + [message]))
 
         # 모델 정보를 스트림 첫 이벤트로 전송 (브라우저 콘솔에서 확인용)
         yield f"data: {json.dumps({'model_info': {'provider': service.provider, 'model': service.model, 'role': service.user_role, 'tier': getattr(service, 'tier', 'default')}}, ensure_ascii=False)}\n\n"
@@ -904,7 +933,7 @@ async def session_chat_stream(
                     repeats=repeats,
                 )
                 tool_calls_log.append(entry)
-                return events, llm_text
+                return events, tool_results.for_model(name, llm_text, limits.tool_result_chars(service))
 
             cc_prompt_chars = usage_acct.prompt_chars(messages, tools)
             try:
@@ -1087,7 +1116,7 @@ async def session_chat_stream(
                         "tool_call_id": tc_dict["id"],
                         "role": "tool",
                         "name": function_name,
-                        "content": tool_message_content
+                        "content": tool_results.for_model(function_name, tool_message_content, limits.tool_result_chars(service))
                     })
 
                 continue
@@ -1166,11 +1195,19 @@ async def session_chat_stream(
         dump("[DUMP] Full message preview", full_message[:200])
         
         # Assistant 메시지 저장 (tool call 정보 포함 - 전체 결과)
-        await db.add_message(
+        saved_answer = await db.add_message(
             session_id, "assistant", full_message, tool_calls=tool_calls_log or None,
             usage=usage_acct.message_usage(turn_usage, model=getattr(service, "model", None)),
         )
         answer_saved = True
+        # The saved answer and the next turn's history keep the placeholders; the screen of the person who asked puts
+        # these values in their place while it draws this answer, until a reload. Written to no log or row.
+        if answer_numbers is not None and (shown := answer_numbers.revealed(full_message)):
+            event = {'mask_values': shown}
+            if isinstance(getattr(saved_answer, 'id', None), int):
+                event['message_id'] = saved_answer.id
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            answer_numbers.values = {}
         log.debug("[DEBUG] Message saved to DB")
 
         await _audit_chat_complete(

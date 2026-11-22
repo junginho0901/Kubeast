@@ -1,73 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Lightbulb } from 'lucide-react'
-
-interface ExampleQuery {
-  label: string
-  types: string[]
-  query: string
-  /** i18n key under advancedSearch.examples; `description` is the English default */
-  key: string
-  description: string
-}
-
-const EXAMPLES: ExampleQuery[] = [
-  {
-    label: 'Pod',
-    types: ['pods'],
-    query: 'status.phase !== "Running"',
-    key: 'podsNotRunning',
-    description: 'Pods that are not Running',
-  },
-  {
-    label: 'All',
-    types: [],
-    query: 'metadata.labels?.app === "nginx"',
-    key: 'labelApp',
-    description: 'Everything labelled app=nginx',
-  },
-  {
-    label: 'Deployment',
-    types: ['deployments'],
-    query: 'spec.replicas > 3',
-    key: 'replicasOver3',
-    description: 'Deployments with more than 3 replicas',
-  },
-  {
-    label: 'Pod',
-    types: ['pods'],
-    query: 'status.containerStatuses?.some(c => c.restartCount > 5)',
-    key: 'restartsOver5',
-    description: 'Pods restarted more than 5 times',
-  },
-  {
-    label: 'ConfigMap',
-    types: ['configmaps'],
-    query: '!!data',
-    key: 'configMapWithData',
-    description: 'ConfigMaps that carry data',
-  },
-  {
-    label: 'Job',
-    types: ['jobs'],
-    query: 'spec.suspend === false && status.succeeded > 0',
-    key: 'completedJobs',
-    description: 'Completed jobs (not suspended)',
-  },
-  {
-    label: 'Service',
-    types: ['services'],
-    query: 'spec.type === "LoadBalancer"',
-    key: 'loadBalancerServices',
-    description: 'Services of type LoadBalancer',
-  },
-  {
-    label: 'PVC',
-    types: ['persistentvolumeclaims'],
-    query: 'status.phase === "Pending"',
-    key: 'pendingPvcs',
-    description: 'PVCs stuck in Pending',
-  },
-]
+import { EXAMPLE_QUERIES } from './exampleQueries'
 
 interface Props {
   onSelect: (types: string[], query: string) => void
@@ -85,7 +18,7 @@ export default function SearchExamples({ onSelect }: Props) {
         </span>
       </div>
       <div className="flex flex-wrap gap-2 justify-center max-w-2xl">
-        {EXAMPLES.map((ex, i) => (
+        {EXAMPLE_QUERIES.map((ex, i) => (
           <button
             key={i}
             onClick={() => onSelect(ex.types, ex.query)}

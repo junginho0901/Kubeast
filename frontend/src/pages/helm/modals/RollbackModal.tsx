@@ -52,7 +52,7 @@ export default function RollbackModal({
       setError(null)
     },
     onError: (err: any) => {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'dry-run failed')
+      setError(err?.response?.data?.detail ?? err?.message ?? t('helmReleaseDetail.rollback.dryRunFailed', 'dry-run failed'))
     },
   })
 
@@ -70,7 +70,7 @@ export default function RollbackModal({
       onClose()
     },
     onError: (err: any) => {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'rollback failed')
+      setError(err?.response?.data?.detail ?? err?.message ?? t('helmReleaseDetail.rollback.rollbackFailed', 'rollback failed'))
     },
   })
 

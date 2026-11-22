@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: monthly-report}
+spec:
+  schedule: "0 3 1 * *"
+  suspend: true
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1800
+      template:
+        metadata: {labels: {app: monthly-report}}
+        spec:
+          restartPolicy: Never
+          terminationGracePeriodSeconds: 1
+          containers:
+            - name: main
+              image: docker.io/library/busybox:1.38.0
+              imagePullPolicy: IfNotPresent
+              command: [taskset, -c, "1", sh, -c]
+              args:
+                - |
+                  n=2
+                  echo "level=info msg=\"monthly report started\" partitions=$n"
+                  i=1
+                  while [ $i -le "$n" ]; do
+                    (
+                      p=0
+                      while true; do
+                        p=$((p + 1))
+                        [ $((p % 200000)) = 0 ] && echo "level=info msg=\"pages rendered\" partition=$i pages=$((p / 1000))"
+                      done
+                    ) &
+                    i=$((i + 1))
+                  done
+                  wait
+              resources: {requests: {cpu: 500m, memory: 16Mi}, limits: {memory: 64Mi}}
