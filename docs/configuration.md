@@ -310,6 +310,7 @@ multicluster:
   wsWatchStreamWindowKiB: 1024  # HTTP/2 window of each live list's stream: memory a slow browser's watch holds against how fast a list comes over a long round trip; see architecture.md "Many users"
   maxTerminalsPerAccount: 20     # terminals (pod exec, node shell) one account may hold open at once on each k8s-service (k8s-service-stream with streams on); one past it is refused before it opens and the screen says why; 0 = no cap, below 0 the chart refuses
   maxFollowedLogsPerAccount: 20  # followed logs (a container's output, a log file) the same way
+  maxStreamsPerServer: 443       # terminals and followed logs of every account together on each k8s-service (k8s-service-stream with streams on); one past it is refused before it opens and the screen says the server is full; 0 = no cap, below 0 the chart refuses. About 0.37 MiB each on a kind node: 443 is half of what took a pod at 512 Mi to 80 % of its memory
 ```
 
 ## Stages of new values
@@ -336,6 +337,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `multicluster.breakerConsecutiveFails` (`0` turns the breaker off from 0.7.8), `multicluster.breakerOpenSec` (read from 0.7.8) | 5, 30 | beta | A cluster cut off on the kind dev install |
 | `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | Tested: upgrade rehearsals from 0.7.7 on kind (the default install, an existing Secret, an external database, AI off, 2 and 3 replicas) and on EKS 1.35, where a live list closed once and was back within 1.1 s when a node was drained, closed once and was back within 1.2 s when turning HPAs on took k8s-service from two pods to one, and did not close while the HPAs added and removed pods |
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | Tested: the stream-caps e2e on the kind dev install with the defaults (2026-11-19): the 21st terminal and followed log of one account refused, the screen saying why, and a new one opened once one closed |
+| `multicluster.maxStreamsPerServer` | 443 | beta | The cap reached on the kind dev install, with the screen saying why. The default comes from a load run there (2026-11-22) that held 800 terminals and followed logs open on one pod with no cap (about 0.37 MiB each, 79 % of 512 Mi at 800) |
 | `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | Tested: the whole e2e with it on, twice on the kind dev install with no failure, and 100 people opening the screens at once with no error |
 
 ## Redis users
