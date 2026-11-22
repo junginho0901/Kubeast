@@ -287,10 +287,11 @@ line names nothing of its truth.
 - `synthetic`: always posted.
 
 The real path is what an install runs: the rule's own labels, its generator URL, a rule `prometheus_rules` finds by the
-alert's name. A posted alert needs no rule, no metric that shows the fault and no wait for a rule's `for`. The ten
-cases of `evals/ai-hard/` have no rule: most of their faults show only in logs, and five run on `self`, which has no
-Alertmanager. The only test rules today are the OpenTelemetry demo's, and the demo's cases (01–03, 07, 10, 11) are not
-written. So the ten are posted, and their alert repeats what the question says.
+alert's name. A posted alert needs no rule, no metric that shows the fault and no wait for a rule's `for`. The
+twenty-two cases of `evals/ai-hard/` have no rule: most of their faults show only in logs, and ten run on `self`, which
+has no Alertmanager. The only test rules today are the OpenTelemetry demo's; the three cases on the demo (01, 07, 10)
+carry an `uptime-check` alert (`job: uptime-check`), not one of those rules. So the twenty-two are posted, and their
+alert repeats what the question says.
 
 A posted alert is one alert in Alertmanager's message (version 4), sent with the cluster's own webhook token (the HMAC
 of `ALERT_WEBHOOK_TOKEN` from `kubeast-secrets`, which `webhookClusterTokensOnly` also takes), receiver `ai-eval`, a
