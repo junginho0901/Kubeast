@@ -121,8 +121,9 @@ The account and earlier runs:
   whoever reads the whole cluster). For a chat round, keep `features.alertInvestigation.enabled` off (the inbox then
   answers 404), so a fault of the round (01, 07 and 10 can fire the demo's rules) starts no investigation the model
   could read and none takes the model's one Claude Code place. A run with hard cases stops before the first case when
-  a cluster's investigation list answers at the start; `--alert-investigation-on` runs it anyway, with a warning and
-  `alert_investigation_on: true` in the round's record.
+  a cluster's inbox answers at the start (the investigation list answers whether or not the switch is on, its earlier
+  reports staying listed, so the runner does not read it for this); `--alert-investigation-on` runs it anyway, with a
+  warning and `alert_investigation_on: true` in the round's record.
 - The round's record `<stamp>-round.json`, and the table's last line, give the account, the namespace suffix and how
   many investigations and inbox rows each cluster had before and after the round.
 - `--namespace-suffix random` (or a value of up to eight lowercase letters and digits) runs each case in
