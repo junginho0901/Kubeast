@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.ai import features as feature_gate
+from app.services.investigation import numbers
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import runner
 from app.services.investigation import settings as inv_settings
@@ -137,8 +138,10 @@ async def test_step_zero_narrows_once_before_the_first_model_call(monkeypatch):
     assert audits[0]["action"] == "ai.tool.call" and audits[0]["after"]["tool"] == "anomaly_rank" and audits[0]["after"]["iteration"] == 0
     assert audits[0]["result"] == "success" and audits[0]["namespace"] == "apps"
     assert len(service.completions.calls) == 2 and out["iterations"] == 2 and out["report"] == "## Summary\nweb restarts."
-    # the system prompt is untouched by the narrowing
-    assert service.completions.calls[0]["messages"][0]["content"] == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en")
+    # narrowFirst numbers the calls (numbers.on): the narrowing is call 1 and the system prompt gains only the note on numbers
+    assert "<<<NARROWING" in first and first.index("[call 1]") > first.index("<<<NARROWING")
+    assert service.completions.calls[0]["messages"][0]["content"] == (
+        inv_prompt.system_prompt(cluster="self", namespace="apps", language="en") + numbers.NOTE)
 
 
 @pytest.mark.asyncio
@@ -260,5 +263,6 @@ async def test_both_switches_on_narrow_first_and_ask_for_the_calls(monkeypatch):
     service = NarrowService([completion(content="## Summary\nok")])
     out = await run(monkeypatch, service, rules=True, changes_first=True, narrow_first=True, call_paths=True)
     system, first = service.completions.calls[0]["messages"][0]["content"], first_message(service)
-    assert system == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True, call_paths=True)
+    # the switches number the calls (numbers.on), so the system prompt ends with the note on call numbers
+    assert system == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True, call_paths=True) + numbers.NOTE
     assert first.index("<<<CHANGES") < first.index("<<<NARROWING") and [c["step"] for c in out["tool_calls"]] == [0, 0]

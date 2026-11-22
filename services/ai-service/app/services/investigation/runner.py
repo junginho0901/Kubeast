@@ -384,7 +384,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             unnarrowed = f"{inv_windows.NARROW_TOOL} did not answer with findings"
         if unnarrowed:
             return inv_prompt.no_narrowing_block(unnarrowed)
-        return inv_prompt.narrowing_block(text, args)
+        return inv_prompt.narrowing_block(numbers.tag(number_of(entry), text) if numbered else text, args)
 
     first: list[str] = []
     unused = ""  # why step 0 gave nothing to use

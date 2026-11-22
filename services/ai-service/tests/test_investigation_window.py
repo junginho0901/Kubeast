@@ -140,6 +140,7 @@ def test_the_switches_are_off_and_the_windows_held_to_their_ranges(monkeypatch):
 
 
 SWITCHES = {"ALERT_INVESTIGATION_RULES": "rules", "ALERT_INVESTIGATION_CHANGES_FIRST": "changes_first",
+            "ALERT_INVESTIGATION_NARROW_FIRST": "narrow_first",
             "ALERT_INVESTIGATION_LEDGER": "ledger", "ALERT_INVESTIGATION_EVIDENCE_CHECK": "evidence_check"}
 
 
