@@ -1,0 +1,28 @@
+{
+ "id": "01_cache_down_chain",
+ "control": false,
+ "symptom": "checkouts fail because checkout cannot read the user's cart; the cart page and add-to-cart answer 500; cart's own calls to its store do not connect",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "Deployment/otel-demo/valkey-cart",
+   "kind": "dependency_down",
+   "accept_resources": ["(deployment|replicaset|pod|service|endpoints)/(otel-demo/)?valkey-cart", "^valkey"],
+   "accept_kinds": ["config_change"]
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/otel-demo/valkey-cart", "role": "cause", "required": true, "accept": ["valkey"], "note": "scaled to 0 replicas; its Service has no endpoints"},
+  {"resource": "Deployment/otel-demo/cart", "role": "via", "required": true, "accept": ["(^|/)cart$"], "note": "every cart call fails with 'Can't access cart storage' after its connection attempts"},
+  {"resource": "Deployment/otel-demo/checkout", "role": "via", "required": false, "accept": ["(^|/)checkout$"], "note": "PlaceOrder fails at its first step, reading the cart"},
+  {"resource": "Deployment/otel-demo/frontend", "role": "symptom", "required": true, "accept": ["(^|/)(checkout|frontend|frontend-proxy|load-generator)$"]}
+ ],
+ "also_ok": ["Deployment/otel-demo/cart"],
+ "decoys": [
+  {"resource": "Deployment/otel-demo/checkout", "why": "where the order fails; its code and settings did not change, it passes the cart's error on"},
+  {"resource": "Deployment/otel-demo/payment", "why": "the word the question uses; checkout never reaches it once the cart read fails, so its calls drop rather than fail"},
+  {"resource": "Deployment/otel-demo/frontend", "why": "shows the errors to the users; nothing in it changed"}
+ ]
+}

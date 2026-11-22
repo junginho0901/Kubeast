@@ -87,13 +87,18 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
 
     const decoder = new TextDecoder()
 
-    ws.onopen = () => {
+    // Connected once the server says something: a socket refused at the account's cap opens and closes at once.
+    let opened = false
+    const markOpen = () => {
+      if (opened) return
+      opened = true
       setStatus('starting')
       term.writeln(tRef.current('nodes.shell.connected', 'Connected.'))
       term.focus()
     }
 
     ws.onmessage = (event) => {
+      markOpen()
       if (typeof event.data === 'string') {
         const s = parseNodeShellStatus(event.data)
         if (s) {

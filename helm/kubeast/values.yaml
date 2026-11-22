@@ -133,7 +133,8 @@ auth:
   # Kubernetes user impersonation: k8s-service and tool-server act toward every
   # cluster as the signed-in user (email) in groups kubeast:viewer/operator/admin,
   # so the cluster's RBAC decides and its audit log names the person. The
-  # Kubeast credential then only needs the "impersonate" verb.
+  # Kubeast credential then only needs the "impersonate" verb, and get on the
+  # kube-system Namespace, whose UID refuses registering one cluster twice.
   # clusterRoles renders files/impersonation-rbac.yaml (group → view/edit/
   # cluster-admin bindings) into this cluster; apply the same file to every
   # external cluster you register.
@@ -376,10 +377,20 @@ ai:
   # number masking; disable lists rule names to skip (key_name, private_key,
   # url_credentials, authorization, jwt, aws_key, provider_key, email, phone,
   # rrn, card). Error messages shown on screen or written to the audit log are
-  # masked with every credential rule, whatever these settings.
+  # masked with every credential rule, whatever these settings. numbered (with
+  # pii, off by default) reads each value as its kind and a number (<EMAIL_1>,
+  # <PHONE_1>, <RRN_1>, <CARD_1>) that stays the same within one chat answer or
+  # alert investigation; a later answer numbers past what the conversation
+  # shows, so the same value then gets a new number; a chat answer shows the
+  # person who asked the values in their place, kept in that page's memory and
+  # never saved; a write holding <PHONE_n>, <RRN_n> or <CARD_n> is refused like
+  # one holding <EMAIL_n>. Off: one address keeps one <EMAIL_n> within a text,
+  # the other kinds read <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, and
+  # no value is shown in a placeholder's place.
   redaction:
     enabled: true
     pii: false
+    numbered: false
     disable: []
   # Chat history sent to the model: the last historyMessages user/assistant
   # messages verbatim; with summary.enabled, everything before them is folded
@@ -402,6 +413,7 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  toolResultsJSON: false  # true: the model reads each tool result as one JSON object naming its tool, cluster text as JSON strings (docs/ai-alerts.md "Planted instructions")
   # The AI tool timeline's changes view (view: changes — what changed in a
   # window: rollouts compared with the revision before, ConfigMap and Secret
   # writes as metadata, Helm revisions, HPA scales, node conditions, Argo CD
@@ -522,10 +534,10 @@ audit:
   # Tamper evidence for the audit rows (internal/auditchain): auth-service
   # chains every row to the one sealed before it (sha256, every sealSeconds)
   # and, when anchor.sink names an s3 sink above, writes the chain head there
-  # as a digest every anchor.hours (under <prefix>digests/). Admin → Audit log
-  # shows the chain state, verifies a range and anchors on demand. Turn on
-  # Object Lock on that bucket: the digest outside the database is what a
-  # rewritten database cannot match.
+  # as a digest every anchor.hours, a whole number (under <prefix>digests/).
+  # Admin → Audit log shows the chain state, verifies a range and anchors on
+  # demand. Turn on Object Lock on that bucket: the digest outside the
+  # database is what a rewritten database cannot match.
   integrity:
     enabled: true
     sealSeconds: 10
@@ -594,8 +606,8 @@ postgresql:
   # connection: set 0 there and put the limits in the proxy's initialization query or on the database role. The
   # schema migrations always run without the statement and lock limits, also when the role sets them. Through
   # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
-  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with
-  # the client that made it.
+  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's, k8s-service's health
+  # status lock) does not stay with the client that made it.
   # sessionLimits, pool and maxConnections: stage beta, a long database outage has not been tested with them yet
   # (docs/configuration.md "Stages of new values").
   sessionLimits:
@@ -700,7 +712,7 @@ autoscaling:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
-# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (behind an AWS ALB the default 5 s was enough).
+# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (AWS ALB: 25 with a 20 s deregistration delay).
 # Stage: beta, tested: Kubernetes 1.29 refuses the preStop wait, set 0 there (docs/configuration.md "Stages of new values").
 podShutdown:
   preStopSeconds: 5
@@ -1326,6 +1338,17 @@ multicluster:
   # wsMaxSubscriptionsPerConn those of one browser tab.
   wsMaxSubscriptions: 2000
   wsMaxSubscriptionsPerConn: 50
+  # Terminals (pod exec, node shell) and followed logs (a container's output, a
+  # log file) one account may hold open at once on each k8s-service (on
+  # k8s-service-stream with streams on); one past it is refused before it opens,
+  # and the screen says why. 0 = no cap; the chart refuses a value below 0. A
+  # screen opens at most two of each at once (Cluster View's pod window and a
+  # drawer): 20 is ten browser tabs of that. Counted in each pod: with N pods an
+  # account may hold up to N times as many, but the followed logs of a pod that
+  # leaves move to the pods that stay, so count on the cap.
+  # Stage: beta, tested: the stream-caps e2e on the kind dev install with the defaults (2026-11-19) (docs/configuration.md "Stages of new values").
+  maxTerminalsPerAccount: 20
+  maxFollowedLogsPerAccount: 20
   # How many watches of one cluster may be waiting for the API server's first
   # answer at once; the rest wait, so a restart does not bring every subscription
   # to the API server at one moment. A start not answered in 5 s gives its place

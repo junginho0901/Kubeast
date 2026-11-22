@@ -25,6 +25,9 @@ tests:
           path: data.REDACTION_PII
           value: "false"
       - equal:
+          path: data.REDACTION_NUMBERED
+          value: "false"
+      - equal:
           path: data.COOKIE_SECURE
           value: "true"
       - equal:
@@ -32,6 +35,9 @@ tests:
           value: ""
       - equal:
           path: data.AI_DEBUG_DUMP
+          value: "false"
+      - equal:
+          path: data.AI_TOOL_RESULTS_JSON
           value: "false"
       - notExists:
           path: data.TOOL_SERVER_URL_READ
@@ -86,10 +92,12 @@ tests:
     set:
       ai.redaction.enabled: false
       ai.redaction.pii: true
+      ai.redaction.numbered: true
       ai.redaction.disable:
         - aws-keys
         - jwt
       ai.debugDump: true
+      ai.toolResultsJSON: true
     asserts:
       - equal:
           path: data.REDACTION_ENABLED
@@ -98,10 +106,16 @@ tests:
           path: data.REDACTION_PII
           value: "true"
       - equal:
+          path: data.REDACTION_NUMBERED
+          value: "true"
+      - equal:
           path: data.REDACTION_DISABLE
           value: aws-keys,jwt
       - equal:
           path: data.AI_DEBUG_DUMP
+          value: "true"
+      - equal:
+          path: data.AI_TOOL_RESULTS_JSON
           value: "true"
 
   - it: access request settings are handed to auth-service as env values
@@ -750,6 +764,15 @@ tests:
       - equal:
           path: data.AI_TIMELINE_CHANGES
           value: "true"
+
+  - it: values without ai.redaction.numbered, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.redaction.pii: true
+      ai.redaction.numbered: null
+    asserts:
+      - equal:
+          path: data.REDACTION_NUMBERED
+          value: "false"
 
   # auth-service makes each group from the names as the chart does (handler/role.go); a comma, which would split the
   # list, goes as "-", which makes the same group.

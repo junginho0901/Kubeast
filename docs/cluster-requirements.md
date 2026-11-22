@@ -52,7 +52,7 @@ Kubeast sends requests to the cluster **as the signed-in person** (impersonation
 
 | What | Why | Where |
 | --- | --- | --- |
-| ClusterRole `kubeast-impersonator` + binding (group `kubeast:impersonator`) | So that Kubeast's credentials impersonate only users and the fixed groups | [`helm/kubeast/files/impersonation-rbac.yaml`](../helm/kubeast/files/impersonation-rbac.yaml) |
+| ClusterRole `kubeast-impersonator` + binding (group `kubeast:impersonator`) | So that Kubeast's credentials impersonate only users and the fixed groups. It also gives `get` on the `kube-system` Namespace, that one only: its UID refuses a second entry for a cluster and a registered cluster's kubeconfig replaced by another cluster's ([Installation and first setup — Connect your cluster](getting-started.md#3-log-in-and-connect-a-cluster-connect-your-cluster)). Without it a kubeconfig is registered without a UID and both checks are skipped (since 2026-11-19: re-apply the RBAC on clusters where it was applied before) | [`helm/kubeast/files/impersonation-rbac.yaml`](../helm/kubeast/files/impersonation-rbac.yaml) |
 | Group bindings `kubeast:viewer` (view + `kubeast:cluster-reader`), `kubeast:operator` (edit) and `kubeast:admin` (cluster-admin) | What the Read, Write and Admin roles can do on the cluster. `kubeast:cluster-reader` adds the cluster-scoped objects and Roles and RoleBindings, which `view` leaves out (Roles and RoleBindings since 2026-10-27: re-apply the RBAC on clusters where it was applied before), and Leases, IngressClasses, DeviceClasses, ResourceSlices and the Gateway API, VPA and policy report kinds, whose installers do not add them to `view` (since 2026-11-01: re-apply the RBAC on clusters where it was applied before). Secrets stay out | Same file |
 | Custom role groups `kubeast:role:<name>`, namespace-scoped grants | When you use custom roles or namespace-limited grants. A list screen follows its objects with `watch` on the kind: a role that may list but not watch shows what it read when the screen opened, and a notice above the page says so. An open window does the same for what it shows: a workload's or an HPA's events, a Node's pods, a Namespace drawer's own Namespace (not for a grant limited to namespaces, which is refused a watch of them), the bindings and roles of a pod's RBAC tab, and the custom resources of a CRD or of the chosen kind (for those a `list` of one item first, then `watch`, with no object sent to the browser) | `auth.impersonation.customRoles` → `templates/impersonation-custom-roles.yaml` |
 | Prometheus and OpenCost proxy GET for Read | When Read views cost and graphs | `auth.impersonation.viewerProxyServices` → `templates/impersonation-viewer-proxy.yaml` |
@@ -68,8 +68,8 @@ Prefer group bindings; if you bind a `User`, make sure that person's account exi
 
 **Requests with no person behind them.** Some reads are Kubeast's own, and the cluster's audit log names Kubeast for them:
 
-- With no `Impersonate-User` header: the server version, the API discovery it keeps once per cluster for everyone, and its health checks. Only a `GET` of `/version`, `/api`, `/apis`, `/api/v1` or `/apis/<group>/<version>` (after the path of the cluster's server URL, when it has one) goes out so.
-- As the fixed identity `kubeast:cache` (the `view` rights of §1): the overview informers, an object's events and a node's pods read once for everyone who may list them, the `kube-system` UID that tells the cluster Kubeast runs in, the `metrics.k8s.io` group check, and the search for Prometheus and OpenCost Services.
+- With no `Impersonate-User` header: the server version, the API discovery it keeps once per cluster for everyone, and its health checks. Only a `GET` of `/version`, `/api`, `/apis`, `/api/v1` or `/apis/<group>/<version>` (after the path of the cluster's server URL, when it has one) goes out so. Besides those, the connection check (registering a cluster, giving it a new kubeconfig, the connection test) gets the `kube-system` Namespace so, for its UID, with the credential's own rights (§1).
+- As the fixed identity `kubeast:cache` (the `view` rights of §1): the overview informers, an object's events, a namespace's or the cluster's events for the Timeline and the events API, the Deployments, ReplicaSets and ControllerRevisions of the Timeline's rollouts, and a node's pods read once for everyone who may list them, the `kube-system` UID that tells the cluster Kubeast runs in, the `metrics.k8s.io` group check, and the search for Prometheus and OpenCost Services.
 
 Any other request whose signed-in person Kubeast cannot name is not sent, and a kubectl tool is not run.
 
@@ -182,6 +182,8 @@ These read Prometheus:
   - The format is `namespace/service:port`, the same as Lens and Headlamp.
   - If the API sits under a path, include the path: `namespace/service:port/path`. For example, a VictoriaMetrics cluster: `monitoring/vmselect-main:8481/select/0/prometheus`.
   - Kubeast reads it through the API server proxy.
+  - A redirect from the Service is followed only on the same API server and under that Service's proxy path. Any other is refused, since every request through the proxy carries Kubeast's cluster credential and the user's identity, and the read answers 502 with the reason.
+  - A 401 or 403 the store writes itself (an authenticating proxy such as kube-rbac-proxy in front of it) is a 502 with the store's words, not a sign-out or a refusal. The API server's own refusal of the proxy stays a 403. Register a store behind an authenticating proxy by URL with its authentication.
   - The status API reports whether `/-/healthy` is reachable, and the store type (`flavor`: prometheus or victoriametrics). The type comes from the text of the `/-/healthy` answer.
 - **Auto-discovery in the cluster** has two steps:
   - ① By label, in all namespaces, in this order:
@@ -306,6 +308,7 @@ In Kubeast, Admin → Clusters → Edit → Prometheus "Check connection" shows 
 ## 4. OpenCost (cost)
 
 - **How Kubeast finds it**: it looks for Services with `opencost` in the name on **port 9003** in the `opencost`, `kubecost`, `monitoring` and `cost` namespaces and checks them with `/healthz`. A found Service is remembered for 10 minutes, a miss for 5 minutes.
+  - It is read through the API server proxy with the same rules as a Prometheus Service (§3): a redirect only under its own proxy path, and its own 401 or 403 is a 502.
 - **Requirement**: OpenCost reads Prometheus, and Prometheus must scrape OpenCost's `/metrics` back (the price and cluster metrics OpenCost exports are used in the allocation calculation).
 - **Example**: [`opencost-values.yaml`](../deploy/examples/target-cluster/opencost-values.yaml) — values that make it read the Prometheus of the §3 example.
 
@@ -379,6 +382,8 @@ It then starts a privileged pod on the chosen node, with hostPID, hostIPC, hostN
 - If a policy (Kyverno, Gatekeeper, etc.) blocks privileged pods in that namespace, it needs an exception.
 - The node must be able to pull the image (`nodeShell.images`, default `docker.io/library/busybox:1.38.0`). On an air-gapped network, enter your internal mirror address.
 - The user must be an Admin (cluster-admin) of that cluster.
+
+A shell's pod is deleted when the shell ends. It carries the label `kubeast.io/node-shell-id` and the annotation `kubeast.io/node-shell-owner`, the k8s-service pod that opened it. When that k8s-service pod is killed before it can delete the shell's pod (out of memory, a node lost), another k8s-service pod deletes it one to two minutes later, as the person who opened the shell, with the same `get` and `delete` on pods in this namespace the shell used. A k8s-service pod that cannot write its node shells to the database for 45 s closes them itself first, so no other pod deletes a shell in use. While the cluster cannot be reached, or refuses that delete (the person's binding removed), k8s-service logs a line and tries again later; the pod ends at `nodeShell.timeoutSeconds` (3600 s) at the latest, and the row is dropped, with no more tries, 150 s after that. A cluster removed from Kubeast drops its rows at once, and its node shell pods end at their deadline. With the node shell on, a shell whose row the database does not take is refused ("node shell row not saved") before its pod is made.
 
 The namespace stays after the first shell, still `privileged`.
 
@@ -552,7 +557,7 @@ service:
 | What | Requirement |
 | --- | --- |
 | User namespaces | `podSecurity.hostUsers: false` (default) needs Kubernetes 1.33 or later and a node kernel that supports it (6.3 or later). Otherwise `true` |
-| Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service, but for the bundled PostgreSQL and Redis, wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection to a pod that has exited; `0` leaves the wait out |
+| Pod shutdown | Kubernetes 1.30 or later: the chart's pods behind a Service, but for the bundled PostgreSQL and Redis, wait `podShutdown.preStopSeconds` (5 s) before SIGTERM with the native `preStop` `sleep` action (beta and on by default in 1.30, GA in 1.34), so a rolling update sends no new connection through the Service to a pod that is leaving. A load balancer that sends to pod IPs can still send new requests to a leaving pod for a few seconds after that wait has ended, so behind one set `podShutdown.preStopSeconds` longer than the load balancer takes to stop sending (behind an AWS Application Load Balancer, 25 with the target group's deregistration delay at 20 s: [Running more than one replica](high-availability.md#before-you-start), [Upgrading from 0.7.7 to 0.7.8](upgrade-0.7.8.md#3-values-you-must-change)). `0` leaves the wait out. With `streams.enabled`, `k8s-service-stream` waits `streams.preStopSeconds` (10 s) the same way whatever `podShutdown.preStopSeconds` is, so it needs Kubernetes 1.30 or later and, below 1.33, a `streams.preStopSeconds` of 1 or more (Kubernetes takes a `sleep` of 0 from 1.33 on) |
 | Storage | With the built-in PostgreSQL, a PVC — the default StorageClass or `postgresql.storageClassName` |
 | Exposure | NodePort (default), LoadBalancer, or an Ingress controller (`ingress.enabled`) |
 | A proxy or load balancer in front | An idle timeout above 30 s (AWS ALB's default is 60 s). While quiet, a live list, terminal, node shell, followed log and AI answer send something every 25 s and the Helm releases stream every 30 s — a WebSocket ping, an SSE comment line — so they stay open; the gateway gives them 600 to 3 600 s itself |
@@ -623,7 +628,9 @@ For the drawers' "Recent Flows" and the AI tool `network_flows` (`features.netwo
   - The Relay Service is `features.networkFlows.relay` (default `kube-system/hubble-relay:443`), or the one an entry names (`proxy:<namespace>/<service>:<port>`).
   - **The Relay must serve TLS** (`hubble.relay.tls.server.enabled=true`): the API server speaks HTTP/2 to a backend only over TLS, and gRPC needs HTTP/2. A plaintext Relay gives 502 or 503, and the message names that setting.
   - The API server does not check the Relay's certificate (it proxies by IP) and sends no client certificate, so a Relay that requires client certificates (`hubble.relay.tls.server.mtls=true`) needs the address mode.
+  - A redirect from the Relay or Whisker is followed only on the same API server and under its Service's proxy path; any other gives 502.
 - **Address mode** (`https://<host>:<port>`): Kubeast connects to the Relay itself over TLS.
+  - It follows no redirect: a Relay that answers with one gives 502. Register the address the Relay answers on.
   - `tls.existingSecret` holds `ca.crt`, and with `tls.clientCertificate: true` also `tls.crt` and `tls.key` for mTLS. `tls.serverName` overrides the name checked on the certificate.
   - The Relay must be reachable from k8s-service: add the address to `features.networkFlows.egressCIDRs` when `networkPolicy` is on.
   - Kubeast asks the cluster the same permission as below (SelfSubjectAccessReview) before each read, so the same people read in both modes.

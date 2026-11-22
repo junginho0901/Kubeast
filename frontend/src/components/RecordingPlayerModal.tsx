@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import i18next from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { Download, FileText, Loader2, X } from 'lucide-react'
 
@@ -43,7 +44,7 @@ export default function RecordingPlayerModal({ recordingId, title, onClose }: Pr
           theme: 'monokai',
         })
       } catch (e: any) {
-        setError(e?.message || 'player failed to load')
+        setError(e?.message || i18next.t('recordings.player.loadFailed', 'player failed to load'))
       }
     })()
     return () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SESSION_ENDED_EVENT } from '@/services/auth'
+import { STREAM_LIMIT_EVENT } from '@/utils/serverShutdown'
 import { followLogFile, SOURCE_CONNECTING, type FollowSource, type FollowStop } from './logFileFollow'
 
 // A stand-in EventSource the test drives: what the browser does when a server leaves, when it refuses the
@@ -94,6 +95,15 @@ describe('a followed log file', () => {
     session.es.emit(SESSION_ENDED_EVENT, 'session_revoked')
     expect(session.es.closed).toBe(true)
     expect(session.seen.stops).toEqual([{ kind: 'session', code: 'session_revoked' }])
+  })
+
+  it('stops, without reconnecting, when the server refuses it at the account\'s cap', () => {
+    const { es, seen } = follow()
+    es.emit(STREAM_LIMIT_EVENT, 'followed_log_limit')
+    expect(es.closed).toBe(true)
+    expect(seen.stops).toEqual([{ kind: 'limit' }])
+    expect(seen.reconnecting).toEqual([false])
+    expect(seen.lines).toEqual([])
   })
 
   it('shows the server\'s notices as notices', () => {

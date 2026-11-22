@@ -64,6 +64,13 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	}
 	// The row holds what was asked with its credentials masked; only the container gets the command as it came.
 	payload := map[string]interface{}{"container": container, "command": redact.Command([]string{command}, execRowRedactOpts)[0]}
+	releasePlace, ok := h.takeTerminal(w, r, &execUpgrader, func(err error) {
+		_ = h.recordAuditWithPayload(r, "k8s.pod.exec", "pod", podName, namespace, err, nil, audit.MustJSON(payload))
+	})
+	if !ok {
+		return
+	}
+	defer releasePlace()
 	rec, ok := h.startRecording(w, r, "exec", namespace, podName, container, "k8s.pod.exec", "pod", payload)
 	if !ok {
 		return

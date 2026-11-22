@@ -290,7 +290,9 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language,
                                                                rules=cfg.rules, call_paths=cfg.call_paths)},
-        {"role": "user", "content": inv_prompt.alert_message(cluster=row.cluster, alert=alert_view(row), context="\n\n".join(first))},
+        {"role": "user", "content": inv_prompt.alert_message(
+            cluster=row.cluster, alert=alert_view(row), context="\n\n".join(first),
+            numbers=getattr(service.tool_server, "numbers", None))},
     ]
     turn = await run_tool_turn(service, messages, tools, run_tool, max_steps=cfg.max_steps,
                                final_message=inv_prompt.final_step_message(cfg.rules), remaining=remaining, lane="investigation",

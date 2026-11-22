@@ -1,0 +1,264 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: order-events-config}
+data:
+  broker.properties: |
+    fetch.max.bytes=1048576
+    retention.ms=3600000
+    segment.bytes=104857600
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: order-events}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: order-events}}
+  template:
+    metadata: {labels: {app: order-events}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: SEGMENT_SEEK_SECONDS, value: "0.05"}
+            - {name: FETCH_MAX_MESSAGES, value: "500"}
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin /data/log
+              cat > /www/cgi-bin/publish <<'EOF'
+              #!/bin/sh
+              cd /data/log
+              n=$(cat head 2>/dev/null || echo 0); n=$((n + 1))
+              head -c "${CONTENT_LENGTH:-0}" > m.$n
+              echo >> m.$n
+              echo $n > head.tmp && mv head.tmp head
+              printf 'Content-Type: application/json\r\n\r\n{"offset":%d}\n' "$n"
+              EOF
+              cat > /www/cgi-bin/fetch <<'EOF'
+              #!/bin/sh
+              cd /data/log
+              group=$(echo "&$QUERY_STRING" | sed -n 's/.*&group=\([a-z-]*\).*/\1/p')
+              max=$(sed -n 's/^fetch\.max\.bytes=//p' /etc/broker/broker.properties)
+              last=$(cat head 2>/dev/null || echo 0)
+              [ -f off.$group ] || echo $last > off.$group
+              off=$(cat off.$group)
+              sleep "$SEGMENT_SEEK_SECONDS"
+              list=""; i=$off
+              while [ $i -lt $last ] && [ $i -lt $((off + FETCH_MAX_MESSAGES)) ]; do i=$((i + 1)); list="$list m.$i"; done
+              k=0
+              if [ -n "$list" ]; then
+                k=$(wc -c $list | awk -v max="${max:-1048576}" '$2 != "total" { b += $1; n++; if (n > 1 && b > max) { n--; exit } } END { print n + 0 }')
+              fi
+              printf 'Content-Type: text/plain\r\n\r\n'
+              if [ "$k" -gt 0 ]; then
+                set -- $list; files=""; j=0
+                for f; do [ $j -ge "$k" ] && break; files="$files $f"; j=$((j + 1)); done
+                cat $files
+                echo $((off + k)) > off.$group.tmp && mv off.$group.tmp off.$group
+              fi
+              echo "$group $k" >> /tmp/fetches
+              EOF
+              chmod 755 /www/cgi-bin/publish /www/cgi-bin/fetch
+              (
+                prev=0; cfg_seen=""; cleaned=0
+                while true; do
+                  sleep 15
+                  cfg=$(tr '\n' ' ' < /etc/broker/broker.properties)
+                  if [ "$cfg" != "$cfg_seen" ]; then
+                    [ -n "$cfg_seen" ] && echo "level=info msg=\"topic config reloaded\" topic=order-events config=\"$cfg\""
+                    cfg_seen=$cfg
+                  fi
+                  last=$(cat /data/log/head 2>/dev/null || echo 0)
+                  mv /tmp/fetches /tmp/fetches.r 2>/dev/null; touch /tmp/fetches.r
+                  stats=$(awk '{ n[$1]++; m[$1] += $2 } END { for (g in n) printf " fetches_%s=%d messages_%s=%d", g, n[g], g, m[g] }' /tmp/fetches.r)
+                  lags=""; low=$last
+                  for f in /data/log/off.*; do
+                    case $f in *.tmp|*'*') continue ;; esac
+                    o=$(cat "$f"); lags="$lags lag_${f##*/off.}=$((last - o))"
+                    [ "$o" -lt "$low" ] && low=$o
+                  done
+                  echo "level=info msg=\"topic stats\" topic=order-events interval_s=15 produced=$((last - prev))$stats$lags"
+                  prev=$last
+                  old=""; while [ $cleaned -lt $((low - 100)) ]; do cleaned=$((cleaned + 1)); old="$old m.$cleaned"; done
+                  [ -n "$old" ] && (cd /data/log && rm -f $old)
+                done
+              ) &
+              echo "level=info msg=\"broker started\" topic=order-events"
+              exec httpd -f -p 9092 -h /www
+          ports: [{name: broker, containerPort: 9092}]
+          readinessProbe: {tcpSocket: {port: broker}, periodSeconds: 5}
+          volumeMounts:
+            - {name: config, mountPath: /etc/broker}
+          resources: {requests: {cpu: 100m, memory: 32Mi}, limits: {cpu: "1", memory: 128Mi}}
+      volumes:
+        - name: config
+          configMap: {name: order-events-config}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: order-events}
+spec:
+  selector: {app: order-events}
+  ports: [{name: broker, port: 9092, targetPort: broker}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: checkout}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: checkout}}
+  template:
+    metadata: {labels: {app: checkout}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              note=$(head -c 560 /dev/zero | tr '\000' x)
+              echo "level=info msg=\"checkout started\" topic=order-events"
+              n=0
+              while true; do
+                n=$((n + 1))
+                msg="{\"order_id\":$n,\"ts\":$(date +%s),\"items\":[{\"sku\":$((100 + n % 40)),\"qty\":1}],\"note\":\"$note\"}"
+                wget -q -T 5 -O /dev/null --post-data "$msg" http://order-events:9092/cgi-bin/publish \
+                  || echo "level=error msg=\"publish failed\" order_id=$n"
+                [ $((n % 250)) = 0 ] && echo "level=info msg=\"orders placed\" total=$n"
+                sleep 0.04
+              done
+          resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: 200m, memory: 32Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mailer}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: mailer}}
+  template:
+    metadata: {labels: {app: mailer}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: GROUP, value: mailer}
+            - {name: SMTP_URL, value: "http://smtp-relay:2525/cgi-bin/send"}
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              echo "level=info msg=\"mailer started\" group=$GROUP"
+              orders=0; fetches=0; sends=0; oldest=0; fsum=0; ssum=0; since=$(date +%s)
+              while true; do
+                t0=$(now_cs)
+                if ! body=$(wget -q -T 10 -O - "http://order-events:9092/cgi-bin/fetch?group=$GROUP" 2>&1); then
+                  echo "level=error msg=\"fetch failed\" err=\"$(echo $body)\""; sleep 1; continue
+                fi
+                fsum=$((fsum + ($(now_cs) - t0) * 10)); fetches=$((fetches + 1))
+                k=$(echo "$body" | grep -c order_id)
+                if [ "$k" -gt 0 ]; then
+                  ts=$(echo "$body" | head -1 | sed -n 's/.*"ts":\([0-9]*\).*/\1/p')
+                  age=$(( $(date +%s) - ts )); [ "$age" -gt "$oldest" ] && oldest=$age
+                  t1=$(now_cs)
+                  wget -q -T 5 -O /dev/null "$SMTP_URL?count=$k" || echo "level=error msg=\"smtp send failed\" count=$k"
+                  ssum=$((ssum + ($(now_cs) - t1) * 10)); sends=$((sends + 1)); orders=$((orders + k))
+                else
+                  sleep 1
+                fi
+                now=$(date +%s)
+                if [ $((now - since)) -ge 10 ]; then
+                  s=0; [ "$sends" -gt 0 ] && s=$((ssum / sends))
+                  echo "level=info msg=\"confirmation emails sent\" orders=$orders fetches=$fetches oldest_order_age_s=$oldest fetch_ms_avg=$((fsum / fetches)) smtp_ms_avg=$s"
+                  orders=0; fetches=0; sends=0; oldest=0; fsum=0; ssum=0; since=$now
+                fi
+              done
+          resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: 200m, memory: 32Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: points}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: points}}
+  template:
+    metadata: {labels: {app: points}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: GROUP, value: points}
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              echo "level=info msg=\"points started\" group=$GROUP"
+              orders=0; fetches=0; oldest=0; fsum=0; since=$(date +%s)
+              while true; do
+                t0=$(now_cs)
+                if ! body=$(wget -q -T 10 -O - "http://order-events:9092/cgi-bin/fetch?group=$GROUP" 2>&1); then
+                  echo "level=error msg=\"fetch failed\" err=\"$(echo $body)\""; sleep 1; continue
+                fi
+                fsum=$((fsum + ($(now_cs) - t0) * 10)); fetches=$((fetches + 1))
+                k=$(echo "$body" | grep -c order_id)
+                if [ "$k" -gt 0 ]; then
+                  ts=$(echo "$body" | head -1 | sed -n 's/.*"ts":\([0-9]*\).*/\1/p')
+                  age=$(( $(date +%s) - ts )); [ "$age" -gt "$oldest" ] && oldest=$age
+                  orders=$((orders + k))
+                else
+                  sleep 1
+                fi
+                now=$(date +%s)
+                if [ $((now - since)) -ge 10 ]; then
+                  echo "level=info msg=\"points credited\" orders=$orders fetches=$fetches oldest_order_age_s=$oldest fetch_ms_avg=$((fsum / fetches))"
+                  orders=0; fetches=0; oldest=0; fsum=0; since=$now
+                fi
+              done
+          resources: {requests: {cpu: 20m, memory: 16Mi}, limits: {cpu: 200m, memory: 32Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: smtp-relay}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: smtp-relay}}
+  template:
+    metadata: {labels: {app: smtp-relay}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cat > /www/cgi-bin/send <<'EOF'
+              #!/bin/sh
+              sleep 0.01
+              printf 'Content-Type: text/plain\r\n\r\n250 OK queued\n'
+              EOF
+              chmod 755 /www/cgi-bin/send
+              echo "level=info msg=\"smtp-relay started\""
+              exec httpd -f -p 2525 -h /www
+          ports: [{name: http, containerPort: 2525}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: smtp-relay}
+spec:
+  selector: {app: smtp-relay}
+  ports: [{name: http, port: 2525, targetPort: http}]

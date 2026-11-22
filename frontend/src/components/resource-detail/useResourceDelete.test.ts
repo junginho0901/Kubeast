@@ -26,6 +26,7 @@ vi.mock('react', async (importOriginal) => ({
   useEffect: (fn: () => void) => { effects.push(fn) },
 }))
 vi.mock('react-dom', () => ({ flushSync: (fn: () => void) => fn() }))
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (_key: string, fallback: string) => fallback }) }))
 
 // TanStack's mutation: the function of the render it was pressed in runs; its callbacks are those of the newest render
 // (the observer hands the mutation each render's options), with the variables it was pressed with.

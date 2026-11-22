@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/proxypath"
 	"golang.org/x/time/rate"
 )
 
@@ -80,7 +81,7 @@ func addressClient(cfg Config) (*http.Client, error) {
 		TLSClientConfig:   tc,
 		ForceAttemptHTTP2: true,
 		DialContext:       (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
-	}}, nil
+	}, CheckRedirect: proxypath.FollowNone}, nil
 }
 
 func (s *Store) Config() Config { return s.cfg }
@@ -478,7 +479,7 @@ func (s *Store) Query(ctx context.Context, client *http.Client, url string, req 
 		if ctx.Err() != nil {
 			return nil, ErrTimeout
 		}
-		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return nil, sendError(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -576,6 +577,14 @@ func (s *Store) keep(ctx context.Context, req Request, flows []Flow, now time.Ti
 		Namespace: req.Namespace, Kind: req.Kind, Name: req.Name, Since: req.Since.String(),
 		Flows: out, Truncated: truncated, Redacted: redacted, Groups: group(out),
 	}
+}
+
+// sendError is a read that got no answer; a redirect not followed is said without the Location it named.
+func sendError(err error) error {
+	if nf := proxypath.NotFollowed(err); nf != nil {
+		return fmt.Errorf("%w: %v", ErrUnavailable, nf)
+	}
+	return fmt.Errorf("%w: %v", ErrUnavailable, err)
 }
 
 func statusError(resp *http.Response) error {

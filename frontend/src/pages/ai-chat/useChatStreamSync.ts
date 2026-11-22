@@ -53,6 +53,7 @@ export function useChatStreamSync({
           content: streamState.content,
           toolCalls: streamState.toolCalls && streamState.toolCalls.length > 0 ? [...streamState.toolCalls] : undefined,
           streamingPhase: streamState.streamingPhase ?? updated[tempAssistantIndex].streamingPhase,
+          maskValues: streamState.maskValues,
           queued: coming && streamState.queued,
         }
         return updated
