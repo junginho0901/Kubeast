@@ -377,10 +377,20 @@ ai:
   # number masking; disable lists rule names to skip (key_name, private_key,
   # url_credentials, authorization, jwt, aws_key, provider_key, email, phone,
   # rrn, card). Error messages shown on screen or written to the audit log are
-  # masked with every credential rule, whatever these settings.
+  # masked with every credential rule, whatever these settings. numbered (with
+  # pii, off by default) reads each value as its kind and a number (<EMAIL_1>,
+  # <PHONE_1>, <RRN_1>, <CARD_1>) that stays the same within one chat answer or
+  # alert investigation; a later answer numbers past what the conversation
+  # shows, so the same value then gets a new number; a chat answer shows the
+  # person who asked the values in their place, kept in that page's memory and
+  # never saved; a write holding <PHONE_n>, <RRN_n> or <CARD_n> is refused like
+  # one holding <EMAIL_n>. Off: one address keeps one <EMAIL_n> within a text,
+  # the other kinds read <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, and
+  # no value is shown in a placeholder's place.
   redaction:
     enabled: true
     pii: false
+    numbered: false
     disable: []
   # Chat history sent to the model: the last historyMessages user/assistant
   # messages verbatim; with summary.enabled, everything before them is folded
