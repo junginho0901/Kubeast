@@ -3164,7 +3164,9 @@
     "reconnect": "Reconnect",
     "followStopped": "Following stopped: the server was replaced. Turn Follow on again to go on.",
     "terminalLimit": "This account already has as many terminals open on this server as it may. Close one, then reconnect.",
-    "followLimit": "Not followed: this account already follows as many logs on this server as it may. Stop one it follows elsewhere, then open this one again."
+    "followLimit": "Not followed: this account already follows as many logs on this server as it may. Stop one it follows elsewhere, then open this one again.",
+    "terminalServerLimit": "This server already has as many terminals and followed logs open as it may, for all accounts together. Reconnect in a while.",
+    "followServerLimit": "Not followed: this server already has as many terminals and followed logs open as it may, for all accounts together. Open this one again in a while."
   },
   "login": {
     "sessionEnded": "Your session ended: your account or access may have changed, or the session timed out. Sign in again.",

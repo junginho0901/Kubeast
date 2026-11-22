@@ -4,7 +4,8 @@
 // the last line it got (Last-Event-ID), from which k8s-service goes on. The mark comes after each batch of lines, so a
 // cut in the middle of a batch (a proxy, the network) shows again the lines of that batch the browser already had; a
 // server that leaves ends between batches and repeats none. Each reconnect is its own audited read, its row saying
-// where it went on from. A stream refused at the account's cap (the event `stream-limit`) stops too.
+// where it went on from. A stream refused at the account's cap or the server's (the event `stream-limit`, whose data
+// says which) stops too.
 import { SESSION_ENDED_EVENT } from '@/services/auth'
 import { STREAM_LIMIT_EVENT } from '@/utils/serverShutdown'
 
@@ -19,7 +20,7 @@ export interface FollowSource {
   close(): void
 }
 
-export type FollowStop = { kind: 'end' } | { kind: 'session'; code: string } | { kind: 'limit' } | { kind: 'error'; reason?: string }
+export type FollowStop = { kind: 'end' } | { kind: 'session'; code: string } | { kind: 'limit'; reason?: string } | { kind: 'error'; reason?: string }
 
 export interface FollowHandlers {
   line(text: string): void
@@ -42,10 +43,10 @@ export function followLogFile(es: FollowSource, h: FollowHandlers): void {
     h.reconnecting(false)
     h.stopped({ kind: 'session', code: (e as MessageEvent).data })
   })
-  es.addEventListener(STREAM_LIMIT_EVENT, () => {
+  es.addEventListener(STREAM_LIMIT_EVENT, (e) => {
     es.close()
     h.reconnecting(false)
-    h.stopped({ kind: 'limit' })
+    h.stopped({ kind: 'limit', reason: (e as MessageEvent).data || undefined })
   })
   es.addEventListener('error', (e) => {
     const reason = (e as MessageEvent).data as string | undefined
