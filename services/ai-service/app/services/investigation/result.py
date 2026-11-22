@@ -6,7 +6,7 @@ the calls that show it), the path from the cause to the symptom, what was ruled 
 and with the ledger its hypotheses (investigation/ledger.py). The causes, path, ruled-out and no-fault keys are the
 shape the AI evaluation reads: each cause keeps the numbers the model gave as `raw_evidence`, the ones that name no
 call of the run too, beside `evidence`, each call number given with its tool. The server takes the block out of the
-report and keeps what it read in the row's `result` (dbmigrate 00030), so the report window, the floating chat, the
+report and keeps what it read in the row's `result` (dbmigrate 00031), so the report window, the floating chat, the
 MCP `investigations` read and the AI evaluation stay with the calls they came from. `checks` says which switches read
 it: with evidenceCheck each cause says whether the calls show it (`verified`, and why not as `reason`), without the
 ledger `hypotheses` is empty and the window shows none. With both switches off nothing here runs and `result` stays
