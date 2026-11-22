@@ -21,8 +21,8 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
-// pagedPods answers pod lists in pages as the API server does, per namespace: "big-*" has many pages, anything else
-// one. It counts the requests for a page past the first, the ones a place is for.
+// pagedPods answers pod and event lists in pages as the API server does, per namespace: "big-*" has many pages,
+// anything else one. It counts the requests for a page past the first, the ones a place is for.
 type pagedPods struct {
 	perNamespace int
 	delay        time.Duration
@@ -77,11 +77,19 @@ func (a *pagedPods) client(t testing.TB) *kubernetes.Clientset {
 		if to < total {
 			meta.Continue = strconv.Itoa(to)
 		}
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/events") {
+			events := make([]corev1.Event, 0, to-from)
+			for i := from; i < to; i++ {
+				events = append(events, corev1.Event{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("e-%d", i), Namespace: ns}})
+			}
+			_ = json.NewEncoder(w).Encode(corev1.EventList{TypeMeta: metav1.TypeMeta{Kind: "EventList", APIVersion: "v1"}, ListMeta: meta, Items: events})
+			return
+		}
 		items := make([]corev1.Pod, 0, to-from)
 		for i := from; i < to; i++ {
 			items = append(items, corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("p-%d", i), Namespace: ns}})
 		}
-		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(corev1.PodList{TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"}, ListMeta: meta, Items: items})
 	}))
 	t.Cleanup(srv.Close)
@@ -217,5 +225,46 @@ func TestPagedPodReadsOutsideEachPodTakeTurnsToo(t *testing.T) {
 	t.Logf("pages past the first at once: %d", api.mostAtOnce())
 	if got := api.mostAtOnce(); got > 2 {
 		t.Errorf("%d big reads at once, want at most 2", got)
+	}
+}
+
+// Reads of many pages of events, as the caller or once for everyone, take the same places as the pod reads, and each
+// counts every event.
+func TestBigEventReadsTakeTurnsWithTheOtherBigReads(t *testing.T) {
+	api := &pagedPods{perNamespace: 3*eventPageSize + 1, delay: 5 * time.Millisecond}
+	k := api.client(t)
+	s := &Service{}
+	s.defaultBundle.Store(&clientBundle{clientset: k})
+	var wg sync.WaitGroup
+	for i := 0; i < 12; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ns := fmt.Sprintf("big-%d", i)
+			switch i % 3 {
+			case 0:
+				_, counts, err := s.newestEventsSince(context.Background(), ns, metav1.ListOptions{}, time.Time{}, 10, "")
+				if err != nil || counts.Total != api.perNamespace {
+					t.Errorf("events of %s as the caller: %d, %v", ns, counts.Total, err)
+				}
+			case 1:
+				w, err := readEventWindow(context.Background(), k, ns, metav1.ListOptions{}, 10, "")
+				if err != nil || len(w.seen) != api.perNamespace {
+					t.Errorf("events of %s for everyone: %v", ns, err)
+				}
+			default:
+				if err := eachPod(context.Background(), k.CoreV1(), ns, metav1.ListOptions{}, func(*corev1.Pod) {}); err != nil {
+					t.Errorf("pods of %s: %v", ns, err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	t.Logf("pages past the first at once: %d, for 12 reads of 4 pages", api.mostAtOnce())
+	if got := api.mostAtOnce(); got > bigReadSlots.Cap() {
+		t.Errorf("%d big reads at once, want at most %d", got, bigReadSlots.Cap())
+	}
+	if n := bigReadSlots.InUse(); n != 0 {
+		t.Errorf("%d places still taken", n)
 	}
 }

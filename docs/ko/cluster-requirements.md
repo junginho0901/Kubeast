@@ -49,7 +49,7 @@ Kubeast는 **로그인한 사람의 신원으로**(impersonation) 클러스터�
 
 | 항목 | 필요한 이유 | 위치 |
 | --- | --- | --- |
-| ClusterRole `kubeast-impersonator` + 바인딩(그룹 `kubeast:impersonator`) | Kubeast 자격 증명이 사용자와 정해진 그룹으로만 가장하도록 제한 | [`helm/kubeast/files/impersonation-rbac.yaml`](../../helm/kubeast/files/impersonation-rbac.yaml) |
+| ClusterRole `kubeast-impersonator` + 바인딩(그룹 `kubeast:impersonator`) | Kubeast 자격 증명이 사용자와 정해진 그룹으로만 가장하도록 제한. `kube-system` Namespace `get`도 줍니다(그 하나만). 그 UID로 한 클러스터의 두 번째 등록과, 등록된 클러스터의 kubeconfig를 다른 클러스터 것으로 바꾸는 것을 거절합니다([설치와 첫 설정 — 클러스터 연결](getting-started.md#3-로그인-후-클러스터-연결-connect-your-cluster)). 이 권한이 없으면 kubeconfig가 UID 없이 등록되고 두 검사를 건너뜁니다(2026-11-19부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요) | [`helm/kubeast/files/impersonation-rbac.yaml`](../../helm/kubeast/files/impersonation-rbac.yaml) |
 | 그룹 바인딩 `kubeast:viewer`(view + `kubeast:cluster-reader`) · `kubeast:operator`(edit) · `kubeast:admin`(cluster-admin) | Read·Write·Admin 역할이 클러스터에서 할 수 있는 범위. `kubeast:cluster-reader`는 `view`에 없는 클러스터 범위 객체와 Role·RoleBinding을 더합니다(Role·RoleBinding은 2026-10-27부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요). 설치하는 쪽이 `view`에 넣지 않는 Lease·IngressClass·DeviceClass·ResourceSlice와 Gateway API·VPA·정책 보고서 종류도 더합니다(2026-11-01부터 — 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요). Secret은 넣지 않습니다 | 같은 파일 |
 | 커스텀 역할 그룹 `kubeast:role:<이름>`, Namespace 범위 부여 | 커스텀 역할이나 Namespace 한정 부여를 쓸 때. 목록 화면은 그 종류의 `watch`로 객체를 따라갑니다. list만 되고 watch가 안 되는 역할은 화면을 연 때 읽은 값을 보여 주고, 화면 위 안내가 그렇다고 말합니다. 열린 창도 보여 주는 것을 같이 따라갑니다: 워크로드·HPA의 이벤트, Node의 파드, Namespace 서랍의 그 Namespace(Namespace 한정 부여는 Namespace watch가 거절되므로 빼고), 파드 RBAC 탭의 바인딩과 역할, CRD나 고른 Kind의 커스텀 리소스(이쪽은 항목 하나짜리 `list` 뒤 `watch`, 브라우저에 객체를 보내지 않음) | `auth.impersonation.customRoles` → `templates/impersonation-custom-roles.yaml` |
 | Read의 Prometheus·OpenCost 프록시 GET | Read 역할이 비용과 그래프를 볼 때 | `auth.impersonation.viewerProxyServices` → `templates/impersonation-viewer-proxy.yaml` |
@@ -65,8 +65,8 @@ Kubeast는 주소가 그 사람의 것인지 알 수 없습니다. `admin.users.
 
 **사람이 없는 요청.** 몇몇 읽기는 Kubeast 자체 읽기이고, 클러스터 감사 로그에는 Kubeast가 남습니다.
 
-- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다.
-- 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트와 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
+- `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다. 그 밖에는 연결 확인(클러스터 등록, 새 kubeconfig, 연결 테스트)이 UID를 얻으려고 `kube-system` Namespace를 자격 증명 자신의 권한으로 이렇게 읽습니다(§1).
+- 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트 · 타임라인과 이벤트 API의 네임스페이스나 클러스터 전체 이벤트 · 타임라인 롤아웃의 Deployment · ReplicaSet · ControllerRevision · 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
 
 그 밖의 요청은 로그인한 사람을 알 수 없으면 보내지 않고, kubectl 도구도 실행하지 않습니다.
 
@@ -182,6 +182,8 @@ discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server
   - Lens·Headlamp와 같은 `namespace/service:port` 형식으로 적습니다.
   - API가 하위 경로에 있으면 `namespace/service:port/경로`처럼 경로까지 적습니다(예: VictoriaMetrics 클러스터 `monitoring/vmselect-main:8481/select/0/prometheus`).
   - Kubeast는 API 서버 프록시로 읽고, 상태 API로 `/-/healthy` 연결 여부와 저장소 종류(`flavor`: prometheus·victoriametrics)를 알려 줍니다.
+  - Service가 리다이렉트로 답하면 같은 API 서버의 그 Service 프록시 경로 안에서만 따라갑니다. 프록시로 가는 요청마다 Kubeast의 클러스터 자격 증명과 사용자 신원이 실리므로 그 밖의 리다이렉트는 따라가지 않고, 읽기는 까닭과 함께 502로 답합니다.
+  - 저장소가 직접 쓴 401·403(앞에 둔 kube-rbac-proxy 같은 인증 프록시)은 로그아웃이나 거절이 아니라 저장소의 문구를 담은 502입니다. API 서버가 프록시를 거절한 것은 그대로 403입니다. 인증 프록시 뒤의 저장소는 주소와 인증으로 등록합니다.
   - 저장소 종류는 `/-/healthy` 응답 문구로 판단합니다.
 - **클러스터 안 자동 발견**: 아래 순서로 찾습니다. `/-/healthy`가 응답하면 그 Service를 쓰고, 결과는 클러스터마다 기억합니다. 찾았으면 10분, 못 찾았거나 찾다가 오류 · 시간 초과가 나면 1분입니다.
   - ① 모든 Namespace에서 레이블로 찾고, Service의 포트를 모두 시도합니다. 레이블 순서는 다음과 같습니다.
@@ -314,6 +316,7 @@ Read 사용자에게도 열어 주려면 이 주소를 §1의 `viewerProxyServic
 
 - **Kubeast가 찾는 방법**: 이름에 `opencost`가 들어간 Service 중 **포트 9003**인 것을 `opencost`·`kubecost`·`monitoring`·`cost` Namespace에서 찾고, `/healthz`로 확인합니다.
   - 찾은 결과는 10분, 찾지 못한 결과는 5분 동안 기억합니다.
+  - Prometheus Service(§3)와 같은 규칙으로 API 서버 프록시를 거쳐 읽습니다. 리다이렉트는 자기 프록시 경로 안에서만 따라가고, OpenCost가 직접 쓴 401·403은 502입니다.
 - **조건**: OpenCost는 Prometheus를 읽고, Prometheus는 OpenCost의 `/metrics`를 다시 수집해야 합니다. OpenCost가 내보내는 가격·클러스터 지표를 할당 계산에 쓰기 때문입니다.
 - **예시**: [`opencost-values.yaml`](../../deploy/examples/target-cluster/opencost-values.yaml) — §3 예시의 Prometheus를 읽도록 맞춘 값입니다.
 
@@ -387,6 +390,8 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 - 그 Namespace에서 특권 파드를 막는 정책(Kyverno·Gatekeeper 등)이 있다면 그 정책에 예외를 두어야 합니다.
 - 노드가 이미지(`nodeShell.images`, 기본 `docker.io/library/busybox:1.38.0`)를 내려받을 수 있어야 합니다. 폐쇄망이라면 사내 미러 주소를 적으세요.
 - 사용자는 그 클러스터의 Admin(cluster-admin)이어야 합니다.
+
+셸 파드는 셸이 끝나면 지웁니다. 그 파드에는 라벨 `kubeast.io/node-shell-id`와, 연 k8s-service 파드를 적은 애너테이션 `kubeast.io/node-shell-owner`가 붙습니다. 그 k8s-service 파드가 셸 파드를 지우기 전에 죽으면(메모리 부족, 노드 잃음) 1~2분 뒤에 다른 k8s-service 파드가 셸을 연 사람으로, 셸이 쓴 것과 같은 이 Namespace 파드의 `get`·`delete`로 지웁니다. 45초 동안 데이터베이스에 노드 셸을 적지 못한 k8s-service 파드는 자기 노드 셸을 먼저 스스로 닫으므로, 쓰고 있는 셸을 다른 파드가 지우지 않습니다. 클러스터에 닿지 못하거나 그 삭제를 거절하면(그 사람의 바인딩이 지워짐) k8s-service는 로그 한 줄을 남기고 나중에 다시 해 보며, 파드는 늦어도 `nodeShell.timeoutSeconds`(3600초)에 끝나고 행은 그 150초 뒤에 더 해 보지 않고 지웁니다. Kubeast에서 지운 클러스터의 행은 바로 지우고, 그 클러스터의 노드 셸 파드는 deadline에 끝납니다. 노드 셸이 켜져 있을 때 데이터베이스가 행을 받지 못한 셸은 파드를 만들기 전에 거절합니다("node shell row not saved").
 
 이 Namespace는 첫 셸 뒤에도 `privileged`인 채로 남습니다.
 
@@ -551,7 +556,7 @@ service:
 | 항목 | 조건 |
 | --- | --- |
 | 사용자 네임스페이스 | `podSecurity.hostUsers: false`(기본)를 쓰려면 Kubernetes 1.33 이상과 이를 지원하는 노드 커널(6.3 이상)이 필요합니다. 조건이 맞지 않으면 `true` |
-| 파드 종료 | Kubernetes 1.30 이상: 차트의 Service 뒤 파드는(번들 PostgreSQL과 Redis는 빼고) 기본 `preStop` `sleep` 동작(1.30 베타·기본 켜짐, 1.34 GA)으로 SIGTERM 전에 `podShutdown.preStopSeconds`(5초) 기다리므로, 롤링 업데이트 중 이미 종료한 파드로 새 연결이 가지 않습니다. `0`이면 기다리지 않습니다 |
+| 파드 종료 | Kubernetes 1.30 이상: 차트의 Service 뒤 파드는(번들 PostgreSQL과 Redis는 빼고) 기본 `preStop` `sleep` 동작(1.30 베타·기본 켜짐, 1.34 GA)으로 SIGTERM 전에 `podShutdown.preStopSeconds`(5초) 기다리므로, 롤링 업데이트 중 Service를 거쳐 떠나는 파드로 새 연결이 가지 않습니다. 파드 IP로 보내는 로드 밸런서는 그 기다림이 끝난 뒤에도 몇 초 더 떠나는 파드로 새 요청을 보낼 수 있으므로, 그런 로드 밸런서 뒤에서는 `podShutdown.preStopSeconds`를 로드 밸런서가 그 파드에 새 요청을 그만 보낼 때까지보다 길게 둡니다(AWS Application Load Balancer 뒤에서는 25초, 대상 그룹 등록 해제 지연 20초: [여러 대로 띄우기](high-availability.md#시작하기-전에), [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md#3-바꿔야-하는-값)). `0`이면 기다리지 않습니다. `streams.enabled`를 켜면 `k8s-service-stream`은 `podShutdown.preStopSeconds`와 상관없이 같은 방식으로 `streams.preStopSeconds`(10초)를 기다리므로 Kubernetes 1.30 이상이 필요하고, 1.33 아래에서는 `streams.preStopSeconds`를 1 이상으로 둡니다(Kubernetes는 1.33부터 `sleep` 0을 받습니다) |
 | 저장소 | 내장 PostgreSQL을 쓰면 PVC — 기본 StorageClass 또는 `postgresql.storageClassName` |
 | 노출 | NodePort(기본)·LoadBalancer, 또는 Ingress 컨트롤러(`ingress.enabled`) |
 | 앞단 프록시·로드 밸런서 | 유휴 시간 제한 30초 초과(AWS ALB 기본값은 60초). 조용한 동안 실시간 목록·터미널·노드 셸·로그 실시간 보기·AI 답은 25초마다, Helm 릴리스 스트림은 30초마다 무언가를 보내므로(WebSocket 핑, SSE 주석 줄) 열린 채 유지됩니다. 게이트웨이 자체는 이들에 600~3 600초를 줍니다 |
@@ -622,7 +627,9 @@ service:
   - Relay Service는 `features.networkFlows.relay`(기본 `kube-system/hubble-relay:443`)이거나, 항목에 적은 것(`proxy:<namespace>/<service>:<port>`)입니다.
   - **Relay가 TLS로 서비스해야 합니다**(`hubble.relay.tls.server.enabled=true`). API 서버는 백엔드와 TLS일 때만 HTTP/2로 말하고, gRPC에는 HTTP/2가 필요합니다. 평문 Relay면 502나 503이 오고, 메시지에 이 설정 이름이 나옵니다.
   - API 서버는 Relay 인증서를 검사하지 않고(IP로 중계) 클라이언트 인증서도 보내지 않습니다. 그래서 클라이언트 인증서를 요구하는 Relay(`hubble.relay.tls.server.mtls=true`)는 주소 모드를 써야 합니다.
+  - Relay나 Whisker의 리다이렉트는 같은 API 서버의 그 Service 프록시 경로 안에서만 따라가고, 그 밖이면 502입니다.
 - **주소 모드**(`https://<host>:<port>`): Kubeast가 Relay에 직접 TLS로 연결합니다.
+  - 리다이렉트는 따라가지 않습니다. 리다이렉트로 답하는 Relay는 502입니다. Relay가 답하는 주소를 등록하세요.
   - `tls.existingSecret`에 `ca.crt`를 넣고, `tls.clientCertificate: true`면 mTLS용 `tls.crt`·`tls.key`도 넣습니다. 인증서에서 확인할 이름은 `tls.serverName`으로 바꿀 수 있습니다.
   - k8s-service에서 Relay로 연결할 수 있어야 합니다. `networkPolicy`가 켜져 있으면 그 주소를 `features.networkFlows.egressCIDRs`에 추가하세요.
   - 읽기 전마다 아래와 같은 권한을 클러스터에 물어(SelfSubjectAccessReview) 두 모드에서 같은 사람만 읽게 합니다.

@@ -29,7 +29,7 @@ export default function TestResultModal({
     onSuccess: (data) => setResult({ ...data, hooks: data.hooks ?? [] }),
     // A hook that failed comes as a result (success false, with Helm's error); this is a test that never ran.
     onError: (err: any) => {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'test failed')
+      setError(err?.response?.data?.detail ?? err?.message ?? t('helmReleaseDetail.test.runFailed', 'test failed'))
     },
   })
 

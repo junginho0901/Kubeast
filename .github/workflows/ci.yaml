@@ -57,7 +57,8 @@ jobs:
         run: go test -run 'JQ' .
 
   # The race detector over k8s-service's live lists (internal/ws) and handlers (internal/handler), whose sockets,
-  # terminals and streams run goroutines that can outlive their request. A job of its own, beside the longer helm job,
+  # terminals and streams run goroutines that can outlive their request, and the heartbeat and sweep goroutines of
+  # the node shell rows and the drains (internal/nodeshells, internal/drains). A job of its own, beside the longer helm job,
   # since its build with -race is not in the module cache.
   go-race:
     name: go race (k8s-service ws + handler)
@@ -71,9 +72,15 @@ jobs:
       - name: internal/ws
         working-directory: services/k8s-service-go
         run: go test -race ./internal/ws/
+      - name: internal/streamcap
+        working-directory: services/k8s-service-go
+        run: go test -race ./internal/streamcap/
       - name: internal/handler
         working-directory: services/k8s-service-go
         run: go test -race ./internal/handler/
+      - name: internal/nodeshells and internal/drains
+        working-directory: services/k8s-service-go
+        run: go test -race ./internal/nodeshells/ ./internal/drains/
 
   # Every Go test that needs PostgreSQL, found rather than listed (scripts/postgres-tests.sh):
   # each package whose tests read DBMIGRATE_TEST_DATABASE_URL runs whole against this server —
@@ -248,6 +255,18 @@ jobs:
       - run: |
           cd services && files=$(gofmt -l pkg auth-service-go k8s-service-go session-service-go tool-server model-config-controller-go deploy-service-go dashboards-service-go ci-controller-go)
           if [ -n "$files" ]; then echo "gofmt needed:"; echo "$files"; exit 1; fi
+
+  # The planted-instruction cases of evals/ai-planted and their scorer: standard library only, no cluster, no model.
+  ai-eval-planted:
+    name: planted-instruction cases and scorer (stdlib tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python -I scripts/test_ai_eval_planted.py
+      - run: python -I scripts/ai_eval_planted.py check
 
   e2e-assertions:
     name: e2e specs assert outcomes

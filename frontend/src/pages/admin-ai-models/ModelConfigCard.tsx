@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { ModelConfigResponse } from '@/services/api'
-import { getProvider, getModelLabel } from '@/constants/modelCatalog'
+import { getProvider, getModelLabel, providerLabel } from '@/constants/modelCatalog'
 import { Check, Pencil, Trash2, X, Radio } from 'lucide-react'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { useConfirm } from '@/services/confirm'
@@ -80,7 +80,7 @@ export default function ModelConfigCard({
               )}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              {provDef?.label || cfg.provider} · <code className="text-slate-400">{getModelLabel(cfg.provider, cfg.model)}</code>
+              {(provDef && providerLabel(provDef, tr)) || cfg.provider} · <code className="text-slate-400">{getModelLabel(cfg.provider, cfg.model)}</code>
               {keyVariable
                 ? <span className="text-emerald-400 ml-1">· 🔑 env: {keyVariable}</span>
                 : provDef?.needsApiKey === false

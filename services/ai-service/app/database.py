@@ -86,6 +86,16 @@ class ToolApproval(Base):
     decided_at = Column(DateTime, nullable=True)
 
 
+# An approved call's run is over this long after its approval, whichever ai-service runs it: tool-server takes the call
+# while its token lasts (120 s, approval_token.sign) and answers within 60 s (tool_server_client); the rest is room for
+# the database writes after the run and for the clocks of two servers.
+APPROVED_RUN_LIMIT_SECONDS = 600
+INTERRUPTED_RESULT = (
+    "interrupted: ai-service stopped before this run's outcome was written, so whether it changed the cluster is not "
+    "known; check the cluster before asking again"
+)
+
+
 class ModelConfig(Base):
     """모델 설정 (DB 기반)"""
     __tablename__ = "model_configs"
@@ -202,7 +212,7 @@ class ClaudeCodeSlot(Base):
 
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 29
+REQUIRED_SCHEMA_VERSION = 30
 
 
 async def read_schema_version(engine) -> int:
@@ -350,18 +360,6 @@ class DatabaseService:
             )
             await db.commit()
     
-    async def delete_session(self, session_id: str):
-        """세션 삭제"""
-        async with self.async_session() as db:
-            from sqlalchemy import select
-            result = await db.execute(
-                select(Session).where(Session.id == session_id)
-            )
-            session = result.scalar_one_or_none()
-            if session:
-                await db.delete(session)
-                await db.commit()
-    
     async def add_message(
         self,
         session_id: str,
@@ -505,6 +503,7 @@ class DatabaseService:
         from datetime import timedelta
 
         await self._expire_waiting_tool_approvals()
+        await self.close_interrupted_tool_approvals()
         async with self.async_session() as db:
             row = ToolApproval(
                 id=uuid.uuid4().hex,
@@ -540,6 +539,69 @@ class DatabaseService:
                 await db.commit()
         except Exception as e:
             logger.warning("tool approvals: could not expire waiting calls: %s", e.__class__.__name__)
+
+    async def close_interrupted_tool_approvals(self, approval_id: Optional[str] = None, limit: int = 50) -> int:
+        """Approved calls whose run never wrote its outcome, because the ai-service running it stopped (out of memory, a
+        lost node, the shutdown cutting the request), end failed with a masked copy of their arguments and an
+        ai.tool.interrupt row. Only past APPROVED_RUN_LIMIT_SECONDS, so no server ends a run another is still on.
+        The row moves and its audit row is written in one transaction: the UPDATE holds the row, so of two servers one
+        ends it and writes the row, and with AUDIT_FAIL_CLOSED an audit row that cannot be stored leaves the approval
+        approved for a later sweep (with it off the row is ended and the audit row written after, as elsewhere).
+        approval_id: that one only. A new card and an opened card do this, and the first database use of the process.
+        A failure here must not stop them. Returns how many it ended."""
+        from datetime import timedelta
+
+        from sqlalchemy import select, update
+
+        from app.services import audit_writer
+        from app.services.audit_target import ToolTarget, kept_tool_args, tool_target
+
+        strict = audit_writer.fail_closed_enabled()
+        ended = 0
+        try:
+            if strict and not (await audit_writer.audit_ready())[0]:
+                return 0  # no row could be written now
+            query = select(ToolApproval).where(
+                ToolApproval.status == "approved",
+                ToolApproval.decided_at < utcnow() - timedelta(seconds=APPROVED_RUN_LIMIT_SECONDS),
+            )
+            if approval_id is not None:
+                query = query.where(ToolApproval.id == approval_id)
+            async with self.async_session() as db:
+                rows = (await db.execute(query.order_by(ToolApproval.decided_at).limit(limit))).scalars().all()
+            for row in rows:
+                args = dict(row.args or {})
+                try:
+                    target = tool_target(row.tool, args)
+                except Exception:
+                    target = ToolTarget("tool", row.tool, None, None)
+                record = dict(
+                    action="ai.tool.interrupt", actor_user_id="system", actor_email="system", cluster=row.cluster,
+                    target_type=target.type, target_id=target.id, namespace=target.namespace,
+                    after={"approval_id": row.id, "session_id": row.session_id, "cluster": row.cluster, "tool": row.tool,
+                           "approved_by": row.user_id, "approved_by_email": row.user_email,
+                           "approved_at": row.decided_at.isoformat() + "Z", "end_reason": "interrupted"},
+                )
+                async with self.engine.connect() as conn:
+                    await conn.begin()
+                    moved = await conn.execute(
+                        update(ToolApproval)
+                        .where(ToolApproval.id == row.id, ToolApproval.status == "approved")
+                        .values(status="failed", result=INTERRUPTED_RESULT, decided_at=utcnow(), args=kept_tool_args(args))
+                    )
+                    if moved.rowcount != 1:
+                        await conn.rollback()
+                        continue  # its run ended meanwhile, or another server ended it
+                    if strict and not await audit_writer.write_audit(**record, conn=conn):
+                        await conn.rollback()
+                        continue  # stays approved until a sweep can write the row
+                    await conn.commit()
+                if not strict:
+                    await audit_writer.write_audit(**record)
+                ended += 1
+        except Exception as e:
+            logger.warning("tool approvals: could not end interrupted runs: %s", e.__class__.__name__)
+        return ended
 
     async def get_tool_approval(self, approval_id: str) -> Optional[ToolApproval]:
         async with self.async_session() as db:
@@ -702,6 +764,8 @@ class DatabaseService:
 # 전역 데이터베이스 서비스 인스턴스
 db_service: Optional[DatabaseService] = None
 db_initialized: bool = False
+# Approved runs a stopped ai-service left, from before this version too, are ended once at the first database use.
+interrupted_checked: bool = False
 # Requests that arrive together on a cold service share one initialisation (two
 # sqlite create_all calls collide on "table already exists"). One lock per event
 # loop: a Lock that has waited on one loop cannot be awaited on another.
@@ -719,7 +783,7 @@ def _db_init_lock() -> asyncio.Lock:
 
 async def get_db_service() -> DatabaseService:
     """데이터베이스 서비스 가져오기"""
-    global db_service, db_initialized
+    global db_service, db_initialized, interrupted_checked
     if db_service is None:
         db_service = DatabaseService()
         db_initialized = False
@@ -729,4 +793,7 @@ async def get_db_service() -> DatabaseService:
                 await db_service.init_db()
                 await db_service.ensure_default_model_config()
                 db_initialized = True
+    if not interrupted_checked:
+        interrupted_checked = True  # before the call: its audit rows come back here
+        await db_service.close_interrupted_tool_approvals()
     return db_service

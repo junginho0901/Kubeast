@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/probe"
@@ -199,7 +200,19 @@ func serverEnded(ctx context.Context, lang string) (notice string, closeCode int
 	if probe.IsLeaving(ctx) {
 		return serverRestartNotice(lang), probe.ShutdownCloseCode, probe.ShutdownReason, true
 	}
+	if errors.Is(context.Cause(ctx), nodeshells.ErrHeartbeatLost) {
+		return heartbeatLostNotice(lang), probe.ShutdownCloseCode, nodeshells.ReasonHeartbeatLost, true
+	}
 	return "", 0, "", false
+}
+
+// heartbeatLostNotice is the line a node shell ends with when its server could not save its row's heartbeat
+// (internal/nodeshells): the server closes it before another server would delete its pod.
+func heartbeatLostNotice(lang string) string {
+	if strings.HasPrefix(strings.ToLower(lang), "ko") {
+		return "\r\n[Kubeast] 이 서버가 45초 동안 데이터베이스에 노드 셸을 적지 못해 노드 셸을 닫았습니다. 노드 셸을 다시 여세요.\r\n"
+	}
+	return "\r\n[Kubeast] This node shell was closed: its server could not write it to the database for 45 s. Open the node shell again.\r\n"
 }
 
 // serverRestartNotice is the line a terminal ends with when its server stops (an upgrade or a node change) with no

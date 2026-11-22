@@ -5,6 +5,31 @@
  * Used by both Setup.tsx and AdminAIModels.tsx for the 2-tier dropdown.
  */
 
+/* ── A model's note: its catalog key under admin.aiModels.note and the English text ── */
+export const MODEL_NOTES = {
+  deprecated: 'deprecated',
+  recommended: 'recommended',
+  lowestCost: 'lowest cost',
+  mostCapable: 'most capable',
+  usesTheLeast: 'uses the least',
+  legacy: 'legacy',
+  tools7b: '7b, tools',
+  tools14b: '14b, tools',
+} as const
+export type ModelNote = keyof typeof MODEL_NOTES
+
+/** A note in the screen's language */
+export const modelNoteText = (note: ModelNote, tr: (key: string, fallback: string) => string): string =>
+  tr(`admin.aiModels.note.${note}`, MODEL_NOTES[note])
+
+/** A provider's name in the screen's language: what Kubeast adds to a name ("Local", "Custom / Other") is
+ * admin.aiModels.providerName.<id>; the id, which requests and saves carry, stays */
+export const providerLabel = (p: ProviderDef, tr: (key: string, fallback: string) => string): string =>
+  tr(`admin.aiModels.providerName.${p.id}`, p.label)
+
+/** The hint of a model that takes no tools, in the screen's language */
+export const noToolsText = (tr: (key: string, fallback: string) => string): string => tr('admin.aiModels.noTools', 'no tools')
+
 /* ── Model definition ── */
 export interface ModelDef {
   /** Model identifier sent to the API (e.g. "gpt-4o-mini") */
@@ -12,7 +37,7 @@ export interface ModelDef {
   /** Short display label shown in the dropdown */
   label?: string
   /** A word or two shown after the label in the open list only (recommended, legacy …), so the closed field fits */
-  note?: string
+  note?: ModelNote
   /** Does this model support function/tool calling? */
   functionCalling: boolean
 }
@@ -75,8 +100,8 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     models: [
       { name: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', note: 'recommended', functionCalling: true },
       { name: 'claude-opus-5-5', label: 'Claude Opus 5.5', functionCalling: true },
-      { name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', note: 'lowest cost', functionCalling: true },
-      { name: 'claude-fable-5-1', label: 'Claude Fable 5.1', note: 'most capable', functionCalling: true },
+      { name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', note: 'lowestCost', functionCalling: true },
+      { name: 'claude-fable-5-1', label: 'Claude Fable 5.1', note: 'mostCapable', functionCalling: true },
       { name: 'claude-opus-5', label: 'Claude Opus 5', functionCalling: true },
       { name: 'claude-sonnet-5', label: 'Claude Sonnet 5', functionCalling: true },
       { name: 'claude-fable-5', label: 'Claude Fable 5', functionCalling: true },
@@ -97,7 +122,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     models: [
       { name: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', note: 'recommended', functionCalling: true },
       { name: 'claude-opus-5-5', label: 'Claude Opus 5.5', functionCalling: true },
-      { name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', note: 'uses the least', functionCalling: true },
+      { name: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', note: 'usesTheLeast', functionCalling: true },
     ],
   },
   {
@@ -140,8 +165,8 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     baseUrlPlaceholder: 'http://localhost:11434',
     defaultApiKeyEnv: '',
     models: [
-      { name: 'qwen2.5', label: 'qwen2.5', note: '7b, tools', functionCalling: true },
-      { name: 'qwen2.5:14b', label: 'qwen2.5:14b', note: '14b, tools', functionCalling: true },
+      { name: 'qwen2.5', label: 'qwen2.5', note: 'tools7b', functionCalling: true },
+      { name: 'qwen2.5:14b', label: 'qwen2.5:14b', note: 'tools14b', functionCalling: true },
       { name: 'llama3.3', functionCalling: true },
       { name: 'llama3.1', functionCalling: true },
       { name: 'llama3.2', functionCalling: true },

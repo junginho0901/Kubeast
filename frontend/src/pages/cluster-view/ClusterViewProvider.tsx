@@ -14,7 +14,6 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
     [t],
   )
   const locale = i18n.language === 'ko' ? 'ko-KR' : 'en-US'
-  const na = tr('common.notAvailable', 'N/A')
   const emptyValue = tr('common.empty', '-')
 
   const [selectedNamespace, setSelectedNamespace] = useNamespaceParam()
@@ -101,7 +100,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
   const showExec = activeTab === 'exec'
 
   const value = useMemo<ClusterViewContextValue>(() => ({
-    tr, locale, na, emptyValue,
+    tr, locale, emptyValue,
     selectedNamespace, setSelectedNamespace,
     isNamespaceDropdownOpen, setIsNamespaceDropdownOpen,
     namespaceDropdownRef,
@@ -125,7 +124,7 @@ export function ClusterViewProvider({ children }: { children: ReactNode }) {
     deletingPods, setDeletingPods,
     closeDetailModal, closeContextMenu, openDeleteModal, closeDeleteModal,
   }), [
-    tr, locale, na, emptyValue,
+    tr, locale, emptyValue,
     selectedNamespace, setSelectedNamespace, isNamespaceDropdownOpen, searchQuery,
     nodeView, openNodeView, setNodeViewPage, moveNodeView, closeNodeView,
     selectedPod, selectedContainer, containerSearchQuery,

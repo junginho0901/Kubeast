@@ -11,7 +11,7 @@ import CustomDropdown from '@/components/CustomDropdown'
 import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { liveSessionEndText } from '@/utils/liveSessionEnd'
-import { SERVER_SHUTDOWN_EVENT } from '@/utils/serverShutdown'
+import { SERVER_SHUTDOWN_EVENT, followLimitText } from '@/utils/serverShutdown'
 import { followLogFile } from './logFileFollow'
 import { useCluster } from '@/contexts/ClusterContext'
 import { useClusterFeatures } from '@/hooks/usePrometheusQuery'
@@ -164,6 +164,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
         setFollow(false)
         if (why.kind === 'end') setStreamNote(t('clusterView.logFiles.streamEnded', 'Following stopped.'))
         else if (why.kind === 'session') setStreamNote(liveSessionEndText(t, why.code))
+        else if (why.kind === 'limit') setStreamNote(followLimitText(t))
         else {
           const reason = why.reason || t('clusterView.logs.streamError', 'An error occurred while streaming logs.')
           setStreamNote(t('clusterView.logFiles.streamFailed', 'Following stopped: {{reason}}', { reason }))
