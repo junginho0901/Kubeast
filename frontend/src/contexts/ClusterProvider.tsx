@@ -10,7 +10,16 @@ import { resetListStatus } from '@/services/listStatusStore'
 import { resetWatchProblems } from '@/services/watchProblemStore'
 import { askClusterQueriesOnScreen, dropClusterQueries, isClusterScopedQueryKey } from '@/utils/clusterQueryScope'
 import { paramsForCluster } from '@/utils/clusterScopedParams'
-import { ClusterContext, STORAGE_KEY } from './ClusterContext'
+import { ClusterContext, STORAGE_KEY, clearStoredCluster } from './ClusterContext'
+
+// The cluster last chosen in any tab of this browser: where a new tab starts.
+function readStoredCluster(): string {
+  return typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) || '' : ''
+}
+
+function storeCluster(id: string) {
+  if (typeof window !== 'undefined') window.localStorage.setItem(STORAGE_KEY, id)
+}
 
 // Everything that holds what a cluster answered moves to `cluster`: the requests from here on, the cluster-scoped
 // query cache (cluster-independent caches — identity, registry, sessions, … — are kept, see clusterQueryScope; none
@@ -32,9 +41,10 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
 
   const fromUrl = searchParams.get('cluster') || ''
-  const fromStorage =
-    typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) || '' : ''
-  const chosen = fromUrl || fromStorage
+  // This tab's own choice: the stored one when the tab starts, then only what this tab picks or its address names.
+  // Another tab picking, or a sign-in there clearing the stored one, does not move it.
+  const [tabChoice, setTabChoice] = useState(readStoredCluster)
+  const chosen = fromUrl || tabChoice
 
   // The cluster the screen shows: it takes the chosen one in the same step as the cache and the stores (moveTo), so
   // no render names a cluster beside what the one before answered. React Router applies a URL change in a
@@ -46,14 +56,14 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
   // request issued in this render already carries the cluster.
   setCurrentClusterRef(currentCluster)
   useEffect(() => {
-    // A cluster chosen through the URL (?cluster=, deep link) is remembered
-    // like one chosen in the picker, so an in-app navigation that drops the
-    // query (release detail, drawers) stays on that cluster instead of falling
-    // back to the stored or default one.
-    if (fromUrl && fromUrl !== fromStorage && typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, fromUrl)
-    }
-  }, [fromUrl, fromStorage])
+    // A cluster chosen through the URL (?cluster=, deep link) is this tab's
+    // choice like one chosen in the picker, so an in-app navigation that drops
+    // the query (release detail, drawers, the sidebar) stays on that cluster
+    // instead of falling back to the stored or default one. It is stored too.
+    if (!fromUrl) return
+    setTabChoice(fromUrl)
+    if (readStoredCluster() !== fromUrl) storeCluster(fromUrl)
+  }, [fromUrl])
 
   const [isSwitching, setIsSwitching] = useState(false)
   const switchStartRef = useRef(0)
@@ -112,13 +122,22 @@ export function ClusterProvider({ children }: { children: ReactNode }) {
     if (id && currentCluster && id !== currentCluster) {
       clustersApi.auditClusterSwitch(currentCluster, id).catch(() => {})
     }
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, id)
-    }
+    storeCluster(id)
+    // a choice made is read by a render of its own, not only once the address change (a transition) lands
+    setTabChoice(id)
     // a node of the cluster before (Cluster View's ?node=) is not one of the new cluster's
     setSearchParams(paramsForCluster(searchParams, id, currentCluster), { replace: true })
   }, [])
-  const value = useMemo(() => ({ currentCluster, setCurrentCluster, isSwitching }), [currentCluster, setCurrentCluster, isSwitching])
+  // A sign-in in this tab: its choice and the stored one go, so a new user never starts on the previous user's cluster
+  // (which they may not be able to reach); the screens' gate chooses again among theirs.
+  const forgetCluster = useCallback(() => {
+    clearStoredCluster()
+    setTabChoice('')
+  }, [])
+  const value = useMemo(
+    () => ({ currentCluster, setCurrentCluster, forgetCluster, isSwitching }),
+    [currentCluster, setCurrentCluster, forgetCluster, isSwitching],
+  )
 
   return (
     <ClusterContext.Provider value={value}>

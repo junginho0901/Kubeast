@@ -9,7 +9,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].args
-          value: ["--aclfile", "/run/kubeast/redis-acl/users.acl", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru"]
+          value: ["--aclfile", "/run/kubeast/redis-acl/users.acl", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru", "--save", ""]
       - equal:
           path: spec.template.spec.containers[0].env
           value:
@@ -199,7 +199,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].args
-          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru"]
+          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru", "--save", ""]
       - equal:
           path: spec.template.spec.containers[0].env
           value:
@@ -242,7 +242,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].args
-          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru"]
+          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "107374182", "--maxmemory-policy", "volatile-lru", "--save", ""]
       - contains:
           path: spec.template.spec.containers[0].env
           content:
@@ -361,7 +361,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].args
-          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "858993459", "--maxmemory-policy", "volatile-lru"]
+          value: ["--requirepass", "$(REDIS_PASSWORD)", "--maxmemory", "858993459", "--maxmemory-policy", "volatile-lru", "--save", ""]
 
   - it: refuses a memory limit that is not a quantity
     set:

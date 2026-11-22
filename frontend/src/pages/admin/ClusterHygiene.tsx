@@ -281,7 +281,7 @@ export default function ClusterHygiene() {
       </div>
 
       {viewId && viewed && (
-        <div className="shrink-0 rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-100 flex items-center justify-between gap-3" data-testid="hygiene-snapshot-banner">
+        <div className="shrink-0 rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-200 flex items-center justify-between gap-3" data-testid="hygiene-snapshot-banner">
           <span>
             <History className="inline w-4 h-4 mr-1" />
             {tr('clusterHygiene.snapshot.viewing', 'Viewing the report as signed off on {{when}} by {{who}}.', { when: formatWhen(viewed.reviewed_at), who: viewed.reviewed_by_email })}
@@ -349,7 +349,7 @@ export default function ClusterHygiene() {
       )}
 
       {report && report.collectors.length > 0 && (
-        <div className="shrink-0 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-100" data-testid="hygiene-collectors">
+        <div className="shrink-0 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-200" data-testid="hygiene-collectors">
           <div className="font-medium mb-1">{tr('clusterHygiene.collectors', 'Could not read these lists, so their checks were skipped:')}</div>
           <ul className="list-disc pl-5 space-y-0.5">
             {report.collectors.map((c) => <li key={c.what}><span className="font-mono">{c.what}</span> — {c.error}</li>)}
@@ -412,7 +412,7 @@ export default function ClusterHygiene() {
             />
           </div>
           {report?.truncated && (
-            <div className="shrink-0 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-100">
+            <div className="shrink-0 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-200" data-testid="hygiene-truncated">
               {tr('clusterHygiene.truncated', 'Only the {{shown}} most severe of the {{total}} findings are listed; the cards and the Checks tab count all of them.', { shown: report.findings.length, total })}
             </div>
           )}

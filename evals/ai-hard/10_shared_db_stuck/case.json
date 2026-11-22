@@ -1,0 +1,55 @@
+{
+ "id": "10_shared_db_stuck",
+ "title": "The shared database stalls behind a schema change: several services fail, each looks guilty",
+ "group": "trap",
+ "cluster": "default",
+ "namespace": "shop-10",
+ "question": "default 클러스터 otel-demo 네임스페이스 쇼핑몰에서 상품 목록, 추천, 결제가 한꺼번에 오류가 난대. 원인이 뭐야?",
+ "question_vague": "default 클러스터 otel-demo 네임스페이스 쇼핑몰 여기저기서 오류가 난다는데 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "astronomy-db",
+   "postgres",
+   "데이터베이스",
+   "database",
+   "DB"
+  ],
+  [
+   "too many connections",
+   "connection limit",
+   "연결",
+   "lock",
+   "락",
+   "잠금",
+   "대기",
+   "wait"
+  ]
+ ],
+ "tools": [],
+ "setup_cmds": [
+  "kubectl -n otel-demo exec deploy/astronomy-db -- psql -U postgres -d astronomy_db -q -v ON_ERROR_STOP=1 -c 'ALTER ROLE astronomy_user CONNECTION LIMIT 15'"
+ ],
+ "wait": "kubectl -n otel-demo wait --for=condition=Available deploy/frontend-proxy deploy/frontend deploy/product-catalog deploy/recommendation deploy/checkout deploy/accounting deploy/astronomy-db deploy/load-generator --timeout=10s && kubectl -n $NS wait --for=condition=Available deploy/uptime-check --timeout=10s",
+ "wait_seconds": 300,
+ "baseline_seconds": 300,
+ "inject_cmds": [
+  "kubectl -n otel-demo exec -i deploy/astronomy-db -- psql -U postgres -d astronomy_db -q -v ON_ERROR_STOP=1 < $CASE_DIR/migration.sql >/dev/null 2>&1 &"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/uptime-check --since=60s | grep 'check failed' | grep -q 'path=/api/products'",
+ "inject_wait_seconds": 240,
+ "ask_after_seconds": [480],
+ "undo_cmds": [
+  "kubectl -n otel-demo exec deploy/astronomy-db -- psql -U postgres -d astronomy_db -Atc \"SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE usename = 'postgres' AND backend_type = 'client backend' AND xact_start IS NOT NULL AND pid <> pg_backend_pid()\""
+ ],
+ "cleanup_cmds": [
+  "kubectl -n otel-demo exec deploy/astronomy-db -- psql -U postgres -d astronomy_db -q -c 'ALTER ROLE astronomy_user CONNECTION LIMIT -1'"
+ ],
+ "cooldown_seconds": 120,
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "namespace": "otel-demo", "job": "uptime-check"},
+  "match": {"namespace": "otel-demo"},
+  "annotations": {"summary": "Several pages of the otel-demo shop answer errors", "description": "uptime-check's product list requests to the shop in otel-demo have been failing or timing out for the last few minutes; recommendations and checkouts fail too."}
+ }
+}

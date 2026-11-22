@@ -9,8 +9,11 @@
 # with k8s.cluster.name kubeast-b, the value Kubeast's log search and trace store map cluster `default` to, and the
 # k8s.* attributes of the chart's kubernetesAttributes preset. The log-search collector also reads these pods' stdout
 # into the same Loki, so a line a service both prints and sends over OTLP is there twice (the OTLP one with
-# service_name and the trace id). Helm merges maps and replaces lists: the pipelines' exporter lists and the resource
-# processor's attributes below replace the chart's, its other exporters stay defined and unused.
+# service_name and the trace id). Helm merges maps and replaces lists: the pipelines' exporter lists, the metrics
+# pipeline's receivers and the resource processor's attributes below replace the chart's, its other exporters stay
+# defined and unused. The service_graph connector adds who calls whom (traces_service_graph_*, the AI's call graph
+# reads them) with the namespace on both sides; a store the demo does not instrument (the cart's Valkey, the
+# database) is a node named by the calling span's server.address.
 jaeger:
   enabled: false
 prometheus:
@@ -36,6 +39,10 @@ opentelemetry-collector:
     clusterMetrics:
       enabled: false
   config:
+    connectors:
+      service_graph:
+        dimensions: [k8s.namespace.name]
+        virtual_node_peer_attributes: [peer.service, server.address, db.name, db.system]
     exporters:
       otlp_grpc/tempo:
         endpoint: tempo.tempo.svc:4317
@@ -66,8 +73,9 @@ opentelemetry-collector:
     service:
       pipelines:
         traces:
-          exporters: [otlp_grpc/tempo, span_metrics]
+          exporters: [otlp_grpc/tempo, span_metrics, service_graph]
         metrics:
+          receivers: [otlp, kafkametrics, span_metrics, prometheus/ad, receiver_creator/metrics, service_graph]
           exporters: [prometheus_remote_write]
         logs:
           exporters: [otlp_http/loki]

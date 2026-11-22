@@ -245,7 +245,7 @@ export default function AdminUsers() {
     },
     onError: (err: any) => {
       // The server answers {detail}: e.g. a permission-ceiling refusal.
-      setDetailError(err?.response?.data?.detail || err?.response?.data?.error || err?.message || 'Failed to update user')
+      setDetailError(err?.response?.data?.detail || err?.response?.data?.error || err?.message || tr('adminUsers.updateFailed', 'Failed to update user'))
     },
   })
 
@@ -418,7 +418,7 @@ export default function AdminUsers() {
             >
               <Clock className="w-4 h-4" />
               {tr('adminUsers.pendingBtn', 'Pending')}
-              <span className="rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-slate-900">
+              <span className="rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-black">
                 {pendingRows.length}
               </span>
             </button>

@@ -10,7 +10,7 @@
    "resource": "Deployment/shop-16/payments",
    "kind": "dependency_down",
    "accept_resources": ["(deployment|replicaset|pod|service)/(shop-16/)?payments", "^payments"],
-   "accept_kinds": []
+   "accept_kinds": ["config_change"]
   }
  ],
  "path": [

@@ -4,7 +4,7 @@
  "group": "past",
  "cluster": "default",
  "namespace": "shop-16",
- "question": "default 클러스터 shop-16에서 아까 몇 분 동안 결제가 안 됐다는데 원인이 뭐였어? 지금은 된대.",
+ "question": "default 클러스터 shop-16에서 아까 몇 분 동안 주문이 안 됐다는데 원인이 뭐였어? 지금은 된대.",
  "question_vague": "default 클러스터 shop-16에서 아까 잠깐 장애가 있었다는데 뭐였는지 알아봐 줘.",
  "answer_format": "rca_block_v0",
  "expect": [
