@@ -15,6 +15,10 @@ import (
 
 // Against PostgreSQL named by DBMIGRATE_TEST_DATABASE_URL (freshMigratedDatabase; skipped when unset).
 
+// noSinkFloor is a sink floor that holds no audit row back: the highest value of auth_audit_logs.id (a SERIAL, so
+// int4), whose type the purge's `id <= $3` gives its parameter.
+const noSinkFloor = math.MaxInt32
+
 func seedRows(t *testing.T, pool *pgxpool.Pool, at time.Time, stmts ...string) {
 	t.Helper()
 	for _, stmt := range stmts {
@@ -67,7 +71,7 @@ func TestPostgresATurnTakenDuringAnotherRunLeavesItToThatRun(t *testing.T) {
 		AuditFloor: func(ctx context.Context) (int64, error) {
 			floorAsked = true
 			Purger{Pool: pool, Cfg: cfg, Audit: later, Now: func() time.Time { return now }}.turn(ctx, lock)
-			return math.MaxInt64, nil
+			return noSinkFloor, nil
 		}}.turn(ctx, lock)
 
 	if !floorAsked {
@@ -173,7 +177,7 @@ func TestPostgresATurnWhileTheLockIsHeldElsewhereDeletesNothing(t *testing.T) {
 	var during int64
 	p.AuditFloor = func(context.Context) (int64, error) {
 		during = lockSessions(t, pool, before+1)
-		return math.MaxInt64, nil
+		return noSinkFloor, nil
 	}
 	p.turn(ctx, lock)
 	if n := count(t, pool, "auth_audit_logs"); n != 0 || len(w.recs) != 1 || w.recs[0].Result != audit.ResultSuccess {
@@ -254,7 +258,7 @@ func TestPostgresATurnWithAPoolOfOneConnectionRunsToItsRow(t *testing.T) {
 	Purger{Pool: one, Cfg: Config{AuditDays: 30}, Audit: w, Now: func() time.Time { return now },
 		AuditFloor: func(ctx context.Context) (int64, error) {
 			_, err := one.Exec(ctx, `SELECT 1`) // auditsink.Floor reads the sinks' cursors through the pool
-			return math.MaxInt64, err
+			return noSinkFloor, err
 		}}.turn(ctx, PGLock{Pool: one})
 
 	if ctx.Err() != nil {
