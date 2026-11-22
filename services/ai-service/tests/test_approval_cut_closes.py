@@ -4,7 +4,10 @@ wait for the first look past APPROVED_RUN_LIMIT_SECONDS. The close runs in a tas
 request's cancel scope, which cancels each of its awaits again, does not cut it, and the lifespan's end waits for it.
 A run whose end had begun keeps that end."""
 import asyncio
+import contextlib
+import io
 import json
+import logging
 
 import anyio
 import pytest
@@ -162,7 +165,51 @@ async def test_a_close_leaves_a_row_that_is_not_approved_as_it_is(db, rows):
     assert (await db.get_tool_approval(row.id)).status == "pending" and rows == []
 
 
+@contextlib.contextmanager
+def _pod_log():
+    """What the kubeast.ai stdout handler, the one kubectl logs reads, writes meanwhile."""
+    from app.services.ai import debug_dump
+
+    out = next(h for h in debug_dump.log.handlers if isinstance(h, logging.StreamHandler))
+    buf = io.StringIO()
+    before = out.setStream(buf)
+    try:
+        yield buf
+    finally:
+        out.setStream(before)
+
+
+def _lines(buf):
+    return [line.split(" kubeast.ai ", 1)[1] for line in buf.getvalue().splitlines() if " kubeast.ai " in line]
+
+
 async def test_settle_gives_up_after_its_time(db):
-    async with approval_runs.running(db, "a1"):
-        assert await approval_runs.settle(0.1) == 1
+    with _pod_log() as buf:
+        async with approval_runs.running(db, "a1"):
+            assert await approval_runs.settle(0.1) == 1
     assert not approval_runs._open
+    assert _lines(buf) == ["1 approved run(s) not ended at shutdown: the first look past the run limit ends them"]
+    assert " WARNING " in buf.getvalue()
+
+
+async def test_a_close_that_fails_is_one_warning_line_in_the_pod_log(db, monkeypatch):
+    async def broken(approval_id):
+        raise RuntimeError("password=hunter2")
+
+    monkeypatch.setattr(db, "close_cut_tool_approval", broken)
+    entered = asyncio.Event()
+
+    async def cut():
+        async with approval_runs.running(db, "a1"):
+            entered.set()
+            await asyncio.sleep(10)
+
+    with _pod_log() as buf:
+        task = asyncio.create_task(cut())
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert _lines(buf) == ["approval a1: the run's close was not written: RuntimeError"]
+    assert " WARNING " in buf.getvalue()
+    assert "hunter2" not in buf.getvalue() and not approval_runs._open

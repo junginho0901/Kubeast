@@ -11,11 +11,10 @@ and a run not closed by then is ended by that later look, as one a killed proces
 from __future__ import annotations
 
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Awaitable, Optional
 
-log = logging.getLogger(__name__)
+from app.services.ai.debug_dump import log
 
 
 class Run:
