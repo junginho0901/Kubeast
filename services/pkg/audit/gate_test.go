@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -207,5 +208,210 @@ func TestGuardedProbesAWriteAfterAFailedWrite(t *testing.T) {
 	_, _ = off.Write(ctx, Record{Action: "x"})
 	if err := off.Ready(ctx); err != nil {
 		t.Fatalf("fail-closed off: %v", err)
+	}
+}
+
+type requestKey struct{}
+
+// ctxStore refuses a write on an ended context, as the Postgres store does
+// (pgxpool's Acquire answers ctx.Err() before it takes a connection), and keeps
+// what the write's context carried. With block set it waits for the context to
+// end and fails if it has not in 3 s, with hold for that long or until the
+// context ends; started, when set, is closed as the write begins.
+type ctxStore struct {
+	fakeStore
+	block       bool
+	hold        time.Duration
+	started     chan struct{}
+	rows        []Record
+	deadline    time.Time
+	hasDeadline bool
+	value       any
+}
+
+func (s *ctxStore) Write(ctx context.Context, rec Record) (int64, error) {
+	if s.started != nil {
+		close(s.started)
+	}
+	if s.block {
+		select {
+		case <-ctx.Done():
+		case <-time.After(3 * time.Second):
+			return 0, errors.New("ctxStore: the write's context did not end in 3 s")
+		}
+	} else if s.hold > 0 {
+		select {
+		case <-ctx.Done():
+		case <-time.After(s.hold):
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, fmt.Errorf("audit insert: %w", err)
+	}
+	s.deadline, s.hasDeadline = ctx.Deadline()
+	s.value = ctx.Value(requestKey{})
+	s.rows = append(s.rows, rec)
+	return int64(len(s.rows)), nil
+}
+
+// A request whose client went away after its change ran: the row is stored
+// with the request's values, with no deadline since the request had none, and
+// the store is not counted as failing or marked broken.
+func TestGuardedWriteOutlivesItsCallersCancellation(t *testing.T) {
+	store := &ctxStore{}
+	p := &probingPinger{probeErr: errors.New("probe refused")}
+	g := Guard(store, p, true)
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), requestKey{}, "req-1"))
+	cancel()
+
+	id, err := g.Write(ctx, Record{Action: "k8s.pod.delete"})
+	if err != nil || id != 1 || len(store.rows) != 1 || store.rows[0].Action != "k8s.pod.delete" {
+		t.Fatalf("write after the caller left: id %d err %v rows %+v", id, err, store.rows)
+	}
+	if store.value != "req-1" {
+		t.Fatalf("the write lost the request's values: %v", store.value)
+	}
+	if store.hasDeadline {
+		t.Fatalf("write deadline = %v, want none: the caller had none", store.deadline)
+	}
+	if st := g.Status(context.Background()); st.WriteFailures != 0 || st.LastError != "" {
+		t.Fatalf("status = %+v", st)
+	}
+	if err := g.Ready(context.Background()); err != nil || p.probes != 0 {
+		t.Fatalf("store marked broken: %v probes %d", err, p.probes)
+	}
+}
+
+// While its caller's context stands, the grace does not apply: a write that
+// takes longer than it is not cut (the store's own limits end it, as before).
+func TestGuardedWriteWhileItsCallerStaysTakesNoGrace(t *testing.T) {
+	store := &ctxStore{hold: 200 * time.Millisecond}
+	g := Guard(store, &fakePinger{}, true)
+	g.writeGrace = 10 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if _, err := g.Write(ctx, Record{Action: "helm.release.upgrade"}); err != nil {
+		t.Fatalf("a write longer than the grace, its caller there: %v", err)
+	}
+	if len(store.rows) != 1 || store.hasDeadline {
+		t.Fatalf("rows %d deadline %v (set %v), want one row and no deadline", len(store.rows), store.deadline, store.hasDeadline)
+	}
+	if st := g.Status(context.Background()); st.WriteFailures != 0 {
+		t.Fatalf("status = %+v", st)
+	}
+}
+
+// A caller that leaves while its write runs, its context with no deadline (as a
+// request's) or one a minute off: the write ends writeGrace after the caller's
+// context was cancelled, counted as a failure that names the grace.
+func TestGuardedWriteEndsItsGraceAfterItsCallerLeft(t *testing.T) {
+	for _, deadline := range []time.Duration{0, time.Minute} {
+		t.Run(fmt.Sprintf("deadline %v", deadline), func(t *testing.T) {
+			parent := context.Background()
+			if deadline > 0 {
+				var stop context.CancelFunc
+				parent, stop = context.WithTimeout(parent, deadline)
+				defer stop()
+			}
+			store := &ctxStore{block: true, started: make(chan struct{})}
+			g := Guard(store, &fakePinger{}, true)
+			g.writeGrace = 50 * time.Millisecond
+			ctx, cancel := context.WithCancel(parent)
+			defer cancel()
+			left := make(chan time.Time, 1)
+			go func() {
+				<-store.started
+				at := time.Now()
+				cancel()
+				left <- at
+			}()
+
+			_, err := g.Write(ctx, Record{Action: "helm.release.upgrade"})
+			took := time.Since(<-left)
+			if !errors.Is(err, errWriteGraceOver) || !errors.Is(err, context.Canceled) {
+				t.Fatalf("err = %v, want the grace's end", err)
+			}
+			if took < 50*time.Millisecond {
+				t.Fatalf("write ended %v after the caller left, want 50ms or more", took)
+			}
+			if st := g.Status(context.Background()); st.WriteFailures != 1 || !strings.Contains(st.LastError, "past its grace") {
+				t.Fatalf("status = %+v", st)
+			}
+		})
+	}
+}
+
+// A caller that left 600 ms before its write: the grace (500 ms, far above the
+// store's 20 ms on a slow runner) runs from the write's start and the row is stored.
+func TestGuardedWriteBegunAfterItsCallerLeftHasTheGraceFromItsStart(t *testing.T) {
+	store := &ctxStore{hold: 20 * time.Millisecond}
+	g := Guard(store, &fakePinger{}, true)
+	g.writeGrace = 500 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	time.Sleep(600 * time.Millisecond)
+
+	if _, err := g.Write(ctx, Record{Action: "helm.release.upgrade"}); err != nil {
+		t.Fatalf("a write begun more than the grace after its caller left: %v", err)
+	}
+	if len(store.rows) != 1 || g.failures.Load() != 0 {
+		t.Fatalf("rows %d failures %d", len(store.rows), g.failures.Load())
+	}
+}
+
+// A caller's deadline is the write's: one not reached stays as it is, one that
+// comes before the grace ends ends the write (a step of a shutdown keeps its
+// budget), and one already past ends it as before.
+func TestGuardedWriteKeepsItsCallersDeadline(t *testing.T) {
+	store := &ctxStore{}
+	g := Guard(store, &fakePinger{}, true)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	want, _ := ctx.Deadline()
+	if _, err := g.Write(ctx, Record{Action: "k8s.node.drain"}); err != nil {
+		t.Fatal(err)
+	}
+	if !store.hasDeadline || !store.deadline.Equal(want) {
+		t.Fatalf("write deadline = %v (set %v), want the caller's %v", store.deadline, store.hasDeadline, want)
+	}
+
+	blocked := &ctxStore{block: true}
+	gb := Guard(blocked, &fakePinger{}, true)
+	gb.writeGrace = 10 * time.Second
+	early, cancelEarly := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	cancelEarly() // cancelled, its deadline still 50ms off and before the grace's end
+	if _, err := gb.Write(early, Record{Action: "k8s.node.drain"}); !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, errWriteGraceOver) {
+		t.Fatalf("err = %v, want the caller's deadline", err)
+	}
+
+	past, cancelPast := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelPast()
+	if _, err := g.Write(past, Record{Action: "k8s.node.drain"}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the caller's deadline", err)
+	}
+	if len(store.rows) != 1 || g.Status(context.Background()).WriteFailures != 1 {
+		t.Fatalf("rows %d failures %d", len(store.rows), g.Status(context.Background()).WriteFailures)
+	}
+}
+
+// Guard sets WriteGrace, 5 s, and a Guarded made without Guard (write grace 0)
+// writes as one made with it, also after its caller left.
+func TestAGuardedMadeWithoutGuardTakesWriteGrace(t *testing.T) {
+	if g := Guard(&fakeStore{}, nil, true); g.writeGrace != WriteGrace || WriteGrace != 5*time.Second {
+		t.Fatalf("write grace = %v (WriteGrace %v), want 5s", g.writeGrace, WriteGrace)
+	}
+	store := &ctxStore{hold: 50 * time.Millisecond}
+	g := &Guarded{Store: store}
+	if _, err := g.Write(context.Background(), Record{Action: "k8s.pod.delete"}); err != nil {
+		t.Fatalf("zero Guarded: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := g.Write(ctx, Record{Action: "k8s.pod.delete"}); err != nil {
+		t.Fatalf("zero Guarded, its caller gone: %v", err)
+	}
+	if len(store.rows) != 2 || g.failures.Load() != 0 {
+		t.Fatalf("rows %d failures %d", len(store.rows), g.failures.Load())
 	}
 }
