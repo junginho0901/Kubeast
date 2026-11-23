@@ -66,7 +66,8 @@ async function readDrawer(page: Page): Promise<View> {
       return out
     }
     const view: View = { badges: {}, counts: {}, sections: {} }
-    for (const b of root.querySelectorAll('span.rounded-full')) {
+    // the summary badges and the yes/no text beside them (Global Default)
+    for (const b of root.querySelectorAll('span.rounded-full, span[data-summary-text]')) {
       const bm = has(b, 'py-0.5') ? /^([^:]+): (.*)$/.exec(txt(b)) : null
       if (bm) view.badges[bm[1]] = bm[2]
     }

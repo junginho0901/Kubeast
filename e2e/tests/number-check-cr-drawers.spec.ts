@@ -648,6 +648,8 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
         await p.getByRole('button', { name: NS, exact: true }).click()
         await p.locator('.monaco-editor').first().click()
         await p.keyboard.type('true')
+        // the editor's word suggestions open over the first row until it loses focus (number-check-detail-links.spec.ts)
+        await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
         await p.locator('table tbody tr').getByRole('button', { name, exact: true }).click({ timeout: 20_000 })
       }
       const vpa = async (name: string): Promise<VPA> => {

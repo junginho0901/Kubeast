@@ -6,6 +6,9 @@ import {
   PROVIDER_CATALOG,
   getDefaultModel,
   getProvider,
+  modelNoteText,
+  noToolsText,
+  providerLabel,
   type ProviderDef,
 } from '@/constants/modelCatalog'
 import CustomDropdown, { type DropdownOption } from '@/components/CustomDropdown'
@@ -61,10 +64,10 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
       currentProviderDef.models.map((m) => ({
         value: m.name,
         label: m.label ?? m.name,
-        listHint: m.note,
-        hint: !m.functionCalling ? 'no tools' : undefined,
+        listHint: m.note && modelNoteText(m.note, tr),
+        hint: !m.functionCalling ? noToolsText(tr) : undefined,
       })),
-    [currentProviderDef],
+    [currentProviderDef, tr],
   )
 
   const handleTestConnection = async () => {
@@ -151,7 +154,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
           >
             <div className="flex items-center gap-2 text-sm font-semibold">
               <span className="text-lg">{p.icon}</span>
-              {p.label}
+              {providerLabel(p, tr)}
             </div>
             {unavailable[p.id] && (
               <div className="mt-1 text-[10px] text-slate-400">{tr('admin.aiModels.providerNotSetUp', 'Not set up')}</div>

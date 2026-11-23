@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/proxypath"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -37,6 +38,10 @@ import (
 
 // ErrCostNotFound: the cluster has no OpenCost the proxy can reach.
 var ErrCostNotFound = errors.New("OpenCost not found in this cluster")
+
+// ErrCostUpstream: the OpenCost Service did not answer the read (502 to the caller): a redirect not followed, or its
+// own 401 or 403.
+var ErrCostUpstream = errors.New("cost store error")
 
 const (
 	openCostPort = 9003
@@ -444,20 +449,27 @@ func (s *Service) fetchOpenCostAllocation(ctx context.Context, info costServiceI
 	if aggregate == CostAggregateController {
 		agg = "namespace,controller"
 	}
-	result := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().
+	rc, err := s.proxyClientCtx(ctx)
+	if err != nil {
+		return nil, "", "", err
+	}
+	a := proxyGet(ctx, rc.Get().
 		AbsPath(info.proxyBase()).
 		Suffix("allocation", "compute").
 		Param("window", window).
 		Param("aggregate", agg).
 		Param("accumulate", "true").
-		Param("includeIdle", "false").
-		Do(ctx)
-	body, err := result.Raw()
-	if err != nil {
-		var statusCode int
-		result.StatusCode(&statusCode)
-		return nil, "", "", fmt.Errorf("opencost allocation request failed (status %d): %w", statusCode, err)
+		Param("includeIdle", "false"))
+	switch {
+	case a.err == nil:
+	case proxypath.NotFollowed(a.err) != nil:
+		return nil, "", "", fmt.Errorf("%w: opencost allocation request failed: %v", ErrCostUpstream, proxypath.NotFollowed(a.err))
+	case a.storeOwnAuth():
+		return nil, "", "", fmt.Errorf("%w: opencost allocation request failed (status %d), answered by the OpenCost Service %s/%s:%d itself: %s", ErrCostUpstream, a.code, info.Namespace, info.Name, info.Port, a.bodyText())
+	default:
+		return nil, "", "", fmt.Errorf("opencost allocation request failed (status %d): %w", a.code, a.err)
 	}
+	body := a.body
 	var resp openCostResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, "", "", fmt.Errorf("parse opencost response: %w (body: %s)", err, string(body[:min(len(body), 200)]))
@@ -660,22 +672,22 @@ func probeOpenCostNamespace(ctx context.Context, cs kubernetes.Interface, ns str
 	return nil
 }
 
-// verifyOpenCostProxy asks /healthz through the proxy. A refusal (403) still
-// counts as found: the Service is there and the cluster decides on each
-// caller's own read, not on the discovery identity's.
+// verifyOpenCostProxy asks /healthz through the proxy. The API server's
+// refusal (403) still counts as found: the Service is there and the cluster
+// decides on each caller's own read, not on the discovery identity's. The
+// Service's own 401 or 403 does not.
 func verifyOpenCostProxy(ctx context.Context, cs kubernetes.Interface, info *costServiceInfo) bool {
-	result := cs.CoreV1().RESTClient().Get().
-		AbsPath(info.proxyBase()).
-		Suffix("healthz").
-		Do(ctx)
-	var statusCode int
-	result.StatusCode(&statusCode)
-	if _, err := result.Raw(); err != nil {
-		if statusCode == http.StatusForbidden {
-			return true
-		}
-		slog.Debug("OpenCost verify failed", "status", statusCode, "err", err)
+	rc, err := proxyClient(cs)
+	if err != nil {
 		return false
 	}
-	return statusCode == http.StatusOK
+	a := proxyGet(ctx, rc.Get().AbsPath(info.proxyBase()).Suffix("healthz"))
+	if a.err != nil {
+		if a.cluster && a.code == http.StatusForbidden {
+			return true
+		}
+		slog.Debug("OpenCost verify failed", "status", a.code, "err", a.err)
+		return false
+	}
+	return true
 }

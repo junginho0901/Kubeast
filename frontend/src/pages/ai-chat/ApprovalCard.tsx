@@ -58,7 +58,7 @@ export function ApprovalCard({ approvalId, tool, args, cluster, initialStatus }:
       const next = kind === 'approve' ? await aiApi.approveToolCall(approvalId) : await aiApi.rejectToolCall(approvalId)
       setApproval(next)
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || 'request failed')
+      setError(e?.response?.data?.detail || e?.message || t('aiChat.approval.requestFailed', 'request failed'))
     } finally {
       setBusy(null)
     }

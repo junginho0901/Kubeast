@@ -1,0 +1,42 @@
+{
+ "id": "20_boot_fails_one_env",
+ "title": "A new release that boots only with one environment's settings: after the rollout every production pod fails to start",
+ "group": "hidden_cause",
+ "cluster": "self",
+ "namespace": "shop-20",
+ "question": "self 클러스터 shop-20에서 shop-web이 전부 안 열린대. 원인이 뭐야?",
+ "question_vague": "self 클러스터 shop-20 사이트가 다운됐다는 말이 있어. 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "asset_host",
+   "manifest"
+  ],
+  [
+   "2\\.4\\.0",
+   "롤아웃",
+   "rollout",
+   "배포",
+   "새 (버전|릴리스|판)"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/shop-web deploy/preview-web deploy/assets deploy/visitor --timeout=10s",
+ "wait_seconds": 240,
+ "baseline_seconds": 180,
+ "inject_cmds": [
+  "kubectl -n $NS patch deploy shop-web --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/template/spec/volumes/0/configMap/name\",\"value\":\"shop-web-release-2-4-0\"},{\"op\":\"replace\",\"path\":\"/spec/template/metadata/labels/version\",\"value\":\"2.4.0\"}]'"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/visitor --since=20s | grep 'page failed' | grep -q 'site=shop '",
+ "inject_wait_seconds": 180,
+ "ask_after_seconds": [300, 3900],
+ "undo_cmds": [
+  "kubectl -n $NS rollout undo deploy/shop-web"
+ ],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceDown", "service": "shop-web", "severity": "critical"},
+  "annotations": {"summary": "shop-web is down", "description": "Every request to shop-web has failed for the last few minutes."}
+ }
+}

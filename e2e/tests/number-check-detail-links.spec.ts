@@ -353,6 +353,8 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
         await p.goto('/cluster/search?cluster=default')
         await p.locator('.monaco-editor').first().click()
         await p.keyboard.type('true')
+        // the editor's word suggestions (true, TextTrackCue, …) open over the first row until it loses focus, as a click elsewhere makes it
+        await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
         return p.locator('table tbody tr').getByRole('button', { name: GIZMO, exact: true })
       }, () => GROUPS.map((g) => wantOf(gizmo(g), 'gizmos')))
     } finally {

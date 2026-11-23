@@ -91,23 +91,23 @@ export default function ForbiddenBanner({ clusterKey }: { clusterKey: string }) 
     <div
       role="status"
       data-testid="forbidden-banner"
-      className="mb-4 flex items-start gap-3 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-100"
+      className="mb-4 flex items-start gap-3 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-200"
     >
       <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
       <div>
         <div className="font-medium text-amber-200">{title}</div>
-        <div className="mt-0.5 text-amber-100/90">{body}</div>
+        <div className="mt-0.5 text-amber-200/90">{body}</div>
         {namespacesHint && (
-          <div data-testid="forbidden-namespace-hint" className="mt-1 text-amber-100/80">{namespacesHint}</div>
+          <div data-testid="forbidden-namespace-hint" className="mt-1 text-amber-200/80">{namespacesHint}</div>
         )}
         {readPermissionHint && (
-          <div data-testid="forbidden-read-permission-hint" className="mt-1 text-amber-100/80">{readPermissionHint}</div>
+          <div data-testid="forbidden-read-permission-hint" className="mt-1 text-amber-200/80">{readPermissionHint}</div>
         )}
         {builtinNameHint && (
-          <div data-testid="forbidden-builtin-name-hint" className="mt-1 text-amber-100/80">{builtinNameHint}</div>
+          <div data-testid="forbidden-builtin-name-hint" className="mt-1 text-amber-200/80">{builtinNameHint}</div>
         )}
         {customRoleHint && (
-          <div data-testid="forbidden-custom-role-hint" className="mt-1 text-amber-100/80">{customRoleHint}</div>
+          <div data-testid="forbidden-custom-role-hint" className="mt-1 text-amber-200/80">{customRoleHint}</div>
         )}
       </div>
     </div>
