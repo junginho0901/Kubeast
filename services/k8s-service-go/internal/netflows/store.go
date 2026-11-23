@@ -138,6 +138,9 @@ type Request struct {
 	PodSet string
 	// Lookup fills in what the flows leave out (nil: nothing).
 	Lookup Lookup
+	// atAddress: the Relay is at a registered address (mode address, set by Read), with no API server in between to
+	// refuse, so every 401 or 403 is the Relay's own.
+	atAddress bool
 }
 
 // MaxPods caps the pods of a workload read asked for by name.
@@ -483,7 +486,7 @@ func (s *Store) Query(ctx context.Context, client *http.Client, url string, req 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, statusError(resp)
+		return nil, statusError(resp, req.atAddress)
 	}
 	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/grpc") {
 		return nil, fmt.Errorf("%w: the answer is %q, not gRPC", ErrUnavailable, ct)
@@ -532,6 +535,7 @@ func (s *Store) Read(ctx context.Context, t Target, client *http.Client, url str
 	if t.Calico() {
 		res, err = s.queryWhisker(ctx, client, url, req, now)
 	} else {
+		req.atAddress = t.Mode == "address"
 		res, err = s.Query(ctx, client, url, req, now)
 	}
 	if res != nil {
@@ -587,11 +591,24 @@ func sendError(err error) error {
 	return fmt.Errorf("%w: %v", ErrUnavailable, err)
 }
 
-func statusError(resp *http.Response) error {
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-	detail := strings.TrimSpace(string(body))
+// failedAnswer is the start of a flow source's failed answer, for a message, and whether the answer is the API
+// server's own (a Kubernetes Status, proxypath.APIServerAnswer). A 401 or 403 with any other body is one the Relay or
+// Whisker, or an authenticating proxy in front of it, wrote itself — at an address no API server is in between.
+func failedAnswer(resp *http.Response) (detail string, cluster bool) {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, proxypath.MaxStatusBytes+1))
+	_, cluster = proxypath.APIServerAnswer(resp.StatusCode, body)
+	return strings.TrimSpace(string(body[:min(len(body), 512)])), cluster
+}
+
+// statusError is a Relay's failed answer; atAddress: no API server is in between, so a 401 or 403 is never its refusal,
+// whatever the body.
+func statusError(resp *http.Response, atAddress bool) error {
+	detail, cluster := failedAnswer(resp)
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
+		if !cluster || atAddress {
+			return fmt.Errorf("%w: the Relay (or a proxy in front of it) answered %d itself, not the cluster: %s", ErrUnavailable, resp.StatusCode, detail)
+		}
 		return fmt.Errorf("%w: the cluster refused the Relay read (%d): %s", ErrForbidden, resp.StatusCode, detail)
 	case http.StatusNotFound:
 		return fmt.Errorf("%w: no Hubble Relay Service there (404): %s", ErrRelayMissing, detail)
@@ -601,7 +618,8 @@ func statusError(resp *http.Response) error {
 	return fmt.Errorf("%w (%d): %s", ErrUnavailable, resp.StatusCode, detail)
 }
 
-// grpcStatus turns a non-zero grpc-status into an error.
+// grpcStatus turns a non-zero grpc-status into an error. A PermissionDenied or Unauthenticated is the Relay's own, or
+// that of a proxy in front of it: the API server refuses the proxy with a Status (statusError), never with a gRPC status.
 func grpcStatus(h http.Header) error {
 	st := h.Get("Grpc-Status")
 	if st == "" || st == "0" {
@@ -615,7 +633,7 @@ func grpcStatus(h http.Header) error {
 	case "4": // DeadlineExceeded
 		base = ErrTimeout
 	case "7", "16": // PermissionDenied, Unauthenticated
-		base = ErrForbidden
+		return fmt.Errorf("%w: the Relay (or a proxy in front of it) answered grpc-status %s itself, not the cluster: %s", ErrUnavailable, st, msg)
 	}
 	return fmt.Errorf("%w: relay grpc-status %s: %s", base, st, msg)
 }

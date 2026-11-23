@@ -59,6 +59,69 @@ func TestAStoresOwn401BehindTheProxyIsA502NotASignOut(t *testing.T) {
 	}
 }
 
+// A Relay or Whisker behind an authenticating proxy answers the API server's proxy 401 or 403 itself: that is the flow
+// source not answering, a 502 with its words. Only the API server's own refusal (a Kubernetes Status) stays a 403 —
+// before, both read as "the cluster refused the read".
+func TestAFlowSourcesOwn401Or403BehindTheProxyIsA502NotARefusal(t *testing.T) {
+	var mu sync.Mutex
+	var code int
+	var ctype, body string
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/namespaces/kube-system/services/https:hubble-relay:443/proxy/observer.Observer/GetFlows",
+			"/api/v1/namespaces/calico-system/services/https:whisker:8443/proxy/whisker-backend/flows":
+			mu.Lock()
+			defer mu.Unlock()
+			w.Header().Set("Content-Type", ctype)
+			w.WriteHeader(code)
+			_, _ = w.Write([]byte(body))
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"NotFound","code":404}`))
+		}
+	}))
+	defer api.Close()
+	refused := `{"kind":"Status","apiVersion":"v1","metadata":{},"status":"Failure","message":"services \"https:x:443\" is forbidden: User \"dev@example.com\" cannot create resource \"services/proxy\" in API group \"\" in the namespace \"x\"","reason":"Forbidden","details":{"name":"https:x:443","kind":"services"},"code":403}`
+	cases := []struct {
+		name        string
+		code        int
+		ctype, body string
+		status      int
+		text        string
+	}{
+		{"the store's own 401", http.StatusUnauthorized, "text/plain; charset=utf-8", "Unauthorized", http.StatusBadGateway, "answered 401 itself, not the cluster: Unauthorized"},
+		{"the store's own 403", http.StatusForbidden, "text/plain; charset=utf-8", "Forbidden", http.StatusBadGateway, "answered 403 itself, not the cluster: Forbidden"},
+		{"the API server's refusal", http.StatusForbidden, "application/json", refused, http.StatusForbidden, "the cluster refused"},
+	}
+	for name, target := range map[string]netflows.Target{
+		"Hubble Relay":   {Mode: "proxy", Relay: netflows.Relay{Namespace: "kube-system", Service: "hubble-relay", Port: 443}},
+		"Calico Whisker": {Mode: "proxy", Source: netflows.SourceCalico, Relay: netflows.DefaultWhisker},
+	} {
+		s, err := netflows.New(netflows.Config{
+			Clusters:     map[string]netflows.Target{"c1": target},
+			DefaultRange: time.Hour, MaxRange: time.Hour, MaxFlows: 50, GraphMaxFlows: 400, Timeout: 2 * time.Second, PerUserPerMinute: 50,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		h := metricsHandler(t, api.URL)
+		h.auditStore = &memAudit{}
+		h.SetNetworkFlows(s)
+		h.netflowsCanI = func(context.Context, netflows.Target) (bool, error) { return true, nil }
+		for _, c := range cases {
+			mu.Lock()
+			code, ctype, body = c.code, c.ctype, c.body
+			mu.Unlock()
+			w := httptest.NewRecorder()
+			h.NetworkFlows(w, logSearchRequestAs("/api/v1/namespaces/demo/networkflows", "c1", "demo", flowReader))
+			if w.Code != c.status || !strings.Contains(w.Body.String(), c.text) {
+				t.Errorf("%s, %s: %d %s", name, c.name, w.Code, w.Body)
+			}
+		}
+	}
+}
+
 // A flow read through the API server follows no redirect out of the Relay's or Whisker's Service: the request goes
 // with the cluster's credentials and the person's headers, which another host must never get. It is a 502 saying so.
 func TestNetworkFlowsThroughTheProxyFollowNoRedirectToAnotherHost(t *testing.T) {

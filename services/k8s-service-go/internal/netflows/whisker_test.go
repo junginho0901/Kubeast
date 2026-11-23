@@ -269,7 +269,7 @@ func TestQueryWhiskerErrors(t *testing.T) {
 		text string
 	}{
 		{"the API server cannot reach Whisker", &whiskerServer{status: http.StatusServiceUnavailable, body: "error trying to reach service: dial tcp 192.168.213.129:8443: i/o timeout"}, ErrUnavailable, "i/o timeout"},
-		{"no permission", &whiskerServer{status: http.StatusForbidden, body: "forbidden"}, ErrForbidden, ""},
+		{"no permission", &whiskerServer{status: http.StatusForbidden, body: apiStatus(http.StatusForbidden, "Forbidden", `services "https:whisker:8443" is forbidden`)}, ErrForbidden, "refused the Whisker read"},
 		{"not Whisker's list", &whiskerServer{body: "<html>"}, ErrUnavailable, "not Whisker's flow list"},
 		{"too large", &whiskerServer{body: `{"items":[` + strings.Repeat(" ", MaxWhiskerBytes) + `]}`}, ErrUnavailable, "more than 16 MiB"},
 	} {
