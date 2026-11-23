@@ -481,7 +481,8 @@ Loki returns only patterns with 30 or more lines in the window, for the last 3 h
 
 The narrowing's log checks (`anomaly_rank`):
 
-- They ask `index/stats` for the namespace's streams over the window and the one before first. Past `features.anomalyRank.logMaxBytes` (10 GiB), with no line there, or when Loki does not serve it, both checks are listed as not run.
+- They ask `index/stats` for the namespace's streams over the window and the one before first. Past `features.anomalyRank.logMaxBytes` (10 GiB), or when Loki does not serve it, both checks are listed as not run.
+- When `index/stats` counts no line, one `query_range` of a single line over the same two windows says whether there is one, and with no line there either both checks are listed as not run. The index leaves out the lines Loki's ingesters hold and have not flushed yet, and a Loki run as one process (`-target=all`) asks no ingester for it, so a recent window can count none (Loki's `setupAsyncStore` in `pkg/loki/modules.go`). That read is made only then, once per answer, under the estimate's store query.
 - The error shape check reads `patterns` for the same streams over both windows. A shape counts as an error when Loki's `level` is error, fatal or critical, or when there is no level and the shape holds `error`, `exception`, `fatal` or `panic`. When Loki holds no pattern for the window before (the last 3 hours, above), the check is listed as not run.
 - The error line check runs `sum by (<container label>) (count_over_time({…} |~ "(?i)(error|exception|fatal|panic)" [<window>]))` once, with a step of the window's length. It needs the container label of `features.logSearch.labels` on the streams.
 - With a workload, both narrow to its pods by the pod label (`<name>-.*`).

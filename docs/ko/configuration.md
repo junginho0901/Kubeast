@@ -287,7 +287,8 @@ features:
   anomalyRank:
     enabled: false           # (alpha) true면 AI 도구 anomaly_rank와 GET /namespaces/{namespace}/anomalies를 켭니다 — 한 네임스페이스가
                              # 앞 구간과 무엇이 달라졌는지 순위로(cluster-requirements.md). 끄면 그 경로는 404이고 아무것도 읽지 않습니다
-    maxQueries: 12           # 답 하나가 저장소에 보낼 수 있는 질의 수
+    maxQueries: 12           # 답 하나가 저장소에 보낼 수 있는 질의 수. 로그 저장소 색인이 줄을 하나도 세지 않을 때 로그 검사가 한 줄
+                             # 읽는 것은 그 색인 질의 안에서 셉니다
     checkTimeoutSeconds: 5   # 검사 하나의 시간
     timeoutSeconds: 20       # 답 전체의 시간
     concurrency: 4           # 한 번에 도는 검사 수

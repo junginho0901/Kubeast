@@ -295,7 +295,8 @@ features:
   anomalyRank:
     enabled: false           # (alpha) true: the AI tool anomaly_rank and GET /namespaces/{namespace}/anomalies, what differs in one
                              # namespace from the window before, ranked (cluster-requirements.md); off: the route answers 404, reads nothing
-    maxQueries: 12           # store queries one answer may make
+    maxQueries: 12           # store queries one answer may make; when the log store's index counts no line, the log checks' read of one
+                             # line is counted under that index query
     checkTimeoutSeconds: 5   # each check
     timeoutSeconds: 20       # the whole answer
     concurrency: 4           # checks at once

@@ -1124,7 +1124,7 @@ features:
   # Stage: alpha, not run yet: the e2e ai-anomaly-rank.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
   anomalyRank:
     enabled: false
-    maxQueries: 12           # store queries one answer may make
+    maxQueries: 12           # store queries one answer may make; when the log store's index counts no line, the log checks' read of one line is counted under that index query
     checkTimeoutSeconds: 5   # each check
     timeoutSeconds: 20       # the whole answer
     concurrency: 4           # checks at once
