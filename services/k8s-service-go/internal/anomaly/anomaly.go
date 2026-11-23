@@ -397,6 +397,8 @@ type CallOrderNote struct {
 	Suspects []string `json:"suspects,omitempty"`
 	// Moved: the findings that changed place.
 	Moved int `json:"moved"`
+	// Truncated: the calls answer it was made from was cut (its truncated or a source's): a call or its failures may be missing.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // apply reorders found (ranked) as CallOrder says and counts the findings that moved.

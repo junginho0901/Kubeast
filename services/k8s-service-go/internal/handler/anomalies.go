@@ -308,10 +308,10 @@ func (h *Handler) callOrder(r *http.Request, run func(func(context.Context)), bu
 	})
 	order := &anomaly.CallOrder{Workload: workload}
 	var unread []string
-	read := false
+	read, cut := false, calls.Truncated
 	for _, st := range calls.Sources {
 		if st.Read {
-			read = true
+			read, cut = true, cut || st.Truncated
 			continue
 		}
 		why := st.Source + ": " + st.Reason
@@ -332,6 +332,7 @@ func (h *Handler) callOrder(r *http.Request, run func(func(context.Context)), bu
 			order.Suspects = append(order.Suspects, sp.ID)
 		}
 	}
+	order.Note.Truncated = err == nil && read && cut
 	return order
 }
 
