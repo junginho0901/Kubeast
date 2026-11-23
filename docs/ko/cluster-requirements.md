@@ -582,6 +582,19 @@ service:
 | EKS 외부 클러스터·S3 | IRSA 롤(`aws.irsaRoleArn` 등) |
 | 사설 CA·TLS를 가로채는 프록시 | `customCAs`에 적은 Secret·ConfigMap이 릴리스 네임스페이스에 먼저 있어야 합니다. 없으면 새 파드가 볼륨을 기다리느라 뜨지 않으며, 이전 파드는 계속 응답합니다 |
 
+### AI 서비스가 밖으로 여는 연결
+
+기본으로 ai-service는 공인 주소 어디로든 443(모델 공급자), tool-server는 어느 주소로든 443·6443(등록한 클러스터의 API 서버)으로 연결할 수 있습니다. `networkPolicy.aiEgress.allowListOnly: true`(기본 꺼짐)를 켜면 둘 다 적은 주소로만 나갑니다. 모델이 클러스터에서 읽은 글이 둘을 다른 곳으로 연결하게 할 수 없습니다.
+
+- ai-service: `networkPolicy.allowExternalEgressCIDRs`에 부르는 모델 공급자·게이트웨이를 적습니다. Anthropic은 Claude API의 고정 주소를 공개합니다(`160.79.104.0/23`, `153.61.224.0/22`, IPv6 `2607:6bc0::/48` — platform.claude.com "IP addresses"). Claude Code(공급자 `claude-code`)도 같은 API로 가고 다른 연결은 보내지 않습니다(`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`). 고정 주소를 공개하지 않는 공급자는 직접 둔 프록시·게이트웨이를 거치게 하고 그 주소를 적습니다. NetworkPolicy는 이름이 아니라 주소로 맞춥니다.
+- tool-server: `networkPolicy.aiEgress.clusterAPIs`(CIDR은 443·6443, `{cidr, port}`는 그 포트)와 `networkPolicy.apiserverCIDR`에 Kubeast에 등록한 모든 클러스터의 API 서버를 적습니다. AI의 kubectl이 tool-server에서 돌므로 이 클러스터의 것도 적습니다(`kubectl get endpoints kubernetes -n default`).
+- EKS: API 서버 주소는 바뀝니다(공개 엔드포인트 IP가 옮겨 가고, 비공개 엔드포인트의 네트워크 인터페이스는 업그레이드 때 바뀜). 그래서 비공개 엔드포인트가 있는 VPC·서브넷 CIDR을 적고, /32로 적지 않습니다. 공개 엔드포인트만 있는 클러스터는 적을 고정 대역이 없습니다. 비공개 엔드포인트를 켜서 VPC로 닿게 하거나, 스위치를 끈 채 둡니다.
+- IRSA를 쓰는 EKS(`aws.irsaRoleArn`, 또는 tool-server ServiceAccount의 `eks.amazonaws.com/role-arn` 주석): tool-server의 `aws-iam-authenticator`가 자격과 대상 롤을 받으려고 STS를 부릅니다. STS VPC 인터페이스 엔드포인트(`com.amazonaws.<region>.sts`, 비공개 DNS 켬, 리전 STS)를 만들고 그 서브넷을 `networkPolicy.aiEgress.stsEndpoints`에 적습니다(`{cidr, port: 443}`, CIDR만 적으면 443). 롤을 S3(세션 기록, 감사 싱크)에만 쓰고 EKS 클러스터를 등록하지 않는 설치는 `aws.irsaRoleArn`(tool-server에도 붙음) 대신 `serviceAccounts.k8sService.annotations`·`serviceAccounts.authService.annotations`로 그 서비스에만 롤을 줍니다. 그러면 STS 항목을 묻지 않습니다. 차트는 어떤 클러스터가 등록될지 모르므로, tool-server에 롤이 있으면 늘 이 항목을 묻습니다.
+- 스위치를 켰는데 `networkPolicy.enabled`가 꺼져 있거나, 두 목록 중 하나가 비어 있거나, tool-server에 IRSA 롤이 있는데(`aws.irsaRoleArn`, 또는 `serviceAccounts.toolServer.annotations`의 role-arn 주석) `stsEndpoints`가 비어 있으면 차트가 이유를 말하고 멈춥니다.
+- 목록이 바꾸지 않는 것: DNS·데이터베이스·콘솔 자체 서비스는 전처럼 열려 있습니다. 외부 데이터베이스(`postgresql.enabled: false`)면 ai-service를 포함한 모든 데이터베이스 클라이언트가 데이터베이스 포트로는 어느 주소로든 나갑니다.
+
+목록이 모자라면 멈추는 것: 적지 않은 모델의 AI 답은 두 채팅 모두 공급자 오류("응답하지 않음")로 끝나고, Admin → AI Models의 Test와 알림 조사도 같은 이유로 실패합니다. API 서버를 적지 않은 클러스터의 AI 도구는 kubectl 시간 초과로 실패하고, 그 클러스터의 화면은 그대로 돕니다(k8s-service는 막지 않음). STS 엔드포인트가 없으면 tool-server가 AWS 자격을 못 받아 모든 EKS 클러스터의 AI 도구가 실패합니다. 어느 쪽이든 화면은 답 안의 그림을 불러오지 않습니다. AI가 쓴 글의 그림은 읽는 사람이 여는 링크입니다.
+
 ### Kubeast 자체 Namespace에 누가 닿는가
 
 릴리스 네임스페이스에는 로그인을 서명하는 키(`kubeast-auth-keys`), 등록한 클러스터의 자격 증명(`cluster-kubeconfig-<id>`), 차트의 Secret이 있습니다. 이것을 읽은 사람은 등록된 모든 클러스터에서 전역 관리자로 행동할 수 있습니다.

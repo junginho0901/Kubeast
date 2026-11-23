@@ -232,6 +232,10 @@ redis:
     existingSecret: ""            # 사용자 키만 든 Secret. 서비스마다 자기 키만 읽습니다
 networkPolicy:
   enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(Flannel 등)에서는 영향이 없습니다. kind의 kindnet은 kind 0.24부터 강제합니다
+  aiEgress:
+    allowListOnly: false  # true면(networkPolicy.enabled 필요) ai-service는 allowExternalEgressCIDRs로만, tool-server는 clusterAPIs·stsEndpoints·apiserverCIDR로만 나갑니다(cluster-requirements.md §15)
+    clusterAPIs: []       # 등록한 클러스터(이 클러스터 포함)의 API 서버를 VPC·서브넷 CIDR로(EKS는 /32 금지) — CIDR은 443·6443, {cidr, port}는 그 포트
+    stsEndpoints: []      # tool-server에 IRSA 롤이 있으면 STS VPC 인터페이스 엔드포인트의 서브넷, {cidr, port: 443}
 
 # Gateway 노출 방식
 gateway:
