@@ -26,8 +26,8 @@ function Calls({ refs, toolCalls }: { refs: InvestigationCallRef[]; toolCalls: I
 }
 
 // Under a list the server cut at what it keeps of it: the first how many of how many it shows (cutText).
-function CutNote({ text }: { text: string }) {
-  return text ? <div className="mt-1 text-amber-300" data-testid="investigation-result-cut">{text}</div> : null
+function CutNote({ text, testId = 'investigation-result-cut' }: { text: string; testId?: string }) {
+  return text ? <div className="mt-1 text-amber-300" data-testid={testId}>{text}</div> : null
 }
 
 export function InvestigationResultView({ result, toolCalls }: { result: InvestigationResult; toolCalls: InvestigationToolCall[] }) {
@@ -117,13 +117,20 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
                           )}
                           {!h.closed && <div className="mt-1 text-amber-300 break-words" data-testid="investigation-hypothesis-open">{notClosedText(h, tr)}</div>}
                         </td>
-                        <td className="px-2 py-1"><Calls refs={h.for} toolCalls={toolCalls} /></td>
-                        <td className="px-2 py-1"><Calls refs={h.against} toolCalls={toolCalls} /></td>
+                        <td className="px-2 py-1">
+                          <Calls refs={h.for} toolCalls={toolCalls} />
+                          <CutNote text={cutText(h.cut?.for, tr)} testId="investigation-hypothesis-calls-cut" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <Calls refs={h.against} toolCalls={toolCalls} />
+                          <CutNote text={cutText(h.cut?.against, tr)} testId="investigation-hypothesis-calls-cut" />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
+              <CutNote text={cutText(result.cut?.hypotheses, tr)} />
             </div>}
           </>
         )}

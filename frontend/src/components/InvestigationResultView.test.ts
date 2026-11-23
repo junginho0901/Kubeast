@@ -113,6 +113,22 @@ describe("the report window's result and hypotheses", () => {
     expect(fits).not.toContain('data-testid="investigation-cause-calls-cut"')
   })
 
+  it('says under the hypotheses and under a side of one how many of how many it shows', async () => {
+    const html = await render({
+      ...RESULT,
+      hypotheses: [{ ...RESULT.hypotheses[1], cut: { for: { given: 21, kept: 20 }, against: { given: 25, kept: 20 } } }, ...RESULT.hypotheses.slice(2)],
+      cut: { hypotheses: { given: 13, kept: 12 } },
+    })
+    expect([...html.matchAll(/data-testid="investigation-result-cut">([^<]*)</g)].map((m) => m[1])).toEqual([
+      'Showing the first 12 of 13: the server did not keep the rest.',
+    ])
+    expect([...html.matchAll(/data-testid="investigation-hypothesis-calls-cut">([^<]*)</g)].map((m) => m[1])).toEqual([
+      'Showing the first 20 of 21: the server did not keep the rest.',
+      'Showing the first 20 of 25: the server did not keep the rest.',
+    ])
+    expect(await render(RESULT)).not.toContain('investigation-hypothesis-calls-cut')
+  })
+
   it('shows no hypotheses when the ledger did not read the block', async () => {
     const html = await render({ ...RESULT, hypotheses: [], checks: { evidence: true, ledger: false } })
     expect(html).not.toContain('Hypotheses (')

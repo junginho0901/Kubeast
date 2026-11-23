@@ -131,6 +131,7 @@ const hypothesesForChat = (result: InvestigationResult) => orderedHypotheses(res
   against: h.against.map(callLabel),
   ...(h.blocked ? { blocked: short(h.blocked) } : {}),
   ...(h.problems?.length ? { not_closed: h.problems.map((p) => p.reason) } : {}),
+  ...(h.cut ? { cut: h.cut } : {}),
 }))
 
 // What the floating chat is told of the result: a cause the calls do not show says so, hypotheses only with the ledger,

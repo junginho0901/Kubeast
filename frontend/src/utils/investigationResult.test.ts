@@ -143,6 +143,10 @@ describe("the report window's layer for the floating chat", () => {
     expect((told.causes as Record<string, unknown>[])[0].cut).toEqual({ evidence: { given: 25, kept: 20 } })
     expect('cut' in resultForChat(RESULT)).toBe(false)
     expect('cut' in (resultForChat(RESULT).causes as Record<string, unknown>[])[0]).toBe(false)
+    const side = { for: { given: 21, kept: 20 } }
+    const hypotheses = resultForChat({ ...RESULT, hypotheses: [{ ...RESULT.hypotheses[1], cut: side }] }).hypotheses as Record<string, unknown>[]
+    expect(hypotheses[0].cut).toEqual(side)
+    expect((resultForChat(RESULT).hypotheses as Record<string, unknown>[]).some((h) => 'cut' in h)).toBe(false)
   })
 
   it("keeps the server's notes under a report it cuts", () => {

@@ -61,6 +61,8 @@ export interface InvestigationHypothesis {
   blocked?: string
   closed: boolean
   problems?: { reason: 'open' | 'no_evidence' | 'no_reason' | 'bad_calls' | 'not_verified'; side?: 'for' | 'against'; calls?: string[] }[]
+  // a side when the model gave more numbers than the server keeps
+  cut?: { for?: InvestigationCut; against?: InvestigationCut }
 }
 
 export type UnverifiedReason = 'no_evidence' | 'bad_calls' | 'name_missing' | 'after_alert'
@@ -102,7 +104,7 @@ export interface InvestigationResult {
   // the switches that read the block; absent on a row written before it was kept
   checks?: { evidence: boolean; ledger: boolean }
   // the lists the model gave longer than the server keeps; absent when every list fits
-  cut?: { causes?: InvestigationCut; path?: InvestigationCut; ruled_out?: InvestigationCut }
+  cut?: { causes?: InvestigationCut; path?: InvestigationCut; ruled_out?: InvestigationCut; hypotheses?: InvestigationCut }
 }
 
 export interface Investigation extends InvestigationSummary {

@@ -138,6 +138,28 @@ def test_the_ledger_reads_states_loosely_and_keeps_at_most_twelve():
     assert inv_ledger.check(None, LOG) == [] and inv_ledger.check({"hypotheses": "h1"}, LOG) == []
 
 
+def test_a_ledger_list_past_its_cap_says_how_many_were_given():
+    # thirteen hypotheses: twelve kept, and the result says thirteen were given
+    hyps = [hypothesis(id=f"h{i}") for i in range(13)]
+    kept = inv_ledger.check({"hypotheses": hyps}, LOG)
+    assert len(kept) == inv_ledger.MAX_HYPOTHESES == 12 and all("cut" not in h for h in kept)
+    ledger_on = {"evidence": False, "ledger": True}
+    out = inv_result.shape({"causes": [], "hypotheses": hyps}, "ok", LOG, kept, checks=ledger_on)
+    assert out["cut"] == {"hypotheses": {"given": 13, "kept": 12}}
+    twelve = hyps[:12]
+    assert "cut" not in inv_result.shape({"causes": [], "hypotheses": twelve}, "ok", LOG, inv_ledger.check({"hypotheses": twelve}, LOG),
+                                         checks=ledger_on)
+    # with the ledger off its hypotheses are not read, so none are said to be cut
+    assert "cut" not in inv_result.shape({"causes": [], "hypotheses": hyps}, "ok", LOG, [], checks={"evidence": True, "ledger": False})
+    # a side's numbers: the first twenty read, twenty-one given
+    (wide,) = inv_ledger.check({"hypotheses": [hypothesis(state="ruled_out", **{"for": [1] * 21, "against": [2] * 21})]}, LOG)
+    assert wide["cut"] == {"for": {"given": 21, "kept": 20}, "against": {"given": 21, "kept": 20}}
+    (fits,) = inv_ledger.check({"hypotheses": [hypothesis(state="ruled_out", **{"for": [1] * 20, "against": [2] * 20})]}, LOG)
+    assert "cut" not in fits
+    (one,) = inv_ledger.check({"hypotheses": [hypothesis(**{"for": [1] * 21})]}, LOG)
+    assert one["cut"] == {"for": {"given": 21, "kept": 20}} and one["closed"] is True
+
+
 def test_asking_again_follows_the_block():
     assert inv_ledger.needs_asking("missing", None, [])
     assert inv_ledger.needs_asking("ok", {"no_fault": False}, [])  # a fault with no hypothesis weighed
