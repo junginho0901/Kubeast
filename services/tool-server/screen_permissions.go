@@ -102,6 +102,7 @@ var toolScreenTable = map[string]toolRule{
 	"traces_metrics":                 listsAndDetails,
 	"traces_compare":                 listsAndDetails,
 	"issues":                         listsAndDetails,
+	"anomaly_rank":                   listsAndDetails,
 	"gitops_status":                  listsAndDetails,
 	"optimization":                   listsAndDetails,
 	"resource_graph":                 listsAndDetails,

@@ -21,16 +21,6 @@ func waitUntil(t *testing.T, what string, cond func() bool) {
 	}
 }
 
-func (g *Group[T]) waitersOnNext(key string) int {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	st := g.keys[key]
-	if st == nil || st.next == nil {
-		return 0
-	}
-	return st.next.waiters
-}
-
 // A crowd arriving while one read runs costs one read more, whose answer they all get.
 func TestACrowdOnOneKeyCostsAtMostTwoReads(t *testing.T) {
 	var g Group[int]
@@ -56,7 +46,7 @@ func TestACrowdOnOneKeyCostsAtMostTwoReads(t *testing.T) {
 			results[i], _, _ = g.Do(context.Background(), "k", read)
 		}()
 	}
-	waitUntil(t, "the crowd waits on the next read", func() bool { return g.waitersOnNext("k") == 39 })
+	waitUntil(t, "the crowd waits on the next read", func() bool { return g.Waiting("k") == 39 })
 	close(release)
 	wg.Wait()
 	if reads.Load() != 2 {
@@ -145,7 +135,7 @@ func TestACallerLeavingFailsNoOneElse(t *testing.T) {
 		_, _, err := g.Do(nextCtx, "k", read)
 		nextErr <- err
 	}()
-	waitUntil(t, "the next read has its first caller", func() bool { return g.waitersOnNext("k") == 1 })
+	waitUntil(t, "the next read has its first caller", func() bool { return g.Waiting("k") == 1 })
 
 	type result struct {
 		v      string
@@ -157,7 +147,7 @@ func TestACallerLeavingFailsNoOneElse(t *testing.T) {
 		v, joined, err := g.Do(context.Background(), "k", read)
 		stayed <- result{v, joined, err}
 	}()
-	waitUntil(t, "another caller joined it", func() bool { return g.waitersOnNext("k") == 2 })
+	waitUntil(t, "another caller joined it", func() bool { return g.Waiting("k") == 2 })
 
 	leaveNext()
 	if err := <-nextErr; !errors.Is(err, context.Canceled) {
@@ -202,7 +192,7 @@ func TestAReadNoOneWaitsForStops(t *testing.T) {
 			return 0, nil
 		})
 	}()
-	waitUntil(t, "the next read was made", func() bool { return g.waitersOnNext("k") == 1 })
+	waitUntil(t, "the next read was made", func() bool { return g.Waiting("k") == 1 })
 	leaveNext()
 	<-nextDone
 
@@ -288,7 +278,7 @@ func TestAPanicInASharedReadIsAnError(t *testing.T) {
 		_, _, err := g.Do(context.Background(), "k", func(context.Context) (int, error) { panic("fixture") })
 		failed <- err
 	}()
-	waitUntil(t, "the next read has its caller", func() bool { return g.waitersOnNext("k") == 1 })
+	waitUntil(t, "the next read has its caller", func() bool { return g.Waiting("k") == 1 })
 	close(release)
 	<-first
 	if err := <-failed; !errors.Is(err, ErrPanicked) {
@@ -342,7 +332,7 @@ func TestACallerWithNoReadToWaitForReadsForItself(t *testing.T) {
 		v, _, _ := g.DoOr(context.Background(), "k", func() (string, error) { return "alone", nil }, func(context.Context) (string, error) { return "shared", nil })
 		second <- v
 	}()
-	waitUntil(t, "the second caller waits", func() bool { return g.waitersOnNext("k") == 1 })
+	waitUntil(t, "the second caller waits", func() bool { return g.Waiting("k") == 1 })
 	close(release)
 	if v := <-first; v != "alone" {
 		t.Errorf("the first caller got %q", v)

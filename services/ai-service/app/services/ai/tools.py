@@ -10,6 +10,32 @@
 
 from typing import Dict, List
 
+from app.services import switch
+
+# resource_graph's call parameters, offered only where the cluster has features.callGraph on (features.PARAM_GATES), and
+# in the MCP server's list only with CALL_GRAPH_ENABLED (offer_call_graph).
+CALLS_PARAM = "include"
+CALLS_SINCE_PARAM = "since"
+CALLS_WINDOW_PARAMS = ("since_time", "until_time")
+CALLS_PARAMS = (CALLS_PARAM, CALLS_SINCE_PARAM, *CALLS_WINDOW_PARAMS)
+CALLS_DESCRIPTION = (
+    " With include [\"calls\"] it adds who calls whom over since, or the fixed window since_time to until_time — requests, errors and "
+    "p90 latency from the traces, connections and drops from the network — with the failing workloads that call nothing failing first "
+    "and the cause → … → symptom paths between them: a caller of a failing service is more often its victim than its cause."
+)
+
+# timeline's changes view, offered to the model only with AI_TIMELINE_CHANGES (chart ai.timelineChanges, off by default):
+# off, timeline is offered without the view parameter and without these words (offer_timeline_changes).
+TIMELINE_CHANGES_PARAM = "view"
+TIMELINE_CHANGES_DESCRIPTION = (
+    " view \"changes\" answers instead what changed from since_time to until_time (default the 4 hours before now, exact), newest first, at most 50: "
+    "rollouts compared with the revision before (images, the names of other pod template fields, the keys of env, labels and annotations that were added, "
+    "removed or changed — never a value), ConfigMap and Secret last writes and the field manager that wrote them (metadata only), Helm release revisions, "
+    "HPA last scales, node creations and condition changes, Argo CD syncs and container restarts with their reason. Each object keeps only its last write, "
+    "scale or restart. summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
+    "not zero (without a namespace, every namespace's restarts need listing pods across the cluster: name a namespace). Use it first for \"why did this break?\", then line the changes up with when the symptom started."
+)
+
 K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
@@ -245,6 +271,36 @@ K8S_READONLY_TOOLS: List[Dict] = [
                     "severity": {"type": "string", "description": "Only this severity: critical, warning or info"},
                     "window_minutes": {"type": "integer", "description": "How far back Warning events are read (default: server setting)"},
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "anomaly_rank",
+            "description": (
+                "What differs in one namespace between a window (default the last hour) and the window of the same length right before it, ranked "
+                "by the server before you look around: failing objects now (the issue check), container terminations by reason (OOMKilled, Error), "
+                "restarts, CPU throttling and memory against the limit (Prometheus), error log shapes and error line counts per container (the log "
+                "store), each service's requests, failed share and p90 from its server spans (the trace store), pressure on the nodes its pods run on. "
+                "Each finding has check, "
+                "target, verdict, a one-line summary, before / now / ratio (new: it was not there before) and up to 3 examples; at most 10, the new "
+                "first, then the larger ratio. normal lists the checks that found nothing; not_run the checks that could not run and why (no "
+                "Prometheus, log or trace store, no series, a grant limited to namespaces, no permission to read pod logs, logs too large to read): "
+                "not run is not normal, say so. With call_order the call graph has put a failing workload whose callees are all well before "
+                "the workloads that call it (features.callGraph), else the order is by the counts. Read the objects it names: a finding is a "
+                "lead, not a cause, check it."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string", "description": "The namespace to compare"},
+                    "since_time": {"type": "string", "description": "Start: 1h, 30m or an RFC3339 time (default an hour before the end); the window is 5 minutes to 24 hours"},
+                    "until_time": {"type": "string", "description": "End as an RFC3339 time (default now)"},
+                    "workload_kind": {"type": "string", "enum": ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job", "CronJob"], "description": "Only this workload's pods, with workload_name"},
+                    "workload_name": {"type": "string", "description": "The workload's name, with workload_kind"},
+                },
+                "required": ["namespace"],
             },
         },
     },
@@ -1008,11 +1064,20 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "volume and config references (Pod → ConfigMap/Secret/PVC), Ingress → Service — as nodes and edges plus counts by kind. "
                 "Use it to answer \"what depends on Service X\", \"which pods does this ConfigMap feed\", \"what would break if I delete Y\". "
                 "Large namespaces are cut at 200 nodes and 400 edges; narrow with k8s_get_resources when the answer needs one object's neighbours."
+                + CALLS_DESCRIPTION
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "namespace": {"type": "string", "description": "The namespace to map"},
+                    CALLS_PARAM: {
+                        "type": "array",
+                        "items": {"type": "string", "enum": ["calls"]},
+                        "description": "[\"calls\"] adds the calls between the workloads (traces and network) over since",
+                    },
+                    CALLS_SINCE_PARAM: {"type": "string", "description": "With include calls: the range back from now, e.g. 15m, 1h or 6h (1m to 24h, default 1h)"},
+                    CALLS_WINDOW_PARAMS[0]: {"type": "string", "description": "With include calls: the window's start, 30m, 1h or an RFC3339 time (instead of since; the window is 1m to 24h)"},
+                    CALLS_WINDOW_PARAMS[1]: {"type": "string", "description": "With include calls: the window's end as an RFC3339 time (default now)"},
                 },
                 "required": ["namespace"],
             },
@@ -1028,10 +1093,16 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "summary counts every event of the window; events holds the newest (events_shown of events_matching, said in events_note when cut), so do not count from the rows. "
                 "rollouts_total is null with rollouts_note when the rollouts could not be read: not counted, not zero. With until_time or a kind without a name, narrowed.events_matching is null when the "
                 "list stopped before reaching them: not counted, not zero. Events typically live about an hour in the cluster."
+                + TIMELINE_CHANGES_DESCRIPTION
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
+                    TIMELINE_CHANGES_PARAM: {
+                        "type": "string", "enum": ["events", "changes"],
+                        "description": "events (default): events and rollout revisions; changes: what changed in the window. changes takes namespace, since_time "
+                                       "(default 4h before the end, not rounded), until_time and limit (default and at most 50) only",
+                    },
                     "namespace": {"type": "string", "description": "One namespace; empty for every namespace the user reads"},
                     "since_time": {"type": "string", "description": "Start: 24h, 7d or an RFC3339 time (default 24h before the end). Rounded out to a whole hour back from now"},
                     "until_time": {"type": "string", "description": "End as an RFC3339 time (default now)"},
@@ -1840,3 +1911,87 @@ def get_tools_definition(service) -> List[Dict]:
     tools.extend(ACTION_TOOLS)
     tools.extend(K8S_WRITE_TOOLS)
     return service._filter_tools_by_role(tools)
+
+
+def timeline_changes_on() -> bool:
+    """AI_TIMELINE_CHANGES (chart ai.timelineChanges, default off): the model is offered timeline's changes view."""
+    return switch.env_on("AI_TIMELINE_CHANGES")
+
+
+def changes_view_on(session_id: object = None) -> bool:
+    """Whether a timeline call of this session may keep the changes view: with AI_TIMELINE_CHANGES, or in an alert
+    investigation (its session id starts "investigation:") with ALERT_INVESTIGATION_CHANGES_FIRST, whose step 0 reads it.
+    Otherwise dispatch drops view, as before the view: a chat keeps none with only the investigation's switch on."""
+    if timeline_changes_on():
+        return True
+    return str(session_id or "").startswith("investigation:") and switch.env_on("ALERT_INVESTIGATION_CHANGES_FIRST")
+
+
+def anomaly_rank_on() -> bool:
+    """ANOMALY_RANK_ENABLED (chart features.anomalyRank.enabled, default off; in the ConfigMap every service reads): the
+    chat prompt names anomaly_rank and the MCP server lists it. The chat's and an investigation's tool lists follow the
+    cluster's features (features.GATES); while it is off dispatch answers it as an unknown function and an investigation as a
+    tool outside its read-only list (investigation.runner), as before the tool."""
+    return switch.env_on("ANOMALY_RANK_ENABLED")
+
+
+def _timeline_without_changes(tool: Dict) -> Dict:
+    fn = dict(tool.get("function") or {})
+    parameters = dict(fn.get("parameters") or {})
+    parameters["properties"] = {k: v for k, v in (parameters.get("properties") or {}).items() if k != TIMELINE_CHANGES_PARAM}
+    fn["parameters"] = parameters
+    if isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(TIMELINE_CHANGES_DESCRIPTION, "")
+    return {**tool, "function": fn}
+
+
+# With anomaly_rank on too, the chat's one order rule calls it first (prompts.ANOMALY_RANK_RULE_WITH_CHANGES): the changes
+# view's description then does not say "first".
+TIMELINE_FIRST = " Use it first for \"why did this break?\", then line the changes up with when the symptom started."
+TIMELINE_AFTER_ANOMALY_RANK = " For \"why did this break?\", line the changes up with when the symptom started."
+
+
+def _timeline_after_anomaly_rank(tool: Dict) -> Dict:
+    fn = dict(tool.get("function") or {})
+    if isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(TIMELINE_FIRST, TIMELINE_AFTER_ANOMALY_RANK)
+    return {**tool, "function": fn}
+
+
+def offer_timeline_changes(tools: List[Dict]) -> List[Dict]:
+    """tools as the model is offered them: with AI_TIMELINE_CHANGES off, timeline without its changes view; with it and
+    ANOMALY_RANK_ENABLED on, the view's description without "first"."""
+    def timeline(t: Dict) -> bool:
+        return ((t or {}).get("function") or {}).get("name") == "timeline"
+
+    if timeline_changes_on():
+        if anomaly_rank_on():
+            return [_timeline_after_anomaly_rank(t) if timeline(t) else t for t in tools]
+        return tools
+    return [_timeline_without_changes(t) if timeline(t) else t for t in tools]
+
+
+def without_params(tool: Dict, params: tuple, words: str) -> Dict:
+    """tool without these parameters and the words of its description about them."""
+    fn = dict(tool.get("function") or {})
+    parameters = dict(fn.get("parameters") or {})
+    parameters["properties"] = {k: v for k, v in (parameters.get("properties") or {}).items() if k not in params}
+    fn["parameters"] = parameters
+    if words and isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(words, "")
+    return {**tool, "function": fn}
+
+
+def call_graph_on() -> bool:
+    """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads), read with
+    the one switch rule (app/services/switch.py)."""
+    return switch.env_on("CALL_GRAPH_ENABLED")
+
+
+def offer_call_graph(tools: List[Dict]) -> List[Dict]:
+    """tools for a list that names no cluster (the MCP server's read tools): with CALL_GRAPH_ENABLED off, resource_graph
+    without its call parameters and their words, as features.PARAM_GATES gives a cluster without callGraph."""
+    if call_graph_on():
+        return tools
+    return [without_params(t, CALLS_PARAMS, CALLS_DESCRIPTION) if ((t or {}).get("function") or {}).get("name") == "resource_graph" else t
+            for t in tools]

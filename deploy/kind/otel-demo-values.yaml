@@ -1,0 +1,81 @@
+# The OpenTelemetry Demo on kind (scripts/kind-otel-demo.sh): chart open-telemetry/opentelemetry-demo 0.42.6
+# (app 3.1.0) rendered with `helm template` and applied server-side in the second cluster (kubeast-b), which keeps no
+# Helm release. Every demo service as the chart ships it; the chart's Jaeger, Prometheus, Grafana and OpenSearch are
+# off, as in the chart's examples/bring-your-own-observability. Its collector (the chart's own version) sends:
+#   traces  → the Tempo of scripts/kind-tracing.sh (deploy/kind/tracing-tempo.yaml, Service tempo/tempo, OTLP gRPC 4317)
+#   logs    → the Loki of scripts/kind-logsearch.sh (deploy/kind/logsearch-loki.yaml, Service loki/loki 3100, /otlp)
+#   metrics → the cluster's Prometheus (deploy/kind/second-cluster.yaml, Service monitoring/prometheus 9090, remote
+#             write), span metrics included; kind-otel-demo.sh sends them to `nop` with OTELDEMO_METRICS=0
+# with k8s.cluster.name kubeast-b, the value Kubeast's log search and trace store map cluster `default` to, and the
+# k8s.* attributes of the chart's kubernetesAttributes preset. The log-search collector also reads these pods' stdout
+# into the same Loki, so a line a service both prints and sends over OTLP is there twice (the OTLP one with
+# service_name and the trace id). Helm merges maps and replaces lists: the pipelines' exporter lists, the metrics
+# pipeline's receivers and the resource processor's attributes below replace the chart's, its other exporters stay
+# defined and unused. The service_graph connector adds who calls whom (traces_service_graph_*, the AI's call graph
+# reads them) with the namespace on both sides; a store the demo does not instrument (the cart's Valkey, the
+# database) is a node named by the calling span's server.address.
+jaeger:
+  enabled: false
+prometheus:
+  enabled: false
+grafana:
+  enabled: false
+opensearch:
+  enabled: false
+
+opentelemetry-collector:
+  # A cluster-scoped name that says whose it is (the chart's default is the collector's name, otel-collector).
+  clusterRole:
+    name: otel-demo-collector
+    clusterRoleBinding:
+      name: otel-demo-collector
+  # The cluster's Prometheus already scrapes node-exporter, the kubelet, cAdvisor and kube-state-metrics
+  # (the chart's examples/disable-kubernetes-infra-monitoring).
+  presets:
+    hostMetrics:
+      enabled: false
+    kubeletMetrics:
+      enabled: false
+    clusterMetrics:
+      enabled: false
+  config:
+    connectors:
+      service_graph:
+        dimensions: [k8s.namespace.name]
+        virtual_node_peer_attributes: [peer.service, server.address, db.name, db.system]
+    exporters:
+      otlp_grpc/tempo:
+        endpoint: tempo.tempo.svc:4317
+        tls:
+          insecure: true
+        sending_queue:
+          batch: {}
+      otlp_http/loki:
+        endpoint: http://loki.loki.svc:3100/otlp
+        sending_queue:
+          batch: {}
+      prometheus_remote_write:
+        endpoint: http://prometheus.monitoring.svc:9090/api/v1/write
+        external_labels:
+          cluster: kubeast-b
+        resource_constant_labels:
+          included: [k8s.namespace.name, k8s.pod.name]
+      nop: {}
+    processors:
+      resource:
+        attributes:
+          - key: service.instance.id
+            from_attribute: k8s.pod.uid
+            action: insert
+          - key: k8s.cluster.name
+            value: kubeast-b
+            action: upsert
+    service:
+      pipelines:
+        traces:
+          exporters: [otlp_grpc/tempo, span_metrics, service_graph]
+        metrics:
+          receivers: [otlp, kafkametrics, span_metrics, prometheus/ad, receiver_creator/metrics, service_graph]
+          exporters: [prometheus_remote_write]
+        logs:
+          exporters: [otlp_http/loki]

@@ -24,6 +24,7 @@
   읽기/쓰기/관리 툴은 **사용자 권한(JWT)에 따라 허용됩니다**.
   없는 이름, 없는 종류, 없는 기능(metrics-server 등)은 kubectl 오류 대신 **`not_found`(비슷한 이름 목록 포함)·`unknown_kind`·`unavailable` 결과**로 돌아옵니다.
   그래서 AI는 네임스페이스를 바꿔 가며 되묻지 않고, 한 번 찾아본 뒤 어디를 봤는지 말하고 질문합니다. 비슷한 이름은 그 사람의 네임스페이스 범위 안에서만 찾습니다.
+  - `ai.refuseRepeatedReads`(기본 꺼짐)를 켜면 한 답 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 할 때 실행하지 않고, 그 결과가 몇 번째 걸음에 있는지와 새로 읽으려면 인자를 바꾸라고 모델에 알려 줍니다. 그 호출의 `ai.tool.call` 행에는 `status: repeated`와 `repeat_of`(그 걸음)가 남습니다. 실패했거나 거부된 호출은 다시 할 수 있습니다.
   - **규칙 카드**(`ai.ruleCards`, 기본 꺼짐): `chat`을 켜면 카드가 아는 고장(`OOMKilled`·`ImagePullBackOff` 같은 이유나 알림 이름)을 적은 질문은 그 턴에 카드를 최대 두 장 받습니다. 카드는 그 고장의 원인을 자주 찾아내는 확인 순서와 각 확인에 쓸 도구이며, 그 턴에 주어진 도구만 적힙니다. 기본 카드는 고장 종류마다 한 장이고(`app/services/rule_cards.json`), `cards`로 카드를 더하거나 바꾸고 `remove`로 기본 종류를 뺍니다. `investigations`는 알림 조사에 같은 일을 합니다([AI 알림](ai-alerts.md)).
   - 읽기 도구 52종에는 다음이 들어 있습니다.
     - 이름 조각이나 레이블로 여러 종류와 네임스페이스를 한 번에 찾는 `k8s_find_resource`
@@ -41,6 +42,7 @@
     - kubectl 도구는 tool-server 안의 중계를 거쳐 클러스터에 닿고, 중계가 신원과 `Audit-ID`를 붙입니다. kubectl 자체의 탐색 요청은 목록에 넣지 않습니다.
   - Kubeast 기능을 쓰는 도구는 kubectl이 아니라 k8s-service API를 **그 사람 토큰으로** 부르므로, 권한·감사·마스킹이 화면과 같습니다. 이런 도구는 다음과 같습니다.
     - `issues` — 이슈 점검: 파드·워크로드·노드·PVC·경고 이벤트를 한 번에
+    - `anomaly_rank` — 한 네임스페이스(또는 워크로드 하나의 파드)가 기간(기본 최근 1시간)과 그 바로 앞 같은 길이 구간 사이에 무엇이 달라졌는지, 모델이 둘러보기 전에 서버가 순위를 매겨 줍니다. 지금 고장 난 객체, 종료 이유별 컨테이너 종료 수, 클러스터 Prometheus의 재시작·CPU 걸림·메모리 limit 근처, 로그 저장소의 오류 로그 모양(Loki 패턴)과 컨테이너별 오류 줄 수, 트레이스 저장소의 서버 스팬으로 본 서비스별 요청 수·실패 비율·p90, 그 파드들이 도는 노드의 압박을 봅니다. 발견은 최대 10개(새로 나타난 것 먼저, 약 3,000자)이고, 아무것도 못 찾은 검사는 정상으로, 못 한 검사(Prometheus·로그·트레이스 저장소나 시리즈 없음, 네임스페이스로 한정된 권한, `get pods/log` 없음, 로그 저장소 색인이 허용하는 양을 넘는 로그, 시간·조회 한도를 다 씀)는 까닭과 함께 못 함으로 적습니다. 로그·트레이스 검사는 로그 도구와 같은 문을 지나고 같은 감사 행을 남깁니다. `features.callGraph`가 켜져 있고 발견이 워크로드 둘 이상을 가리키면 같은 구간의 호출 관계를 읽어, 자기가 부르는 쪽은 멀쩡한 고장 워크로드를 그것을 부르는 워크로드 앞에 둡니다(`call_order`. 그 Prometheus 조회는 검사들이 먼저 쓴 뒤 같은 조회 한도에서 나가고, 한도가 다 쓰였으면 수치 차례를 그대로 두고 까닭을 적습니다). 기본 꺼짐(`features.anomalyRank`)이고, 채팅 시스템 프롬프트와 MCP 도구 목록에는 `features.anomalyRank.enabled`가 켜져 있을 때만 나오고, 꺼져 있으면 이 도구를 부르면 도구가 생기기 전처럼 모르는 함수로, 알림 조사에서는 읽기 전용 목록 밖의 도구로 답합니다. 올릴 때 내장 Read 역할은 시작할 때 `ai.tool.anomaly_rank`를 받고 Write는 `ai.tool.*`를 가집니다. AI 도구를 하나씩 나열한 사용자 정의 역할은 `ai.tool.anomaly_rank`를 더해야 받습니다
     - `prometheus_query` — PromQL 즉시·범위 질의, 절대 시각 범위도 가능합니다.
       `chart=true`·제목·단위를 주면 결과를 **답 아래 그래프**로 그립니다(AI 채팅과 플로팅에 같은 그래프, 시리즈 최대 10개, "크게 보기", 저장된 답에도 보존).
     - `prometheus_metrics`·`prometheus_labels` — 질의 전에 지표 이름·타입·설명, 레이블 이름·값 찾기
@@ -56,7 +58,7 @@
     - `network_policy_effective` — 파드나 워크로드를 고르는 NetworkPolicy와 방향별 허용 규칙. 드로어의 Network Policies 칸과 같습니다
     - `limit_range_violations` — LimitRange 범위를 벗어난 컨테이너. 그 창의 Violating Pods와 같습니다
     - `logsearch` — 로그 저장소 검색, 사라진 파드 포함
-    - `loki_query` — LogQL. 로그 줄, 또는 `count_over_time`·`rate` 같은 메트릭 쿼리로 시간대별 에러 수 시리즈를 받고, 그래프로도 그립니다.
+    - `loki_query` — LogQL. 로그 줄, 또는 `count_over_time`·`rate` 같은 메트릭 쿼리로 시간대별 에러 수 시리즈를 받고, 그래프로도 그립니다. `features.logSearch.queryMaxBytes`를 정하면 먼저 로그 저장소 색인에 그 질의가 읽을 양을 묻고, 넘으면 좁히는 법과 함께 거절합니다.
     - `loki_labels` — 로그 레이블 이름·값
     - `loki_patterns` — 로그 패턴, 에러 유형별 줄 수
     - `traces_search`·`traces_get`·`traces_tags`·`traces_metrics`·`traces_compare` — 트레이스 저장소에 TraceQL 질의
@@ -70,14 +72,18 @@
     - `network_flows` — 클러스터의 Hubble Relay가 본 네임스페이스·파드·워크로드의 최근 연결. 연결별로 합치고, 막힌 이유와 판정한 정책을 붙입니다([최근 흐름](#최근-흐름-hubble)).
     - `network_drops` — Hubble 에이전트가 센 네임스페이스·파드·워크로드의 차단 수를 클러스터의 Prometheus에서 사유·상대별로, 최대 1일 전까지([네트워크 차단](#네트워크-차단-hubble-지표)).
     - `network_top_flows` — EKS 클러스터의 Network Flow Monitor에서, 네임스페이스·파드·워크로드가 가장 많이 주고받거나 재전송·재전송 시간 초과가 가장 많은 상대([상위 통신](#상위-통신-network-flow-monitor)).
-    - `resource_graph` — 네임스페이스 객체와 그 연결. 파드가 10개 넘는 소유자의 정상 파드는 화면처럼 개수를 단 노드 하나로
-    - `timeline` — Timeline 화면의 변경 이력. 네임스페이스·객체 하나·전체 네임스페이스의 이벤트와 롤아웃 리비전을 기간·이벤트 종류로 읽습니다. 숫자는 화면과 같고, 목록이 잘리면 "N개 중 최신 M개", 롤아웃을 못 읽으면 그 까닭을 함께 답합니다.
+    - `resource_graph` — 네임스페이스 객체와 그 연결. 파드가 10개 넘는 소유자의 정상 파드는 화면처럼 개수를 단 노드 하나로 — `features.callGraph`를 켜면(기본 꺼짐) `include: ["calls"]`가 지금부터 거꾸로 `since`, 또는 고정 구간 `since_time`–`until_time`(`anomaly_rank`와 같은 읽기) 동안 트레이스 서비스 그래프 지표와 Hubble 지표로 누가 누구를 부르는지, 부르는 쪽이 멀쩡한 고장 워크로드부터 놓은 목록, 그 사이 원인 → … → 증상 경로를 더하고, 알림 조사는 여러 워크로드가 같이 고장 나면 이것을 읽음. MCP 도구 목록에는 `features.callGraph.enabled`가 켜져 있을 때만 그 인자가 나오고, 꺼져 있으면 그 인자를 넣은 호출도 인자 없이 감([클러스터 요구사항 §20](cluster-requirements.md#20-호출-관계-ai-resource_graph의-include-calls))
+    - `timeline` — Timeline 화면의 변경 이력. 네임스페이스·객체 하나·전체 네임스페이스의 이벤트와 롤아웃 리비전을 기간·이벤트 종류로 읽습니다. 숫자는 화면과 같고, 목록이 잘리면 "N개 중 최신 M개", 롤아웃을 못 읽으면 그 까닭을 함께 답합니다. `view: "changes"`면 기간(주지 않으면 지금 전 4시간) 동안 바뀐 것을 최신부터 최대 50개, 이벤트가 사라진 뒤에도 객체에 남는 것으로 답합니다: 롤아웃마다 앞 리비전과 비교한 것(이미지, 파드 템플릿의 다른 필드 이름, 더하고 빼고 바뀐 env·label·annotation 키), ConfigMap·Secret마다 마지막으로 쓴 시각과 쓴 field manager(메타데이터만 읽음), Helm 릴리스 리비전, HPA 크기 조정, 노드 생성과 상태 변화, Argo CD 동기화, 컨테이너 재시작과 그 이유. 값은 읽지 않고, 사용자가 목록을 못 읽는 출처는 까닭과 함께 이름을 말하고 세지 않습니다. 출처는 하나씩 차례로 읽고, 같은 순간 같은 질문은 한 번만 읽습니다. 네임스페이스를 주지 않으면 전체 네임스페이스의 재시작은 클러스터 전체 파드를 목록할 수 있는 사용자에게만 읽고, 아니면 건너뛴 것으로 이름을 말합니다. 모델에 이 보기를 주고 "왜 깨졌나"에 먼저 보라고 채팅에 지시하는 것은 `ai.timelineChanges`를 켰을 때뿐입니다(기본 꺼짐).
     - `gpu` — GPU 화면들의 숫자. 회사별·노드별 GPU 수와 사용·남은 수, 파드별 요청, device plugin, DeviceClass, ResourceClaimTemplate, DCGM 사용률을 읽습니다. 읽지 못한 곳은 이름을 대고 그 숫자는 0이 아니라 null입니다.
     - `hygiene` — 위생 보고, 그 클러스터의 Admin 부여
   - 다음 경우에는 그 도구가 도구 목록에서 빠집니다(`/api/v1/features`, 1분 캐시).
     - 그 클러스터에 기능이 없을 때: Prometheus 미설정, 로그·트레이스·알림 저장소 없음, 네트워크 흐름 꺼짐, 비용·정책 보고 꺼짐
+    - 설치에서 켜지 않았을 때: `features.anomalyRank.enabled`가 꺼진 `anomaly_rank`
     - 그 사람에게 k8s-service가 확인하는 권한(`resource.hygiene.scan` 또는 `admin.hygiene.read`·`resource.helm.read`·`resource.policyreport.read`·`resource.cost.read`·`resource.networkflow.read`)이 없을 때
   - 결과가 길면 시리즈 100개, 점 120개, 로그 200줄, 행 200개, 그래프 노드 200개/엣지 400개, 텍스트 64 KB에서 자릅니다.
+  - `ai.toolResultDetails`(기본 꺼짐)를 켜면 결과에 이미 가진 것만으로(더 읽지 않음) 다음을 붙입니다.
+    - 지표·로그·트레이스·타임라인 도구: `cut`은 잘린 결과에서 보인 양("시리즈 340개 중 100개", 저장소가 한도에서 멈추고 남은 수를 알려 주지 않으면 "200줄, 전체 수는 모름"), `default_window`는 호출이 시간 범위를 정하지 않았을 때 읽은 범위(1시간, 타임라인은 24시간), `empty_reason`은 빈 결과가 까닭을 말하지 않던 곳의 까닭(순간 `prometheus_query`는 마지막 5분의 샘플만 읽음, 수집 대상 없음)입니다.
+    - 채팅과 알림 조사의 모든 읽기 도구: 결과 앞에 `console_links` — 호출과 결과가 가리키는 오브젝트의 콘솔 경로(그 종류 목록 화면에서 연 드로어 `?detail=<Kind>/<namespace>/<name>`, Pod 드로어에는 로그와 지표가 있음 · Alerts의 알림 · 네임스페이스의 Resource Graph)로, 모델이 답에 링크로 붙일 수 있습니다. 상대 경로이고 콘솔 자신의 화면과 Kubernetes 이름 규칙을 따르는 이름으로만 만들므로, 링크는 읽은 그 콘솔을 엽니다. 트레이스 화면은 없어 트레이스에는 링크가 없습니다.
   - 범위 질의 결과(`prometheus_query`·`loki_query` 지표 질의)가 모델이 한 번에 읽는 길이(모델의 도구 결과 최대 길이, 정하지 않으면 6,000자)를 넘으면, 자르는 대신 값이 큰 시리즈 10개의 최저·최고·평균·마지막 값과 12점 개요로 줄여서 줍니다.
     그래프로 그린 결과도 같은 요약을 씁니다.
   - `gitops_status`는 Argo CD Application CR을 그 사람 권한으로 읽어 sync, health, 마지막 operation, 오류 조건, OutOfSync 리소스를 앱별로 정리합니다.
@@ -114,7 +120,8 @@
   - `k8s_get_events`는 최신 이벤트를 최신 순으로 답합니다(기본 200, 최대 1,000). k8s-service가 쪽 단위로 읽으며, 더 많으면 전체 수를 함께 말합니다.
   - kubectl 목록이 도구 출력 상한(`TOOL_OUTPUT_MAX_BYTES`, 1 MiB)보다 길면 잘렸다고 답합니다. `k8s_jq_query`·`k8s_count`는 `too_large`, `k8s_tabular_query`는 "전체 수는 모름"으로 답하며, 읽기 오류나 틀린 개수를 내지 않습니다.
   - 쓰기 전에는 `k8s_diff`로 바뀔 내용을 먼저 보여 줍니다. AI가 값 대신 읽은 글자가 든 manifest는 `placeholders`로 알려 줍니다. diff는 그 글자를 비교한 것이고 쓰기는 거절되기 때문입니다. 서버 dry-run 결과를 라이브 객체와 비교한 diff이며 **실제로 적용하지 않고**, 쓰기 권한이 있는 사용자에게만 보입니다. Secret이면 값 없이 바뀌는 키 이름만 보여 줍니다. `resource.secret.reveal`이 없으면 화면과 같이 값을 비교하지 않습니다. 매니페스트에 적은 키 가운데 Secret에 이미 있는 키는 값이 달라졌든 아니든 바뀜으로 보이고, `values_not_compared`가 그 까닭을 말합니다. 맞는 값을 적어도 틀린 값과 똑같이 보입니다. 새로 생기는 키와 빠지는 키는 그대로 알려 줍니다.
-  - AI가 값 대신 읽은 글자(이름에 무엇이 들었든 `<REDACTED:…>`, `k8s_diff`의 `<REDACTED:secret:new value>`, `REDACTION_PII`의 `<EMAIL_n>`, `SecretList` 안의 것까지 Secret의 `***`, 인코딩한 꼴 포함)를 담은 쓰기는 그 글자가 저장되므로 누구든 거절합니다. 승인 카드 전에 걸리고 tool-server에서 한 번 더 걸립니다. 거절 글이 대신 할 일을 말합니다: 다른 칸만 패치하고, 새 값은 사용자에게 받습니다.
+  - AI가 값 대신 읽은 글자(이름에 무엇이 들었든 `<REDACTED:…>`, `k8s_diff`의 `<REDACTED:secret:new value>`, `REDACTION_PII`의 `<EMAIL_n>`과 `REDACTION_NUMBERED`일 때의 `<PHONE_n>`·`<RRN_n>`·`<CARD_n>`, `SecretList` 안의 것까지 Secret의 `***`, 인코딩한 꼴 포함)를 담은 쓰기는 그 글자가 저장되므로 누구든 거절합니다. 승인 카드 전에 걸리고 tool-server에서 한 번 더 걸립니다. 거절 글이 대신 할 일을 말합니다: 다른 칸만 패치하고, 새 값은 사용자에게 받습니다.
+  - `ai.redaction.pii`와 `ai.redaction.numbered`를 켜면(numbered는 기본 끔 — 끄면 나머지 종류는 `<REDACTED:phone>`·`<REDACTED:rrn>`·`<REDACTED:card>`, 주소는 한 글 안에서 `<EMAIL_n>`) 플로팅 채팅이 보내는 화면과 답 하나의 도구 결과는 그 답 동안만 메모리에 두는 표 하나로 개인 값에 번호를 붙입니다. 같은 메일 주소는 어느 결과에서나 같은 번호라 모델이 주소를 읽지 않고도 두 줄이 같은 사람임을 이을 수 있습니다. 새 답의 번호는 대화에 이미 보이는 가장 큰 번호 다음부터 시작하므로 한 번호가 두 사람을 가리키는 일은 없습니다. 같은 값도 다음 답에서는 새 번호를 받으므로, 잘못 잇는 일 대신 못 잇는 일이 생길 수 있습니다. 답이 끝나면 물은 사람의 화면에는 자리표시자 자리에 값이 보입니다. 도구가 그 사람의 권한으로 읽은 값이기 때문입니다. 결과에 이미 들어 있던 자리표시자(앞서 낸 보고서 등)는 글자 그대로 둡니다. 저장되는 답, Copy, 다음 질문 때 모델에 보내는 대화 기록, 감사 로그에는 자리표시자가 그대로 남고, 값은 그 페이지의 메모리에만 있습니다. 새로고침한 뒤나 멈추거나 끊기거나 오류로 끝난 답에는 자리표시자가 보입니다. 알림 조사 보고서와 MCP 답에는 값이 가지 않습니다.
 - **플로팅 AI 위젯(AI Chat)** — 모든 페이지에 떠 있는 위젯이 **현재 화면 컨텍스트**(보고 있는 리소스)를 이해하고 답합니다.
   - 답할 때는 read-only 툴만 씁니다.
   - 첫 글자가 나오기 전에는 대기 점이, 끝난 답 옆에는 작은 복사 아이콘이 보이고 토큰 줄은 없습니다. 넓은 표는 상자 안에서 스크롤되고 머리 줄은 고정됩니다.
@@ -145,7 +152,7 @@
 - **모델 설정** — `ModelConfig` CRD와 DB로 관리하고, Admin UI에서 추가하고 테스트합니다.
   등급(`tier`, CRD `spec.tier`)이 `economy`인 설정을 켜 두면 채팅 이력 요약과 플로팅 어시스턴트는 보통 더 싼 그 모델을 쓰고, 채팅은 기본 모델을 그대로 씁니다.
   어느 쪽인지는 스트림의 `model_info.tier`로 알 수 있습니다. economy 설정이 없거나 키가 없어 쓸 수 없으면 둘 다 기본 모델을 씁니다.
-  - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 더 긴 결과는 그 길이에서 잘려 모델이 앞부분을 읽습니다. `k8s_get_pod_logs`, `logfiles`, `nodes_log`는 최신 줄이 있는 끝부분을 남기고, tool-server의 상한(`TOOL_OUTPUT_MAX_BYTES`)을 넘을 때도 그렇습니다. 구독은 Claude Code가 답 길이를 정합니다.
+  - 설정마다 **답 최대 길이**(`max_tokens`, 비우면 채팅 답 4,096 · 알림 조사 한 단계 2,048, 조사의 `evidenceCheck`나 `ledger`를 켜면 4,096)와 **도구 결과 최대 길이**(`tool_result_chars`, 1,000~200,000자, 비우면 6,000)를 편집 창(모든 공급자)이나 `ModelConfig` 리소스의 `spec.maxTokens`·`spec.toolResultChars`로 정할 수 있습니다(리소스의 CA 인증서는 `spec.caCert`). 설정의 옵션에 저장하며, 도구 결과 최대 길이는 공급자에 보내지 않습니다. 더 긴 결과는 그 길이에서 잘려 모델이 앞부분을 읽습니다. `k8s_get_pod_logs`, `logfiles`, `nodes_log`는 최신 줄이 있는 끝부분을 남기고, tool-server의 상한(`TOOL_OUTPUT_MAX_BYTES`)을 넘을 때도 그렇습니다. 구독은 Claude Code가 답 길이를 정합니다.
   - 카드마다 서버가 지금 그 설정으로 돌리는 곳(채팅 · 플로팅 어시스턴트 · 이력 요약 · 알림 조사)을 ai-service가 모델을 고르는 규칙 그대로 계산해 보여 줍니다. "활성"은 채팅을 돌리는 설정입니다.
   - OpenAI·Azure OpenAI에는 답 길이를 `max_completion_tokens`로 보냅니다. 추론 모델(o 시리즈, GPT-5)은 `max_tokens`를 받지 않습니다. 모델이 받지 않는 매개변수를 400으로 지목하면(추론 모델은 `temperature`·`top_p` 등을 거부) 그것을 빼고 한 번 다시 보내고, 그 모델에는 이후로도 보내지 않습니다.
   - OpenAI·Azure OpenAI의 GPT-6 Sol·GPT-6 Luna(`gpt-6-sol`, `gpt-6-luna`, 이름 뒤에 날짜가 붙은 것도)에 보내는 호출은 도구가 있든 없든 모두 `reasoning_effort: "none"`을 같이 보냅니다. OpenAI 문서에 따르면 이 모델들은 Chat Completions에서 `none`일 때만 함수 도구를 받습니다. 기본 effort(`medium`)에서는 추론이 답 길이를 먹어 이력 요약이 빈 글로 오고, `temperature`도 거부됩니다. 이름이 다른 배포 · 게이트웨이 · 별칭이 도구를 붙인 호출에 OpenAI의 400 "Function tools with reasoning_effort are not supported"로 답하면, 그 호출을 `none`으로 다시 보냅니다. 기본 effort에서 거부됐던 `temperature` · `top_p` · `top_logprobs` · `logprobs`도 다시 보냅니다. 그 뒤의 호출은 도구가 없는 호출까지 처음부터 `none`을 붙입니다. 그 거부가 이런 모델이라는 뜻이기 때문입니다(공급자 · 주소 · 모델마다, ai-service 파드마다 다시 시작할 때까지). 다른 모델에는 `reasoning_effort`를 보내지 않습니다. 엔드포인트가 이 값을 거부하면 위와 같이 빼고 다시 보냅니다. 설정의 옵션에 `reasoning_effort`가 있으면 그 값을 그대로 보냅니다(편집 창은 Azure OpenAI와 Custom에서 옵션 칸을 보여 줍니다). `ModelConfig` 리소스로는 아직 OpenAI·Azure OpenAI의 옵션을 넣을 수 없습니다. 컨트롤러가 `spec.ollama.options`만 옮기고, 동기화할 때마다 옵션을 덮어씁니다.

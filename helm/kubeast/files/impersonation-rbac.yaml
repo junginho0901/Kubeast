@@ -38,6 +38,11 @@ rules:
     resources: ["groups"]
     verbs: ["impersonate"]
     resourceNames: ["kubeast:authenticated", "kubeast:viewer", "kubeast:operator", "kubeast:admin", "kubeast:role:read", "kubeast:role:write", "kubeast:role:admin"]
+  # The kube-system UID tells clusters apart: one cluster is not registered twice, nor given another cluster's kubeconfig.
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+    resourceNames: ["kube-system"]
 ---
 # Read-only view of what the console lists and the built-in "view" role leaves
 # out: cluster-scoped objects (view is namespaced only), Roles and RoleBindings,
@@ -176,7 +181,7 @@ subjects:
 ---
 # The credential Kubeast connects with on an external cluster. On EKS the
 # registered kubeconfig's IAM role is mapped to this group by its access
-# entry (kubernetesGroups); it needs nothing beyond impersonate.
+# entry (kubernetesGroups); it needs nothing beyond kubeast-impersonator.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:

@@ -16,6 +16,7 @@ import { api } from '@/services/api'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { SESSION_ENDED_EVENT } from '@/services/auth'
 import { liveSessionEndText } from '@/utils/liveSessionEnd'
+import { STREAM_LIMIT_EVENT, followLimitText } from '@/utils/serverShutdown'
 import { LogFilesView, LogSourceToggle, type LogSource } from '@/components/LogFilesView'
 import { LogSearchView } from '@/components/LogSearchView'
 import { useLogSearchAvailable } from '@/hooks/useLogSearchAvailable'
@@ -126,6 +127,13 @@ export function PodLogsTab({
       setIsStreamingLogs(false)
       const reason = liveSessionEndText(trRef.current, (e as MessageEvent).data)
       setLogs((prev) => prev + '» ' + reason + '\n')
+    })
+
+    // Refused at the account's cap: nothing was opened, and reopening would be refused until another one ends.
+    es.addEventListener(STREAM_LIMIT_EVENT, () => {
+      es.close()
+      setIsStreamingLogs(false)
+      setLogs((prev) => prev + '» ' + followLimitText(trRef.current) + '\n')
     })
 
     // backend 가 startup 실패 시 보내는 named 'error' 이벤트
