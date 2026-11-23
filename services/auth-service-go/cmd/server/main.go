@@ -311,6 +311,7 @@ func main() {
 	// in-flight by route pattern, served at /metrics on this port.
 	m := metrics.New("auth")
 	m.Route = metrics.ChiRoute
+	m.DBPool(func() metrics.PoolStat { return pool.Stat() })
 	m.Registry.MustRegister(sinks.Collector())
 	if chainSealer != nil {
 		m.Registry.MustRegister(auditchain.Collector(chainSealer, chainAnchorer))

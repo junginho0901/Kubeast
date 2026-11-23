@@ -94,3 +94,50 @@ def test_metrics_disabled_is_404():
     client = TestClient(build(False))
     assert client.get("/health").status_code == 200
     assert client.get("/metrics").status_code == 404
+
+
+class _Pool:
+    """A SQLAlchemy QueuePool's counts."""
+
+    def __init__(self, out: int, idle: int):
+        self.out, self.idle = out, idle
+
+    def checkedout(self):
+        return self.out
+
+    def checkedin(self):
+        return self.idle
+
+
+def test_the_database_pool_is_shown_with_the_go_services_names(monkeypatch):
+    from types import SimpleNamespace
+
+    from app import database
+
+    monkeypatch.setattr(database, "db_service", SimpleNamespace(engine=SimpleNamespace(pool=_Pool(3, 2)), pool_max=8))
+    body = TestClient(build(True)).get("/metrics").text
+    assert 'kubeast_db_pool_connections{service="ai",state="in_use"} 3.0' in body
+    assert 'kubeast_db_pool_connections{service="ai",state="idle"} 2.0' in body
+    assert 'kubeast_db_pool_max_connections{service="ai"} 8.0' in body
+    assert 'state="opening"' not in body
+
+
+def test_the_pool_max_is_the_engines_pool_size_and_overflow(monkeypatch):
+    from app import database, db_session
+
+    monkeypatch.delenv(db_session.POOL_MAX_ENV, raising=False)
+    svc = database.DatabaseService("postgresql+asyncpg://kubeast:pw@db.example:5432/kubeast")
+    assert svc.pool_max == svc.engine.pool.size() + svc.engine.pool._max_overflow == 15
+    monkeypatch.setattr(database, "db_service", svc)
+    body = TestClient(build(True)).get("/metrics").text
+    assert 'kubeast_db_pool_connections{service="ai",state="in_use"} 0.0' in body
+    assert 'kubeast_db_pool_max_connections{service="ai"} 15.0' in body
+
+
+def test_no_pool_series_before_the_database_service_nor_for_sqlite(monkeypatch, tmp_path):
+    from app import database
+
+    monkeypatch.setattr(database, "db_service", None)
+    assert "kubeast_db_pool_" not in TestClient(build(True)).get("/metrics").text
+    monkeypatch.setattr(database, "db_service", database.DatabaseService(f"sqlite+aiosqlite:///{tmp_path / 'pool.db'}"))
+    assert "kubeast_db_pool_" not in TestClient(build(True)).get("/metrics").text

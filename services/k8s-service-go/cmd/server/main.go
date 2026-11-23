@@ -394,6 +394,7 @@ func main() {
 	if s, ok := any(auditStore).(audit.Statuser); ok {
 		m.AuditStore(s)
 	}
+	m.DBPool(func() metrics.PoolStat { return pgPool.Stat() })
 	m.Gauge("kubeast_ws_subscriptions", "Live watches counted against WS_MAX_SUBSCRIPTIONS: the live lists' WebSocket subscriptions across all connections and the Helm releases streams' Secret watches.",
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
 	m.Registry.MustRegister(ws.WatchWaitCollectors()...)
