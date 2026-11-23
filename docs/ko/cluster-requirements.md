@@ -69,7 +69,7 @@ Kubeast는 주소가 그 사람의 것인지 알 수 없습니다. `admin.users.
 **사람이 없는 요청.** 몇몇 읽기는 Kubeast 자체 읽기이고, 클러스터 감사 로그에는 Kubeast가 남습니다.
 
 - `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다. 그 밖에는 연결 확인(클러스터 등록, 새 kubeconfig, 연결 테스트)이 UID를 얻으려고 `kube-system` Namespace를 자격 증명 자신의 권한으로 이렇게 읽습니다(§1).
-- 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트 · 타임라인과 이벤트 API의 네임스페이스나 클러스터 전체 이벤트 · 타임라인 롤아웃의 Deployment · ReplicaSet · ControllerRevision · 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
+- 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트 · 타임라인과 이벤트 API의 네임스페이스나 클러스터 전체 이벤트 · 타임라인 롤아웃의 Deployment · ReplicaSet · ControllerRevision · 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기. 여러 사람이 한꺼번에 여는 타임라인은 `kubeast:cache`가 이벤트를 볼 수 있다고 여깁니다. 볼 수 없는 클러스터에서는 사람마다 자기로 읽고 첫 쪽 뒤로는 `multicluster.bigReadConcurrency` 자리를 차례로 거치므로, 많은 사람이 한꺼번에 열면 마지막 사람은 몇 분을 기다릴 수 있고, 기다리는 동안 continue 토큰이 만료된 읽기는 410으로 끝납니다.
 
 그 밖의 요청은 로그인한 사람을 알 수 없으면 보내지 않고, kubectl 도구도 실행하지 않습니다.
 
@@ -476,6 +476,7 @@ receivers:
 - **확인**: Kubeast Alerts 메뉴에 그 알림이 생기는지, Admin → Investigations에 조사 행이 생기는지 봅니다.
   - 심각도 필터에서 걸러진 알림은 조사 행이 생기지 않습니다.
   - 웹훅 응답 `{accepted, duplicate, filtered, skipped, capped, resolved, automatic_off, stored}`는 Alertmanager 로그에 남습니다.
+  - 알림의 `generatorURL`과 메시지의 `externalURL`은 호스트가 있는 http·https 주소일 때만 저장합니다. 다른 값은 빈 값으로 저장하고, ai-service가 필드 이름과 scheme을 경고 로그에 남깁니다.
   - `max_alerts`는 두지 마세요(0 = 전부). Kubeast가 한 통의 알림을 전부 저장하고 새 조사는 한 통에 100개까지만 시작합니다. Alertmanager가 `max_alerts`로 자른 알림은 알림함에 오지 않습니다.
   - 개발용 전체 예시: [`deploy/kind/alertmanager.yaml`](../../deploy/kind/alertmanager.yaml)
   - Grafana 예시: `scripts/kind-grafana.sh`와 e2e `grafana.spec.ts`(연락처 시험으로 보낸 알림의 조사 확인)

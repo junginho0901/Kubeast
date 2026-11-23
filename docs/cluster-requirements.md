@@ -69,7 +69,7 @@ Prefer group bindings; if you bind a `User`, make sure that person's account exi
 **Requests with no person behind them.** Some reads are Kubeast's own, and the cluster's audit log names Kubeast for them:
 
 - With no `Impersonate-User` header: the server version, the API discovery it keeps once per cluster for everyone, and its health checks. Only a `GET` of `/version`, `/api`, `/apis`, `/api/v1` or `/apis/<group>/<version>` (after the path of the cluster's server URL, when it has one) goes out so. Besides those, the connection check (registering a cluster, giving it a new kubeconfig, the connection test) gets the `kube-system` Namespace so, for its UID, with the credential's own rights (§1).
-- As the fixed identity `kubeast:cache` (the `view` rights of §1): the overview informers, an object's events, a namespace's or the cluster's events for the Timeline and the events API, the Deployments, ReplicaSets and ControllerRevisions of the Timeline's rollouts, and a node's pods read once for everyone who may list them, the `kube-system` UID that tells the cluster Kubeast runs in, the `metrics.k8s.io` group check, and the search for Prometheus and OpenCost Services.
+- As the fixed identity `kubeast:cache` (the `view` rights of §1): the overview informers, an object's events, a namespace's or the cluster's events for the Timeline and the events API, the Deployments, ReplicaSets and ControllerRevisions of the Timeline's rollouts, and a node's pods read once for everyone who may list them, the `kube-system` UID that tells the cluster Kubeast runs in, the `metrics.k8s.io` group check, and the search for Prometheus and OpenCost Services. The Timeline opened by many people at once counts on `kubeast:cache` listing events: where it may not, each person reads them as themselves, past the first page among `multicluster.bigReadConcurrency`'s places, so the last of a large crowd may wait minutes, and a read whose continue token expires while it waits ends with 410.
 
 Any other request whose signed-in person Kubeast cannot name is not sent, and a kubectl tool is not run.
 
@@ -459,6 +459,7 @@ receivers:
   - Put `severity` (and `namespace` if needed) in the rule labels.
 - **Check** whether the alert appears in the Kubeast Alerts menu, and whether an investigation row appears in Admin → Investigations. If the severity filter drops the alert, there is no investigation row.
   - The webhook response `{accepted, duplicate, filtered, skipped, capped, resolved, automatic_off, stored}` is left in the Alertmanager log.
+  - An alert's `generatorURL` and the message's `externalURL` are kept only when they are http or https URLs with a host. Any other value is stored empty, and ai-service logs a warning naming the field and its scheme.
   - Leave `max_alerts` unset (0 = every alert). Kubeast keeps every alert of a message and starts at most 100 new investigations per message itself; the alerts Alertmanager cuts with `max_alerts` never reach the inbox.
   - The full development example is [`deploy/kind/alertmanager.yaml`](../deploy/kind/alertmanager.yaml).
   - For Grafana, see `scripts/kind-grafana.sh` and e2e `grafana.spec.ts`, where an alert sent by a contact point test is investigated.

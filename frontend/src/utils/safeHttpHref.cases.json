@@ -1,0 +1,32 @@
+{
+  "about": "An alert's generatorURL or a message's externalURL, two rules over one list. href: what the screens link (frontend utils/safeHttpHref, the browser's URL parser), null when they show the address as words; ExternalHttpLink.test.ts runs it. stored: what ai-service's webhook keeps (app/services/investigation/webhook.py stored_address), \"\" when it keeps nothing; tests/test_alert_webhook_addresses.py runs it. The webhook keeps less than the screens link, never more: a link-shaped text the browser reads a link from only after removing a tab, a space or the two slashes is stored empty. Every address is made up.",
+  "cases": [
+    {"name": "Prometheus graph", "address": "http://prometheus:9090/graph?g0.expr=up%3D%3D0&g0.tab=1", "href": "http://prometheus:9090/graph?g0.expr=up%3D%3D0&g0.tab=1", "stored": "http://prometheus:9090/graph?g0.expr=up%3D%3D0&g0.tab=1"},
+    {"name": "no path", "address": "https://alertmanager.example.com", "href": "https://alertmanager.example.com/", "stored": "https://alertmanager.example.com"},
+    {"name": "capitals and a fragment", "address": "HTTPS://Alertmanager.Example.com/#/alerts", "href": "https://alertmanager.example.com/#/alerts", "stored": "HTTPS://Alertmanager.Example.com/#/alerts"},
+    {"name": "IPv6 with a port", "address": "http://[::1]:9093/", "href": "http://[::1]:9093/", "stored": "http://[::1]:9093/"},
+    {"name": "spaces around it", "address": "  https://am.example.com/ ", "href": "https://am.example.com/", "stored": "https://am.example.com/"},
+    {"name": "a tab in the host", "address": "https://am.exa\tmple.com/", "href": "https://am.example.com/", "stored": ""},
+    {"name": "a space in the path", "address": "https://am.example.com/a b", "href": "https://am.example.com/a%20b", "stored": ""},
+    {"name": "no slashes after the scheme", "address": "https:am.example.com", "href": "https://am.example.com/", "stored": ""},
+    {"name": "javascript", "address": "javascript:alert(1)", "href": null, "stored": ""},
+    {"name": "javascript in capitals", "address": "JavaScript:alert(1)", "href": null, "stored": ""},
+    {"name": "a tab in the scheme", "address": "java\tscript:alert(1)", "href": null, "stored": ""},
+    {"name": "a line break in the scheme", "address": "java\nscript:alert(1)", "href": null, "stored": ""},
+    {"name": "a space and a control character before it", "address": " \u0001javascript:alert(1)", "href": null, "stored": ""},
+    {"name": "data", "address": "data:text/html,<script>alert(1)</script>", "href": null, "stored": ""},
+    {"name": "data in base64", "address": "data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==", "href": null, "stored": ""},
+    {"name": "vbscript", "address": "vbscript:msgbox(1)", "href": null, "stored": ""},
+    {"name": "file", "address": "file:///etc/passwd", "href": null, "stored": ""},
+    {"name": "ftp", "address": "ftp://files.example.com/", "href": null, "stored": ""},
+    {"name": "a path", "address": "/graph?g0.expr=up", "href": null, "stored": ""},
+    {"name": "no scheme", "address": "//other.example.com/graph", "href": null, "stored": ""},
+    {"name": "a relative path", "address": "graph?g0.expr=up", "href": null, "stored": ""},
+    {"name": "no host", "address": "https://", "href": null, "stored": ""},
+    {"name": "a port that is not a number", "address": "http://prometheus:notaport/graph", "href": null, "stored": ""},
+    {"name": "a port past 65535", "address": "http://prometheus:99999/", "href": null, "stored": ""},
+    {"name": "an unclosed IPv6 bracket", "address": "http://[::1/graph", "href": null, "stored": ""},
+    {"name": "spaces", "address": "   ", "href": null, "stored": ""},
+    {"name": "empty", "address": "", "href": null, "stored": ""}
+  ]
+}

@@ -1,4 +1,4 @@
-suite: multicluster.maxTerminalsPerAccount and maxFollowedLogsPerAccount — each account's open terminals and followed logs on each k8s-service
+suite: multicluster.maxTerminalsPerAccount, maxFollowedLogsPerAccount and maxStreamsPerServer — open terminals and followed logs on each k8s-service, each account's and every account's together
 templates:
   - checks/stream-caps.yaml
   - deployments.yaml
@@ -88,5 +88,63 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: {name: MAX_FOLLOWED_LOGS_PER_ACCOUNT, value: "7"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service-stream}
+
+  - it: refuses a server cap below 0 or not a whole number instead of turning it off without a word
+    set:
+      multicluster.maxStreamsPerServer: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: "multicluster.maxStreamsPerServer must be a whole number, 0 \\(no cap\\) or more \\(got -1\\)"
+        template: checks/stream-caps.yaml
+
+  - it: refuses a server cap that is not a whole number
+    set:
+      multicluster.maxStreamsPerServer: 100.5
+    asserts:
+      - failedTemplate:
+          errorPattern: "multicluster.maxStreamsPerServer must be a whole number, 0 \\(no cap\\) or more \\(got 100.5\\)"
+        template: checks/stream-caps.yaml
+
+  - it: gives k8s-service a server cap of 443 by default
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_STREAMS_PER_SERVER, value: "443"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: renders the server cap's default when the values hold none (--reuse-values)
+    set:
+      multicluster.maxStreamsPerServer: null
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_STREAMS_PER_SERVER, value: "443"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: hands the server cap to k8s-service, 0 as 0 (no cap), not as the default
+    set:
+      multicluster.maxStreamsPerServer: 0
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/stream-caps.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_STREAMS_PER_SERVER, value: "0"}
+        template: deployments.yaml
+        documentSelector: {path: metadata.name, value: k8s-service}
+
+  - it: gives the stream server, which opens the terminals and followed logs with streams on, the server cap
+    set:
+      streams.enabled: true
+      multicluster.maxStreamsPerServer: 120
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MAX_STREAMS_PER_SERVER, value: "120"}
         template: deployments.yaml
         documentSelector: {path: metadata.name, value: k8s-service-stream}

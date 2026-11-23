@@ -102,16 +102,19 @@ type clientBundle struct {
 	infMu       sync.Mutex
 	inf         *clusterInformers
 	infFailedAt time.Time
+	// closed: Close ran (LRU eviction, kubeconfig rotation); a request still holding this bundle starts no informers on it.
+	closed bool
 	// noInformers: the overview informers never start here (ServiceOptions.NoInformers); readers list instead.
 	noInformers bool
 	// sharesChecks: this cluster's screens share an allowed read check by group (shared_read_checks.go).
 	sharesChecks bool
 }
 
-// Close stops the bundle's informers (LRU eviction, kubeconfig rotation).
+// Close stops the bundle's informers (LRU eviction, kubeconfig rotation) and keeps any from starting on it again.
 func (b *clientBundle) Close() error {
 	b.infMu.Lock()
 	defer b.infMu.Unlock()
+	b.closed = true
 	if b.inf != nil {
 		b.inf.stopNow()
 		b.inf = nil
@@ -324,6 +327,12 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		cfg.Burst = clientRates.burst
 	}
 	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return answerNotice{base: rt, id: info.ID} })
+	// A read waits clusterReadWait for the API server to start its answer, kubeast:cache's too (cluster_read_wait.go).
+	var serverPath string
+	if u, _, err := rest.DefaultServerUrlFor(cfg); err == nil {
+		serverPath = u.Path
+	}
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return newReadWait(rt, info.ID, serverPath) })
 	// The overview informers run outside any user request: with impersonation
 	// on they act as a fixed viewer identity instead of the per-request user
 	// the wrapped transport adds.
@@ -563,6 +572,7 @@ func (s *Service) DropStale(id cluster.ID, builtFrom int64) {
 	s.defaultBundle.Store(nil)
 	s.MarkClusterUp(id)
 	s.invalidateCaches()
+	s.warnUnknownExcludesSoon()
 }
 
 func (s *Service) dropBundle(id cluster.ID) {
@@ -572,13 +582,7 @@ func (s *Service) dropBundle(id cluster.ID) {
 	// down cluster) gives the cluster a fresh chance, so the next request is
 	// actually tried instead of fail-fast 503'd until the next health poll.
 	s.MarkClusterUp(id)
-	if sharedReadChecks.on && len(sharedReadChecks.exclude) > 0 {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			s.warnUnknownExcludes(ctx)
-		}()
-	}
+	s.warnUnknownExcludesSoon()
 }
 
 // defaultClientBundle resolves (and caches) the default cluster's bundle for the

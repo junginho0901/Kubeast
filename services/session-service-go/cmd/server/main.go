@@ -124,6 +124,7 @@ func main() {
 	// Console metrics (services/pkg/metrics), served at /metrics on this port.
 	m := metrics.New("session")
 	m.Route = metrics.ChiRoute
+	m.DBPool(func() metrics.PoolStat { return pool.Stat() })
 	r.Use(m.Middleware)
 
 	// CORS only for listed origins. With none listed the middleware is not

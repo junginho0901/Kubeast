@@ -164,7 +164,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
         setFollow(false)
         if (why.kind === 'end') setStreamNote(t('clusterView.logFiles.streamEnded', 'Following stopped.'))
         else if (why.kind === 'session') setStreamNote(liveSessionEndText(t, why.code))
-        else if (why.kind === 'limit') setStreamNote(followLimitText(t))
+        else if (why.kind === 'limit') setStreamNote(followLimitText(t, why.reason))
         else {
           const reason = why.reason || t('clusterView.logs.streamError', 'An error occurred while streaming logs.')
           setStreamNote(t('clusterView.logFiles.streamFailed', 'Following stopped: {{reason}}', { reason }))

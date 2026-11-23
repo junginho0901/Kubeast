@@ -394,10 +394,17 @@ func main() {
 	if s, ok := any(auditStore).(audit.Statuser); ok {
 		m.AuditStore(s)
 	}
+	m.DBPool(func() metrics.PoolStat { return pgPool.Stat() })
 	m.Gauge("kubeast_ws_subscriptions", "Live watches counted against WS_MAX_SUBSCRIPTIONS: the live lists' WebSocket subscriptions across all connections and the Helm releases streams' Secret watches.",
 		func() float64 { return float64(wsMux.SubscriptionCount()) })
+	m.Registry.MustRegister(ws.WatchWaitCollectors()...)
 	m.Registry.MustRegister(k8s.ClientWaitCollectors()...)
 	m.Registry.MustRegister(k8s.AccessReviewCollectors()...)
+	m.Registry.MustRegister(k8s.BreakerCollectors(k8sSvc)...)
+	m.Registry.MustRegister(cache.RefusalCollectors()...)
+	if drainTracker != nil {
+		m.Registry.MustRegister(nodedrains.Collectors(drainTracker)...)
+	}
 	m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
 		Name: "kubeast_shared_writes_without_place_total", Help: "Node list, node box and shared read answers past 256 KiB whose waits for a write place reached a second in all, so the rest was written without one, since start-up.",
 		ConstLabels: prometheus.Labels{"service": "k8s"},
@@ -412,6 +419,10 @@ func main() {
 				Name: "kubeast_stream_cap_refusals_total", Help: "Terminals and followed logs refused at their account's cap (multicluster.maxTerminalsPerAccount, maxFollowedLogsPerAccount) since start-up.",
 				ConstLabels: prometheus.Labels{"service": "k8s", "kind": label},
 			}, func() float64 { return float64(h.StreamCaps().Refused(kind)) }))
+			m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "kubeast_stream_server_cap_refusals_total", Help: "Terminals and followed logs refused at the server's cap (multicluster.maxStreamsPerServer), which counts every account's together, since start-up.",
+				ConstLabels: prometheus.Labels{"service": "k8s", "kind": label},
+			}, func() float64 { return float64(h.StreamCaps().ServerRefused(kind)) }))
 		}
 	}
 	if recorder.Enabled() && role.ServesStreams() {
@@ -590,7 +601,7 @@ func clusterNotices(cfg config.Config) *redis.Client {
 	if cfg.RedisHost == "" {
 		return nil
 	}
-	return redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisUsername, cfg.RedisPassword))
+	return cache.CountRefusals(redis.NewClient(cache.Options(cfg.RedisHost, cfg.RedisPort, cfg.RedisDB, cfg.RedisUsername, cfg.RedisPassword)))
 }
 
 // The waits run one after another from SIGTERM: where STREAM_DRAIN_SECONDS is set, the drain's wait and

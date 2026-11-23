@@ -21,19 +21,33 @@ async function apiPods(page: Page, cluster: string): Promise<number | null> {
   return (await res.json()).total_pods as number
 }
 
+// read with the API's total in each try: the cluster's pod count may still move
+async function settledPodsTotal(page: Page, cluster: string): Promise<number> {
+  let total = NaN
+  await expect(async () => {
+    const shown = await podsTotal(page)
+    const api = await apiPods(page, cluster)
+    expect(api, `the API's total of ${cluster}`).not.toBeNull()
+    expect(shown, `the Pods stat, and the API's total of ${cluster} read after it`).toBe(api)
+    total = shown
+  }).toPass({ timeout: 30000 })
+  return total
+}
+
 test.describe('multi-cluster dashboard stats', () => {
   test('top totals reflect the selected cluster (no stale bleed)', async ({ page }) => {
     await page.goto('/?cluster=default')
     await page.waitForLoadState('domcontentloaded')
     const [onDefault, onSelf] = await Promise.all([apiPods(page, 'default'), apiPods(page, 'self')])
     test.skip(onDefault === null || onSelf === null, 'clusters default and self are not both registered')
-    test.skip(onDefault === onSelf, `default and self run the same number of pods (${onDefault}), so a stale total could not be told apart`)
 
-    await expect.poll(() => podsTotal(page), { timeout: 30000 }).toBe(onDefault)
+    const shownOnDefault = await settledPodsTotal(page, 'default')
 
     // Switch to self — the total must become this cluster's value, not keep default's.
     await page.getByTestId('cluster-picker').click()
     await page.getByTestId('cluster-option-self').click()
-    await expect.poll(() => podsTotal(page), { timeout: 30000 }).toBe(onSelf)
+    const shownOnSelf = await settledPodsTotal(page, 'self')
+    // decided on the two totals the screen settled on, not on those read at the start
+    test.skip(shownOnDefault === shownOnSelf, `default and self run the same number of pods (${shownOnSelf}), so a stale total could not be told apart`)
   })
 })

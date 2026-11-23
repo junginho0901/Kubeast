@@ -4,7 +4,8 @@ Same names and labels as the Go services (services/pkg/metrics): HTTP request
 count / duration / in-flight by route template, plus prometheus_client's
 default python/process collectors. The route label is the matched route's
 path template ("/api/v1/ai/sessions/{session_id}/chat"), never the raw path,
-so cardinality stays bounded. /metrics, /health and / are not counted. For a
+so cardinality stays bounded. /metrics and the probe paths (SKIP, among them
+/api/v1/ai/health, which the chart's kubelet probes ask) are not counted. For a
 streamed response (SSE chat) the duration is the time to the response headers.
 The endpoint is for an in-cluster scraper on the service port; the gateway
 does not proxy it. METRICS_ENABLED=false leaves it unmounted (404).
@@ -16,11 +17,12 @@ import time
 import re
 
 from fastapi import FastAPI, Request, Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, Counter, Gauge, Histogram, generate_latest
+from prometheus_client.core import GaugeMetricFamily
 from starlette.routing import compile_path
 
 SERVICE = "ai"
-SKIP = {"/metrics", "/health", "/", "/livez", "/readyz"}
+SKIP = {"/metrics", "/health", "/", "/livez", "/readyz", "/api/v1/ai/health"}
 
 REQUESTS = Counter(
     "kubeast_http_requests_total",
@@ -37,6 +39,43 @@ IN_FLIGHT = Gauge(
     "HTTP requests currently being handled.",
     ["service"],
 )
+
+
+class DBPoolCollector:
+    """The database pool's connections, read at each scrape, with the Go services' names (services/pkg/metrics DBPool):
+    in use and idle, and the most it may hold. Nothing before the database service is made, nor for sqlite (local runs,
+    tests). SQLAlchemy's pool keeps no count of the takes that waited, so those series are the Go services' only."""
+
+    def describe(self):
+        # Nothing to check at registration: the series depend on the database service made later.
+        return []
+
+    def collect(self):
+        from app import database
+
+        svc = database.db_service
+        pool = getattr(getattr(svc, "engine", None), "pool", None)
+        if svc is None or getattr(svc, "pool_max", None) is None or not hasattr(pool, "checkedout"):
+            return
+        conns = GaugeMetricFamily(
+            "kubeast_db_pool_connections",
+            "Database connections of the service's pool, by state (in_use, idle, opening).",
+            labels=["service", "state"],
+        )
+        conns.add_metric([SERVICE, "in_use"], pool.checkedout())
+        conns.add_metric([SERVICE, "idle"], pool.checkedin())
+        yield conns
+        most = GaugeMetricFamily(
+            "kubeast_db_pool_max_connections",
+            "The most connections the service's pool may hold (postgresql.pool.<service>.maxConns).",
+            labels=["service"],
+        )
+        most.add_metric([SERVICE], svc.pool_max)
+        yield most
+
+
+_POOL_COLLECTOR = DBPoolCollector()
+REGISTRY.register(_POOL_COLLECTOR)
 
 
 _TEMPLATES: dict[int, list[tuple[frozenset[str], "re.Pattern[str]", str]]] = {}

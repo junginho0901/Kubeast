@@ -103,6 +103,7 @@ The feature is off by default (`features.alertInvestigation.enabled`). Turning i
 - **Screen**: Admin → **Investigations**, in the menu when the feature and AI are on (permission `admin.investigations.read`).
   - A table shows received time, cluster, alert, severity, Namespace, status, repeats, tokens and duration, filtered by status and cluster.
   - Pressing "Report" opens a window with the report, the alert labels/annotations, a link to the alert sender (Alertmanager, Grafana) and the tool calls (arguments, result length).
+  - "Source query" (the alert's `generatorURL`) and "Alert sender" (the message's `externalURL`) are links only to an http or https address with a host. The webhook stores any other value (`javascript:`, `data:`, a path) empty, so neither shows for it; an alert an earlier version stored with such an address shows it as words, with the address on hover.
   - The URL becomes `?id=<investigation ID>`, a link to that report for those who hold the permission.
   - The report is text written by a model that read an external alert, so it is rendered as Markdown only, without raw HTML.
 - **Model**: report quality follows the model. Small local models sometimes put weakly supported causation under "Likely cause", so in production we recommend setting a larger model that is good at tool calling as `model`.
@@ -158,6 +159,7 @@ Without it, or with AI off, a cluster with an alert store still has **Alerts** i
   - A skipped investigation says why in the row, the alert window and its report ("Skipped by the investigation limit", with the numbers).
   - Pressing the object (label `pod`, `deployment`, `node`, etc.) opens the resource details window.
   - Opening one alert shows labels, annotations, the alert sender link, the handling area and the AI investigation.
+  - Its "Source query" and "Alert sender" follow the report window's rule: an http or https address is a link, any other shows as words.
   - API: `GET /api/v1/alerts/inbox?cluster=`, `/{id}` (with `investigate_now`: allowed, or `reason` and `until`), `PATCH /{id}`, `/{id}/investigation` and `POST /{id}/investigate` (403 `forbidden` or `manual_off`, 429 `provider_paused` or `manual_budget` with `until` and `Retry-After`, 503 without the audit row).
   - Retention is `retention.investigationDays`, as for investigations, counted from the last time the alert was received.
 

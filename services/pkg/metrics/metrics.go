@@ -5,7 +5,8 @@
 // The route label is the router's pattern (chi: "/api/v1/pods/{name}"), read
 // after the handler ran, never the raw path — so cardinality stays bounded
 // (Prometheus instrumentation guidance: keep label sets small, no ids in
-// labels). /metrics, /health and / are not counted.
+// labels). /metrics and the probe paths (/health, /, /livez, /readyz) are not
+// counted.
 //
 // The endpoint is meant for an in-cluster scraper on the service port; the
 // gateway does not proxy it. METRICS_ENABLED=false turns it into a 404.

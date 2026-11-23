@@ -144,6 +144,7 @@ type Tracker struct {
 	audit audit.Writer // nil: no finished rows (tests)
 	owner string
 	now   func() time.Time
+	ends  *endCounts
 
 	beatEvery, staleAfter, holdAfter, contactGap, sweepEvery, purgeEvery, keep time.Duration
 
@@ -167,7 +168,7 @@ type running struct {
 
 // NewTracker builds the tracker for this process.
 func NewTracker(store Store, w audit.Writer) *Tracker {
-	return &Tracker{store: store, audit: w, owner: processOwner(), now: time.Now,
+	return &Tracker{store: store, audit: w, owner: processOwner(), now: time.Now, ends: drainEnds,
 		beatEvery: beatEvery, staleAfter: staleAfter, holdAfter: holdAfter, contactGap: contactGap,
 		sweepEvery: sweepEvery, purgeEvery: purgeEvery, keep: keepFor,
 		active: map[string]running{}, beaten: make(chan struct{})}
@@ -514,6 +515,7 @@ func (t *Tracker) recordInterrupted(ctx context.Context, rows []Row) {
 // and address (base): failure unless every pod was evicted. It waits at most
 // opTimeout, and no longer than ctx allows.
 func (t *Tracker) recordEnd(ctx context.Context, base audit.Record, id, status, message string) {
+	t.ends.ended.WithLabelValues(status).Inc()
 	if t.audit == nil {
 		return
 	}

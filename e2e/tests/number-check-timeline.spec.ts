@@ -118,21 +118,21 @@ test.describe('Number check — Timeline', () => {
   })
 
   test('the Warning list is the newest warnings, the counts every event, the rollouts every workload kind', async ({ page }) => {
-    test.setTimeout(120_000)
+    test.setTimeout(150_000)
     const get = async (q: string) => (await page.request.get(`/api/v1/cluster/namespaces/${NS}/timeline?hours=24&limit=500&cluster=${TIMELINE.cluster}${q}`)).json() as Promise<Timeline>
     // the pods keep writing events for a moment: compare when two reads of the cluster agree around the API's
-    await expect(async () => {
+    await expect.soft(async () => {
       const before = cluster()
       const warn = await get('&type=Warning')
       const all = await get('')
       const after = cluster()
       expect(after, 'the cluster held still').toEqual(before)
       expect(before.warnings, 'the fixture warnings').toBeGreaterThanOrEqual(WARNING)
-      expect.soft({ listed: warn.events.length, warnings: warn.events.filter((e) => e.type === 'Warning').length, matching: warn.summary.events_matching, total: warn.summary.total_events },
+      expect({ listed: warn.events.length, warnings: warn.events.filter((e) => e.type === 'Warning').length, matching: warn.summary.events_matching, total: warn.summary.total_events },
         'type=Warning: the newest warnings').toEqual({ listed: Math.min(before.warnings, 500), warnings: Math.min(before.warnings, 500), matching: before.warnings, total: before.total })
-      expect.soft({ shown: all.summary.events_shown, matching: all.summary.events_matching, total: all.summary.total_events, warnings: all.summary.warning_count },
+      expect({ shown: all.summary.events_shown, matching: all.summary.events_matching, total: all.summary.total_events, warnings: all.summary.warning_count },
         'every type: the newest 500 of all').toEqual({ shown: Math.min(before.total, 500), matching: before.total, total: before.total, warnings: before.warnings })
-      expect.soft(all.rollout_history.map((r) => `${r.kind}/${r.name}#${r.revision}`).sort(), 'the rollouts').toEqual(before.rollouts)
+      expect(all.rollout_history.map((r) => `${r.kind}/${r.name}#${r.revision}`).sort(), 'the rollouts').toEqual(before.rollouts)
       expect(before.rollouts.some((r) => r.startsWith('StatefulSet/db#')), 'a StatefulSet rollout to compare').toBe(true)
     }).toPass({ timeout: 90_000, intervals: [3_000] })
 

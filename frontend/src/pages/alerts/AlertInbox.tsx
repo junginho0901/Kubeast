@@ -18,6 +18,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
+import { ExternalHttpLink } from '@/components/ExternalHttpLink'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
 import { inboxPage } from './inboxPage'
@@ -538,16 +539,8 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
                   <ExternalLink className="w-3.5 h-3.5" /> {target.kind}/{target.name}
                 </button>
               )}
-              {data.generator_url && (
-                <a href={data.generator_url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-primary-300 hover:underline">
-                  <ExternalLink className="w-3.5 h-3.5" /> {tr('investigations.link.source', 'Source query')}
-                </a>
-              )}
-              {data.alertmanager_url && (
-                <a href={data.alertmanager_url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-primary-300 hover:underline">
-                  <ExternalLink className="w-3.5 h-3.5" /> {tr('investigations.link.sender', 'Alert sender')}
-                </a>
-              )}
+              {data.generator_url && <ExternalHttpLink url={data.generator_url}>{tr('investigations.link.source', 'Source query')}</ExternalHttpLink>}
+              {data.alertmanager_url && <ExternalHttpLink url={data.alertmanager_url}>{tr('investigations.link.sender', 'Alert sender')}</ExternalHttpLink>}
             </div>
 
             <section data-testid="alert-handling-section">

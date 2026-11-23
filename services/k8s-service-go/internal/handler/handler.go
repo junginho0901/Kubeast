@@ -137,7 +137,7 @@ func New(svc *k8s.Service, cfg config.Config, auditStore audit.Writer) *Handler 
 		cfg:        cfg,
 		auditStore: auditStore,
 		helmSvc:    helm.NewService(svc, svc.Cache()),
-		streamCaps: streamcap.New(cfg.MaxTerminalsPerAccount, cfg.MaxFollowedLogsPerAccount),
+		streamCaps: streamcap.NewWithServerCap(cfg.MaxTerminalsPerAccount, cfg.MaxFollowedLogsPerAccount, cfg.MaxStreamsPerServer),
 	}
 }
 

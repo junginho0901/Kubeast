@@ -548,7 +548,7 @@ func (s *Service) mayDo(ctx context.Context, b *clientBundle, what string, attrs
 		ctx = askingAgain(ctx)
 	}
 	// The key holds the cluster and the identity the review goes out as, all its answer depends on.
-	return s.askOnce(ctx, key, func(ctx context.Context) (bool, error) {
+	return s.askOnce(ctx, b, key, func(ctx context.Context) (bool, error) {
 		if known, ok := s.rememberedAccess(ctx, key, what); ok {
 			return known, nil
 		}
@@ -576,12 +576,14 @@ func (s *Service) rememberedAccess(ctx context.Context, key, question string) (b
 	return allowed, ok
 }
 
-// askOnce is one access question to the cluster at a time per key, whoever waits on it.
-func (s *Service) askOnce(ctx context.Context, key string, ask func(context.Context) (bool, error)) (bool, error) {
+// askOnce is one access question to b's cluster at a time per key, whoever waits on it. A question the cluster did not
+// answer in time ends the reads of everyone who waited on it (noteNoAnswer), not only of the request whose call it was.
+func (s *Service) askOnce(ctx context.Context, b *clientBundle, key string, ask func(context.Context) (bool, error)) (bool, error) {
 	allowed, joined, err := s.accessChecks.Do(ctx, key, ask)
 	if joined && err == nil {
 		accesstrail.Cached(ctx, "the same access question of another request")
 	}
+	noteNoAnswer(ctx, b.id, err)
 	return allowed, err
 }
 

@@ -358,6 +358,40 @@ func TestExcludedClustersThatAreNoRegisteredIdAreNamed(t *testing.T) {
 	}
 }
 
+// Those entries are named again after a cluster changed, on each way a change reaches a replica: told by auth-service
+// (Invalidate), by another replica (DropCluster) or read from the registry's versions (DropStale, which named none).
+func TestExcludedClustersThatAreNoRegisteredIdAreNamedAfterEachChange(t *testing.T) {
+	t.Cleanup(func() { sharedReadChecks.on, sharedReadChecks.exclude = false, nil })
+	sharedReadChecks.on, sharedReadChecks.exclude = true, []string{"prod", "labb"}
+	reg := &mockRegistry{clusters: map[cluster.ID]cluster.Info{"prod": extCluster("prod"), "lab": extCluster("lab")}}
+	logs := captureLogs(t)
+	for _, c := range []struct {
+		name   string
+		change func(s *Service)
+	}{
+		{"Invalidate", func(s *Service) { s.Invalidate("lab") }},
+		{"DropCluster", func(s *Service) { s.DropCluster("lab") }},
+		{"DropStale", func(s *Service) { s.DropStale("lab", 3) }},
+		{"DropStale of a bundle built since", func(s *Service) { s.DropStale("lab", 2) }},
+	} {
+		s := &Service{registry: reg, promQ: newPromQueryCache(time.Minute)}
+		s.pool().Add("lab", &clientBundle{id: "lab", configVersion: 3})
+		logs.take()
+		c.change(s)
+		var got string
+		if !eventually(t, 5*time.Second, func() bool {
+			got += logs.take()
+			return strings.Contains(got, "excludeClusters names no registered cluster id")
+		}) {
+			t.Errorf("%s: the entry no cluster has was not named; logged %q", c.name, got)
+			continue
+		}
+		if !strings.Contains(got, "entries=[labb]") {
+			t.Errorf("%s: named other entries than labb: %q", c.name, got)
+		}
+	}
+}
+
 // Can-i, writes, logs, Secrets, the events and live lists' checks, an AI tool call's checks and a token that is no
 // person's are asked as that identity even while the groups' allow of the same question is kept.
 func TestOtherChecksAreAskedAsThePersonWhileTheGroupsAllowIsKept(t *testing.T) {

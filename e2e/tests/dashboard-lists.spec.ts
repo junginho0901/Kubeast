@@ -296,18 +296,26 @@ test.describe('Dashboard lists', () => {
   })
 
   test('the Namespaces window counts each namespace’s pods, Services and Deployments as kubectl lists them, and a search says how many of how many', async ({ page }) => {
+    test.setTimeout(90_000)
     const k = kubectlFor('kubeast')
     const perNs = (kind: string) => {
       const m = new Map<string, number>()
       for (const ns of k(`get ${kind} -A --no-headers -o custom-columns=NS:.metadata.namespace`).split('\n').filter(Boolean)) m.set(ns, (m.get(ns) ?? 0) + 1)
       return m
     }
-    const names = k('get namespaces --no-headers -o custom-columns=N:.metadata.name').split('\n').filter(Boolean).sort()
+    let names: string[] = []
     await page.goto('/?cluster=self')
     await page.getByTestId('stat-namespaces').click()
     const rows = page.getByTestId('resource-modal-namespace-counts')
-    // pods come and go while the suite runs: read kubectl and the window again until they agree
+    // the window reads its lists when it opens: reopened after 5 s of disagreeing
+    let opened = Date.now()
     await expect(async () => {
+      if (Date.now() - opened > 5_000) {
+        await page.keyboard.press('Escape')
+        await page.getByTestId('stat-namespaces').click()
+        opened = Date.now()
+      }
+      names = k('get namespaces --no-headers -o custom-columns=N:.metadata.name').split('\n').filter(Boolean).sort()
       const [pods, svc, dep] = [perNs('pods'), perNs('services'), perNs('deployments')]
       const want = Object.fromEntries(names.map((n) => [n, [pods.get(n) ?? 0, svc.get(n) ?? 0, dep.get(n) ?? 0].join(' ')]))
       // each row: the namespace (its h3) and the three numbers of its summary line
@@ -319,7 +327,7 @@ test.describe('Dashboard lists', () => {
       expect(Object.fromEntries(seen), 'pods, Services and Deployments per namespace').toEqual(want)
     }).toPass({ timeout: 60_000 })
 
-    // a search keeps some of them: the header says how many of how many, as the pager does
+    // a search keeps some: the header says how many of how many (the names of the try that agreed)
     await page.getByPlaceholder(/Search|검색/).last().fill('kube')
     const kept = names.filter((n) => n.includes('kube')).length
     expect(kept).toBeGreaterThan(0)

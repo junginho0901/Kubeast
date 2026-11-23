@@ -322,6 +322,8 @@ spec:
               value: {{ dig "maxTerminalsPerAccount" 20 $.Values.multicluster | quote }}
             - name: MAX_FOLLOWED_LOGS_PER_ACCOUNT
               value: {{ dig "maxFollowedLogsPerAccount" 20 $.Values.multicluster | quote }}
+            - name: MAX_STREAMS_PER_SERVER
+              value: {{ dig "maxStreamsPerServer" 443 $.Values.multicluster | quote }}
             - name: WS_WATCH_START_CONCURRENCY
               value: "{{ $.Values.multicluster.wsWatchStartConcurrency | default 16 }}"
             - name: WS_WATCH_OPENING_CONCURRENCY

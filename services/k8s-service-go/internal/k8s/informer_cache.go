@@ -427,11 +427,14 @@ func keyMeta(m metav1.ObjectMeta) metav1.ObjectMeta {
 }
 
 // overviewInformers returns the bundle's informer set, starting it on first
-// use. nil when the bundle has no cache client, keeps none (noInformers) or a
+// use. nil when the bundle is closed, has no cache client, keeps none (noInformers) or a
 // recent start was forbidden (tried again after overviewRetryAfter).
 func (b *clientBundle) overviewInformers() *clusterInformers {
 	b.infMu.Lock()
 	defer b.infMu.Unlock()
+	if b.closed {
+		return nil
+	}
 	if b.inf != nil {
 		return b.inf
 	}
@@ -457,7 +460,7 @@ func (b *clientBundle) overviewInformers() *clusterInformers {
 }
 
 // syncedOrStart returns the running, synced informer set, or nil after starting one when there is none
-// (overviewInformers: not without a cache client, with noInformers or within overviewRetryAfter of a refusal). It
+// (overviewInformers: not on a closed bundle, without a cache client, with noInformers or within overviewRetryAfter of a refusal). It
 // never waits for the set to sync: its caller reads as the caller meanwhile.
 func (b *clientBundle) syncedOrStart() *clusterInformers {
 	ci := b.overviewInformers()

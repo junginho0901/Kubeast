@@ -16,6 +16,17 @@ async function totalOf(page: Page, cluster: string): Promise<number> {
   return (await res.json()).total as number
 }
 
+// read with the API's total in each try: an earlier test's namespace may still be going away
+async function settledFooterTotal(page: Page, cluster: string): Promise<number> {
+  let total = NaN
+  await expect(async () => {
+    const shown = (await pagerRange(page, 'list-pager', { uncounted: 'nan' })).total
+    total = await totalOf(page, cluster)
+    expect(shown, `the footer's total, and the API's total of ${cluster} read after it`).toBe(total)
+  }).toPass({ timeout: 20_000 })
+  return total
+}
+
 // holds the Pods list's reads of `cluster` until released
 async function hold(page: Page, cluster: string) {
   let release = () => {}
@@ -55,7 +66,6 @@ const rangeTexts = (seen: string[]) => seen.map((s) => s.match(/Showing (\d+-\d+
 
 test.describe('the Pods list footer', () => {
   test('says it has not counted while the first read comes, then the answer\'s total', async ({ page }) => {
-    const total = await totalOf(page, 'self')
     await page.addInitScript(recordFooter)
     const held = await hold(page, 'self')
     try {
@@ -66,15 +76,13 @@ test.describe('the Pods list footer', () => {
     } finally {
       await held.release()
     }
-    await expect.poll(async () => (await pagerRange(page, 'list-pager', { uncounted: 'nan' })).total, { timeout: 20_000 }).toBe(total)
+    expect(await settledFooterTotal(page, 'self'), 'the total the footer settles on').toBeGreaterThan(0)
     expect(rangeTexts(await footerSeen(page)).filter((s) => s === 'Showing 0 of 0'), 'a 0 nobody counted').toEqual([])
   })
 
   test('says it has not counted while the cluster just picked is read, not the total of the cluster before', async ({ page }) => {
-    const [self, other] = [await totalOf(page, 'self'), await totalOf(page, 'default')]
-    test.skip(self === other, `self and default both hold ${self} pods: the footer could not tell them apart`)
     await page.goto('/workloads/pods?cluster=self')
-    await expect.poll(async () => (await pagerRange(page, 'list-pager', { uncounted: 'nan' })).total, { timeout: 20_000 }).toBe(self)
+    const self = await settledFooterTotal(page, 'self')
     await page.evaluate(recordFooter)
     const held = await hold(page, 'default')
     try {
@@ -87,9 +95,10 @@ test.describe('the Pods list footer', () => {
     } finally {
       await held.release()
     }
-    await expect.poll(async () => (await pagerRange(page, 'list-pager', { uncounted: 'nan' })).total, { timeout: 20_000 }).toBe(other)
+    const other = await settledFooterTotal(page, 'default')
     const seen = rangeTexts(await footerSeen(page))
     expect(seen.filter((s) => s === 'Showing 0 of 0'), 'a 0 nobody counted').toEqual([])
+    test.skip(self === other, `self and default both hold ${self} pods: the footer could not tell them apart`)
     // from the first frame without self's total, self's total does not come back before default's
     const left = seen.findIndex((s) => !s.endsWith(`of ${self}`))
     expect(left, 'the footer left self\'s total').toBeGreaterThanOrEqual(0)

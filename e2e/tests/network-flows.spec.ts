@@ -98,7 +98,7 @@ test.describe('Network flows (Hubble Relay)', () => {
     let groups: Group[] = []
     await expect.poll(async () => {
       const { status, body } = await flows(request, reader.token, { kind: 'Deployment', name: 'web', since: '1m' })
-      expect(status, JSON.stringify(body)).toBe(200)
+      if (status !== 200) return `${status} ${JSON.stringify(body)}`
       groups = body.groups
       return groups.some((g) => g.verdict === 'DROPPED') && groups.some((g) => g.verdict === 'FORWARDED')
     }, { timeout: 60_000, intervals: [3_000] }).toBe(true)

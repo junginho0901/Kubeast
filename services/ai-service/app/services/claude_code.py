@@ -29,12 +29,15 @@ import logging
 import os
 import tempfile
 from collections import deque
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Sequence
 
+from prometheus_client import Counter, Gauge, Histogram
+
 from app.config import settings
+from app.metrics import SERVICE
 from app.services import claude_code_slots
 from app.services.prompt_fence import inside_arrows
 from app.services.audit_target import shown_tool_args
@@ -55,6 +58,66 @@ ToolRunner = Callable[[str, dict, int, int], Awaitable[tuple[list[str], str]]]
 
 # Concurrency lanes: "chat" (chat, floating assistant, plain completions) and "investigation" (one worker, one run).
 _semaphores: dict[str, asyncio.Semaphore] = {}
+
+# The runs' places in this process (docs/metrics.md): no user, model or session label. The series appear with the first
+# run (_series), so a server with the provider off shows none.
+RUNS = Gauge("kubeast_claude_code_runs", "Claude Code runs holding their place in this server now, by lane (chat, investigation).",
+             ["service", "lane"])
+WAITING = Gauge("kubeast_claude_code_waiting", "Chat runs waiting for their Claude Code slots now.", ["service"])
+SLOT_WAIT = Histogram("kubeast_claude_code_slot_wait_seconds",
+                      "Seconds a chat run waited for its Claude Code slots, this server's and the install's (0 when both "
+                      "were free), started or not.", ["service"],
+                      buckets=(0.005, 0.05, 0.25, 1, 2.5, 5, 10, 20, 30, 60, 120, 300))
+BUSY = Counter("kubeast_claude_code_busy_total",
+               "Chat runs that ended as busy: no Claude Code slot came free within AI_CLAUDE_CODE_QUEUE_WAIT.", ["service"])
+_LANES = ("chat", "investigation")
+_made_series = False
+
+
+def _series() -> None:
+    """Makes every series at 0 with the first run, so the first busy run counts as an increase."""
+    global _made_series
+    if not _made_series:
+        for lane in _LANES:
+            RUNS.labels(SERVICE, lane)
+        WAITING.labels(SERVICE)
+        SLOT_WAIT.labels(SERVICE)
+        BUSY.labels(SERVICE)
+        _made_series = True
+
+
+@contextmanager
+def _running(lane: str):
+    """Counts a run in kubeast_claude_code_runs while it holds its place."""
+    runs = RUNS.labels(SERVICE, lane)
+    runs.inc()
+    try:
+        yield
+    finally:
+        runs.dec()
+
+
+class _SlotWait:
+    """A chat run waiting for its slots: in kubeast_claude_code_waiting until it starts or gives up, its wait observed
+    once (end), and counted busy when no slot came in time (busy)."""
+
+    def __init__(self, clock: Callable[[], float]):
+        self._clock = clock
+        self._start = clock()
+        self._open = True
+        WAITING.labels(SERVICE).inc()
+
+    def busy(self) -> None:
+        if self._open:
+            BUSY.labels(SERVICE).inc()
+        self.end()
+
+    def end(self) -> None:
+        if not self._open:
+            return
+        self._open = False
+        WAITING.labels(SERVICE).dec()
+        SLOT_WAIT.labels(SERVICE).observe(max(0.0, self._clock() - self._start))
 
 BUSY_MESSAGE = "Claude Code is busy; ask again in a moment."
 
@@ -144,10 +207,13 @@ async def _slot(lane: str, on_wait: Optional[Callable[[bool], None]] = None):
     this server first, then one of the install's, always in that order, so a run holding one never waits for one a
     run waiting for its first holds. A chat run waits for both at most queue_wait() in all: it calls on_wait(True)
     once when it has to wait and on_wait(False) when it starts, and raises ClaudeCodeBusy past the wait. A run
-    cancelled while it waits (the client went) leaves the queue holding no slot."""
+    cancelled while it waits (the client went) leaves the queue holding no slot. Each run is counted while it holds its
+    place, and a chat run's wait is observed once (_SlotWait)."""
+    _series()
     if lane != "chat":
         async with _sem(lane):
-            yield
+            with _running(lane):
+                yield
         return
     loop = asyncio.get_running_loop()
     deadline = loop.time() + queue_wait()
@@ -163,24 +229,32 @@ async def _slot(lane: str, on_wait: Optional[Callable[[bool], None]] = None):
     sem = _sem("chat")
     if sem.locked():
         waiting()
+    wait = _SlotWait(loop.time)
     try:
-        async with asyncio.timeout_at(deadline):
-            await sem.acquire()
-    except TimeoutError:
-        raise ClaudeCodeBusy() from None
-    try:
-        db = await _database()
-        async with AsyncExitStack() as stack:
-            try:
-                await stack.enter_async_context(
-                    claude_code_slots.held(db, "chat", max_concurrent_total(), deadline, waiting))
-            except claude_code_slots.Busy:
-                raise ClaudeCodeBusy() from None
-            if waited and on_wait is not None:
-                on_wait(False)
-            yield
+        try:
+            async with asyncio.timeout_at(deadline):
+                await sem.acquire()
+        except TimeoutError:
+            wait.busy()
+            raise ClaudeCodeBusy() from None
+        try:
+            db = await _database()
+            async with AsyncExitStack() as stack:
+                try:
+                    await stack.enter_async_context(
+                        claude_code_slots.held(db, "chat", max_concurrent_total(), deadline, waiting))
+                except claude_code_slots.Busy:
+                    wait.busy()
+                    raise ClaudeCodeBusy() from None
+                wait.end()
+                if waited and on_wait is not None:
+                    on_wait(False)
+                with _running("chat"):
+                    yield
+        finally:
+            sem.release()
     finally:
-        sem.release()
+        wait.end()  # cancelled, or an error, while it waited
 
 
 def _content_text(content: Any) -> str:
@@ -312,6 +386,20 @@ def _result_error(result, seen: Optional[dict] = None) -> Optional[ClaudeCodeErr
 
 async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque, lane: str = "chat",
                on_wait: Optional[Callable[[bool], None]] = None):
+    """_run_once, counted in kubeast_ai_model_requests_total: ok, or the refusal kind (a busy run is not counted)."""
+    from app.services.ai import model_requests
+
+    try:
+        result = await _run_once(sdk, prompt, options, on_message, stderr, lane, on_wait)
+    except Exception as e:
+        model_requests.failed(e)
+        raise
+    model_requests.answered()
+    return result
+
+
+async def _run_once(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque, lane: str = "chat",
+                    on_wait: Optional[Callable[[bool], None]] = None):
     """One Claude Code run within its lane's concurrency limits and the turn timeout; returns its result message.
     on_wait hears when the run waits for a slot and when it starts (_slot)."""
     result = None

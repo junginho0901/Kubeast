@@ -362,3 +362,58 @@ def test_the_queue_wait_defaults_to_a_minute(monkeypatch):
     assert claude_code.queue_wait() == 60
     monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_QUEUE_WAIT", 0, raising=False)
     assert claude_code.queue_wait() == 0
+
+
+# --- the places in /metrics: runs holding one, chat runs waiting, each wait observed once, busy counted ------------
+
+def sample(name, **labels):
+    from prometheus_client import REGISTRY
+
+    return REGISTRY.get_sample_value(name, {"service": "ai", **labels}) or 0.0
+
+
+async def test_runs_are_counted_by_lane_while_they_hold_their_place(one_slot, monkeypatch):
+    sdk = holding(monkeypatch)
+    before = {lane: sample("kubeast_claude_code_runs", lane=lane) for lane in ("chat", "investigation")}
+    runs = asyncio.gather(
+        claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"),
+        claude_code.complete([{"role": "user", "content": "y"}], model="m", token="t", lane="investigation"))
+    await until(lambda: sdk.state["running"] == 2)
+    assert sample("kubeast_claude_code_runs", lane="chat") == before["chat"] + 1
+    assert sample("kubeast_claude_code_runs", lane="investigation") == before["investigation"] + 1
+    sdk.state["release"].set()
+    await asyncio.wait_for(runs, 5)
+    assert {lane: sample("kubeast_claude_code_runs", lane=lane) for lane in ("chat", "investigation")} == before
+
+
+async def test_a_chat_run_that_waits_past_the_queue_wait_is_counted_busy_and_its_wait_observed(one_slot, monkeypatch):
+    monkeypatch.setattr(claude_code, "queue_wait", lambda: 0.3)
+    sdk = holding(monkeypatch)
+    busy, waits = sample("kubeast_claude_code_busy_total"), sample("kubeast_claude_code_slot_wait_seconds_count")
+    waited, idle = sample("kubeast_claude_code_slot_wait_seconds_sum"), sample("kubeast_claude_code_waiting")
+    first = asyncio.create_task(claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"))
+    await until(lambda: sdk.state["running"] == 1)
+    waiting_task = asyncio.create_task(claude_code.complete([{"role": "user", "content": "y"}], model="m", token="t"))
+    await until(lambda: sample("kubeast_claude_code_waiting") == idle + 1)
+    with pytest.raises(claude_code.ClaudeCodeBusy):
+        await asyncio.wait_for(waiting_task, 5)
+    assert sample("kubeast_claude_code_waiting") == idle
+    sdk.state["release"].set()
+    await first
+    assert sample("kubeast_claude_code_busy_total") == busy + 1
+    assert sample("kubeast_claude_code_slot_wait_seconds_count") == waits + 2  # the first's 0 and the busy one's wait
+    assert sample("kubeast_claude_code_slot_wait_seconds_sum") - waited >= 0.3
+
+
+async def test_a_chat_run_stopped_while_it_waits_is_no_longer_waiting_and_not_busy(one_slot, servers):
+    assert await claude_code_slots.take(servers[1], "chat", 1, "other-server") == 0
+    busy, waits = sample("kubeast_claude_code_busy_total"), sample("kubeast_claude_code_slot_wait_seconds_count")
+    idle = sample("kubeast_claude_code_waiting")
+    gen = claude_code.ClaudeCodeChat(model="m", token="t").turn(
+        messages=[{"role": "user", "content": "x"}], tools=[], run_tool=None, out=claude_code.TurnResult())
+    assert json.loads((await gen.__anext__()).removeprefix("data: ")) == {"queued": True}
+    assert sample("kubeast_claude_code_waiting") == idle + 1
+    await gen.aclose()  # the user pressed Stop
+    await until(lambda: sample("kubeast_claude_code_waiting") == idle)
+    assert sample("kubeast_claude_code_busy_total") == busy
+    assert sample("kubeast_claude_code_slot_wait_seconds_count") == waits + 1

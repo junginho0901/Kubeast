@@ -282,6 +282,8 @@ class DatabaseService:
         # is replaced on checkout instead of surfacing as "connection is
         # closed" on the first request after the database is back.
         self.engine = create_async_engine(engine_url, echo=False, pool_pre_ping=True, connect_args=connect_args, **pool)
+        # The most connections the pool may hold (DB_POOL_MAX_AI), for kubeast_db_pool_max_connections; None for sqlite.
+        self.pool_max = sum(pool.values()) if pool else None
         # The session limits (app/db_session.py), SET on each new connection.
         self.on_connect = None
         if session_statements:

@@ -164,7 +164,7 @@ test.describe('AI LogQL tools', () => {
     let patterns: Pattern[] = []
     await expect.poll(async () => {
       const out = await tool(request, reader, 'loki_patterns', { cluster: CLUSTER, namespace: NS, selector: podSelector, since: '20m' })
-      expect(out.status, JSON.stringify(out)).not.toBe('unavailable')
+      if (out.status === 'unavailable') return JSON.stringify(out)
       patterns = out.patterns
       return patterns.reduce((n, p) => n + p.count, 0)
     }, { timeout: 120_000, intervals: [5000] }).toBe(95)

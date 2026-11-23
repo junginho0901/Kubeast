@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -76,6 +78,50 @@ func TestMiddleware_FixedPathsAndStreaming(t *testing.T) {
 	body := scrape(t, m)
 	if !strings.Contains(body, `kubeast_http_requests_total{code="200",method="post",route="/tools/call",service="tool-server"} 1`) {
 		t.Fatalf("fixed path route label missing:\n%s", body)
+	}
+}
+
+// chartProbePaths reads the paths the chart's kubelet probes ask, by port: httpGet blocks and the probe helpers' dict arguments.
+func chartProbePaths(t *testing.T) map[string][]string {
+	t.Helper()
+	raw, err := os.ReadFile("../../../helm/kubeast/templates/deployments.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	out := map[string][]string{}
+	for _, m := range regexp.MustCompile(`httpGet:\s*\n\s*path:\s*(\S+)\s*\n\s*port:\s*(\d+)`).FindAllStringSubmatch(text, -1) {
+		out[m[2]] = append(out[m[2]], m[1])
+	}
+	path, port := regexp.MustCompile(`"path" "([^"]+)"`), regexp.MustCompile(`"port" (\d+)`)
+	for _, m := range regexp.MustCompile(`include "kubeast\.\w+" \(dict ([^)]*)\)`).FindAllStringSubmatch(text, -1) {
+		p, n := path.FindStringSubmatch(m[1]), port.FindStringSubmatch(m[1])
+		if p != nil && n != nil {
+			out[n[1]] = append(out[n[1]], p[1])
+		}
+	}
+	return out
+}
+
+// The kubelet asks these every few seconds: counted, they would fill the denominator of KubeastHighErrorRate and KubeastSlowRequests.
+// ai-service, the one service in Python, is held to the same by its test_metrics.py.
+func TestChartProbePathsAreNotCounted(t *testing.T) {
+	probes := chartProbePaths(t)
+	m := New("probes")
+	h := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	for service, port := range map[string]string{"auth-service": "8004", "k8s-service": "8002", "session-service": "8003", "tool-server": "8086"} {
+		if len(probes[port]) == 0 {
+			t.Fatalf("no probe path found for %s (port %s) in deployments.yaml", service, port)
+		}
+		for _, p := range probes[port] {
+			h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, p, nil))
+			if !skip(p) {
+				t.Errorf("%s's probe path %s is counted", service, p)
+			}
+		}
+	}
+	if body := scrape(t, m); strings.Contains(body, "kubeast_http_requests_total{") {
+		t.Fatalf("probe requests were counted:\n%s", body)
 	}
 }
 

@@ -74,6 +74,19 @@ func (s *Service) warnUnknownExcludes(ctx context.Context) {
 	}
 }
 
+// warnUnknownExcludesSoon is warnUnknownExcludes after a cluster changed — told by auth-service or another replica
+// (dropBundle) or read from the registry's versions (DropStale) — off the caller's goroutine, as it reads the registry.
+func (s *Service) warnUnknownExcludesSoon() {
+	if !sharedReadChecks.on || len(sharedReadChecks.exclude) == 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		s.warnUnknownExcludes(ctx)
+	}()
+}
+
 // shareableRead is a question a shared answer may stand for: a read with no subresource, and not of Secrets.
 func shareableRead(a authorizationv1.ResourceAttributes) bool {
 	switch a.Verb {
@@ -135,7 +148,7 @@ func (s *Service) askAsGroups(ctx context.Context, b *clientBundle, key string, 
 	if s.answered.askedAgain(key, time.Now()) {
 		ctx = askingAgain(ctx)
 	}
-	return s.askOnce(ctx, key, func(ctx context.Context) (bool, error) {
+	return s.askOnce(ctx, b, key, func(ctx context.Context) (bool, error) {
 		if known, ok := s.accessAnswers.get(key, time.Now()); ok {
 			return known, nil
 		}
