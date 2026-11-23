@@ -62,15 +62,15 @@ test.describe('Number check — Issues numbers', () => {
     test.setTimeout(180_000)
     const get = async () => (await (await page.request.get('/api/v1/cluster/issues?cluster=self')).json()).issues as Issue[]
     // the pod keeps restarting: compare when two reads of the cluster agree around the API's
-    await expect(async () => {
+    await expect.soft(async () => {
       const before = cluster()
       const issues = await get()
       const after = cluster()
       expect(after, 'the cluster held still').toEqual(before)
       const pod = issues.find((i) => i.id === `Pod/${NS}/${POD}`)
       const job = issues.find((i) => i.id === `Job/${JOB.namespace}/${JOB.name}`)
-      expect.soft({ restarts: pod?.restarts, events: pod?.events, failed: pod?.failed ?? 0 }, 'the pod').toEqual({ restarts: before.restarts, events: before.events, failed: 0 })
-      expect.soft({ failed: job?.failed, restarts: job?.restarts ?? 0 }, 'the Job').toEqual({ failed: before.failed, restarts: 0 })
+      expect({ restarts: pod?.restarts, events: pod?.events, failed: pod?.failed ?? 0 }, 'the pod').toEqual({ restarts: before.restarts, events: before.events, failed: 0 })
+      expect({ failed: job?.failed, restarts: job?.restarts ?? 0 }, 'the Job').toEqual({ failed: before.failed, restarts: 0 })
     }).toPass({ timeout: 90_000, intervals: [3_000] })
 
     // the window: each row's numbers named, as the answer it loaded has them

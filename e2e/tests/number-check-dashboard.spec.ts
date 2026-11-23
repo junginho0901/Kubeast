@@ -95,19 +95,26 @@ test.describe('Number check — dashboard counts as the user may list them', () 
     // the bindings take a moment, and the identity's answers are kept 60 s
     await expect.poll(async () => (await overview()).status, { timeout: 90_000, intervals: [3_000] }).toBe(200)
 
-    const want: Record<string, number | null> = { total_namespaces: asTheUser('namespaces', false) }
-    for (const k of KINDS) want[k.key] = asTheUser(k.resource, k.namespaced)
+    // what kubectl as the identity lists, read again with the overview in each try (namespaces may still be going away)
+    const listed = () => {
+      const w: Record<string, number | null> = { total_namespaces: asTheUser('namespaces', false) }
+      for (const k of KINDS) w[k.key] = asTheUser(k.resource, k.namespaced)
+      return w
+    }
+    let want = listed()
     expect(want.total_namespaces, 'the identity lists namespaces').not.toBeNull()
     expect(want.total_services, 'the identity lists services').not.toBeNull()
     expect(want.total_pods, 'the identity may not list pods').toBeNull()
 
-    await expect(async () => {
+    // hard checks inside, so a try that disagrees throws and is tried again; soft outside, so the test goes on
+    await expect.soft(async () => {
+      want = listed()
       const ov = (await overview()).body
       const got: Record<string, number | null> = {}
       for (const k of Object.keys(want)) got[k] = ov[k] ?? null
-      expect.soft(got, 'the counts, as kubectl as the identity lists').toEqual(want)
-      expect.soft([...(ov.refused ?? [])].sort(), 'refused').toEqual(KINDS.filter((k) => want[k.key] === null).map((k) => k.resource.replace('.apps', '')).sort())
-      expect.soft(ov.pod_status ?? null, 'no pod phases without the pods').toBeNull()
+      expect(got, 'the counts, as kubectl as the identity lists').toEqual(want)
+      expect([...(ov.refused ?? [])].sort(), 'refused').toEqual(KINDS.filter((k) => want[k.key] === null).map((k) => k.resource.replace('.apps', '')).sort())
+      expect(ov.pod_status ?? null, 'no pod phases without the pods').toBeNull()
     }).toPass({ timeout: 30_000, intervals: [3_000] })
 
     // the AI's overview: the same answer, a kind the identity may not list not failing the rest
@@ -132,11 +139,19 @@ test.describe('Number check — dashboard counts as the user may list them', () 
     await page.locator('button[type="submit"]').first().click()
     await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), { timeout: 20_000 })
     await page.goto(`${DASHBOARD.path}?cluster=${CLUSTER}`)
-    await expect(page.getByTestId('stat-value-namespaces')).toHaveText(String(want.total_namespaces), { timeout: 30_000 })
+    // a counted card and kubectl as the identity, read right after it in the same try (the count may still move)
+    const cardListed = async (card: string, resource: string, namespaced: boolean) => {
+      const shown = ((await page.getByTestId(`stat-value-${card}`).textContent()) ?? '').trim()
+      expect(shown, `the ${card} card, and kubectl as the identity read after it`).toBe(String(asTheUser(resource, namespaced)))
+    }
+    await expect(() => cardListed('namespaces', 'namespaces', false)).toPass({ timeout: 30_000 })
     for (const k of KINDS.filter((x) => x.card)) {
-      const n = want[k.key]
-      await expect.soft(page.getByTestId(`stat-value-${k.card}`), `${k.card} card`).toHaveText(n === null ? '—' : String(n))
-      if (n === null) await expect.soft(page.getByTestId(`stat-${k.card}`), `${k.card} card says why`).toHaveAttribute('title', /may not list|목록을 볼 수 없어/)
+      if (want[k.key] !== null) {
+        await expect.soft(() => cardListed(k.card, k.resource, k.namespaced), `${k.card} card`).toPass({ timeout: 30_000 })
+        continue
+      }
+      await expect.soft(page.getByTestId(`stat-value-${k.card}`), `${k.card} card`).toHaveText('—')
+      await expect.soft(page.getByTestId(`stat-${k.card}`), `${k.card} card says why`).toHaveAttribute('title', /may not list|목록을 볼 수 없어/)
     }
   })
 })

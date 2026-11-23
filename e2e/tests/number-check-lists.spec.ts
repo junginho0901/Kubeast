@@ -1447,10 +1447,23 @@ test.describe('number check — list screens', () => {
       await test.step('the picker: the namespace from the address, every namespace offered, the next choice kept on reload', async () => {
         await expect.soft(page.getByTestId('helm-namespace'), 'the address picks the namespace').toHaveText(NS)
         await page.getByTestId('helm-namespace').click()
-        const offered = await page.locator('[data-testid^="helm-namespace-opt-"]').evaluateAll((els) =>
-          els.map((el) => el.getAttribute('data-testid')!.replace('helm-namespace-opt-', '')).filter((n) => n !== 'all').sort())
-        const all = k.kubectl(`get namespaces -o jsonpath='{range .items[*]}{.metadata.name}{"\\n"}{end}'`).split('\n').filter(Boolean).sort()
-        expect.soft(offered, 'every namespace of the cluster, whichever is picked').toEqual(all)
+        // the picker's list is read when the page loads (kept 30 s): reloaded after 5 s of disagreeing
+        let loaded = Date.now()
+        await expect.configure({ soft: true }).poll(async () => {
+          if (Date.now() - loaded > 5_000) {
+            await page.reload()
+            loaded = Date.now()
+          }
+          if (!(await page.getByTestId('helm-namespace-opt-all').isVisible())) await page.getByTestId('helm-namespace').click()
+          const offered = await page.locator('[data-testid^="helm-namespace-opt-"]').evaluateAll((els) =>
+            els.map((el) => el.getAttribute('data-testid')!.replace('helm-namespace-opt-', '')).filter((n) => n !== 'all').sort())
+          const all = k.kubectl(`get namespaces -o jsonpath='{range .items[*]}{.metadata.name}{"\\n"}{end}'`).split('\n').filter(Boolean).sort()
+          return [
+            ...offered.filter((n, i) => offered.indexOf(n) !== i).map((n) => `offered twice: ${n}`),
+            ...offered.filter((n) => !all.includes(n)).map((n) => `offered, not listed by kubectl: ${n}`),
+            ...all.filter((n) => !offered.includes(n)).map((n) => `listed by kubectl, not offered: ${n}`),
+          ]
+        }, { message: 'every namespace of the cluster, whichever is picked', timeout: 20_000 }).toEqual([])
         await page.getByTestId('helm-namespace-opt-kubeast').click()
         await expect.poll(() => new URL(page.url()).searchParams.get('namespace'), { timeout: 10_000 }).toBe('kubeast')
         await page.reload()
@@ -2168,11 +2181,11 @@ test.describe('number check — list screens', () => {
 
             // a fresh read of the list API reads what the update left
             const live = await shown(page, name)
-            await expect.poll(async () => {
+            await expect(async () => {
               await held.goto(screenUrl(s))
               await expect(held.locator('main tbody tr').filter({ has: held.getByRole('cell', { name, exact: true }) })).toHaveCount(1, { timeout: 20_000 })
-              return shown(held, name)
-            }, { timeout: 40_000, message: `${k.kind}: a fresh read of the list API` }).toEqual(live)
+              expect(await shown(held, name), `${k.kind}: a fresh read of the list API`).toEqual(live)
+            }).toPass({ timeout: 40_000 })
 
             if (k.another) {
               const other = `${name}-2`

@@ -243,15 +243,15 @@ test.describe('number check — every drawer\'s Events section', () => {
     await expect(page.locator(DRAWER).last()).toContainText('e2e-label:shown', { timeout: 20_000 })
     await page.getByTestId('floating-chat-toggle').click()
     const input = page.getByTestId('floating-chat-input')
-    await expect.poll(async () => {
+    await expect(async () => {
       const before = sent.length
       await input.fill('what is on this screen?')
       await input.press('Enter')
       await expect.poll(() => sent.length).toBe(before + 1)
       await expect(page.getByTestId('floating-chat-panel').getByRole('button', { name: /^(Send|보내기)$/ })).toBeVisible()
       const data = sent[sent.length - 1].overlays.find((o) => o.source === 'PodTemplateInfo')?.data
-      return { apiVersion: data?.api_version, uid: data?.uid, created: data?.created_at, label: data?.labels?.['e2e-label'], annotated: data?.annotations?.includes('e2e.kubeast.io/note') }
-    }, { timeout: 30_000 }).toEqual({ apiVersion: 'v1', uid: want.metadata.uid, created: want.metadata.creationTimestamp, label: 'shown', annotated: true })
+      expect({ apiVersion: data?.api_version, uid: data?.uid, created: data?.created_at, label: data?.labels?.['e2e-label'], annotated: data?.annotations?.includes('e2e.kubeast.io/note') }).toEqual({ apiVersion: 'v1', uid: want.metadata.uid, created: want.metadata.creationTimestamp, label: 'shown', annotated: true })
+    }).toPass({ timeout: 30_000 })
     expect(JSON.stringify(sent[sent.length - 1].overlays.find((o) => o.source === 'PodTemplateInfo'))).not.toContain('drev-note-value')
   })
 
