@@ -127,6 +127,9 @@ metrics:
 # 해당 라우트: tool-server의 kubeconfig 조회, auth-service의 validate·invalidate
 # 회전하려면 값을 바꾼 뒤 auth-service, k8s-service, tool-server를 롤아웃하세요.
 # secrets.existingSecret를 쓰면 그 Secret에 넣으세요.
+# k8s-service와 k8s-service-stream은 그 Secret(kubeast-secrets 또는 secrets.existingSecret)에서 이 키만 읽습니다:
+# DATABASE_URL, INTERNAL_API_TOKEN, Redis 사용자가 꺼져 있을 때 REDIS_PASSWORD, 그 Secret에 있으면 HTTP_PROXY, HTTPS_PROXY,
+# NO_PROXY. 다른 서비스는 통째로 환경 변수로 읽습니다.
 
 # 노드 셸(특권 디버그 파드) — 기본으로 꺼져 있습니다.
 # 켜면 전용 네임스페이스와 이미지 허용 목록(첫 항목이 기본)을 씁니다.
@@ -372,8 +375,8 @@ multicluster:
 
 - 사용자마다 설치 때 32자로 만들어 Secret `kubeast-redis-users`에 둡니다(`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, `REDIS_TOOL_SERVER_PASSWORD`).
 - 업그레이드해도 유지되고, `kubeast-secrets`처럼 `helm uninstall` 뒤에도 남습니다.
-- 모든 서비스가 통째로 환경 변수로 읽는 `kubeast-secrets`에는 넣지 않습니다. redis 파드가 읽고, k8s-service와 tool-server는 자기 것만 읽습니다.
-- `secrets.existingSecret`과 `redis.acl.existingSecretHasKeys: true`를 쓰면 키를 그 Secret에서 읽습니다. 모든 백엔드가 그 Secret을 통째로 환경 변수로 읽으므로 각자 모든 Redis 사용자의 비밀번호를 갖게 되고, 설치 안내(NOTES)가 이를 알립니다.
+- k8s-service 말고 모든 서비스가 통째로 환경 변수로 읽는 `kubeast-secrets`에는 넣지 않습니다. redis 파드가 읽고, k8s-service와 tool-server는 자기 것만 읽습니다.
+- `secrets.existingSecret`과 `redis.acl.existingSecretHasKeys: true`를 쓰면 키를 그 Secret에서 읽습니다. k8s-service 말고 모든 백엔드가 그 Secret을 통째로 환경 변수로 읽으므로 그 백엔드는 각자 모든 Redis 사용자의 비밀번호를 갖게 되고, 설치 안내(NOTES)가 이를 알립니다.
 - 서비스마다 자기 키만 갖게 하려면 키를 따로 된 Secret에 넣고 `redis.acl.existingSecret`에 그 이름을 두세요. 사용자가 켜지고, redis 파드와 각 서비스가 그 Secret에서 자기 키만 읽으며, 주 Secret에는 키가 없어도 됩니다.
 - 바꾸려면 Secret에 새 값을 쓰고 `redis`와 그 비밀번호의 서비스를 다시 시작합니다.
 

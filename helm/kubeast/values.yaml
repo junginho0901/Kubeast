@@ -37,6 +37,10 @@ admin:
 # GEMINI_API_KEY (may be empty), CLAUDE_CODE_OAUTH_TOKEN (optional) and, with auth.oidc enabled and no
 # auth.oidc.existingSecret, OIDC_CLIENT_SECRET. Pair it with
 # auth.signingKey.existingSecret for a fully deterministic render.
+# k8s-service and k8s-service-stream read only DATABASE_URL, INTERNAL_API_TOKEN,
+# REDIS_PASSWORD (while the Redis users are off) and, when the Secret holds
+# them, HTTP_PROXY, HTTPS_PROXY and NO_PROXY from it; the other services take
+# it whole as environment.
 secrets:
   existingSecret: ""
 
@@ -835,8 +839,8 @@ redis:
     existingSecretHasKeys: false
     # A Secret holding only the Redis users' keys (the three above), read key by
     # key: each service then holds its own password only, where
-    # secrets.existingSecret, which every service takes whole as environment,
-    # gives each all of them. Set, the users are on, the chart makes no
+    # secrets.existingSecret, which every service but k8s-service takes whole as
+    # environment, gives each all of them. Set, the users are on, the chart makes no
     # kubeast-redis-users, and an upgrade that can read it stops when a key is
     # missing.
     existingSecret: ""

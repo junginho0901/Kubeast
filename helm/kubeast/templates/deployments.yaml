@@ -265,8 +265,6 @@ spec:
           envFrom:
             - configMapRef:
                 name: kubeast-config
-            - secretRef:
-                name: {{ include "kubeast.secretsName" $ }}
           # Multi-cluster load / failure-isolation knobs (step 15). All optional;
           # code defaults apply when unset. rateLimitQPS=0 disables rate limiting.
           env:
@@ -324,6 +322,17 @@ spec:
               value: "{{ $.Values.multicluster.bigReadConcurrency | default 2 }}"
             - name: EVENT_LIST_CONCURRENCY
               value: "{{ $.Values.multicluster.eventListConcurrency | default 4 }}"
+            {{- /* Only the keys of the main Secret this server reads, not the whole Secret; the proxy ones when it holds them */}}
+            {{- range $key := list "DATABASE_URL" "INTERNAL_API_TOKEN" "HTTP_PROXY" "HTTPS_PROXY" "NO_PROXY" }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.secretsName" $ }}
+                  key: {{ $key }}
+                  {{- if hasSuffix "_PROXY" $key }}
+                  optional: true
+                  {{- end }}
+            {{- end }}
             {{- if include "kubeast.redisAcl" $ }}
             # Redis user k8s-service (redis.acl) in every role; this REDIS_PASSWORD takes the place of kubeast-secrets' one. optional:
             # a Secret of secrets.existingSecret without the key leaves the cache in memory instead of the pod not starting.
@@ -334,6 +343,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "kubeast.redisUsersSecretName" $ }}
                   key: REDIS_K8S_SERVICE_PASSWORD
+                  optional: true
+            {{- else }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.secretsName" $ }}
+                  key: REDIS_PASSWORD
                   optional: true
             {{- end }}
             {{- if $api }}
