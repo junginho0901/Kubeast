@@ -30,8 +30,8 @@
   "kubectl -n $NS patch cronjob reminder-sender --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/jobTemplate/spec/template/spec/containers/0/envFrom/0/configMapRef/name\",\"value\":\"reminder-sender-v2\"}]'"
  ],
  "inject_wait": "kubectl -n $NS logs deploy/orders-db --since=40s | grep -Eq 'disk_queue_depth=(1[6-9]|[2-9][0-9]|[0-9]{3})'",
- "inject_wait_seconds": 480,
- "ask_after_seconds": [600],
+ "inject_wait_seconds": 300,
+ "ask_after_seconds": [480],
  "undo_cmds": [
   "kubectl -n $NS patch cronjob reminder-sender --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/jobTemplate/spec/template/spec/containers/0/envFrom/0/configMapRef/name\",\"value\":\"reminder-sender\"}]'",
   "kubectl -n $NS delete jobs --all --wait=false",

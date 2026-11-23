@@ -39,13 +39,13 @@ spec:
               if [ -n "$since" ]; then
                 rows=$(( row_count - since )); [ "$rows" -lt 1 ] && rows=1
                 where="id > $since"
-                echo "$client $(date +%s)" > /tmp/running/$$
+                echo "$client $(date +%s)" > /tmp/running/$$$$
               else
                 rows=1; where="id = $(arg id)"
               fi
               ms=$(( 20 + rows * 1000 / read_rows_per_second + queued * io_latency_ms ))
               sleep $(( ms / 1000 )).$(printf '%03d' $(( ms % 1000 )))
-              rm -f /tmp/running/$$
+              rm -f /tmp/running/$$$$
               took=$(( ($(now_cs) - t0) * 10 ))
               if [ "$took" -ge 500 ]; then
                 echo "level=warn msg=\"slow query\" client=$client query=\"select * from $table where $where\" rows_examined=$rows io_wait_ms=$(( queued * io_latency_ms )) duration_ms=$took" >&2
