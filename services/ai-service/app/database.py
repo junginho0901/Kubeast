@@ -557,7 +557,7 @@ class DatabaseService:
         from sqlalchemy import select, update
 
         from app.services import audit_writer
-        from app.services.audit_target import ToolTarget, kept_tool_args, tool_target
+        from app.services.audit_target import ToolTarget, kept_tool_args, tool_target, write_tool_input
 
         strict = audit_writer.fail_closed_enabled()
         ended = 0
@@ -578,12 +578,16 @@ class DatabaseService:
                     target = tool_target(row.tool, args)
                 except Exception:
                     target = ToolTarget("tool", row.tool, None, None)
+                try:
+                    tool_input = write_tool_input(row.tool, args)  # what the run was asked, as ai.tool.execute says it
+                except Exception:
+                    tool_input = {}
                 record = dict(
                     action="ai.tool.interrupt", actor_user_id="system", actor_email="system", cluster=row.cluster,
                     target_type=target.type, target_id=target.id, namespace=target.namespace,
                     after={"approval_id": row.id, "session_id": row.session_id, "cluster": row.cluster, "tool": row.tool,
                            "approved_by": row.user_id, "approved_by_email": row.user_email,
-                           "approved_at": row.decided_at.isoformat() + "Z", "end_reason": "interrupted"},
+                           "approved_at": row.decided_at.isoformat() + "Z", "end_reason": "interrupted", **tool_input},
                 )
                 async with self.engine.connect() as conn:
                     await conn.begin()

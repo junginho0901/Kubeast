@@ -134,6 +134,17 @@ async def test_a_run_cut_after_its_approval_ends_failed_once_its_time_is_past(db
     assert len(_interrupts(rows)) == 1, "an ended row is not ended again"
 
 
+async def test_an_interrupt_row_says_what_the_run_was_asked(db, rows):
+    from app.services.audit_target import write_tool_input
+
+    left = await _left_by_a_stopped_server(db, APPROVED_RUN_LIMIT_SECONDS + 60)
+    assert await db.close_interrupted_tool_approvals() == 1
+    [ended] = _interrupts(rows)
+    asked = write_tool_input("k8s_patch_resource", PATCH)
+    assert asked and {k: ended["after"][k] for k in asked} == asked, "the fields ai.tool.execute has"
+    assert ended["after"]["approval_id"] == left.id and FAKE not in json.dumps(ended["after"])
+
+
 async def test_a_new_card_ends_what_a_killed_server_left(db, rows):
     old = await _left_by_a_stopped_server(db, APPROVED_RUN_LIMIT_SECONDS + 60)
     recent = await _left_by_a_stopped_server(db, APPROVED_RUN_LIMIT_SECONDS - 60)
