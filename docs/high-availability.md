@@ -9,7 +9,7 @@ This page says which services can run more, what they need, how to set the count
 
 | Service | More than one pod | What a pod keeps | What it needs |
 | --- | --- | --- | --- |
-| gateway | yes | nothing; a WebSocket stays on the upstream connection it opened | — |
+| gateway | yes | its idle connections to the services (below); a WebSocket stays on the upstream connection it opened | — |
 | frontend | yes | nothing (static files) | — |
 | auth-service | yes | nothing; its background jobs take turns through database locks, and retention finds nothing left after another pod's run | `migrations.mode: job` (below) |
 | session-service | yes | nothing; sessions and messages are in the database | — |
@@ -107,6 +107,7 @@ Check it with `kubectl -n <namespace> get hpa`.
 
 - No sticky sessions: any pod answers any request, and the gateway and a load balancer in front need no session affinity.
 - A WebSocket (the live lists, a terminal) stays on the pod it opened. When that pod leaves — a rollout, a scale-down, a node drain — the browser connects again and reads the lists again; a followed log goes on after the last line it showed; a terminal ends, as it does on a restart with one pod.
+- gateway: its idle connections to the services (up to 64 per worker to k8s-service, 32 to each other service, two workers) are per pod. A kept connection stays on the pod it was opened to, so a k8s-service pod a rollout or the HPA adds takes its share as those connections are replaced: after 1 000 requests or an hour each (nginx's `keepalive_requests` and `keepalive_time`) or 60 s idle.
 - A node shell's pod is written in the database (`node_shells`) with the k8s-service pod that opened it, which writes every 15 s that it is alive, over one connection it keeps from its pool while it holds a node shell. When that pod is killed (out of memory, a node lost), another k8s-service pod, or the restarted container of the same pod, deletes the shell's pod once the row has had no such write for a minute, looking every 30 s. A shell whose k8s-service pod is alive and reaches the database is never deleted by another: a pod that cannot write the heartbeat for 45 s (the database down, or its own way to it cut) closes its node shells itself first.
 - An approved AI write runs on the ai-service pod that took the approval. When that pod is killed, or its shutdown cuts the run, before the outcome is written, the card says "running" until 10 minutes after the approval; then the first ai-service pod to look (a new approval card, the card opened, a pod's first database use) ends it failed as interrupted with an `ai.tool.interrupt` row, one pod for each approval since each ends it, with that row, in one transaction that holds the approval's row. A run takes far less than 10 minutes, so no pod ends a run another pod is still on. Whether the write changed the cluster is not known; nothing runs it again.
 - Each k8s-service pod watches the clusters for itself, so two requests that land on two pods can be a watch event apart for a moment.
