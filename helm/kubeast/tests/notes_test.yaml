@@ -1,4 +1,4 @@
-suite: NOTES.txt — the notes that Redis keeps one password with secrets.existingSecret, and the database connections an external database must take
+suite: NOTES.txt — the notes that Redis keeps one password with secrets.existingSecret, the database connections an external database must take, and the gateway wait and deregistration delay the chart sets behind an AWS ALB that sends to pod IPs
 templates:
   - NOTES.txt
 tests:
@@ -79,3 +79,58 @@ tests:
     asserts:
       - matchRegexRaw:
           pattern: can hold up to 174 connections to db\.example\.com
+
+  - it: behind an AWS ALB that sends to pod IPs, with neither value set, says the chart set the 25 s wait and the 20 s delay and to keep 2 or more controller pods
+    set:
+      ingress.enabled: true
+      ingress.className: alb
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+    asserts:
+      - matchRegexRaw:
+          pattern: '▸ Behind an AWS ALB that sends to pod IPs'
+      - matchRegexRaw:
+          pattern: 'the gateway pods wait 25 s before they stop and the Ingress\n\s+asks for a 20 s target group deregistration delay'
+      - matchRegexRaw:
+          pattern: 'Keep 2 or more AWS Load Balancer Controller pods'
+
+  - it: says nothing of it behind that ALB when gateway.preStopSeconds and the deregistration delay are written in the values
+    set:
+      ingress.enabled: true
+      ingress.className: alb
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=20
+      gateway.preStopSeconds: 25
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB
+
+  - it: says nothing of it behind that ALB when only the gateway's wait is the chart's (a deregistration delay written)
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=300
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB
+
+  - it: says nothing of it behind that ALB when only the delay is the chart's (podShutdown.preStopSeconds above 25)
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+      podShutdown.preStopSeconds: 40
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB
+
+  - it: says nothing of it while the chart's Ingress is off, whatever its annotations say
+    set:
+      ingress.enabled: false
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB

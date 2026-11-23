@@ -1428,7 +1428,7 @@ upgrade_phase() {
 
 # --- 9. pod settings after the upgrade ---
 spec_checks() { # spec_checks PHASE
-  local a=$1 pre sp sd json bad
+  local a=$1 pre gw name sp sd json bad
   kc -n "$NS" get deploy,svc,pdb -o json > "$OUT/$a-objects.json"
   json="$OUT/$a-objects.json"
   bad=$(jq -r '[.items[] | select(.kind == "Deployment") | select((.spec.template.spec.containers[0].readinessProbe == null) or (.spec.template.spec.containers[0].livenessProbe == null)) | .metadata.name] | join(" ")' "$json")
@@ -1450,12 +1450,19 @@ spec_checks() { # spec_checks PHASE
   fi
   if in_checkout 856; then
     pre=$(value_of podShutdown.preStopSeconds)
+    # the gateway's own wait (kubeast.gatewayPreStopSeconds): gateway.preStopSeconds, else that one, raised to 25 while
+    # above 0 behind an AWS ALB that sends to pod IPs (the chart's Ingress on with alb.ingress.kubernetes.io/target-type ip)
+    gw=$(hc get values kubeast -a -o json 2>/dev/null | jq -r --argjson s "${pre:-0}" '.gateway.preStopSeconds // (if $s > 0 and .ingress.enabled == true
+      and ((.ingress.annotations // {})["alb.ingress.kubernetes.io/target-type"] == "ip") then ([$s, 25] | max) else $s end)')
     # every Deployment a Service selects, except the bundled PostgreSQL and Redis, which have no preStop wait, and the
     # stream server (streams.enabled), whose wait and drain are its own: the row after
-    bad=$(jq -r --argjson s "${pre:-0}" '[.items[] | select(.kind == "Service" and (.metadata.name | IN("postgres", "redis") | not)) | .spec.selector.app] as $apps
+    bad=$(jq -r --argjson s "${pre:-0}" --argjson g "${gw:-${pre:-0}}" '[.items[] | select(.kind == "Service" and (.metadata.name | IN("postgres", "redis") | not)) | .spec.selector.app] as $apps
       | [.items[] | select(.kind == "Deployment" and .metadata.name != "k8s-service-stream" and (.spec.template.metadata.labels.app | IN($apps[]))) | .spec.template.spec as $p
-         | select(($p.containers[0].lifecycle.preStop.sleep.seconds // 0) != $s or ($p.terminationGracePeriodSeconds // 30) < ($s + 30)) | .metadata.name] | join(" ")' "$json")
-    none_bad "$a" "preStop sleep $pre s and grace ≥ $((pre + 30)) s behind each Service" "$bad" "every Deployment behind a Service but postgres and redis" "not on:"
+         | (if .metadata.name == "gateway" then $g else $s end) as $w
+         | select(($p.containers[0].lifecycle.preStop.sleep.seconds // 0) != $w or ($p.terminationGracePeriodSeconds // 30) < ($w + 30)) | .metadata.name] | join(" ")' "$json")
+    name="preStop sleep $pre s and grace ≥ $((pre + 30)) s behind each Service"
+    [ "${gw:-$pre}" = "$pre" ] || name="$name (the gateway ${gw} s and ≥ $((gw + 30)) s)"
+    none_bad "$a" "$name" "$bad" "every Deployment behind a Service but postgres and redis" "not on:"
     if jq -e 'any(.items[]; .kind == "Deployment" and .metadata.name == "k8s-service-stream")' "$json" > /dev/null; then
       # streams.preStopSeconds, then SIGTERM starts the drain: streams.drainSeconds, its 5 s close wait, the 25 s shutdown, 5 s to spare
       sp=$(value_of streams.preStopSeconds); sd=$(value_of streams.drainSeconds)

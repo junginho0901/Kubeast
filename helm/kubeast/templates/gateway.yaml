@@ -58,7 +58,8 @@ spec:
         checksum/nginx-config: {{ print (include "kubeast.gatewayNginxConf" .) (toJson .Values.gateway.trustedProxies) $accessLog | sha256sum }}
     spec:
       automountServiceAccountToken: false
-      {{- include "kubeast.terminationGrace" . | nindent 6 }}
+      {{- /* the gateway's own wait (kubeast.gatewayPreStopSeconds), 25 s for nginx to end, 5 s to spare */}}
+      terminationGracePeriodSeconds: {{ include "kubeast.graceSeconds" (dict "preStop" (include "kubeast.gatewayPreStopSeconds" .)) }}
       {{- include "kubeast.podSecurityContext" (dict "root" $ "uid" 101) | nindent 6 }}
       {{- include "kubeast.topologySpread" (dict "root" $ "app" "gateway") | nindent 6 }}
       containers:
@@ -89,7 +90,7 @@ spec:
             {{- end }}
             - name: tmp
               mountPath: /tmp
-          {{- include "kubeast.preStop" . | nindent 10 }}
+          {{- include "kubeast.preStopSleep" (int (include "kubeast.gatewayPreStopSeconds" .)) | nindent 10 }}
           {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/healthz" "port" 8000 "delay" 2) | nindent 10 }}
           livenessProbe:
             httpGet:

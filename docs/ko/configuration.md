@@ -155,7 +155,7 @@ podSecurity:
 # 가용성 — replicas를 2 이상으로 올렸거나 autoscaling의 minReplicas가 2 이상인 Deployment에는 PodDisruptionBudget이 생깁니다(pdb.maxUnavailable, 1 · pdb.enabled: false면 만들지 않음). 판을 올릴 때는 새 파드를 먼저 띄우고, 새 파드가 준비된 뒤에 옛 파드를 멈춥니다(postgres·redis는 옛 파드를 먼저 내리기 시작)
 # 그래서 sessionRecording.fileVolume(storage: file)은 k8s-service 파드가 바뀌는 동안 파드 둘이 붙입니다. ReadWriteOnce 볼륨은 한 번에 한 노드에만 붙으니, 노드가 여럿이면 ReadWriteMany 볼륨을 주거나 storage s3·database를 쓰세요(docs/ko/operations.md)
 # 프로브 — liveness는 /livez(다른 것은 안 봄), readiness는 /readyz(SIGTERM부터 503, DB는 보지 않음 — 모두가 쓰는 DB가 죽으면 모든 파드가 한꺼번에 빠지므로). DB 상태는 auth-service·session-service의 /health와 k8s-service의 kubeast_audit_store_up에서 봅니다
-# podShutdown.preStopSeconds: Service 뒤의 파드는(번들 PostgreSQL과 Redis는 빼고 — 둘은 preStop 기다림이 없고 Kubernetes 기본 종료 유예 30초) 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상. 1.30 아래에서는 0보다 크면 렌더가 멈춤) 그다음 30초 안에 종료합니다(터미널을 맡은 서버는 드레인 대기와 닫기 대기만큼 더). 파드 IP로 보내는 로드 밸런서 뒤라면 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요(AWS Application Load Balancer 뒤에서는 25초와 대상 그룹 등록 해제 지연 20초: 이 값으로는 게이트웨이 파드를 18번 바꾸는 동안 실패한 요청이 없었고, 기본 5초와 기본 해제 지연 300초로는 18번 중 3번에서 요청이 실패했고, 파드 준비 게이트를 켜고 12번 더 바꿀 때는 실패가 없었습니다. docs/ko/high-availability.md 참고)
+# podShutdown.preStopSeconds: Service 뒤의 파드는(번들 PostgreSQL과 Redis는 빼고 — 둘은 preStop 기다림이 없고 Kubernetes 기본 종료 유예 30초) 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상. 1.30 아래에서는 0보다 크면 렌더가 멈춤) 그다음 30초 안에 종료합니다(터미널을 맡은 서버는 드레인 대기와 닫기 대기만큼 더). 파드 IP로 보내는 로드 밸런서 뒤라면 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요. 게이트웨이는 이 값 대신 gateway.preStopSeconds(아래)를 씁니다. 파드 IP로 보내는 AWS Application Load Balancer 뒤에서는 차트가 게이트웨이에 25초, 대상 그룹에 등록 해제 지연 20초를 줍니다(0.7.8에서 이 값을 손으로 넣었을 때 게이트웨이 파드를 18번 바꾸는 동안 실패한 요청이 없었고, 기본 5초와 기본 해제 지연 300초로는 18번 중 3번에서 요청이 실패했고, 파드 준비 게이트를 켜고 12번 더 바꿀 때는 실패가 없었습니다. 0.7.8 안내대로 넣은 podShutdown.preStopSeconds 25와 ingress.annotations의 지연은 그대로 두어도 되고, 지연은 적은 그대로 남습니다. docs/ko/high-availability.md 참고)
 # podStartup.quickReady: Kubeast 서버들(번들 PostgreSQL과 Redis는 빼고)은 시작 확인(startup probe)을 1초마다, readiness를 첫 지연 없이 3초마다 묻습니다. kubelet은 시작 확인이 통과하는 그 순간 readiness를 묻기 때문에, 하나뿐인 파드를 대신하는 새 파드(지워졌거나 노드 드레인으로 내보내진 경우)는 포트를 연 뒤 약 1초에 Ready가 됩니다. false면 0.7.8의 확인 그대로이고(시작 확인은 auth-service · k8s-service · session-service만 5초마다, readiness는 지연 뒤 10초마다) 그때는 받을 파드가 없는 틈이 ai-service · frontend · gateway는 약 6초, 그 세 서비스는 약 1초였습니다
 replicas:
   gateway: 1
@@ -252,6 +252,7 @@ gateway:
   allowedOrigins: []      # 게이트웨이 자기 호스트와 Ingress 호스트 외에 API·WebSocket을 열어 줄 브라우저 origin(없으면 같은 호스트만)
   accessLog:
     upstreamTimes: false  # true면 접근 로그 줄마다 요청 시간, 서비스 연결·헤더·응답 시간(초), 서비스 주소, 클라이언트 포트를 덧붙입니다
+  preStopSeconds: null    # 게이트웨이 파드의 preStop 기다림(종료 유예 = 이 값 + 30, 0 = 없음). null = podShutdown.preStopSeconds, 파드 IP로 보내는 AWS ALB 뒤(아래 ingress에 alb.ingress.kubernetes.io/target-type: ip)에서는 그 값이 0보다 클 때 25로 올림
 
 # Ingress (선택)
 ingress:
@@ -259,6 +260,11 @@ ingress:
   className: ""
   host: kubeast.example.com
   tls: false
+  # annotations는 적은 그대로. alb.ingress.kubernetes.io/target-type: ip가 있으면 차트가
+  # alb.ingress.kubernetes.io/target-group-attributes에 deregistration_delay.timeout_seconds=20을 더합니다
+  # (거기 적힌 속성 뒤에). 그 주석에 deregistration_delay.timeout_seconds가 이미 있으면 더하지 않습니다
+  # annotations:
+  #   alb.ingress.kubernetes.io/target-type: ip
 
 # 0.7.9에 더한 AI 스위치 — 모두 기본 꺼짐입니다. 끄면 모델이 받는 프롬프트·도구 정의가 0.7.8과 같습니다.
 # (alpha): 예고 없이 바뀌거나 없어질 수 있습니다. 자세한 것은 ai-alerts.md·features.md에 있습니다
@@ -332,6 +338,7 @@ multicluster:
 | `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | 돌려 봄: EKS 1.35에서 서비스마다 파드 둘을 두고 노드 하나를 드레인해 바꾸는 동안, 막힌 내보내기 없음 · 로드 밸런서를 거친 요청 중 실패한 것 없음 |
 | `streams.*` | 끔 | alpha | kind 개발 설치에서 한 번도 안 돌림 |
 | `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | 프로바이더를 켠 시험 설치 |
+| `gateway.preStopSeconds` | null: `podShutdown.preStopSeconds`, 파드 IP로 보내는 AWS ALB 뒤에서는 25, Ingress에 등록 해제 지연 20초 | beta | AWS ALB 뒤에서 차트가 스스로 준 25초와 20초. 게이트웨이 파드 교체 18번에 실패가 없던 회차는 모든 파드에 `podShutdown.preStopSeconds: 25`와 주석을 손으로 넣었음(EKS 1.35, AWS Load Balancer Controller v3.6.2) |
 | `gateway.accessLog.upstreamTimes` | false | alpha | 돌려 봄: kind 개발 설치에서 켠 상태로 100명이 한꺼번에 화면을 엶(2026-11-17), 접근 로그 줄마다 여섯 칸이 붙음 |
 | `multicluster.breakerConsecutiveFails`(0.7.8부터 `0`이면 차단기 끔), `multicluster.breakerOpenSec`(0.7.8부터 읽음) | 5, 30 | beta | kind 개발 설치에서 클러스터를 끊어 본 경우 |
 | `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | 돌려 봄: kind에서 0.7.7부터 업그레이드 리허설(기본 설치, 기존 Secret, 외부 데이터베이스, AI 끔, 2대 · 3대)과 EKS 1.35. EKS 1.35에서는 노드를 드레인할 때 실시간 목록이 한 번 닫혔다가 1.1초 안에 다시 붙고, HPA를 켜면서 k8s-service가 2대에서 1대로 줄 때 한 번 닫혔다가 1.2초 안에 다시 붙음. HPA가 파드를 늘리고 줄일 때는 닫히지 않음 |
