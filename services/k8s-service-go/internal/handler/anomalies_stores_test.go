@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -32,6 +33,10 @@ type storeFixture struct {
 	tempoOff bool   // Tempo answers 404 for metrics
 	reviews  []string
 	canLogs  bool
+	// services and containers, when set, are how many series Tempo and Loki's count query answer: all steady in both
+	// windows but the last, whose failed spans or error lines appear
+	services   int
+	containers int
 }
 
 func (f *storeFixture) lokiPaths() []string {
@@ -75,6 +80,21 @@ func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 				{"pattern":"GET /healthz <_>","level":"info","samples":[[%d,40],[%d,40]]}]}`,
 				unixAt(0, 40), unixAt(1, 0), unixAt(0, 0), unixAt(1, 0))
 		case "/loki/api/v1/query_range":
+			f.mu.Lock()
+			containers := f.containers
+			f.mu.Unlock()
+			if containers > 0 {
+				series := make([]string, 0, containers)
+				for i := 0; i < containers; i++ {
+					before, now := 2, 2
+					if i == containers-1 {
+						before, now = 0, 9
+					}
+					series = append(series, fmt.Sprintf(`{"metric":{"k8s_container_name":"c%03d"},"values":[[%d,"%d"],[%d,"%d"]]}`, i, unixAt(0, 30), before, unixAt(1, 30), now))
+				}
+				_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[%s]}}`, strings.Join(series, ","))
+				return
+			}
 			_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[
 				{"metric":{"k8s_container_name":"app"},"values":[[%d,"2"],[%d,"9"]]},
 				{"metric":{"k8s_container_name":"sidecar"},"values":[[%d,"4"],[%d,"5"]]}]}}`,
@@ -87,7 +107,7 @@ func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 	tempo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.tempo = append(f.tempo, r)
-		off := f.tempoOff
+		off, services := f.tempoOff, f.services
 		f.mu.Unlock()
 		if off || r.URL.Path != "/api/metrics/query_range" {
 			http.NotFound(w, r)
@@ -102,18 +122,39 @@ func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 		case strings.Contains(q, "quantile_over_time"):
 			before, now, bound = 0.05, 0.3, 9
 		}
-		var samples []string
-		for ts := unixAt(23-24, 30); ts <= unixAt(1, 30); ts += 900 {
-			v := now
-			if ts < unixAt(0, 30) {
-				v = before
+		stepsOf := func(before, now float64) string {
+			var samples []string
+			for ts := unixAt(23-24, 30); ts <= unixAt(1, 30); ts += 900 {
+				v := now
+				if ts < unixAt(0, 30) {
+					v = before
+				}
+				if ts == unixAt(0, 30) || ts == unixAt(1, 30) {
+					v = bound
+				}
+				samples = append(samples, fmt.Sprintf(`{"timestampMs":"%d","value":%g}`, ts*1000, v))
 			}
-			if ts == unixAt(0, 30) || ts == unixAt(1, 30) {
-				v = bound
-			}
-			samples = append(samples, fmt.Sprintf(`{"timestampMs":"%d","value":%g}`, ts*1000, v))
+			return strings.Join(samples, ",")
 		}
-		_, _ = fmt.Fprintf(w, `{"series":[{"labels":[{"key":"resource.service.name","value":{"stringValue":"cart"}}],"samples":[%s]}]}`, strings.Join(samples, ","))
+		if services == 0 {
+			_, _ = fmt.Fprintf(w, `{"series":[{"labels":[{"key":"resource.service.name","value":{"stringValue":"cart"}}],"samples":[%s]}]}`, stepsOf(before, now))
+			return
+		}
+		series := make([]string, 0, services)
+		for i := 0; i < services; i++ {
+			b, n := 100.0, 100.0
+			switch {
+			case strings.Contains(q, "status = error"):
+				b, n = 0, 0
+				if i == services-1 {
+					n = 10
+				}
+			case strings.Contains(q, "quantile_over_time"):
+				b, n = 0.05, 0.05
+			}
+			series = append(series, fmt.Sprintf(`{"labels":[{"key":"resource.service.name","value":{"stringValue":"svc-%03d"}}],"samples":[%s]}`, i, stepsOf(b, n)))
+		}
+		_, _ = fmt.Fprintf(w, `{"series":[%s]}`, strings.Join(series, ","))
 	}))
 	t.Cleanup(tempo.Close)
 
@@ -397,6 +438,75 @@ func TestAnomaliesKeepToTheStoresRanges(t *testing.T) {
 	notRun := notRunOf(res)
 	if !strings.Contains(notRun[anomaly.CheckErrorLogShapes], "features.logSearch.maxRange 24h0m0s") || notRun[anomaly.CheckTraceErrors] != "" || len(f.lokiReqs()) != 0 {
 		t.Fatalf("%d %+v", w.Code, notRun)
+	}
+}
+
+// readOf asks for the narrowing and gives its findings' targets, its normal checks and its partial checks with why, as
+// the answer's JSON says them.
+func (f *storeFixture) readOf(t *testing.T, namespace string) ([]string, []string, map[string]string) {
+	t.Helper()
+	w := httptest.NewRecorder()
+	f.h.GetNamespaceAnomalies(w, logSearchRequestAs("/api/v1/namespaces/"+namespace+"/anomalies", "self", namespace, podReader))
+	if w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	var res struct {
+		Findings []anomaly.Finding `json:"findings"`
+		Normal   []string          `json:"normal"`
+		Partial  []anomaly.NotRun  `json:"partial"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	targets := []string{}
+	for _, finding := range res.Findings {
+		targets = append(targets, finding.Check+":"+finding.Target)
+	}
+	partial := map[string]string{}
+	for _, p := range res.Partial {
+		partial[p.Check] = p.Reason
+	}
+	return targets, res.Normal, partial
+}
+
+// Tempo answers 101 services, the first 100 steady in both windows and the 101st with failed spans that appear: past
+// the reader's 100 series, the trace checks say they read the first 100, so their normal is about those.
+func TestAnomaliesPastTheTraceReadersSeriesArePartial(t *testing.T) {
+	f := newStoreFixture(t, config.Config{})
+	f.services = traces.MaxSeries + 1
+	found, normal, partial := f.readOf(t, "shop")
+	for _, target := range found {
+		if strings.HasPrefix(target, "trace_") {
+			t.Errorf("a trace finding among steady services: %s", target)
+		}
+	}
+	for _, check := range anomaly.TraceChecks {
+		if !strings.Contains(partial[check], "answered 101 series and only the first 100 were read") {
+			t.Errorf("%s: partial %q", check, partial[check])
+		}
+	}
+	// the failed share needs the requests: a service past the requests read is not compared even when its failures are read
+	if !strings.Contains(partial[anomaly.CheckTraceErrors], "the trace store's requests query") || !slices.Contains(normal, anomaly.CheckTraceErrors) {
+		t.Fatalf("normal %v partial %v", normal, partial)
+	}
+}
+
+// Loki's count query answers 101 containers, the first 100 steady and the 101st with error lines that appear: the
+// count check says it read the first 100; the shapes, read whole, are not partial.
+func TestAnomaliesPastTheLogReadersSeriesArePartial(t *testing.T) {
+	f := newStoreFixture(t, config.Config{})
+	f.containers = logsearch.MaxSeries + 1
+	found, normal, partial := f.readOf(t, "shop")
+	for _, target := range found {
+		if strings.HasPrefix(target, anomaly.CheckErrorLogCounts) {
+			t.Errorf("a count finding among steady containers: %s", target)
+		}
+	}
+	if !strings.HasPrefix(partial[anomaly.CheckErrorLogCounts], "the log store answered 101 series and only the first 100 were read") || !slices.Contains(normal, anomaly.CheckErrorLogCounts) {
+		t.Fatalf("normal %v partial %v", normal, partial)
+	}
+	if why, ok := partial[anomaly.CheckErrorLogShapes]; ok {
+		t.Fatalf("the shapes: %q", why)
 	}
 }
 
