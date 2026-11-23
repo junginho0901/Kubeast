@@ -18,7 +18,8 @@ type IssueRow struct {
 }
 
 // FromIssues is the "failing now" check: each critical or warning issue of an object in the namespace. Nodes are the
-// node pressure check's and a list that failed (kind Collector) makes the answer partial, so neither is a finding here.
+// node pressure check's and a list that failed (kind Collector) makes the answer partial, so neither is a finding here:
+// with no finding the check did not run, else its findings come with the lists it could not read.
 func FromIssues(rows []IssueRow, pods []map[string]interface{}, wl *Workload) CheckResult {
 	names := podNames(pods, wl)
 	r := CheckResult{Check: CheckIssues}
@@ -38,8 +39,13 @@ func FromIssues(rows []IssueRow, pods []map[string]interface{}, wl *Workload) Ch
 		r.Findings = append(r.Findings, f)
 	}
 	sort.Strings(unread)
-	if len(r.Findings) == 0 && len(unread) > 0 {
-		r.NotRun = "these lists could not be read: " + strings.Join(unread, ", ")
+	if len(unread) > 0 {
+		why := "these lists could not be read: " + strings.Join(unread, ", ")
+		if len(r.Findings) == 0 {
+			r.NotRun = why
+		} else {
+			r.Partial = why + "; the findings are from the other lists"
+		}
 	}
 	return r
 }

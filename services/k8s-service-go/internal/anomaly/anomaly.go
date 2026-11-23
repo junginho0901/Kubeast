@@ -323,15 +323,24 @@ type Finding struct {
 	Examples []string `json:"examples,omitempty"`
 }
 
-// CheckResult is what one check gives: findings, or the reason it did not run.
+// CheckResult is what one check gives: findings, or the reason it did not run. Partial says what part of its reads it
+// could not make when it ran on the rest.
 type CheckResult struct {
 	Check    string
 	Findings []Finding
 	NotRun   string
+	Partial  string
 }
 
 // NotRun names a check that did not run and why.
 type NotRun struct {
+	Check  string `json:"check"`
+	Reason string `json:"reason"`
+}
+
+// Partial names a check that ran on part of what it reads and what it could not read: its findings, or its place under
+// normal, are about the part it read.
+type Partial struct {
 	Check  string `json:"check"`
 	Reason string `json:"reason"`
 }
@@ -346,7 +355,8 @@ func windowJSON(w Window) WindowJSON {
 	return WindowJSON{Start: w.Start.UTC().Format(time.RFC3339), End: w.End.UTC().Format(time.RFC3339)}
 }
 
-// Result is the answer: the ranked findings, the checks that found nothing and the checks that did not run.
+// Result is the answer: the ranked findings, the checks that found nothing, the checks that did not run and those that
+// ran on part of what they read.
 type Result struct {
 	Namespace     string     `json:"namespace"`
 	Workload      *Workload  `json:"workload,omitempty"`
@@ -356,6 +366,7 @@ type Result struct {
 	FindingsTotal int        `json:"findings_total"`
 	Normal        []string   `json:"normal"`
 	NotRun        []NotRun   `json:"not_run"`
+	Partial       []Partial  `json:"partial,omitempty"`
 	StoreQueries  int        `json:"store_queries"`
 	// CallOrder: how the call graph ordered the findings of the namespace's failing workloads, present only when it was
 	// asked (features.callGraph on and findings on two workloads or more).
@@ -456,6 +467,9 @@ func AssembleWith(namespace string, wl *Workload, w Window, results []CheckResul
 		}
 		if anomalous == 0 {
 			out.Normal = append(out.Normal, check)
+		}
+		if r.Partial != "" {
+			out.Partial = append(out.Partial, Partial{Check: check, Reason: r.Partial})
 		}
 	}
 	Rank(found)
