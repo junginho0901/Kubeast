@@ -30,9 +30,9 @@ export function turnsOnScreen(saved: DisplayMessage[], state: ChatStreamState, e
     out.push(...saved.slice(shown, end))
     shown = Math.max(shown, end)
   }
-  const answer = (content: string, toolCalls: unknown[], pending = false, queued = false) => {
+  const answer = (content: string, toolCalls: unknown[], pending = false, queued = false, maskValues: ChatStreamState['maskValues'] = null) => {
     if (content || pending) {
-      out.push({ role: 'assistant', content, toolCalls: toolCalls.length > 0 ? toolCalls : undefined, pending, ...(queued ? { queued } : {}) })
+      out.push({ role: 'assistant', content, toolCalls: toolCalls.length > 0 ? toolCalls : undefined, pending, ...(queued ? { queued } : {}), ...(maskValues ? { maskValues } : {}) })
     }
   }
   const failure = (turn: Failure) => {
@@ -89,7 +89,7 @@ export function turnsOnScreen(saved: DisplayMessage[], state: ChatStreamState, e
   if (!questionSaved) out.push({ role: 'user', content: question, pending: state.isStreaming })
   const answerSaved = questionSaved && saved[at + 1]?.role === 'assistant' && !state.isStreaming
   savedUpTo(saved.length)
-  if (!answerSaved) answer(state.content, state.toolCalls, state.isStreaming, state.isStreaming && state.queued)
+  if (!answerSaved) answer(state.content, state.toolCalls, state.isStreaming, state.isStreaming && state.queued, state.maskValues)
   failure(state)
   return out
 }

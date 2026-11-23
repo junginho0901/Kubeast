@@ -27,6 +27,8 @@ func (m *memAudit) Write(_ context.Context, rec audit.Record) (int64, error) {
 type fakeSessions struct {
 	sessions  map[string]*model.Session
 	deleteErr error
+	// what DeleteSession returns as deleted while approved
+	open []model.OpenApproval
 	// the messages of every session, oldest first; ids are positions + 1
 	messages []model.Message
 	// what GetMessagesBefore was asked
@@ -49,12 +51,12 @@ func (f *fakeSessions) UpdateSessionTitle(_ context.Context, id, title string) e
 	f.sessions[id].Title = title
 	return nil
 }
-func (f *fakeSessions) DeleteSession(_ context.Context, id string) error {
+func (f *fakeSessions) DeleteSession(_ context.Context, id string) ([]model.OpenApproval, error) {
 	if f.deleteErr != nil {
-		return f.deleteErr
+		return nil, f.deleteErr
 	}
 	delete(f.sessions, id)
-	return nil
+	return f.open, nil
 }
 func (f *fakeSessions) GetMessages(_ context.Context, _ string, limit int) ([]model.Message, error) {
 	if len(f.messages) <= limit {
@@ -127,5 +129,39 @@ func TestRenameAndDeleteAreRecorded(t *testing.T) {
 	h.DeleteSession(w, sessionRequest(http.MethodDelete, "s2", "", auth.TokenPayload{UserID: "u2"}))
 	if w.Code != http.StatusNotFound || len(rows.rows) != 3 {
 		t.Fatalf("someone else's: %d rows %d", w.Code, len(rows.rows))
+	}
+	if rows.rows[1].After != nil {
+		t.Fatalf("a delete that took no approved approval has an after: %s", rows.rows[1].After)
+	}
+}
+
+// Approvals deleted while approved, whose calls had no outcome row yet, are named in the delete's row by id, tool,
+// cluster and the time they were approved; a failed delete took none and names none.
+func TestDeleteNamesTheApprovalsItTookWhileApproved(t *testing.T) {
+	owner := auth.TokenPayload{UserID: "u1", Email: "dev@example.com"}
+	approvedAt := time.Date(2026, 11, 20, 2, 3, 4, 0, time.UTC)
+	store := &fakeSessions{
+		sessions: map[string]*model.Session{"s1": {ID: "s1", UserID: "u1", Title: "scale"}, "s2": {ID: "s2", UserID: "u1", Title: "keep"}},
+		open:     []model.OpenApproval{{ID: "ap-1", Tool: "k8s_patch_resource", Cluster: "self", ApprovedAt: &approvedAt}},
+	}
+	rows := &memAudit{}
+	h := &SessionHandler{repo: store, auditStore: rows}
+
+	w := httptest.NewRecorder()
+	h.DeleteSession(w, sessionRequest(http.MethodDelete, "s1", "", owner))
+	if w.Code != http.StatusOK || len(rows.rows) != 1 {
+		t.Fatalf("delete: %d rows %d", w.Code, len(rows.rows))
+	}
+	r := rows.rows[0]
+	want := `{"open_approvals":[{"approved_at":"2026-11-20T02:03:04Z","cluster":"self","id":"ap-1","tool":"k8s_patch_resource"}]}`
+	if r.Action != "ai.session.delete" || r.Result != audit.ResultSuccess || string(r.Before) != `{"title":"scale"}` || string(r.After) != want {
+		t.Fatalf("delete row %+v\nafter %s\nwant  %s", r, r.After, want)
+	}
+
+	store.deleteErr = errors.New("db down")
+	w = httptest.NewRecorder()
+	h.DeleteSession(w, sessionRequest(http.MethodDelete, "s2", "", owner))
+	if w.Code != http.StatusInternalServerError || rows.rows[1].Result != audit.ResultFailure || rows.rows[1].After != nil {
+		t.Fatalf("failed delete: %d %+v", w.Code, rows.rows[1])
 	}
 }

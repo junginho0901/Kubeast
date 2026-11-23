@@ -80,11 +80,11 @@ async def audit_ready() -> tuple[bool, Optional[str]]:
             async with db.engine.connect() as conn:
                 await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=2.0)
                 if _write_broken:
-                    trans = await conn.begin()
+                    # SELECT 1 began the connection's transaction (SQLAlchemy autobegin): the insert joins it
                     try:
                         await asyncio.wait_for(conn.execute(_PROBE_SQL), timeout=2.0)
                     finally:
-                        await trans.rollback()
+                        await conn.rollback()
         _write_broken = False
     except Exception as exc:  # unreachable, timeout, pool exhausted, the table refusing rows, ...
         ok, error = False, str(exc) or exc.__class__.__name__
@@ -160,10 +160,13 @@ async def write_audit(
     cluster: Optional[str] = None,
     result: str = "success",
     error: Optional[str] = None,
+    conn: Any = None,
 ) -> bool:
     """Insert a single audit record. Returns True when the row was stored (or
     there is no Postgres to store it in); a failure is logged, counted and
     returned as False — the caller decides whether the action may go on.
+    conn: the caller's connection in a transaction, which the row joins and
+    which the caller commits, or rolls back on False.
 
     Postgres-only — when DATABASE_URL points to sqlite (local dev) the table
     doesn't exist and we skip silently. `cluster` is the cluster the request
@@ -198,27 +201,28 @@ async def write_audit(
 
         after_json = json.dumps(after, ensure_ascii=False, default=str) if after else "{}"
 
-        async with db.engine.begin() as conn:
-            await conn.execute(
-                _INSERT_SQL,
-                {
-                    "service": SERVICE_AI,
-                    "action": action,
-                    "actor_user_id": actor_user_id or None,
-                    "actor_email": actor_email or None,
-                    "target_type": target_type or None,
-                    "target_id": target_id or None,
-                    "after": after_json,
-                    "request_ip": request_ip or None,
-                    "user_agent": user_agent or None,
-                    "request_id": request_id or None,
-                    "path": path or None,
-                    "cluster": cluster or None,
-                    "namespace": namespace or None,
-                    "result": result,
-                    "error": error or None,
-                },
-            )
+        params = {
+            "service": SERVICE_AI,
+            "action": action,
+            "actor_user_id": actor_user_id or None,
+            "actor_email": actor_email or None,
+            "target_type": target_type or None,
+            "target_id": target_id or None,
+            "after": after_json,
+            "request_ip": request_ip or None,
+            "user_agent": user_agent or None,
+            "request_id": request_id or None,
+            "path": path or None,
+            "cluster": cluster or None,
+            "namespace": namespace or None,
+            "result": result,
+            "error": error or None,
+        }
+        if conn is not None:
+            await conn.execute(_INSERT_SQL, params)
+        else:
+            async with db.engine.begin() as own:
+                await own.execute(_INSERT_SQL, params)
         _write_broken = False
         return True
     except Exception as exc:

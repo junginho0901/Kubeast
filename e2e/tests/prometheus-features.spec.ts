@@ -74,7 +74,7 @@ test.describe('Prometheus features — toggle + 4 detail modal sections + #5 eve
     // a pod whose image the node already has: the kubelet records "Pulled" right away
     const image = kubectl(`-n default get cronjob e2e-fixture -o jsonpath='{.spec.jobTemplate.spec.template.spec.containers[0].image}'`)
     test.skip(!image, 'e2e-fixture CronJob missing (fixtures.yaml)')
-    const name = `e2e-pull-history-${Date.now().toString(36)}`
+    const name = withUndo(`e2e-pull-history-${Date.now().toString(36)}`, (n) => kubectl(`-n default delete pod ${n} --ignore-not-found --wait=false`))
     kubectl(`-n default run ${name} --image=${image} --image-pull-policy=IfNotPresent --restart=Never -- sleep 300`)
     try {
       await expect.poll(() => kubectl(`-n default get events --field-selector involvedObject.name=${name},reason=Pulled -o name`), { timeout: 60000 }).not.toBe('')
@@ -152,4 +152,17 @@ test.describe('Prometheus toggle smoke — page error 0', () => {
     await expect(usage).toBeVisible({ timeout: 20000 })
     await expect(usage).toContainText(/\d/)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

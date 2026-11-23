@@ -35,6 +35,7 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 | `kubeast_k8s_node_drains_holding` | gauge 0/1 | `service` | 이 레플리카의 드레인이 쫓아내기를 멈추고 있으면 1: 드레인을 돌리는데 15초 동안 생존 신호를 저장하지 못함(데이터베이스가 받지 않음). 생존 신호가 다시 저장되면 이어 가고, 그사이 다른 레플리카가 중단 표시를 했으면 멈춥니다 |
 | `kubeast_k8s_node_drains_ended_total` | counter | `service`, `status` | 기동 뒤 이 레플리카가 끝을 적은 노드 드레인 수(끝 `k8s.node.drain` 행), `status`별: `success`, `error`, `interrupted`(자기가 내려갈 때의 자기 드레인과, 낡은 행으로 찾은 사라진 서버의 드레인) |
 | `kubeast_redis_refusals_total` | counter | `service`, `command` | 기동 뒤 k8s-service가 보낸 Redis 명령 가운데 Redis가 그 사용자의 ACL로 거절한 수(`NOPERM`, `redis.acl`), 명령별. 캐시는 이 거절을 없는 항목으로 읽고 클러스터에 물으므로 화면은 캐시 없이 돌고 다른 데에는 드러나지 않습니다. 로그에는 10초에 한 번까지 그 명령을 적습니다([Redis 사용자](configuration.md#redis-사용자)) |
+| `kubeast_shared_writes_without_place_total` | counter | `service` | 256 KiB 넘는 노드 목록 · 노드 칸 답과 묶인 읽기 답 가운데 쓰기 자리 16개를 기다린 시간이 합쳐 1초에 닿아 남은 본문을 자리 없이 쓴 수, 시작한 뒤로([아키텍처](architecture.md)). 자리가 1초 안에 내보낼 수 있는 것보다 큰 몰림 때와, 차례 기다림이 합쳐 1초가 된 느린 읽는 이 때 오릅니다. 조용할 때 오르면 자리를 쥔 채 읽지 않는 읽는 이가 있다는 뜻입니다 |
 | `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | 감사 싱크(`audit.sinks`)가 아직 보내지 않은 감사 행 수. 전송을 맡은 auth-service 레플리카만 냅니다 |
 | `kubeast_audit_sink_failures_total` | counter | 같음 | 그 레플리카가 전송을 시작한 뒤 실패한 전송 수 |
 | `kubeast_audit_sink_last_success_timestamp_seconds` | gauge | 같음 | 싱크 커서가 마지막으로 앞으로 나아간 시각(처음 값은 전송을 시작한 시각) |

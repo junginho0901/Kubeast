@@ -86,6 +86,14 @@ type Handler struct {
 	netdropsSrc netdropsSource
 	// backendUsageSrc replaces the Prometheus and EndpointSlice reads of ServiceBackendUsage in tests (nil: svc).
 	backendUsageSrc backendUsageSource
+	// anomalySrc replaces the cluster and Prometheus reads of the narrowing in tests (nil: svc), anomalyNow its clock;
+	// anomalyAnswers keeps its answers for features.anomalyRank.cacheSeconds.
+	anomalySrc     anomalySource
+	anomalyNow     func() time.Time
+	anomalyAnswers anomalyAnswers
+	// anomalyGraph replaces the narrowing's read of the namespace's Resource Graph in tests (nil: svc), read for the
+	// call graph's order when features.callGraph is on.
+	anomalyGraph func(ctx context.Context, namespace string) (map[string]interface{}, error)
 	// alertStore reads the alert store (nil: alert reads off).
 	alertStore *alerts.Store
 	// logSearchCanI replaces the pods/log access review in tests.
@@ -262,8 +270,8 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, k8s.ErrBadSelector), errors.Is(err, k8s.ErrBadQuery):
 		return http.StatusBadRequest
-	case errors.Is(err, k8s.ErrPrometheusUpstream):
-		// The metrics store answered with an error (or not at all): not this service's fault.
+	case errors.Is(err, k8s.ErrPrometheusUpstream), errors.Is(err, k8s.ErrCostUpstream):
+		// The metrics or cost store answered with an error (or not at all): not this service's fault.
 		return http.StatusBadGateway
 	}
 	msg := err.Error()

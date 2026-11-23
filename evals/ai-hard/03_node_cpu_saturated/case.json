@@ -1,0 +1,46 @@
+{
+ "id": "03_node_cpu_saturated",
+ "title": "A batch job with no CPU limit takes the node: three services that share nothing but the node slow down",
+ "group": "chain",
+ "cluster": "default",
+ "namespace": "shop-03",
+ "question": "default 클러스터 shop-03에서 검색, 가격 조회, 썸네일 만들기가 한꺼번에 느려졌대. 원인이 뭐야?",
+ "question_vague": "default 클러스터 shop-03 서비스가 전부 느리다는데 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "노드",
+   "node",
+   "monthly-report"
+  ],
+  [
+   "CPU"
+  ]
+ ],
+ "tools": [],
+ "setup_cmds": [
+  "kubectl create namespace reports --dry-run=client -o yaml | kubectl apply -f - && kubectl -n reports apply -f $CASE_DIR/reports.yaml"
+ ],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/search deploy/pricing deploy/thumbnails deploy/storefront deploy/image-worker --timeout=10s && kubectl -n reports get cronjob monthly-report",
+ "wait_seconds": 240,
+ "baseline_seconds": 300,
+ "inject_cmds": [
+  "kubectl -n reports create job monthly-report-run --from=cronjob/monthly-report"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/storefront --since=30s | grep 'upstream=search' | grep -Eq 'duration_ms=([5-9][0-9]{2}|[0-9]{4,})'",
+ "inject_wait_seconds": 180,
+ "ask_after_seconds": [360],
+ "undo_cmds": [
+  "kubectl -n reports delete job monthly-report-run --ignore-not-found --wait=false"
+ ],
+ "cleanup_cmds": [
+  "kubectl delete namespace reports --ignore-not-found --wait=false"
+ ],
+ "cooldown_seconds": 90,
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceSlow", "namespace": "", "service": "search"},
+  "match": {"namespace": ""},
+  "annotations": {"summary": "search responses in shop-03 are slow", "description": "search requests from storefront in shop-03 have taken most of a second instead of tens of milliseconds for the last few minutes; no request fails."}
+ }
+}

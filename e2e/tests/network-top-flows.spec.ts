@@ -189,7 +189,7 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
 
     // bound to view in this namespace only, it reads; the CoreDNS end in kube-system keeps its namespace and address, its zone gone
     const binding = `e2e-nfm-read-${id}`
-    kubectl!('-n', NS, 'create', 'rolebinding', binding, '--clusterrole=view', '--group=kubeast:role:read')
+    withUndo(kubectl!('-n', NS, 'create', 'rolebinding', binding, '--clusterrole=view', '--group=kubeast:role:read'), () => kubectl!('-n', NS, 'delete', 'rolebinding', binding, '--ignore-not-found'))
     try {
       const { status, body } = await top(request, scoped.token, { kind: 'Pod', name: pods.k8s })
       expect(status, JSON.stringify(body)).toBe(200)
@@ -286,4 +286,17 @@ test.describe('Top talkers (Network Flow Monitor)', () => {
     expect(clusters.find((c) => c.id === CLUSTER)?.tools).toContain('network_top_flows')
     expect(clusters.find((c) => c.id === 'default')?.tools ?? []).not.toContain('network_top_flows')
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

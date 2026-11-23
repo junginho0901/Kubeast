@@ -18,7 +18,7 @@ test.describe('model config policy (M19)', () => {
   test('refuses other secrets, private or metadata endpoints and auth headers; masks header values', async ({ request }) => {
     const admin = await adminHeaders(request)
     const ts = Date.now()
-    const created: number[] = []
+    const created = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/ai/model-configs/${id}`, { headers: admin, failOnStatusCode: false }) })
     const post = async (data: Record<string, unknown>) => {
       const res = await request.post('/api/v1/ai/model-configs', { headers: admin, data: { provider: 'openai', model: 'gpt-4o-mini', ...data }, failOnStatusCode: false })
       const body = await res.json().catch(() => ({}))
@@ -154,4 +154,17 @@ test.describe('model config policy (M19)', () => {
     expect(row?.After?.ok).toBe(false)
     expect(row?.Error).toContain(STAND_IN_ADDRESS)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

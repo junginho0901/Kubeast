@@ -3,6 +3,7 @@ package retention
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestCutoffs(t *testing.T) {
 
 func TestPurgeWithoutPolicyTouchesNothing(t *testing.T) {
 	res, err := Purger{Cfg: Config{}}.Purge(context.Background(), time.Now())
-	if err != nil || res != (Result{}) {
+	if err != nil || !reflect.DeepEqual(res, Result{}) {
 		t.Fatalf("disabled purge = %+v, %v", res, err)
 	}
 	if _, err := (Purger{Cfg: Config{AuditDays: 1}}).Purge(context.Background(), time.Now()); err == nil {
@@ -82,6 +83,31 @@ func TestRunOnceRecordsTheRunEvenWhenItFails(t *testing.T) {
 	}
 	if after["audit_cutoff"] != now.AddDate(0, 0, -365).Format(time.RFC3339) || after["chat_cutoff"] != now.AddDate(0, 0, -180).Format(time.RFC3339) {
 		t.Fatalf("cutoffs in payload: %v", after)
+	}
+}
+
+// The run's record names the tool approvals it deleted while approved, by ids and names, and has no such key when
+// it deleted none.
+func TestRecordNamesTheApprovalsDeletedWhileApproved(t *testing.T) {
+	now := time.Date(2026, 11, 20, 3, 0, 0, 0, time.UTC)
+	approvedAt := now.AddDate(0, 0, -200)
+	for _, c := range []struct {
+		res  Result
+		want string
+	}{
+		{Result{ToolApprovals: 3, OpenApprovals: []OpenApproval{{ID: "t1", SessionID: "s1", Tool: "k8s_patch_resource", Cluster: "self", ApprovedAt: &approvedAt}}},
+			`[{"approved_at":"2026-05-04T03:00:00Z","cluster":"self","id":"t1","session_id":"s1","tool":"k8s_patch_resource"}]`},
+		{Result{ToolApprovals: 3}, ""},
+	} {
+		w := &captureWriter{}
+		Purger{Cfg: Config{ChatDays: 180}, Audit: w}.record(context.Background(), now, c.res, nil)
+		var after map[string]json.RawMessage
+		if err := json.Unmarshal(w.recs[0].After, &after); err != nil {
+			t.Fatal(err)
+		}
+		if got := string(after["open_approvals"]); got != c.want {
+			t.Errorf("open_approvals = %s, want %q", got, c.want)
+		}
 	}
 }
 

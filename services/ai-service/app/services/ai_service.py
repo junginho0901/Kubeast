@@ -302,7 +302,7 @@ class AIService:
         *,
         system_prompt_override: Optional[str] = None,
         tool_filter: Optional[Callable[[list], list]] = None,
-        extra_context_block: Optional[str] = None,
+        extra_context_block: Optional[str | Callable[..., str]] = None,
         title_prefix: Optional[str] = None,
         audit_actor: Optional[dict] = None,
         audit_http: Optional[dict] = None,

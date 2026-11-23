@@ -140,7 +140,7 @@ test.describe('AI tools: what a screen computes', () => {
   test('pod_rbac answers the route value for value, with the bindings the cluster has', async ({ request }) => {
     const run = runId()
     const ns = namespace(`e2e-sym4-rbac-${run}`)
-    const crb = `e2e-sym4-${run}`
+    const crb = withUndo(`e2e-sym4-${run}`, (name) => tryKubectl(['delete', 'clusterrolebinding', name, '--ignore-not-found']))
     try {
       kubectl(['-n', ns, 'create', 'serviceaccount', 'web-sa'])
       kubectl(['-n', ns, 'create', 'role', 'web-reader', '--verb=get', '--resource=configmaps'])
@@ -227,7 +227,7 @@ test.describe('AI tools: what a screen computes', () => {
   test('storage_summary answers the Storage window, counted as the window counts', async ({ request }) => {
     const run = runId()
     const ns = namespace(`e2e-sym4-storage-${run}`)
-    const pv = `e2e-sym4-pv-${run}`
+    const pv = withUndo(`e2e-sym4-pv-${run}`, (name) => tryKubectl(['delete', 'pv', name, '--ignore-not-found', '--wait=false']))
     const storageClass = `e2e-sym4-${run}`
     const claim = (name: string, extra: Obj = {}) => JSON.stringify({
       apiVersion: 'v1', kind: 'PersistentVolumeClaim', metadata: { name, namespace: ns },
@@ -321,7 +321,7 @@ test.describe('AI tools: what a screen computes', () => {
     })
 
     await test.step('a credential in the file is masked', async () => {
-      const file = `/var/log/app/e2e-sym4-${runId()}.log`
+      const file = withUndo(`/var/log/app/e2e-sym4-${runId()}.log`, (f) => tryKubectl(['-n', 'default', 'exec', pod!, '-c', 'app', '--', 'rm', '-f', f]))
       try {
         kubectl(['-n', 'default', 'exec', pod!, '-c', 'app', '--', 'sh', '-c', `printf 'first line\\npassword: fake-e2e-logfile-password\\nlast line\\n' > ${file}`])
         const masked = await answerOf(request, reader.token, 'logfiles', { ...target, path: file })
@@ -358,7 +358,7 @@ test.describe('AI tools: what a screen computes', () => {
         alerts: [{ status, labels, annotations: { summary: `sym4 ${run}`, runbook: 'https://runbook.example/sym4' }, startsAt: new Date(Date.now() - 60_000).toISOString(), fingerprint: `sym4-${run}`, ...extra }],
       },
     })
-    expect((await (await post('firing')).json()).stored).toBe(1)
+    expect((await (await withUndo(post('firing'), () => post('resolved', { endsAt: new Date().toISOString() }))).json()).stored).toBe(1)
     try {
       const routeList = await routeOf(request, admin, '/api/v1/alerts/inbox', { q: run, limit: 50 })
       const id = (routeList.items as Obj[]).find((i) => i.fingerprint === `sym4-${run}`).id as string
@@ -409,7 +409,7 @@ test.describe('AI tools: what a screen computes', () => {
     const run = runId()
     const own = namespace(`e2e-sym4-own-${run}`)
     const outside = namespace(`e2e-sym4-out-${run}`)
-    const rbac = `e2e-sym4-${run}`
+    const rbac = withUndo(`e2e-sym4-${run}`, (name) => { tryKubectl(['delete', 'clusterrolebinding', `${name}-imp`, '--ignore-not-found']); tryKubectl(['delete', 'clusterrole', `${name}-imp`, '--ignore-not-found']) })
     const storageClass = `e2e-sym4-sc-${run}`
     const unschedulable = JSON.stringify({ spec: { nodeSelector: { 'kubeast.io/no-such-node': 'true' } } })
     const claim = (ns: string) => JSON.stringify({
@@ -510,4 +510,17 @@ test.describe('AI tools: what a screen computes', () => {
       tryKubectl(['delete', 'clusterrole', `${rbac}-imp`, '--ignore-not-found'])
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

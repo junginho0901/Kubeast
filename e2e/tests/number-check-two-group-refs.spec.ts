@@ -138,7 +138,7 @@ test.describe('number check — one Kind of two groups where a screen picked by 
       kc(`delete namespace -l ${LABEL} --wait=false --ignore-not-found`)
       kc(`delete crd -l ${LABEL} --ignore-not-found --wait=true --timeout=180s`)
     }
-    cleanup()
+    withUndo(cleanup(), () => cleanup())
     try {
       kc('apply --server-side --field-manager=e2e-two-group-refs -f -', JSON.stringify(crd(GROUP, 'StatefulSet', 'statefulsets', [{ name: 'v1beta1', storage: true }])))
       kc(`wait --for=condition=Established crd/statefulsets.${GROUP} --timeout=60s`)
@@ -300,7 +300,7 @@ test.describe('number check — one Kind of two groups where a screen picked by 
       kc(`delete namespace -l ${LABEL} --wait=false --ignore-not-found`)
       kc(`delete crd -l ${LABEL} --ignore-not-found --wait=true --timeout=180s`)
     }
-    cleanup()
+    withUndo(cleanup(), () => cleanup())
     try {
       // the second group serves v1alpha1 (its storage version) and v1: discovery and kubectl prefer v1
       kc('apply --server-side --field-manager=e2e-two-group-refs -f -', JSON.stringify({
@@ -393,4 +393,17 @@ test.describe('number check — one Kind of two groups where a screen picked by 
       cleanup()
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

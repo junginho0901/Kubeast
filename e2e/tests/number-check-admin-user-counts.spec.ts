@@ -101,7 +101,7 @@ test.describe('number check — admin screens count every user', () => {
     const run = Date.now().toString(36)
     const team = `${PREFIX}team-${run}`
     const roleName = `${PREFIX}role-${run}`
-    await cleanup(request, token)
+    withUndo(await cleanup(request, token), () => cleanup(request, token))
     try {
       const made = await request.post('/api/v1/auth/admin/organizations', { headers: bearer(token), data: { type: 'team', name: team } })
       expect(made.status(), await made.text()).toBeLessThan(300)
@@ -201,4 +201,17 @@ test.describe('number check — admin screens count every user', () => {
       await cleanup(request, token)
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

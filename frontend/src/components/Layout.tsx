@@ -550,7 +550,7 @@ export default function Layout() {
                             {item.tag && <BetaTag label={item.tag} />}
                             {item.badge ? (
                               <span
-                                className="ml-auto rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-slate-900"
+                                className="ml-auto rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-black"
                                 data-testid={item.testId ? `${item.testId}-badge` : undefined}
                               >
                                 {item.badge}

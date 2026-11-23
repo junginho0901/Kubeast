@@ -168,7 +168,7 @@ const (
 	defaultMaxSubscriptionsPerConn = 50
 	// defaultWatchStartsAtOnce: at 50 ms a start, 16 bring 2 000 subscriptions back in about six seconds.
 	defaultWatchStartsAtOnce = 16
-	// defaultWatchOpeningsAtOnce: 8 × 5.5 MiB a node list reading = 44 MiB < 65 MiB from watchMemoryShare to 0.94 of 461;
+	// defaultWatchOpeningsAtOnce: 8 × 5.5 MiB a node list reading = 44 MiB < 61 MiB from watchMemoryShare to 0.94 of 435;
 	// a watch waiting for a slow browser reads nothing and holds its stream window, which only watchMemoryShare counts.
 	defaultWatchOpeningsAtOnce = 8
 	// maxFrameBytes bounds a client → server frame: a REQUEST/CLOSE message

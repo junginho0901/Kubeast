@@ -55,7 +55,7 @@ test.describe('permission ceiling (M16)', () => {
       data: { name: `e2e-limited-admin-${ts}`, description: 'e2e', permissions: ['admin.users.*', 'admin.roles.*', 'menu.*'] },
     })
     expect(limitedRole.status()).toBe(201)
-    const limitedRoleId = (await limitedRole.json()).id as number
+    const limitedRoleId = withUndo((await limitedRole.json()).id as number, (i) => request.delete(`/api/v1/auth/admin/roles/${i}`, { headers: admin, failOnStatusCode: false }))
     const adminRoleId = await roleId(request, admin, 'Admin')
     const memberRoleId = await roleId(request, admin, 'Member')
     const readRoleId = await roleId(request, admin, 'Read')
@@ -67,7 +67,7 @@ test.describe('permission ceiling (M16)', () => {
     const victim = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E victim', email: `e2e-victim-${ts}@kubeast.local`, password: 'e2e-ceiling-throwaway-2' } })
     expect(victim.status()).toBe(201)
     const victimId = madeUser((await victim.json()).id as string, admin)
-    const created: number[] = []
+    const created = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false }) })
     try {
       // The limited admin is a viewer on `self`: cluster-scoped permissions
       // are only ever held per cluster, and those count for authoring roles.
@@ -119,7 +119,7 @@ test.describe('permission ceiling (M16)', () => {
     const ts = Date.now().toString(36)
     const adminRoleId = await roleId(request, admin, 'Admin')
     const users: string[] = []
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false }) })
     try {
       const managerRole = await request.post('/api/v1/auth/admin/roles', {
         headers: admin,
@@ -161,7 +161,7 @@ test.describe('permission ceiling (M16)', () => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const ts = Date.now().toString(36)
     const users: string[] = []
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false }) })
     const mkUser = async (tag: string, role: number) => {
       const email = `e2e-acct-${tag}-${ts}@kubeast.local`
       const password = `e2e-acct-${tag}-throwaway-1`
@@ -251,7 +251,7 @@ test.describe('permission ceiling (M16)', () => {
   test('a role name acting as a built-in role or as another role is refused; a stored one stays', async ({ request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const ts = Date.now().toString(36)
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false }) })
     // every role this test makes is removed after it, also one made where a refusal was expected (a build without the rule)
     const create = async (name: string) => {
       const res = await request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name, permissions: ['menu.dashboard'] }, failOnStatusCode: false })
@@ -303,7 +303,7 @@ test.describe('permission ceiling (M16)', () => {
     const ts = Date.now().toString(36)
     const email = `e2e-chartrole-${ts}@kubeast.local`
     const password = 'e2e-ceiling-throwaway-8'
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false }) })
     let userId = ''
     let bound = 0
     // No permissions: a global role's token holds no menu or resource key to pass on, so only the name decides.
@@ -358,7 +358,7 @@ test.describe('permission ceiling (M16)', () => {
 
       const created = await create(admin, CHART_BOUND)
       expect(created.status(), `a global admin creates what the chart lists: ${await created.text()}`).toBe(201)
-      bound = (await created.json()).id
+      bound = withUndo((await created.json()).id, (i) => request.delete(`/api/v1/auth/admin/roles/${i}`, { headers: admin, failOnStatusCode: false }))
       const edited = await update(roleAdmin, bound, CHART_BOUND, 'edited by the role admin')
       expect.soft(edited.status(), 'the role stays open to its editors').toBe(200)
       expect.soft((await edited.json()).description).toBe('edited by the role admin')
@@ -379,7 +379,7 @@ test.describe('permission ceiling (M16)', () => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const ts = Date.now().toString(36)
     const password = 'e2e-ceiling-throwaway-9'
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false }) })
     const users: string[] = []
     const listed = async () => {
       const raw = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
@@ -436,7 +436,7 @@ test.describe('permission ceiling (M16)', () => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const ts = Date.now().toString(36)
     const users: string[] = []
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false }) })
     const mkUser = async (tag: string, role: number) => {
       const email = `e2e-edit-${tag}-${ts}@kubeast.local`
       const res = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: `E2E ${tag}`, email, password: `e2e-edit-${tag}-throwaway-1`, role_id: role } })
@@ -533,7 +533,7 @@ test.describe('permission ceiling (M16)', () => {
     const ts = Date.now().toString(36)
     const password = 'e2e-ceiling-throwaway-8'
     const memberRole = await roleId(request, admin, 'Member')
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false }) })
     const users: string[] = []
     const newRole = async (name: string, permissions: string[]) => {
       const res = await request.post('/api/v1/auth/admin/roles', { headers: admin, data: { name, permissions } })
@@ -613,7 +613,7 @@ test.describe('permission ceiling (M16)', () => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const ts = Date.now().toString(36)
     const users: string[] = []
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: admin, failOnStatusCode: false }) })
     let keyId = ''
     const settings = (headers: Record<string, string>) => request.get('/api/v1/ai/model-configs', { headers, failOnStatusCode: false })
     try {
@@ -641,7 +641,7 @@ test.describe('permission ceiling (M16)', () => {
         const created = await request.post('/api/v1/auth/api-keys', { headers: admin, data: { name: `e2e-ai-${ts}`, expires_in_days: 1, cluster_ids: ['self'], role_ceiling: 'Read' } })
         expect(created.status(), await created.text()).toBe(201)
         const key = await created.json()
-        keyId = key.id
+        keyId = withUndo(key.id, (k) => request.delete(`/api/v1/auth/api-keys/${k}`, { headers: admin, failOnStatusCode: false }))
         const exchanged = await request.post('/api/v1/auth/token', { headers: { Authorization: `Bearer ${key.key}` } })
         expect(exchanged.status(), 'the key is exchanged').toBe(200)
         expect((await settings({ Authorization: `Bearer ${(await exchanged.json()).access_token}` })).status(), 'a token from a global admin\'s key').toBe(403)
@@ -663,4 +663,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

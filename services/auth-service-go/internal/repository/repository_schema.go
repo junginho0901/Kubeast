@@ -55,6 +55,7 @@ var ReadAIToolPermissions = []string{
 	"ai.tool.resource_graph",
 	"ai.tool.timeline",
 	"ai.tool.gpu",
+	"ai.tool.anomaly_rank",
 	"ai.tool.k8s_jq_query",
 	"ai.tool.k8s_tabular_query",
 	"ai.tool.k8s_count",
