@@ -1,4 +1,8 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 // OpenID Connect sign-in against a mock provider (e2e/scripts/oidc-mock.sh up).
 // The provider is reached as host.docker.internal:8080 by both auth-service
@@ -49,6 +53,46 @@ async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
   return (await res.json()).access_token
+}
+
+// The kind cluster kubeast's database, for a row no route writes any more. The kubeconfig comes from `kind get
+// kubeconfig` into a directory of its own, never from the shell's KUBECONFIG, and close() removes it; null when there is
+// no such cluster or its postgres does not answer.
+type KindPsql = { run: (sql: string) => string; close: () => void }
+function kindPsql(): KindPsql | null {
+  let dir = ''
+  const close = () => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true })
+  }
+  try {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-oidc-'))
+    const kc = path.join(dir, 'kubeconfig')
+    fs.writeFileSync(kc, execFileSync('kind', ['get', 'kubeconfig', '--name', 'kubeast'], { encoding: 'utf8' }), { mode: 0o600 })
+    const run = (sql: string) => execFileSync('kubectl', ['--kubeconfig', kc, '--context', 'kind-kubeast', '-n', 'kubeast', 'exec', 'deploy/postgres', '--',
+      'psql', '-U', 'kubeast', '-d', 'kubeast', '-tAc', sql], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+    run('SELECT 1')
+    return { run, close }
+  } catch {
+    close()
+    return null
+  }
+}
+
+// run on db, skipping the test with the reason when psql fails there.
+function psqlOrSkip(db: KindPsql, sql: string): string {
+  try {
+    return db.run(sql)
+  } catch (err) {
+    test.skip(true, `psql in the kind cluster kubeast failed: ${String(err).split('\n')[0]}`)
+    return ''
+  }
+}
+
+// The user.login.failed rows of one account, newest first.
+async function signInFailures(request: APIRequestContext, headers: Record<string, string>, email: string) {
+  const audit = await (await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { action: 'user.login.failed', limit: 200 } })).json()
+  const rows = ((Array.isArray(audit) ? audit : audit.items) || []) as Array<{ TargetEmail?: string; Error?: string; After?: { reason?: string; auth_source?: string } }>
+  return rows.filter((r) => r.TargetEmail === email)
 }
 
 test.describe('OIDC sign-in', () => {
@@ -174,6 +218,119 @@ test.describe('OIDC sign-in', () => {
     expect(res.status()).toBe(401)
     const res2 = await request.post('/api/v1/auth/login', { data: { email, password: 'anything-at-all-123' } })
     expect(res2.status()).toBe(401)
+    // Refused for how the account signs in, not counted as a wrong password.
+    const rows = await signInFailures(request, { Authorization: `Bearer ${await adminToken(request)}` }, email)
+    expect(rows.map((r) => r.Error)).toEqual(['single_sign_on_account', 'single_sign_on_account'])
+  })
+
+  test('a password an account the provider made holds does not sign it in', async ({ page, request }) => {
+    const db = kindPsql()
+    test.skip(!db, 'no kind cluster kubeast whose postgres answers: the password is put on the account in the database')
+    try {
+      const psql = (sql: string) => psqlOrSkip(db!, sql)
+      const email = newEmail('grace')
+      const twin = newEmail('grace-twin')
+      const password = 'E2e-sso-twin-sign-in-0791!'
+      await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
+      await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
+      // The account the sign-in made is in this database only when the run's address is that kind cluster's gateway.
+      test.skip(psql(`SELECT count(*) FROM auth_users WHERE email = '${email}'`) !== '1',
+        'the kind cluster kubeast is not the install this run signs in to: its database has no row of the account just made')
+      const headers = { Authorization: `Bearer ${await adminToken(request)}` }
+      const made = await request.post('/api/v1/auth/admin/users', { headers, data: { name: 'E2E SSO twin', email: twin, password } })
+      expect(made.status(), await made.text()).toBe(201)
+
+      // An admin's reset gave such accounts a password in an earlier version and is refused now: the twin's hash is copied in.
+      psql(`UPDATE auth_users SET password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}') WHERE email = '${email}' AND auth_source = 'oidc'`)
+      expect(psql(`SELECT count(*) FROM auth_users WHERE email = '${email}' AND auth_source = 'oidc' AND password_hash = (SELECT password_hash FROM auth_users WHERE email = '${twin}')`)).toBe('1')
+      const own = await request.post('/api/v1/auth/login', { data: { email: twin, password }, failOnStatusCode: false })
+      expect(own.status(), 'the password signs in the account made with it').toBe(200)
+
+      const res = await request.post('/api/v1/auth/login', { data: { email, password }, failOnStatusCode: false })
+      expect(res.status()).toBe(401)
+      expect((await res.json()).detail).toBe('Invalid credentials')
+      const rows = await signInFailures(request, headers, email)
+      expect(rows.map((r) => [r.Error, r.After?.auth_source])).toEqual([['single_sign_on_account', 'oidc']])
+      expect(psql(`SELECT failed_logins FROM auth_users WHERE email = '${email}'`), 'no failure counted toward the lockout').toBe('0')
+    } finally {
+      db!.close()
+    }
+  })
+
+  test('an admin password reset gives a provisioned account no password', async ({ page, request }) => {
+    const email = newEmail('frank')
+    await signInWithMock(page, { email, email_verified: true, groups: ['kubeast-users'] })
+    await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
+    const headers = { Authorization: `Bearer ${await adminToken(request)}` }
+    const users = (await (await request.get('/api/v1/auth/admin/users?limit=500', { headers })).json()) as Array<{ id: string; email: string; auth_source?: string }>
+    const account = users.find((u) => u.email === email)
+    expect(account?.auth_source).toBe('oidc')
+
+    const res = await request.post(`/api/v1/auth/admin/users/${account!.id}/reset-password`, { headers })
+    expect(res.status()).toBe(400)
+    const body = await res.json()
+    expect(body.detail).toMatch(/single sign-on/)
+    expect(body.temporary_password).toBeUndefined()
+
+    const audit = await (await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { action: 'user.password.reset', limit: 200 } })).json()
+    const rows = ((Array.isArray(audit) ? audit : audit.items) || []) as Array<Record<string, unknown>>
+    expect(rows.filter((r) => r.TargetID === account!.id).map((r) => [r.Result, r.Error])).toEqual([['failure', 'single_sign_on_account']])
+  })
+
+  test('a self sign-up the provider reached signs in only through it', async ({ page, request }) => {
+    const cfg = await (await request.get('/api/v1/auth/oidc/config')).json()
+    test.skip(!cfg.registration, 'self sign-up is off (auth.allowRegistration): the account is made through the sign-up form')
+    const email = newEmail('heidi')
+    const password = 'E2e-self-sign-up-0791!'
+    const headers = { Authorization: `Bearer ${await adminToken(request)}` }
+    // The sign-up form, as a person who signs up: a password account waiting for approval, marked as a self sign-up.
+    const made = await request.post('/api/v1/auth/register', { data: { name: 'E2E self sign-up', email, password }, failOnStatusCode: false })
+    expect(made.status(), await made.text()).toBe(200)
+    const id = (await made.json()).id as string
+    const before = await request.post('/api/v1/auth/login', { data: { email, password }, failOnStatusCode: false })
+    expect(before.status(), 'its password signs it in before the provider reaches it').toBe(200)
+
+    // No groups claim, so the sign-in leaves the account level as it is.
+    await signInWithMock(page, { email, email_verified: true })
+    await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
+    expect((await me(page)).body.auth_source).toBe('oidc')
+
+    const res = await request.post('/api/v1/auth/login', { data: { email, password }, failOnStatusCode: false })
+    expect(res.status()).toBe(401)
+    expect((await res.json()).detail).toBe('Invalid credentials')
+    const failures = await signInFailures(request, headers, email)
+    expect(failures.map((r) => [r.Error, r.After?.auth_source])).toEqual([['single_sign_on_account', 'oidc']])
+
+    const reset = await request.post(`/api/v1/auth/admin/users/${id}/reset-password`, { headers, failOnStatusCode: false })
+    expect(reset.status()).toBe(400)
+    expect((await reset.json()).temporary_password).toBeUndefined()
+
+    const audit = await (await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { action: 'user.account.link', limit: 200 } })).json()
+    const links = ((Array.isArray(audit) ? audit : audit.items) || []) as Array<{ TargetEmail?: string; Before?: { auth_source?: string }; After?: { auth_source?: string; password_removed?: boolean } }>
+    expect(links.filter((r) => r.TargetEmail === email).map((r) => [r.Before?.auth_source, r.After?.auth_source, r.After?.password_removed]))
+      .toEqual([['password', 'oidc', true]])
+  })
+
+  test('an account an admin made waiting for approval keeps its password through the provider', async ({ page, request }) => {
+    const email = newEmail('ivan')
+    const password = 'E2e-admin-made-pending-0791!'
+    const headers = { Authorization: `Bearer ${await adminToken(request)}` }
+    const roles = await (await request.get('/api/v1/auth/roles', { headers })).json()
+    const pending = (Array.isArray(roles) ? roles : roles.roles || roles.items || []).find((r: { name: string }) => r.name === 'Pending')
+    expect(pending, 'a Pending role exists').toBeTruthy()
+    const made = await request.post('/api/v1/auth/admin/users', { headers, data: { name: 'E2E made Pending', email, password, role_id: pending.id } })
+    expect(made.status(), await made.text()).toBe(201)
+
+    // No groups claim, so the sign-in leaves the account level as it is.
+    await signInWithMock(page, { email, email_verified: true })
+    await page.waitForURL((u) => !u.pathname.startsWith('/login') && !u.host.includes('host.docker.internal'))
+    expect((await me(page)).body.auth_source, 'an account an admin made stays a password account').toBe('password')
+
+    const res = await request.post('/api/v1/auth/login', { data: { email, password }, failOnStatusCode: false })
+    expect(res.status(), 'the password the admin gave still signs it in').toBe(200)
+    const audit = await (await request.get('/api/v1/auth/admin/audit-logs', { headers, params: { action: 'user.account.link', limit: 200 } })).json()
+    const links = ((Array.isArray(audit) ? audit : audit.items) || []) as Array<{ TargetEmail?: string }>
+    expect(links.filter((r) => r.TargetEmail === email)).toEqual([])
   })
 
   test('audit rows: provision, role sync, and login success/failure name the OIDC path', async ({ page, request }) => {

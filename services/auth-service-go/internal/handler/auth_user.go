@@ -85,6 +85,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		RoleID:       pendingRole.ID,
 		RoleName:     pendingRole.Name,
 		PasswordHash: hash,
+		SelfSignedUp: true, // a provider's sign-in reaching it while it waits takes it over (selfSignUpToMove)
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -141,6 +142,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		email := req.Email
 		reason := jsonRaw(map[string]interface{}{"reason": "user_not_found"})
 		h.writeAuditFailure(r, "user.login.failed", nil, nil, nil, &email, "user_not_found", reason)
+		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+
+	// An account the provider made or took over from a self sign-up signs in there, and a password it holds (an earlier
+	// version's reset gave it one) does not open it. The answer is a wrong password's after the same hashing work, so
+	// it tells no one which accounts sign in through the provider, and no failure is counted toward the lockout, which
+	// guards only this form.
+	if h.refusesForSingleSignOn(req.Password, user) {
+		reason := jsonRaw(map[string]interface{}{"reason": signInRefusedSingleSignOn, "auth_source": user.AuthSource})
+		h.writeAuditFailure(r, "user.login.failed", &user.ID, &user.Email, &user.ID, &user.Email, signInRefusedSingleSignOn, reason)
 		response.Error(w, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
@@ -295,6 +307,8 @@ func (h *AuthHandler) clearAuthCookie(w http.ResponseWriter, _ *http.Request) {
 // browser session slides as long as the user stays active. The current token
 // must still be valid (the auth middleware checks signature, expiry and tv)
 // and its sign-in not signed out (the middleware marks it, security.SignedOut).
+// It does not ask how the account signs in, as Login does: a token names no
+// sign-in method, and an account the provider made gets its sessions there.
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	payload, ok := auth.FromContext(r.Context())
 	if !ok {
@@ -530,6 +544,9 @@ func (h *AuthHandler) writeMe(w http.ResponseWriter, user *model.User, permissio
 	}{user.ToResponseWithPermissions(permissions), matrix, roles, namespaces, h.cfg.JWTExpiresMinutes})
 }
 
+// passwordChangeRefusedSingleSignOn is the error of a change refused for an account the password form does not open.
+const passwordChangeRefusedSingleSignOn = "single_sign_on_account"
+
 // ChangePassword handles POST /auth/change-password
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	payload, ok := auth.FromContext(r.Context())
@@ -555,6 +572,14 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
+		return
+	}
+	// An account the password form refuses signs in at the provider: a password it holds is not one it changes, as an
+	// admin's reset gives it none.
+	if !SignsInWithPassword(h.cfg, user) {
+		h.writeAuditFailure(r, "user.password.change", &payload.UserID, &user.Email, &user.ID, &user.Email, passwordChangeRefusedSingleSignOn,
+			jsonRaw(map[string]interface{}{"auth_source": user.AuthSource}))
+		response.Error(w, http.StatusBadRequest, "Cannot change the password of an account that signs in through single sign-on")
 		return
 	}
 	if err := security.ValidatePassword(req.NewPassword, user.Email, h.cfg.PasswordMinLength); err != nil {

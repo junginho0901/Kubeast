@@ -556,6 +556,9 @@ func (h *AuthHandler) AdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, updated.ToResponse())
 }
 
+// resetRefusedSingleSignOn is the error of a reset refused for an account that signs in through single sign-on.
+const resetRefusedSingleSignOn = "single_sign_on_account"
+
 // AdminResetPassword handles POST /auth/admin/users/{user_id}/reset-password
 //
 // 1회용 랜덤 비밀번호를 생성하여 사용자의 PasswordHash 를 갱신하고,
@@ -574,6 +577,14 @@ func (h *AuthHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if h.refuseCeiling(w, r, payload, target, h.accountCeiling(r.Context(), payload, target), auditEvent{action: "user.password.reset"}) {
+		return
+	}
+	// An account the password form refuses signs in at the provider: a password would be a second way in beside it.
+	// The chart's admin account is not refused, whatever made it: the form opens it.
+	if !SignsInWithPassword(h.cfg, target) {
+		writeAudit(h.auditStore, r, payload, auditEvent{action: "user.password.reset", targetType: "user", targetID: target.ID, targetEmail: target.Email,
+			before: map[string]any{"auth_source": target.AuthSource}, err: errors.New(resetRefusedSingleSignOn)})
+		response.Error(w, http.StatusBadRequest, "Cannot reset the password of an account that signs in through single sign-on")
 		return
 	}
 

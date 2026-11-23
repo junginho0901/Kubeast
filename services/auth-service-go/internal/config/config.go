@@ -69,7 +69,8 @@ type Config struct {
 	BootstrapDemoUsers bool // create the read/write demo accounts at boot (dev only)
 	PasswordMinLength  int
 	// PasswordLogin: "on" (default), "admin-only" (only DefaultAdminEmail may
-	// use a password — break-glass next to OIDC), "off".
+	// use a password — break-glass next to OIDC), "off". An account the
+	// provider made never signs in with a password, DefaultAdminEmail's aside.
 	PasswordLogin string
 
 	// OIDC login (one provider, chosen by configuration: Keycloak, Google, …).

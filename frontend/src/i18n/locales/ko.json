@@ -3064,6 +3064,8 @@
     },
     "resetting": "초기화 중...",
     "reset": "비밀번호 초기화",
+    "resetPasswordSso": "SSO로 로그인하는 계정이라 초기화할 비밀번호가 없습니다.",
+    "ssoAccount": "SSO 계정",
     "deleteConfirm": "유저를 삭제할까요?\n\n대상: {{target}}\n\n* 삭제하면 복구가 어렵습니다.",
     "deleteSelfBlocked": "자기 자신은 삭제할 수 없습니다.",
     "deleteTitle": "유저 삭제",

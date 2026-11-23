@@ -54,8 +54,8 @@ type grantOn struct {
 func accountRules(id string, roleID int, roleName string, grants ...grantOn) []pgRule {
 	account := pgRule{
 		match: fmt.Sprintf("u.role_id WHERE u.id =  '%s'", id),
-		oids:  []uint32{textOID, textOID, textOID, textOID, integerOID, textOID, textOID, integerOID, textOID, stampOID, stampOID, stampOID, stampOID, stampOID},
-		rows:  [][]any{{id, id, id + "@example.com", nil, roleID, roleName, "x", 0, "password", pgNow(), pgNow(), nil, nil, nil}},
+		oids:  []uint32{textOID, textOID, textOID, textOID, integerOID, textOID, textOID, integerOID, textOID, stampOID, stampOID, stampOID, stampOID, stampOID, booleanOID},
+		rows:  [][]any{{id, id, id + "@example.com", nil, roleID, roleName, "x", 0, "password", pgNow(), pgNow(), nil, nil, nil, "f"}},
 	}
 	matrix := pgRule{match: fmt.Sprintf("namespaces FROM user_cluster_roles WHERE user_id =  '%s'", id), oids: []uint32{textOID, integerOID, listOID}}
 	scoped := pgRule{match: fmt.Sprintf("user_id =  '%s'  AND namespaces IS NOT NULL", id), oids: []uint32{textOID, listOID}}
