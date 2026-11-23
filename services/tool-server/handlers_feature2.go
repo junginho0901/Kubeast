@@ -590,7 +590,10 @@ const graphCallsNote = "calls: who calls whom over the range, from the traces' s
 	"the Hubble metrics (connections, dropped, drop_reasons), read from the cluster's Prometheus. sources says which were read and why not (off, " +
 	"no_prometheus, no_metrics, namespace_limited, permission). An end with id is a box of this graph; service is a trace service name " +
 	"that fits no workload; a namespace alone is a peer outside the reader's grant or not named. A matched_by ending in _unscoped was " +
-	"placed by name because the metric names no namespace: a service of the same name in another namespace counts there too. errors are " +
+	"placed by name because the metric names no namespace: a service of the same name in another namespace counts there too. Such a " +
+	"metric is read for the 500 edges of every namespace with the most of each (requests, failed calls, p90): errors and error_ratio " +
+	"null mean the edge's failed calls were not among them, not known and not 0, and a source with truncated true had a query come back " +
+	"with 500, so an edge of this namespace below them may be missing (calls.truncated is then true) or its p90_ms absent. errors are " +
 	"the calls either side marked failed, so a 4xx the caller saw (404, 401) counts: check in the traces or logs that they are 5xx before " +
 	"naming a cause. p90_ms is shown only and does not rank suspects: a failure that only slows calls may leave suspects empty. suspects are " +
 	"the failing workloads (the first 10 of suspects_total), those that call nothing failing first: a caller of a failing workload is more " +
