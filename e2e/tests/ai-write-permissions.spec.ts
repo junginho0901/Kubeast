@@ -342,10 +342,13 @@ test.describe('AI write tools ask for the screens permissions', () => {
     const ns = `e2e-aiw-chat-${s}`
     const email = `e2e-aiw-chat-${s}@kubeast.local`
     let userId = ''
+    let owner: Record<string, string> = {}
+    let conversation = ''
     const ctx = await (browser as Browser).newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
     try {
       fixture(ns)
       userId = await createUser(request, admin, email, 'Write')
+      owner = bearer(await login(request, email, PW))
       const page = await ctx.newPage()
       await page.goto('/login')
       await page.locator('input[autocomplete="email"]').first().fill(email)
@@ -357,7 +360,10 @@ test.describe('AI write tools ask for the screens permissions', () => {
       const input = page.getByPlaceholder(/메시지|message/i)
       const ask = async (question: string) => {
         await input.fill(question)
+        // the first question makes the conversation; the next ones go on in it
+        const created = conversation ? null : page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
         await page.getByRole('button', { name: /^전송$|^send$/i }).click()
+        if (created) conversation = madeConversation((await (await created).json()).id as string, owner)
         await expect(input).toBeDisabled({ timeout: 15_000 })
         await expect(input).toBeEnabled({ timeout: 180_000 })
       }
@@ -380,12 +386,28 @@ test.describe('AI write tools ask for the screens permissions', () => {
       const asked = await auditRows(request, admin, 'ai.tool.approval_requested', email)
       expect(asked.map((r) => r.after.tool)).toContain('k8s_scale')
       expect(asked.map((r) => r.after.tool)).not.toContain('k8s_execute_command')
+
+      // its owner deletes the conversation, the card in it too
+      const deleted = await request.delete(`/api/v1/sessions/${conversation}`, { headers: owner, failOnStatusCode: false })
+      expect(deleted.status(), await deleted.text()).toBe(200)
     } finally {
       await ctx.close()
+      if (conversation) await request.delete(`/api/v1/sessions/${conversation}`, { headers: owner, failOnStatusCode: false })
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
       tryKubectl(`delete namespace ${ns} --wait=false`)
     }
   })
+})
+
+// The chat test's conversation is deleted after each test as well, before the accounts below: only its owner can delete
+// one, and the owner's token stops working once the account is gone. A second delete answers 404.
+const madeConversations: { id: string; headers: Record<string, string> }[] = []
+function madeConversation(id: string, headers: Record<string, string>): string {
+  madeConversations.push({ id, headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeConversations.splice(0)) await request.delete(`/api/v1/sessions/${id}`, { headers, failOnStatusCode: false })
 })
 
 // Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
