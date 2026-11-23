@@ -1,6 +1,6 @@
-# PR gate: unit tests, type checks and gofmt for every service. e2e (kind + LLM)
-# stays local — see docs/development.md "E2E tests". eslint is informational until the
-# pre-existing lint debt is cleared.
+# PR gate: unit tests, type checks and gofmt for every service, and eslint for the frontend
+# (npm run lint, --max-warnings 0). e2e (kind + LLM) stays local — see docs/development.md
+# "E2E tests". The main branch ruleset names the jobs a pull request must pass; eslint is one.
 name: ci
 
 on:
