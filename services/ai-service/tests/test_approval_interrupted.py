@@ -253,7 +253,8 @@ async def test_a_model_setting_that_cannot_be_used_leaves_the_card_waiting(db, r
     with pytest.raises(HTTPException) as e:
         await api.approve_tool_approval(row.id, request=SimpleNamespace(), authorization="Bearer x")
     assert e.value.status_code == 503
-    assert (await db.get_tool_approval(row.id)).status == "pending" and rows == [] and ran == []
+    assert (await db.get_tool_approval(row.id)).status == "pending" and ran == []
+    assert [(r["action"], r["result"]) for r in rows] == [("ai.tool.approve", "failure")], "a refused press is a failure row"
 
     api = _api(monkeypatch, ran=ran)
     answer = await api.approve_tool_approval(row.id, request=SimpleNamespace(), authorization="Bearer x")
