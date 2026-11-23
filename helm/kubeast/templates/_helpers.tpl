@@ -366,16 +366,16 @@ resources:
 {{- end -}}
 
 {{/*
-startupProbe of a service that opens its port only after waiting for the
-database at boot; liveness and readiness start once it passes. 180 s covers the
-longest wait (auth-service and session-service: 60 s for the database, at most
-5 s a ping, then 60 s for the schema; k8s-service: AUDIT_DB_WAIT_SEC 90 s, then up to 10 s in
-k8s.NewService) and 60 s of migrations. Usage, with the liveness path and port
-and, for kubeast.quickReadiness, "period" (5 when not given):
-  {{ include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) }}
+startupProbe: liveness and readiness start once it passes, and the kubelet runs readiness the moment it does. 180 s
+covers the longest wait of a service that opens its port only after the database (auth-service and session-service:
+60 s for the database, at most 5 s a ping, then 60 s for the schema; k8s-service: AUDIT_DB_WAIT_SEC 90 s, then up to
+10 s in k8s.NewService) and 60 s of migrations. It asks every second with podStartup.quickReady, every 5 s without.
+Usage:
+  {{ include "kubeast.startupProbe" (dict "root" $ "path" "/health" "port" 8004) }}
 */}}
 {{- define "kubeast.startupProbe" -}}
-{{- $period := .period | default 5 -}}
+{{- $period := 5 -}}
+{{- if .root.Values.podStartup.quickReady }}{{ $period = 1 }}{{ end -}}
 startupProbe:
   httpGet:
     path: {{ .path }}
@@ -385,16 +385,12 @@ startupProbe:
 {{- end -}}
 
 {{/*
-Startup and readiness probes of ai-service, the frontend and the gateway, which answer as soon as they listen. With
-podStartup.quickReady the startup probe asks every second and the kubelet runs readiness the moment it passes, so a
-pod that replaces the only one is ready about a second after it listens; readiness then asks every 3 s. Off, they are
-0.7.8's: no startup probe, readiness after "delay" s and every 10 s. Usage:
-  {{ include "kubeast.quickReadiness" (dict "root" $ "path" "/" "port" 5173 "delay" 2) }}
+readinessProbe. With podStartup.quickReady it has no initial delay, which the kubelet counts from the container's
+start: a delay longer than the startup probe took would skip the readiness run made the moment that probe passes, and
+the pod would wait a whole period. It then asks every 3 s. Off, it is 0.7.8's: after "delay" s and every 10 s. Usage:
+  {{ include "kubeast.readinessProbe" (dict "root" $ "path" "/readyz" "port" 8004 "delay" 3) }}
 */}}
-{{- define "kubeast.quickReadiness" -}}
-{{- if .root.Values.podStartup.quickReady -}}
-{{ include "kubeast.startupProbe" (dict "path" .path "port" .port "period" 1) }}
-{{ end -}}
+{{- define "kubeast.readinessProbe" -}}
 readinessProbe:
   httpGet:
     path: {{ .path }}
@@ -405,6 +401,19 @@ readinessProbe:
   initialDelaySeconds: {{ .delay }}
   periodSeconds: 10
   {{- end }}
+{{- end -}}
+
+{{/*
+Startup and readiness probes of a service that answers as soon as it listens and had no startup probe in 0.7.8
+(ai-service, the frontend, the gateway, tool-server, the ModelConfig controller): with podStartup.quickReady a startup
+probe on the readiness path, then kubeast.readinessProbe. Usage:
+  {{ include "kubeast.quickReadiness" (dict "root" $ "path" "/" "port" 5173 "delay" 2) }}
+*/}}
+{{- define "kubeast.quickReadiness" -}}
+{{- if .root.Values.podStartup.quickReady -}}
+{{ include "kubeast.startupProbe" . }}
+{{ end -}}
+{{ include "kubeast.readinessProbe" . }}
 {{- end -}}
 
 {{/* A pod behind a Service answers podShutdown.preStopSeconds more while its endpoint leaves, then gets SIGTERM with the 30 s its shutdown fits in. */}}

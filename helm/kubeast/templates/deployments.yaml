@@ -81,14 +81,9 @@ spec:
             {{- end }}
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
-          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) | nindent 10 }}
+          {{- include "kubeast.startupProbe" (dict "root" $ "path" "/health" "port" 8004) | nindent 10 }}
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8004
-            initialDelaySeconds: 3
-            periodSeconds: 10
+          {{- include "kubeast.readinessProbe" (dict "root" $ "path" "/readyz" "port" 8004 "delay" 3) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /livez
@@ -395,16 +390,11 @@ spec:
               readOnly: true
             {{- end }}
           {{- end }}
-          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8002) | nindent 10 }}
+          {{- include "kubeast.startupProbe" (dict "root" $ "path" "/health" "port" 8002) | nindent 10 }}
           {{- if $api }}
           {{- include "kubeast.preStop" $ | nindent 10 }}
           {{- end }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8002
-            initialDelaySeconds: 3
-            periodSeconds: 10
+          {{- include "kubeast.readinessProbe" (dict "root" $ "path" "/readyz" "port" 8002 "delay" 3) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /livez
@@ -480,14 +470,9 @@ spec:
             {{- . | trim | nindent 12 }}
           {{- end }}
           {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
-          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8003) | nindent 10 }}
+          {{- include "kubeast.startupProbe" (dict "root" $ "path" "/health" "port" 8003) | nindent 10 }}
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8003
-            initialDelaySeconds: 3
-            periodSeconds: 10
+          {{- include "kubeast.readinessProbe" (dict "root" $ "path" "/readyz" "port" 8003 "delay" 3) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /livez
@@ -616,12 +601,7 @@ spec:
               mountPath: /tmp
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8086
-            initialDelaySeconds: 2
-            periodSeconds: 10
+          {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/readyz" "port" 8086 "delay" 2) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /livez
@@ -691,12 +671,7 @@ spec:
             - secretRef:
                 name: {{ include "kubeast.secretsName" . }}
           {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8081
-            initialDelaySeconds: 3
-            periodSeconds: 10
+          {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/readyz" "port" 8081 "delay" 3) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /healthz

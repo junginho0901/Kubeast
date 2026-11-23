@@ -84,8 +84,8 @@ the gateway `E2E_BASE_URL` (default `http://localhost:30080`).
   for the first), none slower than 5 s; the test writes the gap, the limit, the count and the statuses down per
   Deployment. Measured on kind: about 1 s for auth-service, k8s-service and session-service, about 6 s for ai-service
   and frontend, and up to 15.5 s for the gateway when its first readiness probe came too early (readiness every 10 s).
-  With `podStartup.quickReady` (the default) those three have a startup probe every second and readiness every 3 s,
-  no initial delay, so their limit is 11 s.
+  With `podStartup.quickReady` (the default) every Deployment here but Redis has a startup probe every second and
+  readiness every 3 s, no initial delay, so its limit is 11 s.
 - The gateway's own pod is read from inside the kind node (`NodeProbe`: curl through `docker exec` to the gateway's
   NodePort), the other Deployments through the gateway as before. From the laptop, Docker Desktop's published port
   takes the request while no gateway pod answers and passes it on once one does, a 200 after 5 s or more, where the
