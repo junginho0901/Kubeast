@@ -129,11 +129,11 @@ export function PodLogsTab({
       setLogs((prev) => prev + '» ' + reason + '\n')
     })
 
-    // Refused at the account's cap: nothing was opened, and reopening would be refused until another one ends.
-    es.addEventListener(STREAM_LIMIT_EVENT, () => {
+    // Refused at the account's cap or the server's: nothing was opened, and reopening would be refused until another one ends.
+    es.addEventListener(STREAM_LIMIT_EVENT, (e) => {
       es.close()
       setIsStreamingLogs(false)
-      setLogs((prev) => prev + '» ' + followLimitText(trRef.current) + '\n')
+      setLogs((prev) => prev + '» ' + followLimitText(trRef.current, (e as MessageEvent).data) + '\n')
     })
 
     // backend 가 startup 실패 시 보내는 named 'error' 이벤트

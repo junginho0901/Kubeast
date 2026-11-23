@@ -1,10 +1,10 @@
 {{- /*
 multicluster.maxTerminalsPerAccount and maxFollowedLogsPerAccount: the terminals and followed logs each account may hold
-open on each k8s-service (internal/streamcap). 0 turns a cap off; a value below 0 or not a whole number stops the render
-here instead of turning the cap off without a word.
+open on each k8s-service; maxStreamsPerServer: those of every account together (internal/streamcap). 0 turns a cap off;
+a value below 0 or not a whole number stops the render here instead of turning the cap off without a word.
 */}}
-{{- range $key := list "maxTerminalsPerAccount" "maxFollowedLogsPerAccount" }}
-{{- $value := dig $key 20 $.Values.multicluster }}
+{{- range $key, $default := dict "maxTerminalsPerAccount" 20 "maxFollowedLogsPerAccount" 20 "maxStreamsPerServer" 443 }}
+{{- $value := dig $key $default $.Values.multicluster }}
 {{- if not (and (include "kubeast.wholeNumber" $value) (ge (int $value) 0)) }}
 {{- fail (printf "multicluster.%s must be a whole number, 0 (no cap) or more (got %v)" $key $value) }}
 {{- end }}

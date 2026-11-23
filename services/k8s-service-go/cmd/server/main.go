@@ -418,6 +418,10 @@ func main() {
 				Name: "kubeast_stream_cap_refusals_total", Help: "Terminals and followed logs refused at their account's cap (multicluster.maxTerminalsPerAccount, maxFollowedLogsPerAccount) since start-up.",
 				ConstLabels: prometheus.Labels{"service": "k8s", "kind": label},
 			}, func() float64 { return float64(h.StreamCaps().Refused(kind)) }))
+			m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+				Name: "kubeast_stream_server_cap_refusals_total", Help: "Terminals and followed logs refused at the server's cap (multicluster.maxStreamsPerServer), which counts every account's together, since start-up.",
+				ConstLabels: prometheus.Labels{"service": "k8s", "kind": label},
+			}, func() float64 { return float64(h.StreamCaps().ServerRefused(kind)) }))
 		}
 	}
 	if recorder.Enabled() && role.ServesStreams() {

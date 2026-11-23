@@ -1408,6 +1408,15 @@ multicluster:
   # Stage: beta, tested: the stream-caps e2e on the kind dev install with the defaults (2026-11-19) (docs/configuration.md "Stages of new values").
   maxTerminalsPerAccount: 20
   maxFollowedLogsPerAccount: 20
+  # Terminals and followed logs of every account together one k8s-service (on
+  # k8s-service-stream with streams on) may hold open at once; one past it is
+  # refused before it opens, as at an account's cap, and the screen says the
+  # server is full. 0 = no cap; the chart refuses a value below 0. On a kind
+  # node each one held about 0.37 MiB of the pod's memory, so about 886 took a
+  # pod at 512 Mi to 80 % of it (2026-11-22); 443 is half of that. A higher
+  # memory limit on that pod can take a higher cap. Counted in each pod.
+  # Stage: beta, not run yet: the cap reached on the kind dev install (docs/configuration.md "Stages of new values").
+  maxStreamsPerServer: 443
   # How many watches of one cluster may be waiting for the API server's first
   # answer at once; the rest wait, so a restart does not bring every subscription
   # to the API server at one moment. A start not answered in 5 s gives its place

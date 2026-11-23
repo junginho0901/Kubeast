@@ -302,6 +302,7 @@ multicluster:
   wsWatchStreamWindowKiB: 1024  # 실시간 목록 스트림 하나의 HTTP/2 창: 느린 브라우저의 watch가 쥐는 메모리와, 왕복이 긴 망에서 목록이 오는 빠르기의 맞바꿈. architecture.md "Many users" 참고
   maxTerminalsPerAccount: 20     # 한 계정이 k8s-service 하나(streams를 켜면 k8s-service-stream)에 한꺼번에 열어 둘 수 있는 터미널(파드 exec, 노드 셸) 수. 넘는 것은 열기 전에 거절하고 화면이 까닭을 보여 줌. 0 = 상한 없음, 0보다 작으면 차트가 멈춤
   maxFollowedLogsPerAccount: 20  # 실시간 로그(컨테이너 출력, 로그 파일)도 같은 방식
+  maxStreamsPerServer: 443       # k8s-service 하나(streams를 켜면 k8s-service-stream)에 모든 계정을 합쳐 한꺼번에 열어 둘 수 있는 터미널과 실시간 로그 수. 넘는 것은 열기 전에 거절하고 화면이 서버가 찼다고 알림. 0 = 상한 없음, 0보다 작으면 차트가 거부. kind 노드에서 하나에 약 0.37 MiB: 443은 512 Mi 파드가 메모리의 80 %에 닿은 수의 절반
 ```
 
 ## 새 값의 단계
@@ -328,6 +329,7 @@ multicluster:
 | `multicluster.breakerConsecutiveFails`(0.7.8부터 `0`이면 차단기 끔), `multicluster.breakerOpenSec`(0.7.8부터 읽음) | 5, 30 | beta | kind 개발 설치에서 클러스터를 끊어 본 경우 |
 | `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | 돌려 봄: kind에서 0.7.7부터 업그레이드 리허설(기본 설치, 기존 Secret, 외부 데이터베이스, AI 끔, 2대 · 3대)과 EKS 1.35. EKS 1.35에서는 노드를 드레인할 때 실시간 목록이 한 번 닫혔다가 1.1초 안에 다시 붙고, HPA를 켜면서 k8s-service가 2대에서 1대로 줄 때 한 번 닫혔다가 1.2초 안에 다시 붙음. HPA가 파드를 늘리고 줄일 때는 닫히지 않음 |
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | 돌려 봄: kind 개발 설치에서 기본값으로 stream-caps e2e(2026-11-19). 한 계정의 21번째 터미널과 실시간 로그가 거절되고 화면이 까닭을 보여 주며, 하나를 닫으면 새로 열림 |
+| `multicluster.maxStreamsPerServer` | 443 | beta | kind 개발 설치에서 상한에 닿아 화면이 까닭을 보여 주는 경우. 기본값은 거기서 한 부하 시험(2026-11-22)에서 왔음: 상한 없이 파드 하나에 터미널과 실시간 로그 800개를 열어 둠(하나에 약 0.37 MiB, 800개에서 512 Mi의 79 %) |
 | `auth` 설정의 `customRoles` 옆 `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters` | false, [] | alpha | 돌려 봄: 켠 상태의 전체 e2e를 kind 개발 설치에서 두 번(실패 없음), 100명이 한꺼번에 화면을 연 부하(오류 없음) |
 
 ## Redis 사용자

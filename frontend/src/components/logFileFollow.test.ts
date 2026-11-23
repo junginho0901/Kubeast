@@ -101,9 +101,21 @@ describe('a followed log file', () => {
     const { es, seen } = follow()
     es.emit(STREAM_LIMIT_EVENT, 'followed_log_limit')
     expect(es.closed).toBe(true)
-    expect(seen.stops).toEqual([{ kind: 'limit' }])
+    expect(seen.stops).toEqual([{ kind: 'limit', reason: 'followed_log_limit' }])
     expect(seen.reconnecting).toEqual([false])
     expect(seen.lines).toEqual([])
+  })
+
+  it('stops the same way at the server\'s cap, saying whose cap it was', () => {
+    const { es, seen } = follow()
+    es.emit(STREAM_LIMIT_EVENT, 'server_stream_limit')
+    expect(es.closed).toBe(true)
+    expect(seen.stops).toEqual([{ kind: 'limit', reason: 'server_stream_limit' }])
+    expect(seen.reconnecting).toEqual([false])
+
+    const bare = follow()
+    bare.es.emit(STREAM_LIMIT_EVENT)
+    expect(bare.seen.stops).toEqual([{ kind: 'limit' }])
   })
 
   it('shows the server\'s notices as notices', () => {

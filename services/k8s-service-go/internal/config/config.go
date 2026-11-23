@@ -161,6 +161,9 @@ type Config struct {
 	// (internal/streamcap, chart multicluster.maxTerminalsPerAccount and maxFollowedLogsPerAccount).
 	MaxTerminalsPerAccount    int
 	MaxFollowedLogsPerAccount int
+	// Terminals and followed logs of every account together this server may hold open at once; 0 = no cap (chart
+	// multicluster.maxStreamsPerServer).
+	MaxStreamsPerServer int
 	// MaxRequestBodyBytes caps every request body; YAML apply/create of large
 	// manifests fit well under the default 4 MiB.
 	MaxRequestBodyBytes int
@@ -275,6 +278,7 @@ func Load() Config {
 		WSWatchStreamWindowKiB:    pkgconfig.GetEnvInt("WS_WATCH_STREAM_WINDOW_KIB", 1024),
 		MaxTerminalsPerAccount:    pkgconfig.GetEnvInt("MAX_TERMINALS_PER_ACCOUNT", 20),
 		MaxFollowedLogsPerAccount: pkgconfig.GetEnvInt("MAX_FOLLOWED_LOGS_PER_ACCOUNT", 20),
+		MaxStreamsPerServer:       pkgconfig.GetEnvInt("MAX_STREAMS_PER_SERVER", 443),
 		MaxRequestBodyBytes:       pkgconfig.GetEnvInt("MAX_REQUEST_BODY_BYTES", 4<<20),
 
 		StreamDrainSeconds: pkgconfig.GetEnvInt("STREAM_DRAIN_SECONDS", -1),

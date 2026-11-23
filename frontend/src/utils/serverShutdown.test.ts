@@ -32,6 +32,23 @@ describe('why a terminal closed', () => {
     expect(terminalEnd(1013, 'terminal_limit')).toBeNull()
   })
 
+  it('reads a terminal refused at the server\'s cap apart from the account\'s, as one to reconnect in a while', () => {
+    expect(terminalEnd(4429, 'server_stream_limit')).toBe('serverLimit')
+    expect(terminalEndText('serverLimit', echo)).toBe((en as any).serverShutdown.terminalServerLimit)
+    expect(terminalEndText('serverLimit', echo)).toContain('for all accounts together')
+    expect(terminalEndText('serverLimit', echo)).not.toContain('Close one')
+    expect(terminalEnd(1013, 'server_stream_limit')).toBeNull()
+  })
+
+  it('says a followed log refused at the server\'s cap apart from the account\'s, from the event\'s data', () => {
+    expect(followLimitText(echo, 'server_stream_limit')).toBe((en as any).serverShutdown.followServerLimit)
+    expect(followLimitText(echo, 'followed_log_limit')).toBe((en as any).serverShutdown.followLimit)
+    expect(followLimitText(echo, undefined)).toBe((en as any).serverShutdown.followLimit)
+    const koText = (key: string) => key.split('.').reduce((o: any, k) => o?.[k], ko) as string
+    expect(followLimitText(koText, 'server_stream_limit')).toBe((ko as any).serverShutdown.followServerLimit)
+    expect(followLimitText(koText, 'server_stream_limit')).toContain('실시간 보기')
+  })
+
   it('says a followed log refused at its account\'s cap in the screen\'s language', () => {
     expect(followLimitText(echo)).toBe((en as any).serverShutdown.followLimit)
     const koText = (key: string) => key.split('.').reduce((o: any, k) => o?.[k], ko) as string
@@ -47,7 +64,7 @@ describe('why a terminal closed', () => {
   })
 
   it('has every line in both languages, and the English one is the fallback', () => {
-    for (const key of ['terminalReplaced', 'terminalLost', 'terminalUnchecked', 'reconnect', 'followStopped', 'terminalLimit', 'followLimit'] as const) {
+    for (const key of ['terminalReplaced', 'terminalLost', 'terminalUnchecked', 'reconnect', 'followStopped', 'terminalLimit', 'followLimit', 'terminalServerLimit', 'followServerLimit'] as const) {
       expect((en as any).serverShutdown[key]).toBeTruthy()
       expect((ko as any).serverShutdown[key]).toBeTruthy()
     }
