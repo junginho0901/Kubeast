@@ -53,6 +53,74 @@ tests:
           errorPattern: "podShutdown\\.preStopSeconds is 5, a sleep in each Deployment behind a Service; streams\\.enabled gives k8s-service-stream"
         template: checks/kube-version.yaml
 
+  - it: stops Kubernetes 1.29 on gateway.preStopSeconds 1 alone, with podShutdown.preStopSeconds 0 and streams off
+    capabilities: { majorVersion: 1, minorVersion: 29 }
+    set:
+      podShutdown.preStopSeconds: 0
+      gateway.preStopSeconds: 1
+      streams.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: "Kubernetes v1\\.29\\.0 refuses a preStop sleep \\(Kubernetes 1\\.30 turns it on\\): gateway\\.preStopSeconds is 1, a sleep in the gateway whatever podShutdown\\.preStopSeconds is\\. Set podShutdown\\.preStopSeconds: 0, gateway\\.preStopSeconds: 0 and leave streams\\.enabled off on this cluster, or upgrade it to 1\\.30 or later\\. helm template checks the version given with --kube-version"
+        template: checks/kube-version.yaml
+
+  - it: names gateway.preStopSeconds beside podShutdown.preStopSeconds on Kubernetes 1.29 when both are set
+    capabilities: { majorVersion: 1, minorVersion: 29 }
+    set:
+      gateway.preStopSeconds: 5
+    asserts:
+      - failedTemplate:
+          errorPattern: "podShutdown\\.preStopSeconds is 5, a sleep in each Deployment behind a Service; gateway\\.preStopSeconds is 5, a sleep in the gateway whatever podShutdown\\.preStopSeconds is\\. Set podShutdown\\.preStopSeconds: 0, gateway\\.preStopSeconds: 0 and leave streams\\.enabled off"
+        template: checks/kube-version.yaml
+
+  - it: names the gateway's 25 s on Kubernetes 1.29 behind an AWS ALB that sends to pod IPs
+    capabilities: { majorVersion: 1, minorVersion: 29 }
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+    asserts:
+      - failedTemplate:
+          errorPattern: "podShutdown\\.preStopSeconds is 5, a sleep in each Deployment behind a Service; the gateway sleeps 25, podShutdown\\.preStopSeconds raised behind an AWS ALB that sends to pod IPs\\. Set podShutdown\\.preStopSeconds: 0 and leave streams\\.enabled off on this cluster"
+        template: checks/kube-version.yaml
+
+  - it: lets Kubernetes 1.29 render with every wait at 0, also behind an AWS ALB that sends to pod IPs
+    capabilities: { majorVersion: 1, minorVersion: 29 }
+    set:
+      podShutdown.preStopSeconds: 0
+      gateway.preStopSeconds: 0
+      streams.enabled: false
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/kube-version.yaml
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  - it: renders gateway.preStopSeconds 1 alone on Kubernetes 1.30
+    capabilities: { majorVersion: 1, minorVersion: 30 }
+    set:
+      podShutdown.preStopSeconds: 0
+      gateway.preStopSeconds: 1
+      streams.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/kube-version.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 1 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+        template: deployments.yaml
+
   - it: renders nothing on Kubernetes 1.30, on the defaults and with streams on
     capabilities: { majorVersion: 1, minorVersion: 30 }
     set:
