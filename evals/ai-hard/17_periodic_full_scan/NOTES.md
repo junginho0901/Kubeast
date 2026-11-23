@@ -21,5 +21,5 @@ How the scorer judges: cause = the CronJob `reminder-sender` (its Jobs, pods and
 Unsure:
 - The disk is a model, not a disk: the wait per queued read is a formula in the CGI, so kind's real disk and the laptop do not change the numbers. cAdvisor's disk counters for the pod stay flat, which a real database would not show; the stats line stands in for the database's own metrics.
 - The CGI that sleeps through a 330 s read keeps one shell and one httpd child per running read; about six at once. Not measured on kind.
-- The callers' point reads are slow only while range reads run; the first slow line comes about a minute after the change. `inject_wait` waits for a queue of 16 (two range reads at once).
+- The callers' point reads are slow only while range reads run; the first slow line comes about a minute after the change. `inject_wait` waits for a queue of 16 (two range reads at once). On the first kind run it was still false at 300 s with five `reminder-sender` Jobs running, so it now waits 480 s and the question comes at 600 s; what `orders-db`'s stats lines said in that run was not kept.
 - Whether busybox httpd keeps a CGI running after the client (the job pod) has gone was not checked; the read is meant to go on, as a database query does.
