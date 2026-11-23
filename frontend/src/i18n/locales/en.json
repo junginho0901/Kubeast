@@ -3078,7 +3078,8 @@
       "confirm": "Confirm new password",
       "confirmPlaceholder": "Type again",
       "updating": "Updating...",
-      "submit": "Update password"
+      "submit": "Update password",
+      "wrongCurrent": "The current password is wrong."
     },
     "title": "Settings",
     "subtitle": "Manage your profile, password, language, and color mode.",

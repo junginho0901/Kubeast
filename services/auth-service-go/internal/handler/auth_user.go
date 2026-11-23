@@ -562,9 +562,11 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A wrong current password is a 403 with its reason, not a 401: the console
+	// reads a 401 as the sign-in being over. It counts toward no login lockout.
 	if !security.VerifyPassword(req.CurrentPassword, user.PasswordHash) {
 		h.writeAuditFailure(r, "user.password.change", &payload.UserID, &user.Email, &user.ID, &user.Email, "password_mismatch", nil)
-		response.Error(w, http.StatusUnauthorized, "Invalid current password")
+		response.JSON(w, http.StatusForbidden, map[string]string{"detail": "Invalid current password", "reason": "password_mismatch"})
 		return
 	}
 
