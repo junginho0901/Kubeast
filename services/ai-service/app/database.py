@@ -613,6 +613,33 @@ class DatabaseService:
             logger.warning("tool approvals: could not end interrupted runs: %s", e.__class__.__name__)
         return ended
 
+    async def end_tool_run(self, approval_id: str, from_status: str, record: Dict[str, Any], **fields: Any) -> Optional[ToolApproval]:
+        """An approved call's end: transition_tool_approval and its outcome row (record: write_audit's arguments) in one
+        transaction, so a process stopped between the two leaves the approval approved, for the interrupted sweep, never
+        ended with no outcome row. The call has run, so a row the audit table refuses does not hold the approval: it
+        moves on its own and the row is written after it, as a failed write when it fails again. None when the row no
+        longer has from_status; nothing is written then."""
+        from sqlalchemy import update
+
+        from app.services import audit_writer
+
+        async with self.engine.connect() as conn:
+            await conn.begin()
+            moved = await conn.execute(
+                update(ToolApproval).where(ToolApproval.id == approval_id, ToolApproval.status == from_status).values(**fields)
+            )
+            if moved.rowcount != 1:
+                await conn.rollback()
+                return None
+            if await audit_writer.write_audit(**record, conn=conn):
+                await audit_writer.commit_row(conn, **record)  # mirrored to stdout once it has landed
+                return await self.get_tool_approval(approval_id)
+            await conn.rollback()
+        ended = await self.transition_tool_approval(approval_id, from_status, **fields)
+        if ended is not None:
+            await audit_writer.write_audit(**record)
+        return ended
+
     async def get_tool_approval(self, approval_id: str) -> Optional[ToolApproval]:
         async with self.async_session() as db:
             from sqlalchemy import select

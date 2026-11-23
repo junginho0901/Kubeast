@@ -428,7 +428,7 @@ async def approve_tool_approval(
     request: Request,
     authorization: str = Depends(bearer_or_cookie),
 ):
-    from app.database import APPROVED_RUN_LIMIT_SECONDS, INTERRUPTED_RESULT, utcnow
+    from app.database import APPROVED_RUN_LIMIT_SECONDS, utcnow
     from app.services.audit_target import EXEC_TOOL, kept_tool_args, pod_exec_row, tool_target, write_tool_input
     from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
     from app.services.ai import access as tool_access, formatters
@@ -511,33 +511,19 @@ async def approve_tool_approval(
     call_requests = ai_service.tool_server.last_requests
     # The run is over, so nothing needs the arguments as they were: the row and the saved message keep a masked copy.
     kept_args = kept_tool_args(args)
-    ended = await db.transition_tool_approval(
-        approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(), args=kept_args,
-    )
-    late = False
-    if ended is None:
-        # The run outlived APPROVED_RUN_LIMIT_SECONDS and a sweep ended its approval as interrupted meanwhile (or the
-        # conversation was deleted, and the row with it). The outcome is known after all: the row stays ended and says it.
-        current = await db.get_tool_approval(approval.id)
-        if current is not None and current.status == "failed" and current.result == INTERRUPTED_RESULT:
-            late = True
-            note = f"{status} after this approval was ended as interrupted: the run took longer than {APPROVED_RUN_LIMIT_SECONDS // 60} minutes."
-            ended = await db.transition_tool_approval(
-                approval.id, "failed", result=f"{note}\n\n{formatted}"[:APPROVAL_RESULT_MAX_CHARS],
-            ) or current
-    approval = ended or approval
-    # The rows before the chat message: the conversation may have been deleted during the call, and the message with it.
     target = tool_target(approval.tool, args)
     tool_input = write_tool_input(approval.tool, args)
-    await write_audit(
+    outcome_row = dict(
         action="ai.tool.execute", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type=target.type, target_id=target.id, namespace=target.namespace,
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster, "tool": approval.tool, "approved": True,
-               "access": call_access, "requests": call_requests, **({"objects": target.objects} if target.objects else {}),
-               **({"late_after_interrupt": True} if late else {}), **tool_input},
+               "access": call_access, "requests": call_requests, **({"objects": target.objects} if target.objects else {}), **tool_input},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
         result="success" if status == "executed" else "failure", error=error[:500] if error else error,
     )
+    # The rows before the chat message: the conversation may have been deleted during the call, and the message with it.
+    ended, late = await _end_run(db, approval.id, status, formatted, kept_args, outcome_row)
+    approval = ended or approval
     if approval.tool == EXEC_TOOL and not refusal:
         await write_audit(
             **pod_exec_row(args, tool_input, approval_id=approval.id), actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
@@ -561,6 +547,32 @@ async def approve_tool_approval(
     )
     _invalidate_caches()
     return _approval_dict(approval)
+
+
+async def _end_run(db, approval_id: str, status: str, formatted: str, kept_args: dict, outcome_row: dict):
+    """The approval leaves `approved` with its ai.tool.execute row in one transaction (end_tool_run). A run that outlived
+    APPROVED_RUN_LIMIT_SECONDS finds its approval ended as interrupted by a sweep meanwhile (or gone with its
+    conversation): the outcome is known after all, so the row stays ended and says it, and the outcome row is written
+    anyway. Returns the approval as it ended (None when not this run's end) and whether the run came back late."""
+    from app.database import APPROVED_RUN_LIMIT_SECONDS, INTERRUPTED_RESULT, utcnow
+    from app.services.audit_writer import write_audit
+
+    ended = await db.end_tool_run(
+        approval_id, "approved", outcome_row,
+        status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(), args=kept_args,
+    )
+    if ended is not None:
+        return ended, False
+    current = await db.get_tool_approval(approval_id)
+    if current is None or current.status != "failed" or current.result != INTERRUPTED_RESULT:
+        await write_audit(**outcome_row)
+        return None, False
+    late_row = {**outcome_row, "after": {**outcome_row["after"], "late_after_interrupt": True}}
+    note = f"{status} after this approval was ended as interrupted: the run took longer than {APPROVED_RUN_LIMIT_SECONDS // 60} minutes."
+    ended = await db.end_tool_run(approval_id, "failed", late_row, result=f"{note}\n\n{formatted}"[:APPROVAL_RESULT_MAX_CHARS])
+    if ended is None:
+        await write_audit(**late_row)
+    return ended or current, True
 
 
 @router.post("/sessions/{session_id}/floating-chat")
