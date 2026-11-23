@@ -9,6 +9,7 @@ import ClusterAccessSection from './account/ClusterAccessSection'
 import ApiKeysSection from './account/ApiKeysSection'
 import { useAccountSectionsReady } from './account/accountReady'
 import NodeShellSection from './account/NodeShellSection'
+import { wrongCurrentPassword } from './account/passwordChange'
 import { COLOR_MODES, setColorMode, useColorMode } from '@/utils/colorMode'
 import { failureText } from '@/utils/failureText'
 import { useDismiss } from '@/hooks/useDismiss'
@@ -47,6 +48,7 @@ export default function Account() {
   })
 
   const isBusy = changePasswordMutation.isPending
+  const currentRefused = wrongCurrentPassword(changePasswordMutation.error)
   const language = i18n.language?.startsWith('ko') ? 'ko' : 'en'
 
   const setLanguage = (next: 'en' | 'ko') => {
@@ -70,10 +72,12 @@ export default function Account() {
     e.preventDefault()
     setSuccess(null)
     if (!currentPassword || !newPassword) {
+      changePasswordMutation.reset()
       setLocalError(tr('account.password.required', 'Enter current and new passwords.'))
       return
     }
     if (newPassword !== confirmPassword) {
+      changePasswordMutation.reset()
       setLocalError(tr('account.password.mismatch', 'New passwords do not match.'))
       return
     }
@@ -275,7 +279,7 @@ export default function Account() {
               </div>
             )}
 
-            {(localError || changePasswordMutation.isError) && (
+            {(localError || (changePasswordMutation.isError && !currentRefused)) && (
               <div role="alert" data-testid="password-error" className="mb-4 rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-200 break-words">
                 {localError ?? tr('account.password.failed', 'Password not changed: {{reason}}', { reason: failureText(changePasswordMutation.error) })}
               </div>
@@ -293,7 +297,14 @@ export default function Account() {
                   className="w-full rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2.5 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                   placeholder="••••••••"
                   autoComplete="current-password"
+                  aria-invalid={currentRefused || undefined}
+                  aria-describedby={currentRefused ? 'password-current-error' : undefined}
                 />
+                {currentRefused && (
+                  <p id="password-current-error" role="alert" data-testid="password-current-error" className="mt-1 text-[11px] text-red-400">
+                    {tr('account.password.wrongCurrent', 'The current password is wrong.')}
+                  </p>
+                )}
               </div>
 
               <div>

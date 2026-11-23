@@ -44,7 +44,7 @@ func LogSelector(l LogLabels, wl *Workload) string {
 	if wl == nil {
 		return "{}"
 	}
-	return "{" + l.Pod + "=~" + strconv.Quote(regexp.QuoteMeta(wl.Name)+"-.*") + "}"
+	return "{" + l.Pod + "=~" + strconv.Quote(wl.PodPattern()) + "}"
 }
 
 // ErrorCountQuery counts the error lines of each container over the last d at each step.
@@ -185,11 +185,12 @@ type TraceQuery struct {
 }
 
 // TraceQueries count each service's server spans and failed server spans and take their p90 duration at each step.
-// The store adds the cluster and namespace; a workload narrows to its pods by k8s.pod.name.
+// The store adds the cluster and namespace; a workload narrows to its pods by k8s.pod.name, anchored for a Tempo that
+// does not anchor a regular expression itself.
 func TraceQueries(wl *Workload) []TraceQuery {
 	pod := ""
 	if wl != nil {
-		pod = " && resource.k8s.pod.name =~ " + strconv.Quote(regexp.QuoteMeta(wl.Name)+"-.*")
+		pod = " && resource.k8s.pod.name =~ " + strconv.Quote("^(?:"+wl.PodPattern()+")$")
 	}
 	return []TraceQuery{
 		{Signal: SignalRequests, Query: "{ kind = server" + pod + " } | count_over_time() by (resource.service.name)"},

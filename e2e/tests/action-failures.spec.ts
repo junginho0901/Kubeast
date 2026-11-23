@@ -5,7 +5,8 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 
 // Writes the server refuses say why where they were pressed, and the line stays: each case answers its request in
 // the browser with a 409 and a reason of its own (the server is never asked, nothing changes), presses as a person
-// would and holds the line under the action to "<what did not happen>: <that reason>" — also 6 s later.
+// would and holds the line under the action to "<what did not happen>: <that reason>" — also 6 s later. Change
+// password's wrong current password is answered with its own 403 and held under that field.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -138,6 +139,32 @@ test.describe('a refused write says why where it was pressed', () => {
     await page.getByRole('button', { name: EN.account.password.submit }).click()
     await stays(page, 'password-error', EN.account.password.failed.replace('{{reason}}', REASON))
     expect(seen, 'the request went out once and the server was not asked').toEqual(['POST /api/v1/auth/change-password'])
+  })
+
+  test('Account: Change password says a wrong current password under its field and keeps the sign-in', async ({ page }) => {
+    const seen: string[] = []
+    await page.route((url) => url.pathname === '/api/v1/auth/change-password', async (route) => {
+      seen.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`)
+      await route.fulfill({ status: 403, json: { detail: 'Invalid current password', reason: 'password_mismatch' } })
+    })
+    await page.goto('/account')
+    await page.getByRole('button', { name: EN.account.password.open }).click()
+    const dialog = page.getByTestId('password-dialog')
+    const inputs = dialog.locator('input[type="password"]')
+    await inputs.nth(0).fill('e2e-not-the-password')
+    await inputs.nth(1).fill('E2e-af-new-Passw0rd!')
+    await inputs.nth(2).fill('E2e-af-new-Passw0rd!')
+    await page.getByRole('button', { name: EN.account.password.submit }).click()
+    await stays(page, 'password-current-error', EN.account.password.wrongCurrent)
+    await expect(dialog.getByTestId('password-error'), 'no failure line above the form for this refusal').toHaveCount(0)
+    await expect(page, 'a 403 is not a sign-out').toHaveURL(/\/account(\?|$)/)
+    expect(seen, 'the request went out once').toEqual(['POST /api/v1/auth/change-password'])
+    // a mistake the window finds itself replaces the server's refusal, which no longer stands under the field
+    await inputs.nth(2).fill('E2e-af-other-Passw0rd!')
+    await page.getByRole('button', { name: EN.account.password.submit }).click()
+    await expect(dialog.getByTestId('password-error')).toHaveText(EN.account.password.mismatch, { timeout: 15_000 })
+    await expect(dialog.getByTestId('password-current-error'), 'the earlier refusal is gone').toHaveCount(0)
+    expect(seen, 'the window asked the server nothing for its own mistake').toEqual(['POST /api/v1/auth/change-password'])
   })
 
   test('Namespaces: Create names why it was refused', async ({ page }) => {

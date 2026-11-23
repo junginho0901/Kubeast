@@ -7,6 +7,7 @@ import pytest
 
 from app.services.ai import history
 from app.services.ai.streaming import tool_block_markdown
+from tests.test_audit_rows import fake_end_tool_run
 
 
 def code_block_after(text: str, heading: str) -> str:
@@ -66,6 +67,8 @@ async def test_an_approved_write_keeps_its_result_in_its_code_block(monkeypatch)
     messages = []
 
     class DB:
+        end_tool_run = fake_end_tool_run
+
         async def transition_tool_approval(self, *a, **k):
             for key, value in k.items():
                 setattr(approval, key, value)

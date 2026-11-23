@@ -10,7 +10,8 @@ import ko from '@/i18n/locales/ko.json'
 import { ChatHeader } from './ChatHeader'
 import headerSrc from './ChatHeader.tsx?raw'
 import sidebarSrc from './SessionSidebar.tsx?raw'
-import { aiConfigRetry, aiConfigRetryDelay } from './utils'
+import { retryAsAskedDelay } from '@/services/queryDefaults'
+import { aiConfigRetry } from './utils'
 
 // The AI Chat header says why the model could not be read, in the server's words, where the model's name would be.
 
@@ -91,12 +92,12 @@ describe('the AI model read', () => {
     const failing = (error: unknown) => vi.fn(async () => { throw error })
     const reads = { noModel: failing(refused(503, NO_MODEL)), refused: failing(refused(403, 'no')), failed: failing(refused(500, 'boom')), network: failing(new Error('Network Error')) }
     const client = new QueryClient()
-    const stops = Object.entries(reads).map(([name, queryFn]) => new QueryObserver(client, { queryKey: ['ai-config', name], queryFn, retry: aiConfigRetry, retryDelay: aiConfigRetryDelay }).subscribe(() => {}))
+    const stops = Object.entries(reads).map(([name, queryFn]) => new QueryObserver(client, { queryKey: ['ai-config', name], queryFn, retry: aiConfigRetry, retryDelay: retryAsAskedDelay }).subscribe(() => {}))
     await vi.advanceTimersByTimeAsync(10_000)
     expect(Object.fromEntries(Object.entries(reads).map(([name, read]) => [name, read.mock.calls.length])))
       .toEqual({ noModel: 1, refused: 1, failed: 2, network: 2 })
     stops.forEach((stop) => stop())
-    expect(headerSrc).toMatch(/queryKey: \['ai-config'\],[\s\S]*?retry: aiConfigRetry,\s*retryDelay: aiConfigRetryDelay,/)
+    expect(headerSrc).toMatch(/queryKey: \['ai-config'\],[\s\S]*?retry: aiConfigRetry,\s*retryDelay: retryAsAskedDelay,/)
   })
 
   // The 503 of a session the server could not check carries Retry-After, the 503 of no model set up does not: the
@@ -107,7 +108,7 @@ describe('the AI model read', () => {
       if (unchecked-- > 0) throw SESSION_UNCHECKED()
       return { model: 'gpt-6-luna', app_name: 'Kubeast', version: '0.7.8' }
     })
-    const observer = new QueryObserver(new QueryClient(), { queryKey: ['ai-config'], queryFn: read, retry: aiConfigRetry, retryDelay: aiConfigRetryDelay })
+    const observer = new QueryObserver(new QueryClient(), { queryKey: ['ai-config'], queryFn: read, retry: aiConfigRetry, retryDelay: retryAsAskedDelay })
     const errors: unknown[] = []
     const stop = observer.subscribe((r) => { if (r.error) errors.push(r.error) })
     await vi.advanceTimersByTimeAsync(4_900)
@@ -124,7 +125,7 @@ describe('the AI model read', () => {
       aiConfigRetry(9, SESSION_UNCHECKED()),
       aiConfigRetry(0, refused(403, 'no', { 'retry-after': '5' })),
     ]).toEqual([false, true, true, false])
-    expect([aiConfigRetryDelay(0, SESSION_UNCHECKED()), aiConfigRetryDelay(5, SESSION_UNCHECKED()), aiConfigRetryDelay(0, refused(500, 'boom'))])
+    expect([retryAsAskedDelay(0, SESSION_UNCHECKED()), retryAsAskedDelay(5, SESSION_UNCHECKED()), retryAsAskedDelay(0, refused(500, 'boom'))])
       .toEqual([5_000, 30_000, 1_000])
   })
 })

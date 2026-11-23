@@ -2,8 +2,9 @@ import { MessageSquare } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
+import { retryAsAskedDelay } from '@/services/queryDefaults'
 import { failureText } from '@/utils/failureText'
-import { aiConfigRetry, aiConfigRetryDelay } from './utils'
+import { aiConfigRetry } from './utils'
 
 // AIChat 상단 고정 헤더 — title + AI model 뱃지 + subtitle.
 // aiConfig 조회는 자체에서 (5분 캐시) — header 외 다른 곳에서 모델명 필요 없음.
@@ -17,7 +18,7 @@ export function ChatHeader() {
     queryFn: api.getAIConfig,
     staleTime: 5 * 60 * 1000,
     retry: aiConfigRetry,
-    retryDelay: aiConfigRetryDelay,
+    retryDelay: retryAsAskedDelay,
   })
   const reason = error ? t('aiChat.modelReadFailed', { defaultValue: 'Could not read the AI model: {{reason}}', reason: failureText(error) }) : null
 

@@ -280,14 +280,49 @@ func clusterGrants(groups []string, prefix string) map[string]string {
 	return out
 }
 
-// passwordLoginAllowed applies PASSWORD_LOGIN (on / admin-only / off).
+// passwordLoginAllowed applies PASSWORD_LOGIN (on / admin-only / off). admin-only opens the form to the chart's admin
+// account alone (isChartAdmin), so an address that differs from DEFAULT_ADMIN_EMAIL only in letter case is refused.
 func passwordLoginAllowed(cfg config.Config, email string) bool {
 	switch cfg.PasswordLogin {
 	case "off":
 		return false
 	case "admin-only":
-		return strings.EqualFold(email, cfg.DefaultAdminEmail)
+		return isChartAdmin(cfg, email)
 	}
+	return true
+}
+
+// signInRefusedSingleSignOn is the reason of a password sign-in refused for an account that signs in through single
+// sign-on.
+const signInRefusedSingleSignOn = "single_sign_on_account"
+
+// isChartAdmin says whether the account at this address is the chart's admin account (DEFAULT_ADMIN_EMAIL). Addresses
+// are stored and found as written (auth_users.email is unique as written; boot and reset-admin store the setting so,
+// and every read by address is exact), so an account whose address differs from the setting only in letter case, such
+// as one the provider made from its lowercased claim, is another account.
+func isChartAdmin(cfg config.Config, email string) bool {
+	return email == cfg.DefaultAdminEmail
+}
+
+// SignsInWithPassword says whether the password form may open the account: a password account (auth_source password),
+// or the chart's admin account (isChartAdmin, the break-glass path while the provider is down) whatever made it, as
+// reset-admin gives it a password without changing how it was made. An account the provider made, or a self sign-up a
+// provider's sign-in reached while it waited for approval (endSelfSignUpCredentials, and a migration for those reached
+// by builds that left them password accounts), is oidc. It is the one answer of the password form
+// (refusesForSingleSignOn), a person's own change (ChangePassword), an admin's reset (AdminResetPassword) and
+// reset-admin (whether it writes a password, and its last line).
+func SignsInWithPassword(cfg config.Config, user *model.User) bool {
+	return user.AuthSource == model.AuthSourcePassword || isChartAdmin(cfg, user.Email)
+}
+
+// refusesForSingleSignOn says whether the password form refuses the account because the provider made it. A refusal
+// spends one hash check against the dummy hash first, as an unknown address does, so the time of the answer does not
+// tell such an account from a missing one.
+func (h *AuthHandler) refusesForSingleSignOn(password string, user *model.User) bool {
+	if SignsInWithPassword(h.cfg, user) {
+		return false
+	}
+	h.checkPassword(password, h.dummyPasswordHash())
 	return true
 }
 
@@ -520,8 +555,8 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 	if err != nil {
 		return nil, err
 	}
-	if user != nil && user.RoleName == "Pending" && user.PasswordHash != "" {
-		if err := h.endSelfSignUpCredentials(r, user); err != nil {
+	if user != nil && selfSignUpToMove(h.cfg, user) {
+		if user, err = h.endSelfSignUpCredentials(r, user); err != nil {
 			return nil, err
 		}
 	}
@@ -586,21 +621,42 @@ func (h *AuthHandler) provisionOIDCUser(r *http.Request, claims oidcClaims) (*mo
 	return user, nil
 }
 
-// endSelfSignUpCredentials is for a provider's sign-in reaching an account still
-// waiting for approval: a sign-up proved nothing about the address, so whoever
-// made it must not keep a password or a token that a later approval or role sync
-// would widen. The provider has just proved who owns the address.
-func (h *AuthHandler) endSelfSignUpCredentials(r *http.Request, user *model.User) error {
+// selfSignUpToMove says whether a provider's sign-in takes the account over from a self sign-up: an account the
+// sign-up form made (SelfSignedUp) that is still a password account and waits for approval, or holds no password,
+// which only that sign-in leaves (a build before this one took the password away and kept the account a password
+// account, a rolling upgrade's old pod among them). An account an admin made keeps its password and stays a password
+// account whatever its role, Pending included (an admin's choice, or defaultRole on a role sync), and so does the
+// chart's admin account, the way in while the provider is down. A self sign-up an admin approved keeps its password
+// while it holds a role past Pending. MoveToSingleSignOn asks the same of the row again.
+func selfSignUpToMove(cfg config.Config, user *model.User) bool {
+	if !user.SelfSignedUp || user.AuthSource != model.AuthSourcePassword || isChartAdmin(cfg, user.Email) {
+		return false
+	}
+	return user.RoleName == "Pending" || user.PasswordHash == ""
+}
+
+// endSelfSignUpCredentials is for a provider's sign-in reaching an account selfSignUpToMove names: a sign-up proved
+// nothing about the address, so whoever made it must not keep a password or a token that a later approval or role sync
+// would widen. The provider has just proved who owns the address, and the account signs in there from now on
+// (auth_source oidc), so neither the password form nor an admin's reset gives it a password way in again. One statement
+// (MoveToSingleSignOn) does it all and ends the tokens only when it took a password away: one held by no password was
+// issued by the provider. When the statement changed nothing, because another sign-in took the account over first or
+// an admin approved it meanwhile, the account is read again and this sign-in goes on from what is stored (nil when it
+// was deleted meanwhile).
+func (h *AuthHandler) endSelfSignUpCredentials(r *http.Request, user *model.User) (*model.User, error) {
 	ctx := r.Context()
-	if err := h.repo.UpdateUserPassword(ctx, user.ID, ""); err != nil {
-		return err
+	move, err := h.repo.MoveToSingleSignOn(ctx, user.ID)
+	if err != nil {
+		return nil, err
 	}
-	if err := h.endTokens(ctx, user); err != nil {
-		return err
+	if !move.Moved {
+		return h.repo.GetUserByEmail(ctx, user.Email)
 	}
-	user.PasswordHash = ""
-	h.writeAuditLog(r, "user.account.link", &user.ID, &user.Email, &user.ID, &user.Email, nil, jsonRaw(map[string]any{"method": "oidc", "password_removed": true}))
-	return nil
+	before := jsonRaw(map[string]any{"auth_source": user.AuthSource})
+	user.PasswordHash, user.AuthSource, user.TokenVersion = "", model.AuthSourceOIDC, move.TokenVersion
+	h.writeAuditLog(r, "user.account.link", &user.ID, &user.Email, &user.ID, &user.Email, before,
+		jsonRaw(map[string]any{"method": "oidc", "password_removed": move.PasswordRemoved, "auth_source": model.AuthSourceOIDC}))
+	return user, nil
 }
 
 // endTokens ends every token issued to the user so far and keeps user current,

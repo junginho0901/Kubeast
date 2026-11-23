@@ -58,6 +58,19 @@ describe('a read asked again as its answer asks', () => {
     ]).toEqual([true, true, false, true, false, true, false])
   })
 
+  it('does not try again a status that answers the same a second later, unless its answer carries Retry-After', () => {
+    const retry = retryAsAsked(1, [503])
+    expect([
+      retry(0, failed(503)),
+      retry(0, failed(503, { 'retry-after': '5' })),
+      retry(9, failed(503, { 'retry-after': '5' })),
+      retry(0, failed(403, { 'retry-after': '5' })),
+      retry(0, failed(500)),
+      retry(1, failed(500)),
+      retry(0, new Error('Network Error')),
+    ]).toEqual([false, true, true, false, true, false, true])
+  })
+
   it('waits the Retry-After at least, else the growing wait up to 30 s', () => {
     expect([
       retryAsAskedDelay(0, failed(503, { 'retry-after': '5' })),

@@ -6,9 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/anomaly"
 )
 
 func testConfig(url string) Config {
@@ -135,7 +138,7 @@ func TestWorkloadPodRegex(t *testing.T) {
 		kind, name  string
 		match, miss []string
 	}{
-		{"Deployment", "api", []string{"api-7d4b9c8f6-x2k9p", "api-5c9f-abcde"}, []string{"api-gateway-7d4b9c8f6-x2k9p", "api-0", "xapi-7d4b9c8f6-x2k9p"}},
+		{"Deployment", "api", []string{"api-7d4b9c8f6-x2k9p", "api-5c9f-x2k9p"}, []string{"api-gateway-7d4b9c8f6-x2k9p", "api-0", "xapi-7d4b9c8f6-x2k9p"}},
 		{"StatefulSet", "db", []string{"db-0", "db-12"}, []string{"db-a", "db-0-x"}},
 		{"DaemonSet", "agent", []string{"agent-x2k9p"}, []string{"agent-x2k9", "agent-node-x2k9p"}},
 		{"Job", "migrate", []string{"migrate-x2k9p", "migrate-3-x2k9p"}, []string{"migrate-x2k9pp"}},
@@ -150,6 +153,62 @@ func TestWorkloadPodRegex(t *testing.T) {
 		}
 		pattern := strings.ReplaceAll(m[1], `\\`, `\`)
 		re := regexp.MustCompile("^(?:" + pattern + ")$") // stream selector regexes match the whole value
+		for _, p := range tc.match {
+			if !re.MatchString(p) {
+				t.Errorf("%s %s: %s should match %s", tc.kind, tc.name, pattern, p)
+			}
+		}
+		for _, p := range tc.miss {
+			if re.MatchString(p) {
+				t.Errorf("%s %s: %s should not match %s", tc.kind, tc.name, pattern, p)
+			}
+		}
+	}
+}
+
+// logPodPattern is the pod matcher of a workload search, unquoted.
+func logPodPattern(t *testing.T, kind, name string) string {
+	t.Helper()
+	q := testConfig("http://loki:3100").LogQL(Request{Namespace: "apps", WorkloadKind: kind, WorkloadName: name}, "kubeast")
+	m := regexp.MustCompile(`k8s_pod_name=~("(?:[^"\\]|\\.)*")`).FindStringSubmatch(q)
+	if m == nil {
+		t.Fatalf("%s/%s: no pod matcher in %s", kind, name, q)
+	}
+	pattern, err := strconv.Unquote(m[1])
+	if err != nil {
+		t.Fatalf("%s: %v", m[1], err)
+	}
+	return pattern
+}
+
+// A workload search matches the pod label by the narrowing's rule (anomaly.Workload.PodPattern): one rule for both.
+func TestWorkloadPodsAreTheNarrowingsPodNames(t *testing.T) {
+	for kind := range anomaly.WorkloadKinds {
+		for _, name := range []string{"cart", "a.b", strings.Repeat("a", 70)} {
+			want := (&anomaly.Workload{Kind: kind, Name: name}).PodPattern()
+			if got := logPodPattern(t, kind, name); got != want {
+				t.Errorf("%s/%s: log search %s, narrowing %s", kind, name, got, want)
+			}
+		}
+	}
+}
+
+// The pods the earlier per-kind suffixes got wrong: DaemonSet cart-api's pod was Deployment cart's, and a Job of
+// Kubeast's CronJob trigger and a pod of a long name, cut before the API server adds its letters, were left out.
+func TestWorkloadSearchFindsThePodsItsControllerNamed(t *testing.T) {
+	long, job := strings.Repeat("a", 60), strings.Repeat("b", 63)
+	cases := []struct {
+		kind, name  string
+		match, miss []string
+	}{
+		{"Deployment", "cart", []string{"cart-6d4b9c-x7k2p"}, []string{"cart-api-x7k2p", "cart-api-6d4b9c-x7k2p"}},
+		{"CronJob", "report", []string{"report-29123456-x7k2p", "report-manual-1763880000-x7k2p"}, []string{"report-hourly-29123456-x7k2p"}},
+		{"Deployment", long, []string{long[:58] + "x7k2p"}, nil},
+		{"Job", job, []string{job[:58] + "x7k2p", job[:55] + "-7-x7k2p"}, nil},
+	}
+	for _, tc := range cases {
+		pattern := logPodPattern(t, tc.kind, tc.name)
+		re := regexp.MustCompile("^(?:" + pattern + ")$")
 		for _, p := range tc.match {
 			if !re.MatchString(p) {
 				t.Errorf("%s %s: %s should match %s", tc.kind, tc.name, pattern, p)

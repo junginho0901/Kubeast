@@ -134,10 +134,12 @@ func whiskerList(ctx context.Context, client *http.Client, base string, q url.Va
 }
 
 func whiskerStatusError(resp *http.Response) error {
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-	detail := strings.TrimSpace(string(body))
+	detail, cluster := failedAnswer(resp)
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
+		if !cluster {
+			return fmt.Errorf("%w: Whisker (or a proxy in front of it) answered %d itself, not the cluster: %s", ErrUnavailable, resp.StatusCode, detail)
+		}
 		return fmt.Errorf("%w: the cluster refused the Whisker read (%d): %s", ErrForbidden, resp.StatusCode, detail)
 	case http.StatusNotFound:
 		return fmt.Errorf("%w: no Whisker Service there (404 — is Whisker on in the Tigera operator?): %s", ErrRelayMissing, detail)

@@ -91,6 +91,15 @@ type Statuser interface {
 	Status(ctx context.Context) Status
 }
 
+// WriteGrace is how long a write through Guarded may go on after its caller's context
+// is cancelled, from then or the write's start, whichever comes last. While the
+// caller stays, the write has the caller's deadline, if any, and the store's limits.
+const WriteGrace = 5 * time.Second
+
+// errWriteGraceOver is the cause of a write whose grace (WriteGrace) ran out
+// after its caller's context was cancelled.
+var errWriteGraceOver = errors.New("audit: write went on past its grace after the caller's context was cancelled")
+
 // Guarded wraps a Store for fail-closed operation: it counts write failures,
 // keeps the last one, and answers Ready by pinging the store (cached for a
 // short window) so handlers can refuse to run an action that would go
@@ -103,6 +112,7 @@ type Guarded struct {
 	prober     WriteProber
 	failClosed bool
 	ttl        time.Duration
+	writeGrace time.Duration
 
 	mu        sync.Mutex
 	checkedAt time.Time
@@ -123,15 +133,25 @@ type writeFailure struct {
 // Guard wraps store; pinger is normally the same PostgresStore. A nil pinger
 // means Ready only reflects the fail-closed switch (never pings).
 func Guard(store Store, pinger Pinger, failClosed bool) *Guarded {
-	g := &Guarded{Store: store, pinger: pinger, failClosed: failClosed, ttl: 2 * time.Second}
+	g := &Guarded{Store: store, pinger: pinger, failClosed: failClosed, ttl: 2 * time.Second, writeGrace: WriteGrace}
 	g.prober, _ = pinger.(WriteProber)
 	return g
 }
 
 // Write persists through the inner Store, counting and logging failures. A
-// failure also drops the Ready cache so the next check pings again.
+// failure also drops the Ready cache so the next check pings again. The write
+// keeps ctx's values and deadline but not its cancellation: a request whose
+// client went away after its change ran (net/http cancels the request's
+// context when the connection closes) still gets its row, the write going on
+// at most writeGrace from ctx's cancellation or its own start, whichever comes
+// last. A step of a shutdown keeps its deadline.
 func (g *Guarded) Write(ctx context.Context, rec Record) (int64, error) {
-	id, err := g.Store.Write(ctx, rec)
+	wctx, cancel := writeContext(ctx, g.writeGrace)
+	defer cancel()
+	id, err := g.Store.Write(wctx, rec)
+	if err != nil && errors.Is(context.Cause(wctx), errWriteGraceOver) {
+		err = fmt.Errorf("%w: %w", errWriteGraceOver, err)
+	}
 	g.mu.Lock()
 	if err != nil {
 		g.checkedAt, g.probedAt = time.Time{}, time.Time{}
@@ -146,6 +166,36 @@ func (g *Guarded) Write(ctx context.Context, rec Record) (int64, error) {
 		slog.ErrorContext(ctx, "audit: write failed", "action", rec.Action, "error", err)
 	}
 	return id, err
+}
+
+// writeContext is ctx without its cancellation: it keeps ctx's values and
+// deadline and ends grace after ctx is cancelled, or after this call if it
+// already is (WriteGrace when grace is 0 or less, as in a Guarded made without
+// Guard). A ctx ended by its deadline ends it at that deadline, which it holds
+// as its own. The CancelFunc stops the AfterFunc and cancels both contexts.
+func writeContext(ctx context.Context, grace time.Duration) (context.Context, context.CancelFunc) {
+	if grace <= 0 {
+		grace = WriteGrace
+	}
+	base, cancelBase := context.WithoutCancel(ctx), context.CancelFunc(func() {})
+	if d, ok := ctx.Deadline(); ok {
+		base, cancelBase = context.WithDeadline(base, d)
+	}
+	wctx, end := context.WithCancelCause(base)
+	stop := context.AfterFunc(ctx, func() {
+		t := time.NewTimer(grace)
+		defer t.Stop()
+		select {
+		case <-t.C:
+			end(errWriteGraceOver)
+		case <-wctx.Done():
+		}
+	})
+	return wctx, func() {
+		stop()
+		end(nil)
+		cancelBase()
+	}
 }
 
 // Ready implements Readier.

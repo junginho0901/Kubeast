@@ -30,6 +30,8 @@ type AuthHandler struct {
 	dummyHash string
 	// listClusterIDs replaces the cluster registry lookup in tests.
 	listClusterIDs func(context.Context) ([]string, error)
+	// verify replaces security.VerifyPassword in tests, which count the hash checks an answer spends.
+	verify func(password, stored string) bool
 }
 
 func (h *AuthHandler) dummyPasswordHash() string {
@@ -39,6 +41,14 @@ func (h *AuthHandler) dummyPasswordHash() string {
 		}
 	})
 	return h.dummyHash
+}
+
+// checkPassword is security.VerifyPassword, or the test's replacement.
+func (h *AuthHandler) checkPassword(password, stored string) bool {
+	if h.verify != nil {
+		return h.verify(password, stored)
+	}
+	return security.VerifyPassword(password, stored)
 }
 
 func NewAuthHandler(repo *repository.Repository, jwtMgr *security.JWTManager, cfg config.Config, auditStore audit.Store) *AuthHandler {

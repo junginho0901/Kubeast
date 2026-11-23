@@ -131,7 +131,8 @@ test.describe('audit gaps', () => {
       expect(self.status()).toBe(403)
       // a wrong current password
       const pw = await request.post('/api/v1/auth/change-password', { headers: member, data: { current_password: 'not-the-password', new_password: 'e2e-audit-auth-new-1' }, failOnStatusCode: false })
-      expect(pw.status()).toBe(401)
+      expect(pw.status()).toBe(403)
+      expect((await pw.json()).reason, 'the refusal names the field').toBe('password_mismatch')
       // an access request on a cluster the member holds nothing on (when the feature is on)
       const arCfg = await (await request.get('/api/v1/auth/access-requests/config', { headers: member })).json()
       if (arCfg.enabled) {

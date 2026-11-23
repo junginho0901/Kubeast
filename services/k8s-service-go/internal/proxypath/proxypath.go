@@ -94,8 +94,8 @@ func dotSegment(p string) bool {
 	return false
 }
 
-// maxStatusBytes is the largest failed answer read as a Status; the API server's own are a few hundred bytes.
-const maxStatusBytes = 64 << 10
+// MaxStatusBytes is the largest failed answer read as a Status; the API server's own are a few hundred bytes.
+const MaxStatusBytes = 64 << 10
 
 // APIServerAnswer reads a failed answer of a Service read through the API server proxy. A Kubernetes Status (kind
 // Status, apiVersion v1), which only the API server writes, is its own answer: a refusal of the proxy, no such
@@ -103,7 +103,7 @@ const maxStatusBytes = 64 << 10
 // none and its message cut to 300 characters. Any other body is the Service's own answer, which the API server passed
 // on: nil, false.
 func APIServerAnswer(code int, body []byte) (*apierrors.StatusError, bool) {
-	if len(body) > maxStatusBytes {
+	if len(body) > MaxStatusBytes {
 		return nil, false
 	}
 	var st metav1.Status

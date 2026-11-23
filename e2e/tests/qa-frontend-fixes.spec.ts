@@ -22,7 +22,7 @@ function kubectl(args: string[]): void {
 test.describe('QA sweep frontend fixes', () => {
   test('login page hides "Create account" when registration is off', async ({ page, request }) => {
     const cfg = await (await request.get('/api/v1/auth/oidc/config')).json()
-    test.skip(cfg.registration !== false, 'registration is open on this server')
+    test.skip(cfg.registration !== false, 'registration is open on this server (e2e/scripts/oidc-mock.sh up opens it)')
     await page.context().clearCookies()
     await page.goto('/login')
     await expect(page.locator('input[type="password"]')).toBeVisible()

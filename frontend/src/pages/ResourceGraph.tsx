@@ -503,7 +503,8 @@ export default function ResourceGraph() {
               maxZoom={2}
             >
               <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--color-slate-700)" />
-              <Controls className="bg-slate-800! border-slate-700! rounded-lg! [&>button]:bg-slate-700! [&>button]:border-slate-600! [&>button]:text-ink! [&>button:hover]:bg-slate-600!" />
+              {/* bottom centre: the legend holds the bottom-left corner and the traffic panel the right edge */}
+              <Controls position="bottom-center" orientation="horizontal" className="bg-slate-800! border-slate-700! rounded-lg! [&>button]:bg-slate-700! [&>button]:border-slate-600! [&>button]:text-ink! [&>button:hover]:bg-slate-600!" />
               <MiniMap
                 nodeColor={node => {
                   const raw = node.data?.raw as ResourceGraphNode | undefined

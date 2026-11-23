@@ -2957,6 +2957,8 @@
     },
     "resetting": "Resetting...",
     "reset": "Reset password",
+    "resetPasswordSso": "This account signs in with single sign-on and has no password to reset.",
+    "ssoAccount": "SSO account",
     "deleteConfirm": "Delete this user?\n\nTarget: {{target}}\n\n* Deletions cannot be easily undone.",
     "deleteSelfBlocked": "You cannot delete your own account.",
     "deleteTitle": "Delete user",
@@ -3078,7 +3080,8 @@
       "confirm": "Confirm new password",
       "confirmPlaceholder": "Type again",
       "updating": "Updating...",
-      "submit": "Update password"
+      "submit": "Update password",
+      "wrongCurrent": "The current password is wrong."
     },
     "title": "Settings",
     "subtitle": "Manage your profile, password, language, and color mode.",

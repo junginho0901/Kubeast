@@ -70,7 +70,8 @@ auth:
   cookieSecure: true
   # Password sign-in: "on" / "admin-only" (only admin.email, as the break-glass
   # path when the identity provider is down) / "off". Quoted: YAML reads a bare
-  # on/off as a boolean.
+  # on/off as a boolean. An account the provider made never signs in with a
+  # password, admin.email's aside.
   passwordLogin: "on"
   # Single sign-on through one OpenID Connect provider (Keycloak, Google, Okta,
   # Entra ID, ...): authorization code flow with PKCE, ID token verified via

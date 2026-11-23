@@ -10,6 +10,7 @@ import (
 	"math"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -164,7 +165,8 @@ func ParseWorkload(kind, name string) (*Workload, error) {
 }
 
 // OwnsPod reports whether a pod with these owner references (podrow's "owner_references") belongs to w: its own owner,
-// or the ReplicaSet of a Deployment and the Job of a CronJob, which carry the owner's name and a suffix.
+// or the ReplicaSet of a Deployment (<name>-<pod-template-hash>) and the Job of a CronJob (<name>-<schedule minute>, or
+// <name>-manual-<unix second> as Kubeast's trigger names it), so cart-api's ReplicaSet is not cart's.
 func (w *Workload) OwnsPod(owners []map[string]interface{}) bool {
 	if w == nil {
 		return true
@@ -175,13 +177,130 @@ func (w *Workload) OwnsPod(owners []map[string]interface{}) bool {
 		switch {
 		case kind == w.Kind && name == w.Name:
 			return true
-		case w.Kind == "Deployment" && kind == "ReplicaSet" && strings.HasPrefix(name, w.Name+"-"):
+		case w.Kind == "Deployment" && kind == "ReplicaSet" && suffixed(name, w.Name+"-", hashLetters):
 			return true
-		case w.Kind == "CronJob" && kind == "Job" && strings.HasPrefix(name, w.Name+"-"):
+		case w.Kind == "CronJob" && kind == "Job" && (suffixed(name, w.Name+"-", digitLetters) || suffixed(name, w.Name+"-manual-", digitLetters)):
 			return true
 		}
 	}
 	return false
+}
+
+// hashLetters are the letters of a pod-template-hash and of the 5 the API server adds to a generated name
+// (k8s.io/apimachinery util/rand); digitLetters those of a Job's schedule minute and of an index.
+const (
+	hashLetters  = "bcdfghjklmnpqrstvwxz2456789"
+	digitLetters = "0123456789"
+)
+
+// suffixed: name is prefix and then 1 to 10 of letters.
+func suffixed(name, prefix, letters string) bool {
+	rest, ok := strings.CutPrefix(name, prefix)
+	return ok && rest != "" && len(rest) <= 10 && strings.Trim(rest, letters) == ""
+}
+
+// generatedBase is the longest generateName base the API server keeps before its 5 letters (apiserver names: 63 in all).
+const generatedBase = 58
+
+// namePart is a literal, or a run of min to max letters of class, in a generated name.
+type namePart struct {
+	lit      string
+	class    string
+	min, max int
+}
+
+// cutTo is the pattern of the names parts make, cut to their first room bytes as the API server cuts a long base.
+func cutTo(parts []namePart, room int) string {
+	if len(parts) == 0 || room <= 0 {
+		return ""
+	}
+	p := parts[0]
+	if p.class == "" {
+		if len(p.lit) >= room {
+			return regexp.QuoteMeta(p.lit[:room])
+		}
+		return regexp.QuoteMeta(p.lit) + cutTo(parts[1:], room-len(p.lit))
+	}
+	type alt struct {
+		lo, hi int
+		rest   string
+	}
+	var alts []alt
+	for n := p.min; n <= p.max; n++ {
+		kept := min(n, room)
+		rest := cutTo(parts[1:], room-kept)
+		if last := len(alts) - 1; last >= 0 && alts[last].rest == rest && kept-alts[last].hi <= 1 {
+			alts[last].hi = kept
+			continue
+		}
+		alts = append(alts, alt{kept, kept, rest})
+	}
+	out := make([]string, len(alts))
+	for i, a := range alts {
+		out[i] = p.class + repeat(a.lo, a.hi) + a.rest
+	}
+	return group(out)
+}
+
+func repeat(lo, hi int) string {
+	if lo == hi {
+		return fmt.Sprintf("{%d}", lo)
+	}
+	return fmt.Sprintf("{%d,%d}", lo, hi)
+}
+
+func group(alts []string) string {
+	if len(alts) == 1 {
+		return alts[0]
+	}
+	return "(?:" + strings.Join(alts, "|") + ")"
+}
+
+// indexedBase is the base of an indexed Job's pods, <job>-<index>-, the Job's name cut so it stays within
+// generatedBase (the job controller's podGenerateNameWithIndex), for an index of 1 to 6 digits.
+func indexedBase(job []namePart) string {
+	var alts []string
+	from := 1
+	for d := 1; d <= 6; d++ {
+		name := cutTo(job, generatedBase-d-2)
+		if d < 6 && cutTo(job, generatedBase-d-3) == name {
+			continue
+		}
+		alts = append(alts, name+"-[0-9]"+repeat(from, d)+"-")
+		from = d + 1
+	}
+	return group(alts)
+}
+
+// PodPattern is the regular expression of the names w's controller gives its pods: a Deployment's
+// <name>-<pod-template-hash>-<5 letters>, a ReplicaSet's and a DaemonSet's <name>-<5 letters>, a Job's that or
+// <name>-<index>-<5 letters>, a CronJob's the same after its Job's name, a StatefulSet's <name>-<ordinal>; a base past
+// generatedBase is cut as the API server cuts it. So a sibling whose name starts with w's (cart, cart-api) is left out.
+// Log search's workload filter (logsearch.Config.LogQL) matches the pod label by it too.
+func (w *Workload) PodPattern() string {
+	random := "[" + hashLetters + "]{5}"
+	digits := namePart{class: "[0-9]", min: 1, max: 10}
+	var bases, jobs [][]namePart
+	switch w.Kind {
+	case "StatefulSet":
+		return regexp.QuoteMeta(w.Name) + "-[0-9]+"
+	case "Deployment":
+		bases = [][]namePart{{{lit: w.Name + "-"}, {class: "[" + hashLetters + "]", min: 1, max: 10}, {lit: "-"}}}
+	case "CronJob":
+		jobs = [][]namePart{{{lit: w.Name + "-"}, digits}, {{lit: w.Name + "-manual-"}, digits}}
+	case "Job":
+		jobs = [][]namePart{{{lit: w.Name}}}
+	default:
+		bases = [][]namePart{{{lit: w.Name + "-"}}}
+	}
+	var alts []string
+	for _, b := range bases {
+		alts = append(alts, cutTo(b, generatedBase)+random)
+	}
+	for _, job := range jobs {
+		alts = append(alts, cutTo(append(append([]namePart{}, job...), namePart{lit: "-"}), generatedBase)+random, indexedBase(job)+random)
+	}
+	return group(alts)
 }
 
 // podMatcher is the PromQL label matcher of w's pods by name — pods that are gone have no owner left to read.
@@ -189,7 +308,7 @@ func (w *Workload) podMatcher() string {
 	if w == nil {
 		return ""
 	}
-	return `,pod=~"` + strings.ReplaceAll(w.Name, ".", `\\.`) + `-.*"`
+	return `,pod=~` + strconv.Quote(w.PodPattern())
 }
 
 // Finding is one thing a check found, or one target it compared.
@@ -205,15 +324,24 @@ type Finding struct {
 	Examples []string `json:"examples,omitempty"`
 }
 
-// CheckResult is what one check gives: findings, or the reason it did not run.
+// CheckResult is what one check gives: findings, or the reason it did not run. Partial says what part of its reads it
+// could not make when it ran on the rest.
 type CheckResult struct {
 	Check    string
 	Findings []Finding
 	NotRun   string
+	Partial  string
 }
 
 // NotRun names a check that did not run and why.
 type NotRun struct {
+	Check  string `json:"check"`
+	Reason string `json:"reason"`
+}
+
+// Partial names a check that ran on part of what it reads and what it could not read: its findings, or its place under
+// normal, are about the part it read.
+type Partial struct {
 	Check  string `json:"check"`
 	Reason string `json:"reason"`
 }
@@ -228,7 +356,8 @@ func windowJSON(w Window) WindowJSON {
 	return WindowJSON{Start: w.Start.UTC().Format(time.RFC3339), End: w.End.UTC().Format(time.RFC3339)}
 }
 
-// Result is the answer: the ranked findings, the checks that found nothing and the checks that did not run.
+// Result is the answer: the ranked findings, the checks that found nothing, the checks that did not run and those that
+// ran on part of what they read.
 type Result struct {
 	Namespace     string     `json:"namespace"`
 	Workload      *Workload  `json:"workload,omitempty"`
@@ -238,6 +367,7 @@ type Result struct {
 	FindingsTotal int        `json:"findings_total"`
 	Normal        []string   `json:"normal"`
 	NotRun        []NotRun   `json:"not_run"`
+	Partial       []Partial  `json:"partial,omitempty"`
 	StoreQueries  int        `json:"store_queries"`
 	// CallOrder: how the call graph ordered the findings of the namespace's failing workloads, present only when it was
 	// asked (features.callGraph on and findings on two workloads or more).
@@ -267,6 +397,8 @@ type CallOrderNote struct {
 	Suspects []string `json:"suspects,omitempty"`
 	// Moved: the findings that changed place.
 	Moved int `json:"moved"`
+	// Truncated: the calls answer it was made from was cut (its truncated or a source's): a call or its failures may be missing.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // apply reorders found (ranked) as CallOrder says and counts the findings that moved.
@@ -338,6 +470,9 @@ func AssembleWith(namespace string, wl *Workload, w Window, results []CheckResul
 		}
 		if anomalous == 0 {
 			out.Normal = append(out.Normal, check)
+		}
+		if r.Partial != "" {
+			out.Partial = append(out.Partial, Partial{Check: check, Reason: r.Partial})
 		}
 	}
 	Rank(found)

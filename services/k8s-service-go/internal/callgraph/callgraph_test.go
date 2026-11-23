@@ -1,6 +1,7 @@
 package callgraph
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -171,6 +172,90 @@ func TestBuildCapsTheEdges(t *testing.T) {
 	edges, total, truncated := Build(ix, tr, nil)
 	if total != MaxEdges+20 || !truncated || len(edges) != MaxEdges || edges[0].Requests != MaxEdges+20 || edges[MaxEdges-1].Requests != 21 {
 		t.Fatalf("%d %v %d first %d last %d", total, truncated, len(edges), edges[0].Requests, edges[len(edges)-1].Requests)
+	}
+}
+
+// Without the namespace labels the failed query is capped too: 500 other edges with 20 failed calls each fill it, so
+// cart's 10 failed calls of 100 000 are not in it and its errors are not known (null), never 0. A failed answer short of
+// the cap, one that reached a 0 or one holding cart's series says what cart's failed calls are, and so does a metric
+// with the namespace labels, whose queries are not capped.
+func TestBuildErrorsOutsideAFullFailedAnswerAreNotKnown(t *testing.T) {
+	ix := NewIndex("shop", []Node{{ID: "Deployment/shop/cart", Kind: "Deployment", Name: "cart", Namespace: "shop", Health: "ok"}}, nil)
+	cart := sample(100000, "client", "edge", "server", "cart")
+	others := func(n int, failed float64) []Sample {
+		var out []Sample
+		for i := 0; i < n; i++ {
+			out = append(out, sample(failed, "client", fmt.Sprintf("else%d", i), "server", "other"))
+		}
+		return out
+	}
+	edgeOf := func(shape Shape, failed []Sample) (Edge, map[string]interface{}, string) {
+		edges, _, _ := Build(ix, &Traces{Shape: shape, Requests: []Sample{cart}, Failed: failed}, nil)
+		if len(edges) != 1 {
+			t.Fatalf("edges %+v", edges)
+		}
+		raw, err := json.Marshal(edges[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m map[string]interface{}
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatal(err)
+		}
+		return edges[0], m, string(raw)
+	}
+	e, m, raw := edgeOf(Shape{}, others(MaxSeries, 20))
+	errs, hasErrors := m["errors"]
+	ratio, hasRatio := m["error_ratio"]
+	if !hasErrors || errs != nil || !hasRatio || ratio != nil || m["requests"] != float64(100000) || e.Failing() {
+		t.Fatalf("cart's failed calls were not read: errors and error_ratio null, got %s", raw)
+	}
+	for name, failed := range map[string][]Sample{
+		"short of the cap": others(MaxSeries-1, 20),
+		"reached a 0":      append(others(MaxSeries-1, 20), sample(0, "client", "quiet", "server", "other")),
+		"holds cart":       append(others(MaxSeries-1, 20), sample(10, "client", "edge", "server", "cart")),
+	} {
+		_, m, raw := edgeOf(Shape{}, failed)
+		got, ok := m["errors"]
+		// 10 of 100 000 is a ratio of 0 at three places, which the answer leaves out as before
+		if name == "holds cart" && got != float64(10) || name != "holds cart" && ok || hasKey(m, "error_ratio") {
+			t.Errorf("%s: errors known (10 when held, else 0 and left out), got %s", name, raw)
+		}
+	}
+	if _, m, raw := edgeOf(Shape{Namespace: "k8s_namespace_name"}, others(MaxSeries, 20)); hasKey(m, "errors") || hasKey(m, "error_ratio") {
+		t.Errorf("namespace labels, no cap: errors 0, got %s", raw)
+	}
+}
+
+func hasKey(m map[string]interface{}, key string) bool {
+	_, ok := m[key]
+	return ok
+}
+
+// Every one of the cluster's 500 busiest edges is in another namespace and cart's is the 501st, which topk left out:
+// the namespace's edges are empty and the answer says it was cut. A requests answer short of the cap, or one that
+// reached a 0, is whole, and with the namespace labels the queries are not capped.
+func TestBuildAFullRequestsAnswerIsCut(t *testing.T) {
+	ix := NewIndex("shop", []Node{{ID: "Deployment/shop/cart", Kind: "Deployment", Name: "cart", Namespace: "shop"}}, nil)
+	busiest := func(n int) []Sample {
+		var out []Sample
+		for i := 0; i < n; i++ {
+			out = append(out, sample(1000, "client", fmt.Sprintf("else%d", i), "server", "other"))
+		}
+		return out
+	}
+	edges, total, cut := Build(ix, &Traces{Shape: Shape{}, Requests: busiest(MaxSeries)}, nil)
+	if len(edges) != 0 || total != 0 || !cut {
+		t.Fatalf("a full requests answer: edges %d total %d truncated %v", len(edges), total, cut)
+	}
+	for name, tr := range map[string]*Traces{
+		"short of the cap": {Shape: Shape{}, Requests: busiest(MaxSeries - 1)},
+		"reached a 0":      {Shape: Shape{}, Requests: append(busiest(MaxSeries-1), sample(0, "client", "quiet", "server", "other"))},
+		"namespace labels": {Shape: Shape{Namespace: "k8s_namespace_name"}, Requests: busiest(MaxSeries)},
+	} {
+		if _, _, cut := Build(ix, tr, nil); cut {
+			t.Errorf("%s: whole, got truncated", name)
+		}
 	}
 }
 
