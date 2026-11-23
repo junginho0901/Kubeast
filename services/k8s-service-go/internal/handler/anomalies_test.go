@@ -259,7 +259,7 @@ func TestAnomaliesOfOneWorkloadAskForItsPods(t *testing.T) {
 	f := &fakeAnomalies{prometheus: true}
 	_, res := getAnomalies(anomalyHandler(f, config.Config{}), "/api/v1/namespaces/shop/anomalies?workload_kind=Deployment&workload_name=api", flowReader)
 	for _, q := range f.queries {
-		if !strings.Contains(q, `pod=~"api-.*"`) {
+		if !strings.Contains(q, `pod=~"api-[bcdfghjklmnpqrstvwxz2456789]{1,10}-[bcdfghjklmnpqrstvwxz2456789]{5}"`) {
 			t.Errorf("query without the workload's pods: %s", q)
 		}
 	}

@@ -115,7 +115,7 @@ func TestQueriesParseAndStayInTheNamespace(t *testing.T) {
 					if m.Name == "namespace" && m.Value == "shop" {
 						ns = true
 					}
-					if m.Name == "pod" && m.Value == `web\.v2-.*` {
+					if m.Name == "pod" && m.Value == `web\.v2-[bcdfghjklmnpqrstvwxz2456789]{1,10}-[bcdfghjklmnpqrstvwxz2456789]{5}` {
 						pod = true
 					}
 				}
@@ -186,7 +186,7 @@ func pod(name string, terminations ...map[string]interface{}) map[string]interfa
 	for i, t := range terminations {
 		containers = append(containers, map[string]interface{}{"name": "c" + string(rune('0'+i)), "last_state": map[string]interface{}{"terminated": t}})
 	}
-	return map[string]interface{}{"name": name, "node_name": "n1", "containers": containers, "owner_references": owners("ReplicaSet", "web-1")}
+	return map[string]interface{}{"name": name, "node_name": "n1", "containers": containers, "owner_references": owners("ReplicaSet", "web-5d4f8c7b9")}
 }
 
 func ended(reason string, at time.Time) map[string]interface{} {
@@ -248,6 +248,39 @@ func TestFromIssues_AWorkloadKeepsItsOwnRows(t *testing.T) {
 	r := FromIssues(rows, pods, &Workload{Kind: "Deployment", Name: "web"})
 	if len(r.Findings) != 2 || r.Findings[0].Target != "Pod/web-1-a" || r.Findings[1].Target != "Deployment/web" {
 		t.Fatalf("%+v", r.Findings)
+	}
+}
+
+// A warning about Deployment/cart and a Jobs list that could not be read: the answer keeps the finding and says the Jobs
+// were not read.
+func TestFromIssues_KeepsAFailedListBesideItsFindings(t *testing.T) {
+	w := Window{Start: now.Add(-time.Hour), End: now}
+	rows := []IssueRow{
+		{Kind: "Deployment", Name: "cart", Severity: "warning", Reason: "NotReady"},
+		{Kind: "Collector", Name: "jobs", Severity: "info", Reason: "ListFailed"},
+	}
+	out, err := json.Marshal(Assemble("shop", nil, w, []CheckResult{FromIssues(rows, nil, nil)}, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res struct {
+		Findings []Finding `json:"findings"`
+		NotRun   []NotRun  `json:"not_run"`
+		Partial  []NotRun  `json:"partial"`
+	}
+	if err := json.Unmarshal(out, &res); err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Findings) != 1 || res.Findings[0].Target != "Deployment/cart" || len(res.NotRun) != 0 {
+		t.Fatalf("the finding stays: %s", out)
+	}
+	if len(res.Partial) != 1 || res.Partial[0].Check != CheckIssues || !strings.HasPrefix(res.Partial[0].Reason, "these lists could not be read: jobs") {
+		t.Fatalf("the Jobs list that failed is not said: %s", out)
+	}
+	// with nothing else found, the check did not run
+	only := Assemble("shop", nil, w, []CheckResult{FromIssues(rows[1:], nil, nil)}, 0)
+	if len(only.NotRun) != 1 || only.NotRun[0].Reason != "these lists could not be read: jobs" || len(only.Normal) != 0 {
+		t.Fatalf("%+v", only)
 	}
 }
 
