@@ -20,12 +20,17 @@ const memoryShortMessage = "k8s-service is short of memory, cannot create new wa
 // watchMemoryFull says whether the memory held against the collector's limit is past watchMemoryShare of it. Without a
 // limit (GOMEMLIMIT unset outside a container) nothing waits.
 func (m *Multiplexer) watchMemoryFull() bool {
+	held, limit := m.heldAndLimit()
+	return limit > 0 && limit < math.MaxInt64 && float64(held) > watchMemoryShare*float64(limit)
+}
+
+// heldAndLimit is the memory held against the collector's limit and that limit (heldBytes).
+func (m *Multiplexer) heldAndLimit() (held, limit uint64) {
 	read := m.heap
 	if read == nil {
 		read = heapNow.read
 	}
-	held, limit := read()
-	return limit > 0 && limit < math.MaxInt64 && float64(held) > watchMemoryShare*float64(limit)
+	return read()
 }
 
 // heapReading is the memory the next collection cannot give back and the collector's limit, read through

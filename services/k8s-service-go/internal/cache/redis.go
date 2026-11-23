@@ -128,8 +128,8 @@ func NewWithUser(host string, port, db int, username, password string) *Cache {
 		return c
 	}
 
-	rdb := redis.NewClient(cacheOptions(host, port, db, username, password))
-	c.inv = redis.NewClient(invalidationOptions(host, port, db, username, password))
+	rdb := CountRefusals(redis.NewClient(cacheOptions(host, port, db, username, password)))
+	c.inv = CountRefusals(redis.NewClient(invalidationOptions(host, port, db, username, password)))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
