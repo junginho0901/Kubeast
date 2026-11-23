@@ -5,7 +5,8 @@
 Every release (`v*` tag, `.github/workflows/release.yaml`) publishes the seven
 images to ghcr.io, plus ai-service with Claude Code as `kubeast-ai-service:vX.Y.Z-claude-code`.
 The chart runs that image when `ai.providers.claudeCode.enabled` is on. Its SBOM
-artifact is `sbom-ai-service-claude-code.spdx.json`.
+artifacts are `sbom-ai-service-claude-code.spdx.json` (amd64) and
+`sbom-ai-service-claude-code-arm64.spdx.json`.
 
 - Each image is pushed **by digest first**, and the steps below run against that digest.
 - The version tag (`:vX.Y.Z`) is applied only after the last of them succeeds,
@@ -25,7 +26,7 @@ Before tagging `vX.Y.Z`:
   workflow's first step stops a tag that differs, so the install docs and
   `install.sh` always name the release they ship with.
 - Run the workflow by hand (workflow_dispatch) first. That dry run builds every
-  image without pushing and puts the amd64 variant through the same trivy gate,
+  image without pushing and puts the amd64 and the arm64 variant through the same trivy gate,
   so a tag is pushed after the gate has passed.
   It also starts the Compose install on images built from the commit
   (`scripts/compose-smoke.sh --build`).
@@ -39,9 +40,9 @@ Per image, by digest:
 | Step | What it produces | Fails the release when |
 |---|---|---|
 | architecture check | one line per platform variant with the `file` description of the image's main binary | a variant's binary is not built for its platform (the arm64 variant carrying an x86-64 binary, as v0.3.0/v0.4.0 did for two images) |
-| trivy (`aquasecurity/trivy-action`) | vulnerability report in the job log | a **fixed** CRITICAL or HIGH vulnerability is found (`ignore-unfixed`: findings without an upstream fix are reported but do not block) |
-| syft (`anchore/sbom-action`) | SBOM in SPDX JSON, also a workflow artifact `sbom-<service>.spdx.json` | SBOM generation error |
-| `actions/attest-sbom` | SBOM attestation pushed to the registry next to the image (Sigstore, GitHub OIDC identity) | attestation error |
+| trivy (`aquasecurity/trivy-action`) | vulnerability report of the amd64 and the arm64 variant, each read by its own digest, in the job log | a **fixed** CRITICAL or HIGH vulnerability is found (`ignore-unfixed`: findings without an upstream fix are reported but do not block) |
+| syft (`anchore/sbom-action`) | an SBOM in SPDX JSON of each variant, also workflow artifacts `sbom-<service>.spdx.json` (amd64) and `sbom-<service>-arm64.spdx.json` | SBOM generation error |
+| `actions/attest-sbom` | the two SBOM attestations, both on the image's manifest list digest, pushed to the registry next to the image (Sigstore, GitHub OIDC identity) | attestation error |
 | `actions/attest-build-provenance` | SLSA build-provenance attestation (which workflow, commit and runner built the image) pushed to the registry | attestation error |
 | cosign keyless (`cosign sign --yes IMAGE@DIGEST`) | signature in the registry, entry in the Rekor transparency log | signing error |
 
@@ -68,9 +69,12 @@ cosign verify \
   --certificate-identity-regexp '^https://github.com/junginho0901/Kubeast/\.github/workflows/release\.yaml@refs/tags/v' \
   $IMG
 
-# the SBOM itself
+# the SBOM itself, one per platform variant, which its image package names (arch=amd64, arch=arm64);
+# releases before 0.7.9 attest the amd64 one only
+ARCH=amd64
 gh attestation verify oci://$IMG -R junginho0901/Kubeast --predicate-type https://spdx.dev/Document/v2.3 --format json \
-  | jq '.[0].verificationResult.statement.predicate' > sbom.spdx.json
+  | jq --arg a "arch=$ARCH" '[.[].verificationResult.statement.predicate
+      | select(any(.packages[].externalRefs[]?.referenceLocator; startswith("pkg:oci/") and contains($a)))][0]' > sbom-$ARCH.spdx.json
 ```
 
 ## Verifying the chart
@@ -89,6 +93,12 @@ cosign verify \
 and both commands work offline against a digest pinned in your values
 (`global.imageTag` may be a digest-pinned tag once the chart supports it).
 
+`scripts/verify-release.sh vX.Y.Z` runs these commands over every image and the
+chart of one release. It also runs each check narrowed to that release's tag,
+commit and workflow and against the attestations' copy in the registry, opens
+the SBOMs, and checks that a wrong ref, repository, identity or issuer is
+refused. It only reads (`gh`, `cosign`, `crane`, `helm`, `jq`).
+
 ## Enforcing it in a cluster
 
 The workflow only produces the evidence. To refuse unsigned images at admission,
@@ -100,3 +110,7 @@ policy-controller. That is a cluster-side setting and is not part of the chart.
 
 - Scanning runs at release time only; there is no scheduled rescan of already
   published images.
+- The Claude Code binary in `kubeast-ai-service:vX.Y.Z-claude-code` is one
+  executable inside the `claude-agent-sdk` wheel. trivy, syft and pip-audit see
+  the wheel and its version, not what the binary was built from, so the gate
+  does not check the libraries inside it.

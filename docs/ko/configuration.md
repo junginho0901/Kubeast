@@ -127,6 +127,9 @@ metrics:
 # 해당 라우트: tool-server의 kubeconfig 조회, auth-service의 validate·invalidate
 # 회전하려면 값을 바꾼 뒤 auth-service, k8s-service, tool-server를 롤아웃하세요.
 # secrets.existingSecret를 쓰면 그 Secret에 넣으세요.
+# k8s-service와 k8s-service-stream은 그 Secret(kubeast-secrets 또는 secrets.existingSecret)에서 이 키만 읽습니다:
+# DATABASE_URL, INTERNAL_API_TOKEN, Redis 사용자가 꺼져 있을 때 REDIS_PASSWORD, 그 Secret에 있으면 HTTP_PROXY, HTTPS_PROXY,
+# NO_PROXY. 다른 서비스는 통째로 환경 변수로 읽습니다.
 
 # 노드 셸(특권 디버그 파드) — 기본으로 꺼져 있습니다.
 # 켜면 전용 네임스페이스와 이미지 허용 목록(첫 항목이 기본)을 씁니다.
@@ -152,7 +155,8 @@ podSecurity:
 # 가용성 — replicas를 2 이상으로 올렸거나 autoscaling의 minReplicas가 2 이상인 Deployment에는 PodDisruptionBudget이 생깁니다(pdb.maxUnavailable, 1 · pdb.enabled: false면 만들지 않음). 판을 올릴 때는 새 파드를 먼저 띄우고, 새 파드가 준비된 뒤에 옛 파드를 멈춥니다(postgres·redis는 옛 파드를 먼저 내리기 시작)
 # 그래서 sessionRecording.fileVolume(storage: file)은 k8s-service 파드가 바뀌는 동안 파드 둘이 붙입니다. ReadWriteOnce 볼륨은 한 번에 한 노드에만 붙으니, 노드가 여럿이면 ReadWriteMany 볼륨을 주거나 storage s3·database를 쓰세요(docs/ko/operations.md)
 # 프로브 — liveness는 /livez(다른 것은 안 봄), readiness는 /readyz(SIGTERM부터 503, DB는 보지 않음 — 모두가 쓰는 DB가 죽으면 모든 파드가 한꺼번에 빠지므로). DB 상태는 auth-service·session-service의 /health와 k8s-service의 kubeast_audit_store_up에서 봅니다
-# podShutdown.preStopSeconds: Service 뒤의 파드는(번들 PostgreSQL과 Redis는 빼고 — 둘은 preStop 기다림이 없고 Kubernetes 기본 종료 유예 30초) 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상) 그다음 30초 안에 종료합니다(터미널을 맡은 서버는 드레인 대기와 닫기 대기만큼 더). 파드 IP로 보내는 로드 밸런서 뒤라면 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요(AWS Application Load Balancer 뒤에서는 25초와 대상 그룹 등록 해제 지연 20초: 이 값으로는 게이트웨이 파드를 18번 바꾸는 동안 실패한 요청이 없었고, 기본 5초와 기본 해제 지연 300초로는 18번 중 3번에서 요청이 실패했고, 파드 준비 게이트를 켜고 12번 더 바꿀 때는 실패가 없었습니다. docs/ko/high-availability.md 참고)
+# podShutdown.preStopSeconds: Service 뒤의 파드는(번들 PostgreSQL과 Redis는 빼고 — 둘은 preStop 기다림이 없고 Kubernetes 기본 종료 유예 30초) 종료 요청 뒤 이 초만큼 더 응답하고(preStop sleep, Kubernetes 1.30 이상. 1.30 아래에서는 0보다 크면 렌더가 멈춤) 그다음 30초 안에 종료합니다(터미널을 맡은 서버는 드레인 대기와 닫기 대기만큼 더). 파드 IP로 보내는 로드 밸런서 뒤라면 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요. 게이트웨이는 이 값 대신 gateway.preStopSeconds(아래)를 씁니다. 파드 IP로 보내는 AWS Application Load Balancer 뒤에서는 차트가 게이트웨이에 25초, 대상 그룹에 등록 해제 지연 20초를 줍니다(0.7.8에서 이 값을 손으로 넣었을 때 게이트웨이 파드를 18번 바꾸는 동안 실패한 요청이 없었고, 기본 5초와 기본 해제 지연 300초로는 18번 중 3번에서 요청이 실패했고, 파드 준비 게이트를 켜고 12번 더 바꿀 때는 실패가 없었습니다. 0.7.8 안내대로 넣은 podShutdown.preStopSeconds 25와 ingress.annotations의 지연은 그대로 두어도 되고, 지연은 적은 그대로 남습니다. docs/ko/high-availability.md 참고)
+# podStartup.quickReady: Kubeast 서버들(번들 PostgreSQL과 Redis는 빼고)은 시작 확인(startup probe)을 1초마다, readiness를 첫 지연 없이 3초마다 묻습니다. kubelet은 시작 확인이 통과하는 그 순간 readiness를 묻기 때문에, 하나뿐인 파드를 대신하는 새 파드(지워졌거나 노드 드레인으로 내보내진 경우)는 포트를 연 뒤 약 1초에 Ready가 됩니다. false면 0.7.8의 확인 그대로이고(시작 확인은 auth-service · k8s-service · session-service만 5초마다, readiness는 지연 뒤 10초마다) 그때는 받을 파드가 없는 틈이 ai-service · frontend · gateway는 약 6초, 그 세 서비스는 약 1초였습니다
 replicas:
   gateway: 1
 # 서비스마다 HPA 하나, 기본 꺼짐. k8sService · toolServer를 2대 이상으로 하려면 redis.enabled가 필요(docs/ko/high-availability.md)
@@ -166,11 +170,13 @@ streams:
   enabled: false
   replicas: 1            # 1 그대로 — 스트림 서버 둘 이상은 아직 지원하지 않습니다
   drainSeconds: 60       # 터미널을 맡은 서버가 교체될 때 열린 터미널을 기다리는 시간(꺼져 있으면 k8s-service)
-  preStopSeconds: 10     # k8s-service-stream이 드레인을 시작하기 전에 Service 엔드포인트에서 빠져 있는 시간
+  preStopSeconds: 10     # k8s-service-stream이 드레인을 시작하기 전에 Service 엔드포인트에서 빠져 있는 시간(preStop sleep: Kubernetes 1.30 아래에서는 streams를, 1.33 아래에서는 0을 렌더가 멈춤)
 topologySpread:
   enabled: true
 podShutdown:
   preStopSeconds: 5
+podStartup:
+  quickReady: true
 resources:               # 컨테이너별 requests / memory limit(전체 목록은 values.yaml)
   aiService:
     requests: { cpu: 100m, memory: 256Mi }
@@ -192,9 +198,9 @@ ai:
   model: "gpt-6-luna"
   baseUrlAllowedHosts: []  # 모델 설정의 base_url이 사설 주소(클러스터 안 Ollama, 사내 LLM 게이트웨이)면 여기에 등록하세요
   redaction:
-    numbered: false        # redaction.pii와 함께: 개인 값 네 종류를 채팅 답·조사마다 종류와 번호로(<PHONE_1>), 그 글자를 담은 쓰기는 거절.
+    numbered: false        # (alpha) redaction.pii와 함께: 개인 값 네 종류를 채팅 답·조사마다 종류와 번호로(<PHONE_1>), 그 글자를 담은 쓰기는 거절.
                            # 물은 사람의 채팅 답에는 그 자리에 값이 보임. 끄면 한 글 안의 <EMAIL_n>과 <REDACTED:phone>·<REDACTED:rrn>·<REDACTED:card>, 값 안 보임
-  timelineChanges: false   # AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
+  timelineChanges: false   # (alpha) AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
   refuseRepeatedReads: false # (alpha) true면 채팅 답·조사 하나 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면
                              # 실행하지 않고 그 결과가 어디 있는지 모델에 알려 줍니다. 끄면 전과 같습니다
   toolResultDetails: false # (alpha) true면 도구 결과에 잘린 답의 "M of N", 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭,
@@ -210,7 +216,7 @@ ai:
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),
     # queueWaitSeconds: 칸을 기다리는 최대 시간. 넘으면 "바쁨"으로 끝납니다.
     # memoryLimit: 프로바이더가 켜져 있을 때 ai-service 메모리 한도. resources.aiService.limits.memory보다 클 때 씁니다
-  toolResultsJSON: false   # true면 모델이 도구 결과를 하나의 JSON 객체로, 클러스터 글을 JSON 문자열로 읽습니다(ai-alerts.md "심어 둔 지시")
+  toolResultsJSON: false   # (alpha) true면 모델이 도구 결과를 하나의 JSON 객체로, 클러스터 글을 JSON 문자열로 읽습니다(ai-alerts.md "심어 둔 지시")
 
 # 내장 PostgreSQL(false면 외부 DB)과 Redis(false면 k8s-service가 메모리에 캐시).
 # Redis에 캐시하는 곳은 k8s-service 하나이고, tool-server는 클러스터 바뀜 알림만 듣습니다.
@@ -219,7 +225,7 @@ postgresql:
   user: kubeast
   password: ""          # 비우면 설치 때 생성하고 업그레이드해도 유지합니다(secret에서 확인). 외부 DB(enabled: false)면 필수입니다
   database: kubeast
-  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # 각 서비스가 연결한 뒤 SET으로 거는 PostgreSQL statement_timeout, lock_timeout, idle_in_transaction_session_timeout입니다(마이그레이션은 역할(role)에 걸려 있어도 앞의 둘 없이 돕니다). 0이면 걸지 않습니다. RDS Proxy 뒤에서는 SET이 세션을 고정(pinning)하니 0으로 두고 프록시의 초기화 쿼리나 데이터베이스 역할(role)에 거세요. PgBouncer는 session 풀링으로만 쓰세요. transaction 풀링은 트랜잭션 사이에 서버 연결을 다른 클라이언트에게 넘기므로 SET이나 세션 advisory lock(마이그레이션, 감사 디스패처, k8s-service 상태 확인 잠금)이 그것을 건 클라이언트에 남지 않습니다
+  sessionLimits: { statementTimeoutMs: 30000, lockTimeoutMs: 15000, idleInTransactionTimeoutMs: 300000 }  # 각 서비스가 연결한 뒤 SET으로 거는 PostgreSQL statement_timeout, lock_timeout, idle_in_transaction_session_timeout입니다(마이그레이션은 역할(role)에 걸려 있어도 앞의 둘 없이 돕니다). 0이면 걸지 않습니다. RDS Proxy 뒤에서는 SET이 세션을 고정(pinning)하니 0으로 두고 프록시의 초기화 쿼리나 데이터베이스 역할(role)에 거세요. PgBouncer는 session 풀링으로만 쓰세요. transaction 풀링은 트랜잭션 사이에 서버 연결을 다른 클라이언트에게 넘기므로 SET이나 세션 advisory lock(마이그레이션, 감사 디스패처, 보존 기간 정리, k8s-service 상태 확인 잠금)이 그것을 건 클라이언트에 남지 않습니다
   pool: { authService: { maxConns: 20 }, sessionService: { maxConns: 20 }, k8sService: { maxConns: 10 }, aiService: { maxConns: 15 }, modelConfigController: { maxConns: 4 } }  # 파드 하나의 연결 수입니다. 차트의 PostgreSQL이면 파드들(롤아웃 때 하나 더, 오토스케일링의 maxReplicas 포함)이 maxConnections보다 많이 열 수 있을 때 설치가 멈추고, 외부 데이터베이스면 NOTES가 그 합을 보여 주니 그쪽 max_connections와 비교하세요
   maxConnections: 300   # 차트 PostgreSQL의 max_connections
 # 업그레이드할 때 Redis는 옛 파드를 먼저 내리기 시작한 뒤 새 파드를 만듭니다(maxSurge 0). 새 파드는 빈 캐시로 시작하고, 옛 파드가 끝나는 몇 초 동안 둘이 같이 있을 수 있지만 데이터는 나누지 않습니다(emptyDir). Redis가 답하지 않는 동안 k8s-service는 클러스터에서 읽습니다. 캐시 명령은 0.5초 안에 그만두고, 그 뒤 3초 동안 캐시는 Redis를 건너뜁니다.
@@ -233,7 +239,7 @@ redis:
 networkPolicy:
   enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(Flannel 등)에서는 영향이 없습니다. kind의 kindnet은 kind 0.24부터 강제합니다
   aiEgress:
-    allowListOnly: false  # true면(networkPolicy.enabled 필요) ai-service는 allowExternalEgressCIDRs로만, tool-server는 clusterAPIs·stsEndpoints·apiserverCIDR로만 나갑니다(cluster-requirements.md §15)
+    allowListOnly: false  # (alpha) true면(networkPolicy.enabled 필요) ai-service는 allowExternalEgressCIDRs로만, tool-server는 clusterAPIs·stsEndpoints·apiserverCIDR로만 나갑니다(cluster-requirements.md §15)
     clusterAPIs: []       # 등록한 클러스터(이 클러스터 포함)의 API 서버를 VPC·서브넷 CIDR로(EKS는 /32 금지) — CIDR은 443·6443, {cidr, port}는 그 포트
     stsEndpoints: []      # tool-server에 IRSA 롤이 있으면 STS VPC 인터페이스 엔드포인트의 서브넷, {cidr, port: 443}
 
@@ -244,8 +250,10 @@ gateway:
     nodePort: 30333
   trustedProxies: []      # 앞단 프록시(Ingress 컨트롤러, LB) CIDR — 감사 로그의 클라이언트 주소를 그 뒤에서 읽습니다
   allowedOrigins: []      # 게이트웨이 자기 호스트와 Ingress 호스트 외에 API·WebSocket을 열어 줄 브라우저 origin(없으면 같은 호스트만)
+  servedByHeader: false   # true면 모든 응답의 X-Kubeast-Gateway에 게이트웨이 파드 이름을 실음, 교체 시험용(끄는 까닭: 클라이언트에게 파드 이름이 보임)
   accessLog:
     upstreamTimes: false  # true면 접근 로그 줄마다 요청 시간, 서비스 연결·헤더·응답 시간(초), 서비스 주소, 클라이언트 포트를 덧붙입니다
+  preStopSeconds: null    # 게이트웨이 파드의 preStop 기다림(종료 유예 = 이 값 + 30, 0 = 없음). null = podShutdown.preStopSeconds, 파드 IP로 보내는 AWS ALB 뒤(아래 ingress에 alb.ingress.kubernetes.io/target-type: ip)에서는 그 값이 0보다 클 때 25로 올림
 
 # Ingress (선택)
 ingress:
@@ -253,6 +261,11 @@ ingress:
   className: ""
   host: kubeast.example.com
   tls: false
+  # annotations는 적은 그대로. alb.ingress.kubernetes.io/target-type: ip가 있으면 차트가
+  # alb.ingress.kubernetes.io/target-group-attributes에 deregistration_delay.timeout_seconds=20을 더합니다
+  # (거기 적힌 속성 뒤에). 그 주석에 deregistration_delay.timeout_seconds가 이미 있으면 더하지 않습니다
+  # annotations:
+  #   alb.ingress.kubernetes.io/target-type: ip
 
 # 0.7.9에 더한 AI 스위치 — 모두 기본 꺼짐입니다. 끄면 모델이 받는 프롬프트·도구 정의가 0.7.8과 같습니다.
 # (alpha): 예고 없이 바뀌거나 없어질 수 있습니다. 자세한 것은 ai-alerts.md·features.md에 있습니다
@@ -274,7 +287,8 @@ features:
   anomalyRank:
     enabled: false           # (alpha) true면 AI 도구 anomaly_rank와 GET /namespaces/{namespace}/anomalies를 켭니다 — 한 네임스페이스가
                              # 앞 구간과 무엇이 달라졌는지 순위로(cluster-requirements.md). 끄면 그 경로는 404이고 아무것도 읽지 않습니다
-    maxQueries: 12           # 답 하나가 저장소에 보낼 수 있는 질의 수
+    maxQueries: 12           # 답 하나가 저장소에 보낼 수 있는 질의 수. 로그 저장소 색인이 줄을 하나도 세지 않을 때 로그 검사가 한 줄
+                             # 읽는 것은 그 색인 질의 안에서 셉니다
     checkTimeoutSeconds: 5   # 검사 하나의 시간
     timeoutSeconds: 20       # 답 전체의 시간
     concurrency: 4           # 한 번에 도는 검사 수
@@ -307,7 +321,7 @@ multicluster:
 
 ## 새 값의 단계
 
-이번 릴리스가 더하거나 뜻을 바꾼 값마다 단계가 있고, 이 표와 그 값의 `values.yaml` 주석에 적습니다.
+0.7.8부터 릴리스가 더하거나 뜻을 바꾼 값마다 단계가 있고, 이 표와 그 값의 `values.yaml` 주석에 적습니다.
 
 - **alpha**: 새로 들어온 값입니다. 키나 동작이 뒤 릴리스에서 바뀌거나 없어질 수 있고, 그때는 그 릴리스 노트에 적습니다.
 - **beta**: 기능은 남습니다. 키나 세부는 바뀔 수 있고, 한 릴리스 앞서 알리고 옮기는 법을 적습니다.
@@ -318,6 +332,7 @@ multicluster:
 | 값 | 기본값 | 단계 | 아직 안 돌린 것 · 돌려 봄 |
 | --- | --- | --- | --- |
 | `podShutdown.preStopSeconds` | 5 | beta | 돌려 봄: Kubernetes 1.29.14(kind, `PodLifecycleSleepAction` 기능 게이트 꺼짐)에 기본 설치를 서버 dry-run으로 보내니 API 서버가 preStop 기다림이 있는 Deployment 7개를 거절함(`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`). `0`이면 객체 58개를 모두 받음. 이 시험은 `streams.enabled`를 끈 설치였음 — 켜면 `k8s-service-stream`은 `podShutdown.preStopSeconds`와 상관없이 `streams.preStopSeconds`로 preStop `sleep`을 가지므로 Kubernetes 1.30 이상이 필요하고, 1.33 아래에서는 `streams.preStopSeconds`를 1 이상으로 둠([클러스터 요구 사항](cluster-requirements.md) §15) |
+| `podStartup.quickReady` | true | beta | kind 개발 설치에서 서버마다 파드를 손으로 지우기와 노드 드레인, ModelConfig 컨트롤러 rollout에 걸리는 시간, 조용한 하루 동안 확인 요청 수와 로그 줄 |
 | `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | 시험 설치에서 사용자를 끈 경우 |
 | 1보다 큰 `replicas.k8sService`와 `replicas.toolServer` | 1 | alpha | k8s-service 2대 · 3대의 크기 |
 | `autoscaling.<service>` | 끔 | alpha | 돌려 봄: EKS 1.35에서 k8s-service와 게이트웨이의 HPA가 파드 2대에서 3대로 늘었다가 돌아오고 HPA를 켰다 끄는 동안, 로드 밸런서를 거친 요청 중 실패한 것 없음 |
@@ -325,12 +340,26 @@ multicluster:
 | `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | 돌려 봄: EKS 1.35에서 서비스마다 파드 둘을 두고 노드 하나를 드레인해 바꾸는 동안, 막힌 내보내기 없음 · 로드 밸런서를 거친 요청 중 실패한 것 없음 |
 | `streams.*` | 끔 | alpha | kind 개발 설치에서 한 번도 안 돌림 |
 | `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | 프로바이더를 켠 시험 설치 |
+| `gateway.preStopSeconds` | null: `podShutdown.preStopSeconds`, 파드 IP로 보내는 AWS ALB 뒤에서는 25, Ingress에 등록 해제 지연 20초 | beta | AWS ALB 뒤에서 차트가 스스로 준 25초와 20초. 게이트웨이 파드 교체 18번에 실패가 없던 회차는 모든 파드에 `podShutdown.preStopSeconds: 25`와 주석을 손으로 넣었음(EKS 1.35, AWS Load Balancer Controller v3.6.2) |
 | `gateway.accessLog.upstreamTimes` | false | alpha | 돌려 봄: kind 개발 설치에서 켠 상태로 100명이 한꺼번에 화면을 엶(2026-11-17), 접근 로그 줄마다 여섯 칸이 붙음 |
 | `multicluster.breakerConsecutiveFails`(0.7.8부터 `0`이면 차단기 끔), `multicluster.breakerOpenSec`(0.7.8부터 읽음) | 5, 30 | beta | kind 개발 설치에서 클러스터를 끊어 본 경우 |
 | `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | 돌려 봄: kind에서 0.7.7부터 업그레이드 리허설(기본 설치, 기존 Secret, 외부 데이터베이스, AI 끔, 2대 · 3대)과 EKS 1.35. EKS 1.35에서는 노드를 드레인할 때 실시간 목록이 한 번 닫혔다가 1.1초 안에 다시 붙고, HPA를 켜면서 k8s-service가 2대에서 1대로 줄 때 한 번 닫혔다가 1.2초 안에 다시 붙음. HPA가 파드를 늘리고 줄일 때는 닫히지 않음 |
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | 돌려 봄: kind 개발 설치에서 기본값으로 stream-caps e2e(2026-11-19). 한 계정의 21번째 터미널과 실시간 로그가 거절되고 화면이 까닭을 보여 주며, 하나를 닫으면 새로 열림 |
 | `multicluster.maxStreamsPerServer` | 443 | beta | kind 개발 설치에서 상한에 닿아 화면이 까닭을 보여 주는 경우. 기본값은 거기서 한 부하 시험(2026-11-22)에서 왔음: 상한 없이 파드 하나에 터미널과 실시간 로그 800개를 열어 둠(하나에 약 0.37 MiB, 800개에서 512 Mi의 79 %) |
 | `auth` 설정의 `customRoles` 옆 `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters` | false, [] | alpha | 돌려 봄: 켠 상태의 전체 e2e를 kind 개발 설치에서 두 번(실패 없음), 100명이 한꺼번에 화면을 연 부하(오류 없음) |
+| `ai.refuseRepeatedReads` | false | alpha | 끄고 켠 AI 평가(`scripts/ai-eval.py`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.toolResultDetails` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.redaction.numbered` | false | alpha | `ai.redaction.pii`와 함께 켠 상태로 kind 개발 설치에서 한 채팅, 끄고 켠 AI 평가 |
+| `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, false, [], [] | alpha | `chat`과 `investigations`를 하나씩 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.toolResultsJSON` | false | alpha | 끄고 켠 심어 둔 지시 문제(`evals/ai-planted/`)와 켠 상태의 AI 평가를 모델로 돌린 경우 |
+| `ai.timelineChanges` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | 밖으로 나가는 규칙을 지키는 네트워크 플러그인(Calico나 Cilium을 쓴 kind)에서 `allowListOnly`를 켠 경우: 모델 공급자 주소를 목록에 넣은 채팅과 뺀 채팅 |
+| `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | false, false, false, 15, 5, 4 | alpha | 스위치를 하나씩 끄고 켠 AI 평가의 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `features.alertInvestigation.ledger`, `evidenceCheck`(켜면 다시 물을 때 `maxSteps`에 모델 호출 하나가 더해짐) | false, false | alpha | 하나씩 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | false, 12, 5, 20, 4, 60, 10737418240 | alpha | kind 개발 설치에서 e2e `ai-anomaly-rank.spec.ts`, 끄고 켠 AI 평가 |
+| `features.logSearch.queryMaxBytes` | 0 | alpha | 값을 정한 채 kind 개발 설치에서 한 `loki_query` |
+| `features.callGraph.enabled` | false | alpha | kind 개발 설치에서 e2e `ai-call-graph.spec.ts`, 끄고 켠 AI 평가 |
+| `gateway.servedByHeader` | false | alpha | 켠 상태로 한 번도 안 돌림 |
 
 ## Redis 사용자
 
@@ -356,8 +385,8 @@ multicluster:
 
 - 사용자마다 설치 때 32자로 만들어 Secret `kubeast-redis-users`에 둡니다(`REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD`, `REDIS_TOOL_SERVER_PASSWORD`).
 - 업그레이드해도 유지되고, `kubeast-secrets`처럼 `helm uninstall` 뒤에도 남습니다.
-- 모든 서비스가 통째로 환경 변수로 읽는 `kubeast-secrets`에는 넣지 않습니다. redis 파드가 읽고, k8s-service와 tool-server는 자기 것만 읽습니다.
-- `secrets.existingSecret`과 `redis.acl.existingSecretHasKeys: true`를 쓰면 키를 그 Secret에서 읽습니다. 모든 백엔드가 그 Secret을 통째로 환경 변수로 읽으므로 각자 모든 Redis 사용자의 비밀번호를 갖게 되고, 설치 안내(NOTES)가 이를 알립니다.
+- k8s-service 말고 모든 서비스가 통째로 환경 변수로 읽는 `kubeast-secrets`에는 넣지 않습니다. redis 파드가 읽고, k8s-service와 tool-server는 자기 것만 읽습니다.
+- `secrets.existingSecret`과 `redis.acl.existingSecretHasKeys: true`를 쓰면 키를 그 Secret에서 읽습니다. k8s-service 말고 모든 백엔드가 그 Secret을 통째로 환경 변수로 읽으므로 그 백엔드는 각자 모든 Redis 사용자의 비밀번호를 갖게 되고, 설치 안내(NOTES)가 이를 알립니다.
 - 서비스마다 자기 키만 갖게 하려면 키를 따로 된 Secret에 넣고 `redis.acl.existingSecret`에 그 이름을 두세요. 사용자가 켜지고, redis 파드와 각 서비스가 그 Secret에서 자기 키만 읽으며, 주 Secret에는 키가 없어도 됩니다.
 - 바꾸려면 Secret에 새 값을 쓰고 `redis`와 그 비밀번호의 서비스를 다시 시작합니다.
 

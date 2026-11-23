@@ -81,14 +81,9 @@ spec:
             {{- end }}
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
-          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) | nindent 10 }}
+          {{- include "kubeast.startupProbe" (dict "root" $ "path" "/health" "port" 8004) | nindent 10 }}
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8004
-            initialDelaySeconds: 3
-            periodSeconds: 10
+          {{- include "kubeast.readinessProbe" (dict "root" $ "path" "/readyz" "port" 8004 "delay" 3) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /livez
@@ -192,12 +187,7 @@ spec:
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /api/v1/ai/health
-              port: 8001
-            initialDelaySeconds: 5
-            periodSeconds: 10
+          {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/api/v1/ai/health" "port" 8001 "delay" 5) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /api/v1/ai/health
@@ -275,8 +265,6 @@ spec:
           envFrom:
             - configMapRef:
                 name: kubeast-config
-            - secretRef:
-                name: {{ include "kubeast.secretsName" $ }}
           # Multi-cluster load / failure-isolation knobs (step 15). All optional;
           # code defaults apply when unset. rateLimitQPS=0 disables rate limiting.
           env:
@@ -334,6 +322,17 @@ spec:
               value: "{{ $.Values.multicluster.bigReadConcurrency | default 2 }}"
             - name: EVENT_LIST_CONCURRENCY
               value: "{{ $.Values.multicluster.eventListConcurrency | default 4 }}"
+            {{- /* Only the keys of the main Secret this server reads, not the whole Secret; the proxy ones when it holds them */}}
+            {{- range $key := list "DATABASE_URL" "INTERNAL_API_TOKEN" "HTTP_PROXY" "HTTPS_PROXY" "NO_PROXY" }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.secretsName" $ }}
+                  key: {{ $key }}
+                  {{- if hasSuffix "_PROXY" $key }}
+                  optional: true
+                  {{- end }}
+            {{- end }}
             {{- if include "kubeast.redisAcl" $ }}
             # Redis user k8s-service (redis.acl) in every role; this REDIS_PASSWORD takes the place of kubeast-secrets' one. optional:
             # a Secret of secrets.existingSecret without the key leaves the cache in memory instead of the pod not starting.
@@ -344,6 +343,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "kubeast.redisUsersSecretName" $ }}
                   key: REDIS_K8S_SERVICE_PASSWORD
+                  optional: true
+            {{- else }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kubeast.secretsName" $ }}
+                  key: REDIS_PASSWORD
                   optional: true
             {{- end }}
             {{- if $api }}
@@ -400,16 +406,11 @@ spec:
               readOnly: true
             {{- end }}
           {{- end }}
-          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8002) | nindent 10 }}
+          {{- include "kubeast.startupProbe" (dict "root" $ "path" "/health" "port" 8002) | nindent 10 }}
           {{- if $api }}
           {{- include "kubeast.preStop" $ | nindent 10 }}
           {{- end }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8002
-            initialDelaySeconds: 3
-            periodSeconds: 10
+          {{- include "kubeast.readinessProbe" (dict "root" $ "path" "/readyz" "port" 8002 "delay" 3) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /livez
@@ -485,14 +486,9 @@ spec:
             {{- . | trim | nindent 12 }}
           {{- end }}
           {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
-          {{- include "kubeast.startupProbe" (dict "path" "/health" "port" 8003) | nindent 10 }}
+          {{- include "kubeast.startupProbe" (dict "root" $ "path" "/health" "port" 8003) | nindent 10 }}
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8003
-            initialDelaySeconds: 3
-            periodSeconds: 10
+          {{- include "kubeast.readinessProbe" (dict "root" $ "path" "/readyz" "port" 8003 "delay" 3) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /livez
@@ -536,12 +532,7 @@ spec:
             - name: tmp
               mountPath: /tmp
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 5173
-            initialDelaySeconds: 2
-            periodSeconds: 10
+          {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/" "port" 5173 "delay" 2) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /
@@ -626,12 +617,7 @@ spec:
               mountPath: /tmp
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8086
-            initialDelaySeconds: 2
-            periodSeconds: 10
+          {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/readyz" "port" 8086 "delay" 2) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /livez
@@ -701,12 +687,7 @@ spec:
             - secretRef:
                 name: {{ include "kubeast.secretsName" . }}
           {{- include "kubeast.serviceVolumeMountsBlock" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8081
-            initialDelaySeconds: 3
-            periodSeconds: 10
+          {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/readyz" "port" 8081 "delay" 3) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /healthz

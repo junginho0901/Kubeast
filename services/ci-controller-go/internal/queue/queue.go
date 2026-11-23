@@ -47,8 +47,8 @@ func (b Build) group() string {
 
 // Settings are what an installer turns. The zero value is the default.
 type Settings struct {
-	// MaxRunning builds at once. Zero: 10 (the company CI design's
-	// maxRunners).
+	// MaxRunning builds at once, as maxRunners caps an ARC runner scale
+	// set; the others wait in the queue. Zero: 10.
 	MaxRunning int `json:"maxRunning,omitempty"`
 	// MaxPerRepo running builds of one repository, so one busy repository
 	// cannot hold every place. Zero: 5.

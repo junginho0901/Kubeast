@@ -29,6 +29,7 @@ type storeFixture struct {
 	loki     []*http.Request
 	tempo    []*http.Request
 	stats    string // the index stats answer
+	lines    string // the answer to a query_range with no step (the one-line read)
 	tempoOff bool   // Tempo answers 404 for metrics
 	reviews  []string
 	canLogs  bool
@@ -61,7 +62,8 @@ func unixAt(h, m int) int64 { return time.Date(2026, 11, 15, h, m, 0, 0, time.UT
 
 func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 	t.Helper()
-	f := &storeFixture{audit: &memAudit{}, stats: `{"streams":3,"chunks":4,"entries":1000,"bytes":2048}`, canLogs: true}
+	f := &storeFixture{audit: &memAudit{}, stats: `{"streams":3,"chunks":4,"entries":1000,"bytes":2048}`, canLogs: true,
+		lines: `{"status":"success","data":{"resultType":"streams","result":[]}}`}
 	loki := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.loki = append(f.loki, r)
@@ -75,6 +77,10 @@ func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 				{"pattern":"GET /healthz <_>","level":"info","samples":[[%d,40],[%d,40]]}]}`,
 				unixAt(0, 40), unixAt(1, 0), unixAt(0, 0), unixAt(1, 0))
 		case "/loki/api/v1/query_range":
+			if r.URL.Query().Get("step") == "" {
+				_, _ = w.Write([]byte(f.lines))
+				return
+			}
 			_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[
 				{"metric":{"k8s_container_name":"app"},"values":[[%d,"2"],[%d,"9"]]},
 				{"metric":{"k8s_container_name":"sidecar"},"values":[[%d,"4"],[%d,"5"]]}]}}`,
@@ -270,12 +276,95 @@ func TestAnomaliesLogChecksPastTheEstimateAreTooLarge(t *testing.T) {
 	if f.audit.rows[0].Action != "k8s.pod.logs.logql" || after["estimated_bytes"] != float64(2048) {
 		t.Fatalf("row %+v", f.audit.rows[0])
 	}
+}
 
+// oneLineRead is the read the log checks make when the index counts no line: a log query of one line over both windows.
+func oneLineRead(t *testing.T, f *storeFixture) *http.Request {
+	t.Helper()
+	var got []*http.Request
+	for _, r := range f.lokiReqs() {
+		if r.URL.Path == "/loki/api/v1/query_range" && r.URL.Query().Get("step") == "" {
+			got = append(got, r)
+		}
+	}
+	if len(got) != 1 {
+		t.Fatalf("%d one-line reads: %v", len(got), f.lokiPaths())
+	}
+	q := got[0].URL.Query()
+	if q.Get("limit") != "1" || q.Get("start") != fmt.Sprint(unixAt(23-24, 30)*1e9) || q.Get("end") != fmt.Sprint(unixAt(1, 30)*1e9) ||
+		!strings.Contains(q.Get("query"), `k8s_cluster_name="kubeast", k8s_namespace_name="shop"`) || strings.Contains(q.Get("query"), "|") {
+		t.Fatalf("the one-line read: %v", q)
+	}
+	return got[0]
+}
+
+func TestAnomaliesLogChecksReadALineWhenTheIndexCountsNone(t *testing.T) {
+	f := newStoreFixture(t, config.Config{})
+	// Loki's index without what its ingesters have not flushed: none, while the store answers a line
+	f.stats = `{"streams":0,"chunks":0,"entries":0,"bytes":0}`
+	f.lines = fmt.Sprintf(`{"status":"success","data":{"resultType":"streams","result":[
+		{"stream":{"k8s_namespace_name":"shop","k8s_pod_name":"web-1","k8s_container_name":"app"},"values":[["%d","GET / 200"]]}]}}`, unixAt(1, 20)*1e9)
+	res := f.get(t, "shop", podReader)
+	notRun := notRunOf(res)
+	for _, check := range anomaly.LogChecks {
+		if why, ok := notRun[check]; ok {
+			t.Errorf("%s not run: %q", check, why)
+		}
+	}
+	found := map[string]bool{}
+	for _, finding := range res.Findings {
+		found[finding.Check+":"+finding.Target] = true
+	}
+	if !found[anomaly.CheckErrorLogShapes+`:level=error msg="dial tcp <_>: connection refused"`] || !found[anomaly.CheckErrorLogCounts+":container app"] {
+		t.Fatalf("both log checks ran: %+v", res.Findings)
+	}
+	if got := f.lokiPaths(); len(got) != 4 || got[0] != "/loki/api/v1/index/stats" || got[1] != "/loki/api/v1/query_range" {
+		t.Fatalf("the estimate, the one-line read, then the two reads: %v", got)
+	}
+	oneLineRead(t, f)
+	if res.StoreQueries != 6 {
+		t.Fatalf("%d store queries: the one-line read is made under the estimate's", res.StoreQueries)
+	}
+	var after map[string]interface{}
+	_ = json.Unmarshal(f.audit.rows[0].After, &after)
+	if effective, _ := after["effective"].([]interface{}); f.audit.rows[0].Action != "k8s.pod.logs.logql" || len(effective) != 4 {
+		t.Fatalf("the row names the four queries sent: %v", after)
+	}
+	if strings.Contains(string(f.audit.rows[0].After), "GET / 200") {
+		t.Fatalf("a row holds the line read: %s", f.audit.rows[0].After)
+	}
+}
+
+func TestAnomaliesLogChecksWithNoLineInTheIndexOrTheStoreAreNotRun(t *testing.T) {
+	f := newStoreFixture(t, config.Config{})
+	f.stats = `{"streams":0,"chunks":0,"entries":0,"bytes":0}`
+	res := f.get(t, "shop", podReader)
+	notRun := notRunOf(res)
+	for _, check := range anomaly.LogChecks {
+		if !strings.HasPrefix(notRun[check], "the log store holds no lines for this namespace (or workload) in the window or the one before") {
+			t.Errorf("%s: %q", check, notRun[check])
+		}
+	}
+	if got := strings.Join(f.lokiPaths(), ","); got != "/loki/api/v1/index/stats,/loki/api/v1/query_range" {
+		t.Fatalf("the estimate and the one-line read only: %s", got)
+	}
+	oneLineRead(t, f)
+	if res.StoreQueries != 4 {
+		t.Fatalf("%d store queries: the two reads not made go back", res.StoreQueries)
+	}
+
+	// a one-line read that fails says so, and the two reads are not made
 	f = newStoreFixture(t, config.Config{})
 	f.stats = `{"streams":0,"chunks":0,"entries":0,"bytes":0}`
+	f.lines = `not json`
 	notRun = notRunOf(f.get(t, "shop", podReader))
-	if !strings.HasPrefix(notRun[anomaly.CheckErrorLogCounts], "the log store holds no lines") || len(f.lokiReqs()) != 1 {
-		t.Fatalf("no lines is not normal: %+v", notRun)
+	for _, check := range anomaly.LogChecks {
+		if !strings.HasPrefix(notRun[check], "the log store: ") {
+			t.Errorf("%s: %q", check, notRun[check])
+		}
+	}
+	if len(f.lokiReqs()) != 2 || f.audit.rows[0].Result != audit.ResultFailure {
+		t.Fatalf("%v, row %+v", f.lokiPaths(), f.audit.rows[0])
 	}
 }
 

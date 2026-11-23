@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,6 +22,9 @@ const defaultBigReads = 2
 // it never waits for anything else that waits for it.
 var bigReadSlots = limits.NewSlots("big read", bigReadConcurrency())
 
+// bigReadWaited times each take of bigReadSlots (kubeast_k8s_read_place_wait_seconds{places="big_read"}).
+var bigReadWaited = clientWait.forPlaces(placesBigRead)
+
 func bigReadConcurrency() int {
 	if n, err := strconv.Atoi(os.Getenv("BIG_READ_CONCURRENCY")); err == nil && n > 0 {
 		return n
@@ -31,12 +35,15 @@ func bigReadConcurrency() int {
 // pagedRead is one read's place among bigReadSlots; a reader defers done.
 type pagedRead struct{ release func() }
 
-// nextPage waits for the read's place, which it keeps until done.
+// nextPage waits for the read's place, which it keeps until done; the wait is observed whether it got a place or its
+// context ended first.
 func (r *pagedRead) nextPage(ctx context.Context) error {
 	if r.release != nil {
 		return nil
 	}
+	start := time.Now()
 	release, err := bigReadSlots.Take(ctx)
+	bigReadWaited.Observe(time.Since(start).Seconds())
 	if err != nil {
 		return err
 	}

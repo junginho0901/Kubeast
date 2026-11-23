@@ -75,7 +75,8 @@ updates:
     ignore:
       # Interpreter and runtime lines move on purpose, with the dependency
       # set checked against them (wheels for the new interpreter first); Go
-      # and nginx minors follow their upstream cadence and build as is.
+      # and nginx minors follow their upstream cadence and build as is. A Go
+      # minor also moves ci.yaml's go-version in its PR (scripts/check-go-version.sh).
       - dependency-name: python
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: node

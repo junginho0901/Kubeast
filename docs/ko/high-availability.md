@@ -11,7 +11,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 | --- | --- | --- | --- |
 | gateway | 됨 | 없음. WebSocket은 처음 연 업스트림 연결에 계속 붙어 있습니다 | — |
 | frontend | 됨 | 없음(정적 파일) | — |
-| auth-service | 됨 | 없음. 배경 작업은 데이터베이스 잠금으로 차례를 정하고, 보존 기간 정리는 다른 파드가 먼저 돌았으면 지울 것이 없습니다 | `migrations.mode: job`(아래) |
+| auth-service | 됨 | 없음. 배경 작업은 데이터베이스 잠금으로 차례를 정합니다. 보존 기간 정리는 한 번에 한 파드만 돕니다. 도는 파드는 `admin.retention.purge` 행을 쓸 때까지 풀 밖의 자기 연결 하나에 PostgreSQL advisory lock을 쥐고, 그동안 하루 차례가 온 파드는 그 차례를 건너뜁니다. 다른 파드가 먼저 돌았으면 지울 것이 없습니다 | `migrations.mode: job`(아래) |
 | session-service | 됨 | 없음. 세션과 메시지는 데이터베이스에 있습니다 | — |
 | ai-service | 됨 | 답 스트림. 대기 중인 알림 조사는 데이터베이스 행이고 한 파드가 가져갑니다. Claude Code 실행 수에는 파드당 상한(`ai.providers.claudeCode.maxConcurrent`)과 설치 전체 상한이 있습니다 | — |
 | k8s-service | Redis가 있으면 됨 | 맡은 클러스터의 목록과 감시(자기 메모리). 목록 · YAML · Helm 캐시는 Redis에 있습니다. 클러스터가 바뀌면 10초 안에 모든 파드가 압니다. 노드 드레인 진행은 데이터베이스에 있습니다 | `redis.enabled: true` |
@@ -29,12 +29,15 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 - **Redis**: k8s-service나 tool-server를 2대 이상 띄우려면 `redis.enabled: true`(차트 기본값)를 그대로 두세요.
 - **노드**: 차트는 한 서비스의 파드를 영역(zone)과 노드에 나눠 놓습니다(`topologySpread.enabled`). 강제가 아니라 권장(`ScheduleAnyway`)이라, 파드 2개가 노드 2개에 가려면 받을 수 있는 노드가 2개 있어야 합니다. 노드가 1개면 같은 노드에 갑니다.
 - **마이그레이션**: auth-service를 2대 이상 띄우거나 데이터베이스가 크면 `migrations.mode: job`으로 두세요. `startup`이면 같이 뜬 파드들이 마이그레이션 잠금을 서로 기다리고, 기다림이 시작 확인(startup probe) 180초를 넘으면 기다리던 파드가 재시작됩니다.
-- **로드 밸런서**: 파드 IP로 보내는 로드 밸런서(IP 모드의 AWS Load Balancer Controller) 뒤라면 네임스페이스에 `elbv2.k8s.aws/pod-readiness-gate-inject: enabled` 라벨을 붙여, 새 파드가 대상으로 정상이 된 뒤에만 요청을 받게 하세요. `podShutdown.preStopSeconds`는 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요(docs/ko/configuration.md). AWS Application Load Balancer 뒤에서는 `podShutdown.preStopSeconds: 25`와 대상 그룹 등록 해제 지연(deregistration delay) 20초(`ingress.annotations`에 `alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=20`, 거기 이미 적힌 다른 속성이 있으면 그 뒤에 덧붙임)를 쓰세요. 이 값으로 게이트웨이 파드가 하나일 때와 둘일 때, 이틀에 걸쳐 게이트웨이 파드를 18번 바꾸는 동안 실패한 요청이 없었고, 서비스마다 파드 2개로 노드 하나를 한 번 비울 때도 없었습니다(이때 내보낸 것은 Kubeast 파드뿐이었음). 기본값으로 비울 때는 요청이 실패했지만, 그 노드에는 AWS Load Balancer Controller의 하나뿐인 파드도 있었고 게이트웨이 대상은 파드를 지운 뒤 38초가 지나서야 draining이 되었습니다([EKS에서 잰 것](#eks에서-잰-것)). 컨트롤러 파드는 둘 이상 두세요(컨트롤러 Helm 차트의 기본 `replicaCount`는 2). 하나면 그 파드가 내보내진 때부터 다른 노드에서 다시 뜰 때까지 로드 밸런서 대상이 갱신되지 않습니다. 기본값(5초, 해제 지연 300초)에서는 18번 중 3번(준비 게이트를 켜고 12번 더 바꿀 때는 없었음), 떠나는 게이트웨이 파드의 대상이 이미 draining인데도 로드 밸런서가 그 파드의 기다림이 끝난 뒤에도(파드를 지운 뒤 약 8초까지) 새 요청을 보냈고, 그 2~3초 동안 요청의 3분의 1에서 절반이 502나 504로 실패했습니다. 준비 게이트가 있을 때는 정상인 게이트웨이 대상이 없던 초가 없었습니다(EKS 1.35, AWS Load Balancer Controller v3.6.2).
+- **로드 밸런서**: 파드 IP로 보내는 로드 밸런서(IP 모드의 AWS Load Balancer Controller) 뒤라면 네임스페이스에 `elbv2.k8s.aws/pod-readiness-gate-inject: enabled` 라벨을 붙여, 새 파드가 대상으로 정상이 된 뒤에만 요청을 받게 하세요. 게이트웨이의 `preStop` 기다림은 로드 밸런서가 떠나는 파드에 새 요청을 그만 보낼 때까지보다 길게 두세요(docs/ko/configuration.md). 컨트롤러 파드는 둘 이상 두세요(컨트롤러 Helm 차트의 기본 `replicaCount`는 2). 하나면 그 파드가 내보내진 때부터 다른 노드에서 다시 뜰 때까지 로드 밸런서 대상이 갱신되지 않습니다. 준비 게이트가 있을 때는 정상인 게이트웨이 대상이 없던 초가 없었습니다(EKS 1.35, AWS Load Balancer Controller v3.6.2).
+  - **AWS Application Load Balancer**: 차트의 Ingress(`ingress.enabled`)의 `ingress.annotations`에 `alb.ingress.kubernetes.io/target-type: ip`가 있으면 차트가 양쪽을 스스로 맞춥니다. 게이트웨이 파드는 멈추기 전에 25초를 기다리고 종료 유예는 55초입니다(`podShutdown.preStopSeconds`가 더 길면 그 값, 0이면 기다림 없음. `gateway.preStopSeconds`로 다른 값을 줄 수 있음). Ingress는 대상 그룹 등록 해제 지연(deregistration delay) 20초를 요청합니다. `alb.ingress.kubernetes.io/target-group-attributes`에 적힌 속성 뒤에 `deregistration_delay.timeout_seconds=20`이 붙고, 그 주석에 `deregistration_delay.timeout_seconds`가 이미 있으면 적힌 그대로 둡니다. 다른 서비스는 `podShutdown.preStopSeconds` 그대로입니다. 게이트웨이가 그 서비스들에 Service를 거쳐 닿기 때문입니다. 0.7.8 안내대로 손으로 넣은 `podShutdown.preStopSeconds: 25`와 지연은 그대로 두어도 됩니다. 어느 쪽이든 게이트웨이의 기다림은 25초이고, 대상 그룹은 적어 둔 지연을 받습니다. 다른 서비스를 위해 `podShutdown.preStopSeconds`를 5로 돌려도 게이트웨이는 25초를 지킵니다.
+  - **이 값의 근거**: 0.7.8에서 모든 파드에 25초, 그리고 20초를 손으로 넣었을 때, 두 날 게이트웨이 1개 · 2개에서 게이트웨이 파드를 18번 바꾸는 동안, 그리고 서비스마다 파드 2개인 노드를 한 번 비우는 동안(이때 내보낸 것은 Kubeast 파드뿐이었음) 실패한 요청이 없었습니다. 0.7.8 기본값(5초, 로드 밸런서의 등록 해제 지연 300초)에서는 떠나는 게이트웨이 파드의 기다림이 끝나고 대상이 이미 draining인데도 로드 밸런서가 그 파드로 새 요청을 보냈습니다. 18번 중 3번(준비 게이트를 켜고 12번 더 바꿀 때는 없었음), 파드를 지운 뒤 약 8초까지였고, 그 2~3초 동안 요청의 3분의 1에서 절반이 502나 504로 실패했습니다(EKS 1.35, AWS Load Balancer Controller v3.6.2, 컨트롤러 파드 1개). 기본값으로 노드를 비울 때는 요청이 실패했지만, 그 노드에는 AWS Load Balancer Controller의 하나뿐인 파드도 있었고 게이트웨이 대상은 파드를 지운 뒤 38초가 지나서야 draining이 되었습니다. 게이트웨이의 25초보다 깁니다([EKS에서 잰 것](#eks에서-잰-것)). 하나뿐인 컨트롤러 파드를 쫓아내는 드레인에서는 떠나는 게이트웨이 파드의 대상이 그 기다림이 끝난 뒤에도 등록되어 있을 수 있습니다.
+  - **차트가 못 보는 것**: 차트는 자기가 만드는 Ingress만 읽습니다. IngressClassParams에 대상 유형을 두었거나, 컨트롤러의 `--default-target-type` 플래그를 `ip`로 두었거나(Ingress에 대상 유형이 없을 때 쓰는 값, 기본값은 `instance`), 게이트웨이 Service에 주석을 달았거나, TargetGroupBinding을 직접 만들었다면 `gateway.preStopSeconds: 25`와 대상 그룹 등록 해제 지연 20초를 직접 넣으세요. 0.7.8로 되돌릴 때처럼 주석이 빠지면 대상 그룹이 20초로 남을 수 있습니다. 로드 밸런서 기본값으로 돌리려면 주석에 `deregistration_delay.timeout_seconds=300`을 적으세요. 파드 IP로 보내는 Network Load Balancer 뒤에서도 같은 일이 생길 수 있지만 재지 않았고, 차트는 거기서 아무것도 바꾸지 않습니다.
 - **데이터베이스 연결**: 파드마다 자기 연결 풀을 엽니다. 띄울 파드 수를 아래 표에 곱해 더하고, 합이 데이터베이스의 `max_connections`보다 작게 하세요.
 
 | 서비스 | 파드당 연결, 최대 | 수의 근거 |
 | --- | --- | --- |
-| auth-service | 20 | `postgresql.pool.authService.maxConns` |
+| auth-service | 20, 더하기 1 | `postgresql.pool.authService.maxConns`와, 정리가 도는 동안 풀 밖에서 연결을 따로 하나 쥐는 보존 기간 정리 잠금(`internal/retention`) |
 | session-service | 20 | `postgresql.pool.sessionService.maxConns` |
 | k8s-service | 10, 더하기 1 | `postgresql.pool.k8sService.maxConns`와, 풀 밖에서 연결을 따로 하나 쥐는 상태 확인 잠금(`internal/pglock`). k8s-service-stream은 풀만 |
 | ai-service | 15 | `postgresql.pool.aiService.maxConns` |
@@ -44,7 +47,7 @@ Kubeast의 서비스는 기본으로 하나씩 파드 1개로 뜹니다.
 
 차트 내장 postgres는 `max_connections`를 `postgresql.maxConnections`(300)로 두고, 파드들이 그보다 많이 쥘 수 있으면 설치가 멈춥니다. 셈은 풀마다 배포 중의 파드 수(Deployment마다 `maxSurge`가 1이라 개수에 하나 더함, autoscaling을 켰으면 `maxReplicas`에 하나 더함)를 곱해 더하고, 마이그레이션 4와 psql·PostgreSQL superuser 몫 10을 더합니다(`templates/checks/db-connections.yaml`).
 바깥 데이터베이스는 자기 한도를 쓰고, 차트는 그 값을 읽지 못합니다. NOTES가 같은 합을 적어 주니 그 값과 견주세요. Kubeast 사용자가 superuser가 아니면 그중 3개는 기본으로 superuser 몫입니다.
-예: 서비스마다 1대면 배포 중의 여분 파드까지 최대 154개, 서비스마다 3대면 286개입니다. `streams.enabled`를 켜면 스트림 서버와 그 여분 파드 몫으로 k8s-service 풀이 더해져(기본 20) 서비스마다 3대면 306개로 기본 300을 넘습니다.
+예: 서비스마다 1대면 배포 중의 여분 파드까지 최대 156개, 서비스마다 3대면 290개입니다. `streams.enabled`를 켜면 스트림 서버와 그 여분 파드 몫으로 k8s-service 풀이 더해져(기본 20) 서비스마다 3대면 310개로 기본 300을 넘습니다.
 `postgresql.maxConnections`를 올리거나, 풀이나 파드 수를 줄이거나, 연결을 더 받는 데이터베이스를 쓰세요.
 
 ## 대수 정하기
@@ -58,7 +61,7 @@ replicas:
 ```
 
 - `pdb.enabled`(기본 켜짐)는 2대 이상으로 돌거나 autoscaling의 `minReplicas`가 2 이상인 서비스마다, 한 번에 `pdb.maxUnavailable`개(1)까지 내보낼 수 있는 PodDisruptionBudget을 만듭니다. 1대인 서비스에는 만들지 않아 드레인을 막지 않습니다.
-- 1대로 도는 서비스는 그 파드가 지워지거나 내보내질 때(노드 드레인 포함) preStop 대기가 끝난 때부터 새 파드가 Ready가 될 때까지 받을 파드가 없습니다. rollout과 달리 지워진 파드는 새 파드를 먼저 띄우지 않기 때문입니다. kind 실측으로 auth-service · k8s-service · session-service는 약 1초, readiness probe가 10초마다 묻는 ai-service · frontend · gateway는 약 6초(새 파드가 뜨기 전에 첫 probe가 오면 약 16초)이고, 그동안 화면은 502 · 503 · 504를 받습니다. 2대 이상이면 새 파드가 뜨는 동안 나머지가 답하고, PDB가 드레인이 그 파드들을 한꺼번에 내보내지 않게 합니다.
+- 1대로 도는 서비스는 그 파드가 지워지거나 내보내질 때(노드 드레인 포함) preStop 대기가 끝난 때부터 새 파드가 Ready가 될 때까지 받을 파드가 없습니다. rollout과 달리 지워진 파드는 새 파드를 먼저 띄우지 않기 때문입니다. 서버마다 시작 확인(startup probe)을 1초마다 묻기 때문에(`podStartup.quickReady`, docs/ko/configuration.md) 새 파드가 포트를 연 뒤 약 1초에 Ready가 됩니다. `podStartup.quickReady: false`이면 kind 실측으로 시작 확인을 5초마다 묻는 auth-service · k8s-service · session-service는 약 1초, readiness를 10초마다 묻는 ai-service · frontend · gateway는 약 6초였습니다(새 파드가 뜨기 전에 첫 probe가 오면 약 16초). 그동안 화면은 502 · 503 · 504를 받습니다. 2대 이상이면 새 파드가 뜨는 동안 나머지가 답하고, PDB가 드레인이 그 파드들을 한꺼번에 내보내지 않게 합니다.
 
 ## HPA에 대수 맡기기
 
@@ -121,7 +124,7 @@ autoscaling:
 
 ## EKS에서 잰 것
 
-아래는 t3.medium 온디맨드 노드 3대의 EKS 1.35 클러스터를 파드 IP로 보내는 내부 AWS Application Load Balancer(AWS Load Balancer Controller v3.6.2) 뒤에 두고, 차트와 로드 밸런서의 기본값 그대로, 파드 준비 게이트 없이 잰 것입니다.
+아래는 t3.medium 온디맨드 노드 3대의 EKS 1.35 클러스터를 파드 IP로 보내는 내부 AWS Application Load Balancer(AWS Load Balancer Controller v3.6.2) 뒤에 두고, 0.7.8 차트(게이트웨이도 `preStop` 기다림 5초)와 로드 밸런서의 기본값 그대로, 파드 준비 게이트 없이 잰 것입니다. 줄에 다른 값을 적은 곳은 그 값으로 잰 것입니다.
 같은 클러스터에서 0.7.7부터 올린 업그레이드의 숫자는 [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md#2-업그레이드)에, `preStop` 기다림의 숫자는 [저절로 바뀌는 것](upgrade-0.7.8.md#4-저절로-바뀌는-것)에 있습니다.
 
 - **노드 드레인**: 2026-11-17에 2대 이상 띄울 수 있는 일곱 서비스를 2대씩과 그 PodDisruptionBudget으로 두고, 그 서비스마다 파드 하나씩과 Redis 파드가 있던 노드(차트 내장 PostgreSQL은 다른 노드에 있었음)를 `kubectl drain`으로 비우는 데 10초 걸렸고, PodDisruptionBudget이 막은 내보내기는 없었습니다. 노드를 비우고 그 인스턴스가 새 노드로 바뀌는 동안 로드 밸런서를 거친 요청 중 실패한 것은 없었고, 로드 밸런서를 거쳐 1초마다 `/healthz`와 대시보드 개요를 읽을 때 답이 없던 초는 없었으며, 실시간 목록은 1.1초 안에 다시 붙었습니다. 2026-11-21에 AWS Application Load Balancer 뒤의 다른 EKS 1.35 클러스터에서 같은 기본값으로 비웠을 때는 답이 없던 초가 4초 있었고, 로드 밸런서를 거친 요청이 실패했으며, 실시간 목록이 23.1초 끊겼습니다. 다만 그 노드에는 AWS Load Balancer Controller의 하나뿐인 파드(그 클러스터는 하나만 돌려 다시 뜰 때까지 대상이 갱신되지 않았고, 컨트롤러 Helm 차트의 기본 `replicaCount`는 2)와 CoreDNS, EBS CSI 컨트롤러, metrics-server 파드도 있었고, 게이트웨이 대상은 파드를 지운 뒤 38초가 지나서야 draining이 되었으므로 이 숫자는 기본값만의 결과가 아닙니다. `podShutdown.preStopSeconds: 25`와 등록 해제 지연 20초로 비웠을 때는 Kubeast 파드만 내보냈고, 게이트웨이 대상은 1초 안에 draining이 되었으며, 이런 일이 없었습니다. 두 설정은 [시작하기 전에](#시작하기-전에)의 게이트웨이 파드 교체로 견줍니다.

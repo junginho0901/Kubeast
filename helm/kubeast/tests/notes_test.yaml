@@ -1,4 +1,4 @@
-suite: NOTES.txt — the notes that Redis keeps one password with secrets.existingSecret, and the database connections an external database must take
+suite: NOTES.txt — the notes that Redis keeps one password with secrets.existingSecret, the database connections an external database must take, and the gateway wait and deregistration delay the chart sets behind an AWS ALB that sends to pod IPs
 templates:
   - NOTES.txt
 tests:
@@ -32,15 +32,15 @@ tests:
       - notMatchRegexRaw:
           pattern: Redis runs with one password
 
-  - it: with the users' keys in secrets.existingSecret says every backend holds every Redis password and how to separate them
+  - it: with the users' keys in secrets.existingSecret says every backend but k8s-service holds every Redis password and how to separate them
     set:
       secrets.existingSecret: company-kubeast
       redis.acl.existingSecretHasKeys: true
     asserts:
       - matchRegexRaw:
-          pattern: '▸ Every backend holds every Redis user''s password'
+          pattern: '▸ Every backend but k8s-service holds every Redis user''s password'
       - matchRegexRaw:
-          pattern: 'The Redis user keys are in Secret company-kubeast, which every backend reads whole as its\n\s+environment\. To give each service its own key only, move them to a Secret of their own and upgrade with\n\s+--reset-then-reuse-values --set redis\.acl\.existingSecret=<that Secret>'
+          pattern: 'The Redis user keys are in Secret company-kubeast, which every backend but k8s-service reads whole as its\n\s+environment\. To give each service its own key only, move them to a Secret of their own and upgrade with\n\s+--reset-then-reuse-values --set redis\.acl\.existingSecret=<that Secret>'
 
   - it: says nothing of either with redis.acl.existingSecret
     set:
@@ -48,14 +48,14 @@ tests:
       redis.acl.existingSecret: company-redis-users
     asserts:
       - notMatchRegexRaw:
-          pattern: Every backend holds every Redis
+          pattern: holds every Redis user
       - notMatchRegexRaw:
           pattern: Redis runs with one password
 
   - it: says nothing of the shared keys when the chart makes the passwords
     asserts:
       - notMatchRegexRaw:
-          pattern: Every backend holds every Redis
+          pattern: holds every Redis user
 
   - it: prints the pods' most connections for an external database
     set:
@@ -63,7 +63,7 @@ tests:
       postgresql.externalHost: db.example.com
     asserts:
       - matchRegexRaw:
-          pattern: can hold up to 154 connections to db\.example\.com
+          pattern: can hold up to 156 connections to db\.example\.com
 
   - it: prints nothing of it for the chart's PostgreSQL, which the install checks
     asserts:
@@ -78,4 +78,59 @@ tests:
       streams.replicas: 1
     asserts:
       - matchRegexRaw:
-          pattern: can hold up to 174 connections to db\.example\.com
+          pattern: can hold up to 176 connections to db\.example\.com
+
+  - it: behind an AWS ALB that sends to pod IPs, with neither value set, says the chart set the 25 s wait and the 20 s delay and to keep 2 or more controller pods
+    set:
+      ingress.enabled: true
+      ingress.className: alb
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+    asserts:
+      - matchRegexRaw:
+          pattern: '▸ Behind an AWS ALB that sends to pod IPs'
+      - matchRegexRaw:
+          pattern: 'the gateway pods wait 25 s before they stop and the Ingress\n\s+asks for a 20 s target group deregistration delay'
+      - matchRegexRaw:
+          pattern: 'Keep 2 or more AWS Load Balancer Controller pods'
+
+  - it: says nothing of it behind that ALB when gateway.preStopSeconds and the deregistration delay are written in the values
+    set:
+      ingress.enabled: true
+      ingress.className: alb
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=20
+      gateway.preStopSeconds: 25
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB
+
+  - it: says nothing of it behind that ALB when only the gateway's wait is the chart's (a deregistration delay written)
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=300
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB
+
+  - it: says nothing of it behind that ALB when only the delay is the chart's (podShutdown.preStopSeconds above 25)
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+      podShutdown.preStopSeconds: 40
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB
+
+  - it: says nothing of it while the chart's Ingress is off, whatever its annotations say
+    set:
+      ingress.enabled: false
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+    asserts:
+      - notMatchRegexRaw:
+          pattern: Behind an AWS ALB

@@ -114,8 +114,10 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 ## 여러 레플리카
 
 - 서비스는 레플리카 여러 개로 돌 수 있다([docs/ko/high-availability.md](docs/ko/high-availability.md)). 한 파드만 해야 하는 일(주기 작업 · 큐)은 프로세스 메모리가 아니라 DB로 차례를 정한다:
-  작업 동안 자기 연결에 쥐는 advisory lock(`pg_try_advisory_lock`, auth-service `internal/auditsink`), 트랜잭션 하나 동안의 lock(`pg_try_advisory_xact_lock`, `internal/auditchain`),
+  작업 동안 쥐는 advisory lock(`pg_try_advisory_lock`), 트랜잭션 하나 동안의 lock(`pg_try_advisory_xact_lock`, `internal/auditchain`),
   또는 `FOR UPDATE SKIP LOCKED`로 행을 가져가기(권한 요청 · 휴면 계정 정리, ai-service 알림 조사 큐). lock을 못 잡은 파드는 그 차례를 넘긴다.
+- 작업 동안 쥐는 lock은 풀 설정으로 만든 풀 밖 전용 연결에 두고(auth-service `internal/retention`, k8s-service `internal/pglock`) `kubeast.dbConnections`에 파드마다 1로 센다.
+  풀 연결에 쥐는 lock(auth-service 감사 싱크 `internal/auditsink`)은 쥐는 동안 풀 연결 하나를 차지해, 풀 1(다른 그런 lock 옆이면 2)에서는 작업 자신의 문 · 요청에 남는 연결이 없다.
 - 프로세스 안의 한도 · 캐시 · 카운터는 파드마다다(설치 전체로는 레플리카 수만큼 곱해진다). 설치 전체에서 지켜야 하는 값은 DB나 Redis에 둔다.
   그런 일이나 상태를 더하는 변경은 docs/high-availability.md(en · ko)에 파드가 무엇을 쥐는지 적는다.
 
@@ -123,7 +125,8 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 - Go 서비스는 `services/pkg/memlimit`로 cgroup 메모리 한도의 90 %를 GC 한도로 주고(`Set`), k8s-service는 85 %다(`SetShare(k8sMemoryLimitShare, 0)`). 나머지는 cgroup은 세고 Go는 모르는 커널 몫(소켓 버퍼 · slab)이다. 실시간 목록의 메모리 문(`watchMemoryShare` 0.8)은 이 GC 한도에 대한 몫이다. `GOMEMLIMIT` 환경 값이 있으면 그 값이 한도다.
 - k8s-service가 받은 연결은 보내기 버퍼가 128 KiB다(리눅스는 두 배로 잡고 더 늘리지 않는다, `cmd/server/conn_buffers.go`의 `capSendBuffer`). Go 안에서 한 벌을 같이 쓰는 답(노드 목록)도 커널은 소켓마다 따로 쥐고, 그 몫은 cgroup에는 세지만 Go 메모리 한도는 모른다. k8s-service에 리스너를 더하면 같은 상한을 걸고, k8s-service가 여는 연결(API 서버 · auth-service · DB)은 커널 기본값 그대로 둔다.
-- 여러 사람에게 같은 바이트를 보내는 답(노드 목록 · 노드 칸 답은 묶였든 아니든, `handler.Shared`가 기다린 사람에게 주는 답)은 `writeShared`로 쓴다(`internal/handler/shared_write.go`). 256 KiB를 넘는 본문은 64 KiB씩, 자리 16개 중 하나를 쥐고 쓰고, 한 덩어리가 100 ms를 넘게 걸린 느린 읽는 이는 그 덩어리 뒤에 자리를 내놓고, 자리를 기다린 시간이 본문마다 합쳐 1초에 닿으면 남은 것을 자리 없이 쓴다(읽지 않는 이가 자리를 쥐어도 멈추지 않게, `kubeast_shared_writes_without_place_total`이 센다). 첫 덩어리를 쓴 뒤 다음 차례를 기다리다 요청이 떠나면 연결을 끊는다(`http.ErrAbortHandler`) — 잘린 본문이 다 받은 것처럼 끝나지 않게. 초마다 다시 만드는 노드 목록을 기다리던 사람들이 한꺼번에 쓰면 소켓마다 커널이 한 벌씩 쥐기 때문이다. 같은 바이트를 여럿에게 보내는 새 답도 이 함수로 쓴다.
+- 여러 사람에게 같은 바이트를 보내는 답(노드 목록 · 노드 칸 답은 묶였든 아니든, `handler.Shared`가 기다린 사람에게 주는 답)은 `writeShared`로 쓴다(`internal/handler/shared_write.go`). 256 KiB를 넘는 본문은 64 KiB씩, 자리 16개 중 하나를 쥐고 쓰고, 한 덩어리가 100 ms를 넘게 걸린 느린 읽는 이는 그 덩어리 뒤에 자리를 내놓고, 자리를 기다린 시간이 본문마다 합쳐 1초에 닿으면 남은 것을 자리 없이 쓴다(읽지 않는 이가 자리를 쥐어도 멈추지 않게, `kubeast_shared_writes_without_place_total`이 센다). 자리를 받을 때마다 기다린 시간은 그만둔 받기도 `kubeast_shared_write_place_wait_seconds`(`places="big_write"`)에 남는다. 첫 덩어리를 쓴 뒤 다음 차례를 기다리다 요청이 떠나면 연결을 끊는다(`http.ErrAbortHandler`) — 잘린 본문이 다 받은 것처럼 끝나지 않게. 초마다 다시 만드는 노드 목록을 기다리던 사람들이 한꺼번에 쓰면 소켓마다 커널이 한 벌씩 쥐기 때문이다. 같은 바이트를 여럿에게 보내는 새 답도 이 함수로 쓴다.
+- 노드 목록(`nodeSummaries`)은 바뀜과 초마다 저장소를 읽되, 저장된 노드가 바뀌었거나 나이 칸이 다르게 읽히는 행만 다시 만들고(행마다 JSON을 둔다, `nodeListRowsOf`) 모든 행이 그대로면 목록과 JSON을 그대로 준다. 바이트는 전체를 다시 만든 것과 같다(`TestTheNodeListIsWhatTheWholeBuildMade`). 행에서 시계를 따라 바뀌는 칸은 나이 하나다 — 시계를 읽는 칸을 새로 넣으면 `nodeListRowsOf`의 나이 비교 옆에 넣고 `TestTheNodeRowMovesWithTheClockOnlyInItsAge`의 칸 목록을 고친다.
 
 ## 빌드 / 배포
 
@@ -131,6 +134,8 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   게이트웨이(nginx.conf)는 `scripts/rebuild-kind.sh gateway` — 릴리스 값 그대로 `helm upgrade`로 다시 렌더한다.
   ConfigMap을 `kubectl apply`로 쓰면 kubectl이 필드 소유자가 돼 다음 `helm upgrade`(Helm 4 서버 측 적용)가 충돌로 멈춘다.
 - `docs/X.md`와 `docs/ko/X.md`(`README.md`·`README.ko.md`도)는 같은 PR에서 고치고, `helm/kubeast/values.yaml`에 새 값 경로를 넣으면 `docs/configuration.md`·`docs/ko/configuration.md`에 적는다. 일부러 한쪽만 고치면 그 PR 커밋 메시지의 마지막 문단에 `Co-Authored-By`와 빈 줄 없이 붙여 트레일러로 까닭을 단다: `Docs-Pair: en-only [<파일>...] <이유>`(또는 `ko-only`, `values-not-in-docs [<값 경로>...] <이유>`). 파일·경로를 적으면 그것만, 안 적으면 PR 전체가 빠진다 — CI `scripts/check-docs-pair.sh`.
+- CI는 Go 모듈을 이미지가 빌드하는 Go로 시험한다(`.github/workflows/ci.yaml`의 `go-version: "1.27"`·`check-latest`, Dockerfile의 `golang:1.27-alpine`). 각 `go.mod`의 최소 판으로 시험하지 않는다 — Go 판이 바뀌면 표준 라이브러리가 쓰는 바이트도 바뀐다(1.27은 `encoding/json`을 `encoding/json/v2` 위에서 돌린다). 이미지의 Go를 바꾸는 PR은 거기 `go-version: "1.27"`을 모두 같이 바꾼다. dependabot의 base-images PR은 Dockerfile만 바꾸므로 gofmt 잡의 `scripts/check-go-version.sh`가 고칠 줄을 적고 실패한다 — 같은 PR에서 ci.yaml도 바꿔야 통과한다.
+- CI `go race` 잡은 k8s-service의 고루틴 패키지를 `-race`로 돌린다(`internal/k8s`는 `-short`로, `TestPodRowMemory*`의 힙 측정은 빠진다). 호출보다 오래 사는 고루틴을 띄우는 패키지가 생기면 그 잡에 넣는다.
 
 ## Redis
 
@@ -147,6 +152,10 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 - `auth.impersonation.enabled`가 켜지면 k8s-service의 클러스터 transport(`auth.ImpersonationRoundTripper`)는 문맥의 사람으로 보내고, 사람이 없는 요청은 `auth.AsKubeast` 표시(서버 버전 · 클러스터마다 모두에게 쓰는 디스커버리 · 상태 확인)가 없으면 보내지 않는다(`auth.ErrNoPerson`). 표시가 있어도 클러스터 서버 URL 경로 아래 `/version` · `/api` · `/apis` · `/api/v1` · `/apis/<group>/<version>`의 GET만 보내고 나머지는 같게 거절한다(`kubeastOwnRead`, `ImpersonationRoundTripperAt`). client-go 호출은 호출자 문맥을 넘긴다(`…WithContext(ctx)` — 문맥 없는 디스커버리 메서드는 안에서 `context.Background()`). 호출자가 자기 문맥으로 요청하는 config(Helm SDK · exec · 로그 파일)는 사람을 고정한다(`UserRESTConfigFor`, `auth.WithPinnedPerson`). informer · 공유 이벤트 · 노드 파드 읽기는 이 transport를 거치지 않는 `cacheClient`(고정 신원 `kubeast:cache`)로 읽는다. tool-server는 사람이 없으면 kubectl을 준비하지 않는다(`errNoPerson`). `TestEveryUserCallCarriesThePerson`이 개요 · 디스커버리 · cluster config · hygiene · watch · 고정 config · 상태 확인 읽기를 서버 URL 경로가 있을 때와 없을 때 보고, `TestKubeastOwnRequestsAreVersionAndDiscoveryReadsOnly`가 경로 · 메서드를 본다.
 - API 서버 프록시로 Service를 읽는 곳(Prometheus · OpenCost · Hubble Relay · Whisker)은 리다이렉트를 같은 API 서버의 그 Service 프록시 경로 안에서만 따라간다(`internal/proxypath` `Follow`, `internal/k8s`는 `proxyClient` · `proxyGet`) — client-go는 따라가는 요청마다 클러스터 자격 증명과 사람 머리를 다시 붙이고, API 서버는 다른 호스트를 가리키는 `Location`을 그대로 넘긴다. 주소로 읽는 흐름 저장소는 리다이렉트를 따라가지 않는다(`FollowNone`). 실패한 답의 몸통이 Kubernetes `Status`면 API 서버 자신의 답이고(`proxypath.APIServerAnswer`), 저장소 자신의 401 · 403은 로그아웃 · 거절이 아니라 502다. 새 Service 프록시 읽기도 이 둘을 쓴다.
+
+## 기본 모델
+
+- 아무도 고르지 않았을 때 쓰는 모델(차트 `ai.model`, ai-service 기본값, `install-docker.sh`, `.env.example`, `docker-compose.yml`, 첫 설정 화면 `SetupAIModelPage`, `scripts/kind-model-*.sh`)은 고정된 스냅샷 ID로 적는다. `scripts/check-model-pins.py`(CI)가 별칭이면 실패하고, 기본값 자리가 새로 생기면 그 목록에 넣는다(`docs/ko/development.md` "기본 모델").
 
 ## 컨테이너 exec
 

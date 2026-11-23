@@ -3,7 +3,7 @@
 # 공급망: 스캔, SBOM, 출처 증명, 서명
 
 모든 릴리스(`v*` 태그, `.github/workflows/release.yaml`)는 이미지 7개를 ghcr.io에 게시하고, Claude Code가 들어 있는 ai-service도 `kubeast-ai-service:vX.Y.Z-claude-code`로 함께 게시합니다.
-차트는 `ai.providers.claudeCode.enabled`가 켜져 있을 때 이 이미지를 쓰며, 이 이미지의 SBOM 아티팩트는 `sbom-ai-service-claude-code.spdx.json`입니다.
+차트는 `ai.providers.claudeCode.enabled`가 켜져 있을 때 이 이미지를 쓰며, 이 이미지의 SBOM 아티팩트는 `sbom-ai-service-claude-code.spdx.json`(amd64)과 `sbom-ai-service-claude-code-arm64.spdx.json`입니다.
 
 - 각 이미지는 **먼저 digest로** push하고, 아래 단계를 그 digest에 대해 실행합니다.
 - 버전 태그(`:vX.Y.Z`)는 마지막 단계까지 성공해야 붙입니다. 그래서 게이트에서 실패한 릴리스는 태그로 pull할 수 있는 것을 하나도 남기지 않습니다.
@@ -17,7 +17,7 @@
   - 이 값들이 서로 맞는지는 CI가 확인합니다.
   - 워크플로의 첫 단계가 값이 다른 태그를 멈추므로, 설치 문서와 `install.sh`는 항상 함께 나가는 릴리스를 가리킵니다.
 - 태그를 push하기 전에 워크플로를 수동으로(workflow_dispatch) 실행하세요.
-  - 이 dry run은 모든 이미지를 push하지 않고 빌드한 뒤 amd64 변형을 같은 trivy 게이트로 검사합니다.
+  - 이 dry run은 모든 이미지를 push하지 않고 빌드한 뒤 amd64 변형과 arm64 변형을 같은 trivy 게이트로 검사합니다.
   - 같은 커밋으로 빌드한 이미지로 Compose 설치도 띄워 봅니다(`scripts/compose-smoke.sh --build`).
   - 그래서 태그는 게이트를 통과한 뒤에 push하게 됩니다.
 
@@ -29,9 +29,9 @@
 | 단계 | 만드는 것 | 릴리스를 실패시키는 경우 |
 |---|---|---|
 | 아키텍처 확인 | 플랫폼 변형마다 이미지 주 바이너리를 `file`로 설명한 한 줄 | 변형의 바이너리가 그 플랫폼용으로 빌드되지 않았을 때(v0.3.0/v0.4.0의 이미지 두 개처럼 arm64 변형에 x86-64 바이너리가 들어 있는 경우) |
-| trivy (`aquasecurity/trivy-action`) | job 로그에 남는 취약점 보고서 | **수정판이 있는** CRITICAL 또는 HIGH 취약점이 발견될 때. upstream 수정이 없는 항목은 보고만 하고 막지 않습니다(`ignore-unfixed`) |
-| syft (`anchore/sbom-action`) | SPDX JSON 형식의 SBOM. 워크플로 아티팩트 `sbom-<service>.spdx.json`으로도 남깁니다 | SBOM 생성 오류 |
-| `actions/attest-sbom` | 레지스트리의 이미지 옆에 push하는 SBOM attestation(Sigstore, GitHub OIDC 신원) | attestation 오류 |
+| trivy (`aquasecurity/trivy-action`) | job 로그에 남는 amd64 변형과 arm64 변형의 취약점 보고서(각 변형을 자기 digest로 읽음) | **수정판이 있는** CRITICAL 또는 HIGH 취약점이 발견될 때. upstream 수정이 없는 항목은 보고만 하고 막지 않습니다(`ignore-unfixed`) |
+| syft (`anchore/sbom-action`) | 변형마다 SPDX JSON 형식의 SBOM. 워크플로 아티팩트 `sbom-<service>.spdx.json`(amd64)과 `sbom-<service>-arm64.spdx.json`으로도 남깁니다 | SBOM 생성 오류 |
+| `actions/attest-sbom` | 레지스트리의 이미지 옆에 push하는 SBOM attestation 두 개. 둘 다 이미지의 매니페스트 목록(manifest list) digest에 붙습니다(Sigstore, GitHub OIDC 신원) | attestation 오류 |
 | `actions/attest-build-provenance` | 어느 워크플로·커밋·러너가 이미지를 빌드했는지 담아 레지스트리에 push하는 SLSA 빌드 출처(build provenance) attestation | attestation 오류 |
 | cosign keyless (`cosign sign --yes IMAGE@DIGEST`) | 레지스트리에 올라가는 서명과 Rekor 투명성 로그 항목 | 서명 오류 |
 
@@ -54,9 +54,12 @@ cosign verify \
   --certificate-identity-regexp '^https://github.com/junginho0901/Kubeast/\.github/workflows/release\.yaml@refs/tags/v' \
   $IMG
 
-# SBOM 자체
+# SBOM 자체. 플랫폼 변형마다 하나이고, 이미지 패키지 줄에 변형이 적혀 있음(arch=amd64, arch=arm64).
+# 0.7.9보다 앞선 릴리스에는 amd64 것만 있음
+ARCH=amd64
 gh attestation verify oci://$IMG -R junginho0901/Kubeast --predicate-type https://spdx.dev/Document/v2.3 --format json \
-  | jq '.[0].verificationResult.statement.predicate' > sbom.spdx.json
+  | jq --arg a "arch=$ARCH" '[.[].verificationResult.statement.predicate
+      | select(any(.packages[].externalRefs[]?.referenceLocator; startswith("pkg:oci/") and contains($a)))][0]' > sbom-$ARCH.spdx.json
 ```
 
 ## 차트 검증 (Verifying the chart)
@@ -73,6 +76,10 @@ cosign verify \
 
 전체 statement를 보려면 `gh attestation verify`에 `--format json`을 붙이세요. 두 명령 모두 values에 고정한 digest를 대상으로 오프라인으로 동작합니다. 차트가 지원하게 되면 `global.imageTag`에 digest로 고정한 태그를 쓸 수 있습니다.
 
+`scripts/verify-release.sh vX.Y.Z`는 한 릴리스의 모든 이미지와 차트에 이 명령들을 돌립니다.
+각 확인을 그 릴리스의 태그·커밋·워크플로로 좁혀서도 돌리고 레지스트리에 붙은 attestation 사본으로도 확인하며, SBOM을 열어 보고, 틀린 ref·저장소·신원·발급자가 거부되는지 봅니다.
+읽기만 합니다(`gh`, `cosign`, `crane`, `helm`, `jq`).
+
 ## 클러스터에서 강제하기 (Enforcing it in a cluster)
 
 워크플로는 증거를 만들 뿐입니다. 서명 없는 이미지를 admission 단계에서 거부하려면 대상 클러스터에 이미지 검증 정책을 두세요. 예를 들어 위의 keyless issuer/subject를 쓰는 Kyverno `verifyImages`나 Sigstore의 policy-controller를 쓸 수 있습니다. 이 정책은 클러스터 쪽 설정이며 차트에는 들어 있지 않습니다.
@@ -80,3 +87,4 @@ cosign verify \
 ## 아직 다루지 않는 것 (Not covered yet)
 
 - 스캔은 릴리스할 때만 실행합니다. 이미 게시한 이미지를 주기적으로 다시 스캔하지는 않습니다.
+- `kubeast-ai-service:vX.Y.Z-claude-code`의 Claude Code 바이너리는 `claude-agent-sdk` 휠 안에 든 실행 파일 하나입니다. trivy·syft·pip-audit는 휠과 그 판만 보고, 바이너리를 만든 재료는 보지 못합니다. 그래서 게이트는 바이너리 안의 라이브러리를 검사하지 않습니다.
