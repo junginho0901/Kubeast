@@ -375,6 +375,13 @@ ai:
   # investigation with call numbers names the call instead ([call N]) and the
   # row adds repeat_of_call.
   refuseRepeatedReads: false
+  # The metrics, log, trace and timeline tools say why an empty answer may be
+  # empty where they did not, "M of N" for a cut answer (or that the total is
+  # not known), and the window read when the call named none; a read tool's
+  # result in the chat and in an alert investigation starts with the console
+  # paths of the objects it names (a drawer's ?detail=, an alert, a namespace's
+  # Resource Graph). Nothing more is read for them.
+  toolResultDetails: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
   # JWTs, credentials in URLs, Authorization values, API keys with a known

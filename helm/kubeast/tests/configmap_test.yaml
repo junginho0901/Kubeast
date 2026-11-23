@@ -809,6 +809,20 @@ tests:
           path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
           value: "true"
 
+  - it: keeps the tool result details off by default
+    asserts:
+      - equal:
+          path: data.AI_TOOL_RESULT_DETAILS
+          value: "false"
+
+  - it: passes the tool result details switch as it is set
+    set:
+      ai.toolResultDetails: true
+    asserts:
+      - equal:
+          path: data.AI_TOOL_RESULT_DETAILS
+          value: "true"
+
   # auth-service makes each group from the names as the chart does (handler/role.go); a comma, which would split the
   # list, goes as "-", which makes the same group.
   - it: hands auth-service the names of the custom roles the chart binds

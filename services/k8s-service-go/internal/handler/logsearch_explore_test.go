@@ -59,7 +59,7 @@ func TestLogQLSearchRunsAMetricQueryForAPodReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := `sum by (k8s_pod_name) (count_over_time({k8s_cluster_name="kubeast", k8s_namespace_name="apps", app="web"} |= "error" [5m]))`
-	if res.ResultType != "matrix" || res.EffectiveQuery != want || f.queries[0] != want || step != "300" || res.StepSeconds != 300 {
+	if res.ResultType != "matrix" || res.EffectiveQuery != want || f.queries[0] != want || step != "300" || res.StepSeconds != 300 || res.SeriesTotal != 2 {
 		t.Fatalf("result %+v sent %q step %q", res, f.queries[0], step)
 	}
 	if len(res.Series) != 2 || res.Series[1].Metric["k8s_pod_name"] != "web-1" || len(res.Series[1].Points) != 2 ||
@@ -84,6 +84,9 @@ func TestLogQLSearchLogQueryAndSeriesCap(t *testing.T) {
 	if w.Code != http.StatusOK || res.ResultType != "streams" || len(res.Lines) != 1 || f.queries[0] != `{k8s_cluster_name="kubeast", app="web"} | logfmt | level="error"` {
 		t.Fatalf("status %d %s sent %v", w.Code, w.Body, f.queries)
 	}
+	if strings.Contains(w.Body.String(), "seriesTotal") {
+		t.Fatalf("a log answer has no series count: %s", w.Body)
+	}
 	if _, after := lastAfter(t, f); after["kind"] != "log" || after["lines"] != float64(1) || strings.Contains(fmt.Sprint(after), "boom") {
 		t.Fatalf("after %v", after)
 	}
@@ -93,6 +96,10 @@ func TestLogQLSearchLogQueryAndSeriesCap(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &res)
 	if w.Code != http.StatusOK || len(res.Series) != logsearch.MaxSeries || !res.Truncated {
 		t.Fatalf("status %d series %d truncated %v", w.Code, len(res.Series), res.Truncated)
+	}
+	// the count of the series past the cap comes from the answer the store already gave: one query
+	if res.SeriesTotal != logsearch.MaxSeries+5 || len(f.queries) != 1 {
+		t.Fatalf("seriesTotal %d after %d store queries", res.SeriesTotal, len(f.queries))
 	}
 }
 
