@@ -4,7 +4,8 @@ Same names and labels as the Go services (services/pkg/metrics): HTTP request
 count / duration / in-flight by route template, plus prometheus_client's
 default python/process collectors. The route label is the matched route's
 path template ("/api/v1/ai/sessions/{session_id}/chat"), never the raw path,
-so cardinality stays bounded. /metrics, /health and / are not counted. For a
+so cardinality stays bounded. /metrics and the probe paths (SKIP, among them
+/api/v1/ai/health, which the chart's kubelet probes ask) are not counted. For a
 streamed response (SSE chat) the duration is the time to the response headers.
 The endpoint is for an in-cluster scraper on the service port; the gateway
 does not proxy it. METRICS_ENABLED=false leaves it unmounted (404).
@@ -20,7 +21,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, ge
 from starlette.routing import compile_path
 
 SERVICE = "ai"
-SKIP = {"/metrics", "/health", "/", "/livez", "/readyz"}
+SKIP = {"/metrics", "/health", "/", "/livez", "/readyz", "/api/v1/ai/health"}
 
 REQUESTS = Counter(
     "kubeast_http_requests_total",
