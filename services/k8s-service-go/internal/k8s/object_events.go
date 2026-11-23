@@ -29,7 +29,7 @@ func eventListConcurrency() int {
 	return defaultEventLists
 }
 
-// objectEvents lists the events about an object as kubectl describe finds them (name and kind, namespace "" when cluster-scoped): one read as kubeast:cache for everyone whose identity may list events there, else as the caller, in its turn.
+// objectEvents lists the events about an object as kubectl describe finds them (name and kind, namespace "" when cluster-scoped): one read as kubeast:cache for everyone whose identity may list events there, else as the caller, in its turn: a review that refuses or fails, or kubeast:cache refused there within the last minute.
 func (s *Service) objectEvents(ctx context.Context, namespace, kind, name string) (*corev1.EventList, error) {
 	b := s.bundleForCtx(ctx)
 	if b == nil || b.clientset == nil {
@@ -37,11 +37,8 @@ func (s *Service) objectEvents(ctx context.Context, namespace, kind, name string
 	}
 	selector := fmt.Sprintf("involvedObject.name=%s,involvedObject.kind=%s", name, kind)
 	if b.cacheClient != nil && !eventsRefusedTo(b, namespace) {
-		ok, err := s.mayList(ctx, b, "events", namespace)
-		if err != nil && !apierrors.IsForbidden(err) {
-			return nil, fmt.Errorf("events not listed: %w", err)
-		}
-		if ok {
+		// a review the cluster did not answer says nothing of the caller's rights: its own list answers, as before the review
+		if ok, err := s.mayList(ctx, b, "events", namespace); err == nil && ok {
 			list, err := s.sharedObjectEvents(ctx, b, namespace, selector)
 			if !apierrors.IsForbidden(err) {
 				return list, err
