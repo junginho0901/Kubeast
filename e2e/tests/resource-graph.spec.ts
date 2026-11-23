@@ -57,6 +57,10 @@ async function box(l: Locator) {
   return b
 }
 
+type Box = { x: number; y: number; width: number; height: number }
+const overlap = (a: Box, b: Box) =>
+  Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y))
+
 // The graph draws only the picked namespaces (?namespace= picks them, the old topology
 // links use it); both of these always exist on the dev cluster.
 async function openGraph(page: Page) {
@@ -78,6 +82,43 @@ test.describe('resource graph', () => {
     await expect(page.locator('.react-flow__minimap')).toBeVisible()
     await expect(page.locator('.react-flow__controls')).toBeVisible()
     expect(errors).toEqual([])
+  })
+
+  // The zoom buttons sat under the legend in the bottom-left corner, Fit View and Toggle Interactivity
+  // also with the legend folded: each must be the top element at its centre, the legend open or folded.
+  test('the zoom buttons are clear of the legend, open or folded, and Fit View takes a click', async ({ page }) => {
+    await openGraph(page)
+    const controls = page.locator('.react-flow__controls')
+    const legendToggle = page.getByRole('button', { name: /^(Legend|범례)/ })
+    const legend = legendToggle.locator('..')
+    const fitView = controls.getByRole('button', { name: 'Fit View', exact: true })
+    for (const size of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]) {
+      await page.setViewportSize(size)
+      for (const open of ['true', 'false']) {
+        if ((await legendToggle.getAttribute('aria-expanded')) !== open) await legendToggle.click()
+        await expect(legendToggle).toHaveAttribute('aria-expanded', open)
+        const where = `${size.width}×${size.height}, legend ${open === 'true' ? 'open' : 'folded'}`
+        const [c, l] = [await box(controls), await box(legend)]
+        expect(overlap(c, l), `${where}: controls ${JSON.stringify(c)}, legend ${JSON.stringify(l)}`).toBe(0)
+        for (const name of ['Zoom In', 'Zoom Out', 'Fit View', 'Toggle Interactivity']) {
+          const onTop = await controls.getByRole('button', { name, exact: true }).evaluate((el) => {
+            const r = el.getBoundingClientRect()
+            const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+            return !!top && el.contains(top)
+          })
+          expect(onTop, `${where}: ${name} is the top element at its centre`).toBe(true)
+        }
+        await fitView.click({ trial: true, timeout: 20_000 })
+      }
+    }
+    // the click reaches Fit View: zoomed in, the graph moves back
+    const transform = () => page.locator('.react-flow__viewport').evaluate((el) => (el as HTMLElement).style.transform)
+    const before = await transform()
+    await controls.getByRole('button', { name: 'Zoom In', exact: true }).click()
+    await expect.poll(transform, { timeout: 20_000 }).not.toBe(before)
+    const zoomed = await transform()
+    await fitView.click()
+    await expect.poll(transform, { timeout: 20_000 }).not.toBe(zoomed)
   })
 
   test('grouping by namespace keeps every resource inside a group container', async ({ page }) => {
