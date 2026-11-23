@@ -298,15 +298,20 @@ def _caller(authorization: str):
 
 async def _expire_if_due(db, approval):
     """A waiting call past its time can no longer run, so only a masked copy of its arguments stays. An approved one whose
-    run outlived its time was cut with its ai-service and ends failed (close_interrupted_tool_approvals)."""
-    from app.database import utcnow
+    run outlived its time was cut with its ai-service and ends failed (close_interrupted_tool_approvals). The row's age,
+    already read, decides first: a run within its time is opened without a readiness probe or a sweep."""
+    from datetime import timedelta
+
+    from app.database import APPROVED_RUN_LIMIT_SECONDS, utcnow
     from app.services.audit_target import kept_tool_args
 
     if approval.status == "pending" and approval.expires_at and approval.expires_at < utcnow():
         return await db.transition_tool_approval(
             approval.id, "pending", status="expired", decided_at=utcnow(), args=kept_tool_args(approval.args),
         ) or await db.get_tool_approval(approval.id)
-    if approval.status == "approved" and await db.close_interrupted_tool_approvals(approval_id=approval.id):
+    if (approval.status == "approved" and approval.decided_at is not None
+            and approval.decided_at < utcnow() - timedelta(seconds=APPROVED_RUN_LIMIT_SECONDS)
+            and await db.close_interrupted_tool_approvals(approval_id=approval.id)):
         return await db.get_tool_approval(approval.id) or approval
     return approval
 
