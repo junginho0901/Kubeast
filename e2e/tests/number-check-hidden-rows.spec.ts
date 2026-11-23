@@ -341,7 +341,7 @@ test.describe('number check — no drawer row out of reach', () => {
       k(`delete ${CLUSTER_OBJECTS.join(' ')} --ignore-not-found --wait=true`)
       k('delete clusterrolebindings,persistentvolumes -l kubeast.io/e2e=hidden-rows --ignore-not-found --wait=true --timeout=180s')
     }
-    cleanup()
+    withUndo(cleanup(), () => cleanup())
     try {
       const { objects, pods } = fixture()
       k('apply --server-side --field-manager=e2e-hidden-rows -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: objects }))
@@ -567,7 +567,7 @@ test.describe('number check — no drawer row out of reach', () => {
       k(`delete ${PAGED_CLUSTER_OBJECTS.join(' ')} --ignore-not-found --wait=true`)
       k('delete validatingadmissionpolicybindings -l kubeast.io/e2e=hidden-rows-pages --ignore-not-found --wait=true')
     }
-    cleanup()
+    withUndo(cleanup(), () => cleanup())
     const drawer = () => page.locator(DRAWER).last()
     // every page of a list in the open drawer against what it must read
     const comparePages = async (what: string, testId: string, items: string, cells: string | undefined, want: Obj[][]) => {
@@ -693,4 +693,17 @@ test.describe('number check — no drawer row out of reach', () => {
       cleanup()
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

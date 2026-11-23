@@ -52,7 +52,7 @@ test.describe('Phase 5 — detail modal sections', () => {
 
   // a PriorityClass of the run that twelve pods no node takes use, so its drawer's pod list has a second page
   test('페이지네이션 — PriorityClass 하나를 쓰는 파드 12개', async ({ page }) => {
-    const NAME = 'e2e-p5-pc'
+    const NAME = withUndo('e2e-p5-pc', (n) => kubectl(`delete namespace/${n} priorityclass/${n} --ignore-not-found --wait=false`))
     const pod = (i: number) => `apiVersion: v1\nkind: Pod\nmetadata: {name: ${NAME}-${String(i).padStart(2, '0')}, namespace: ${NAME}}\n` +
       `spec: {priorityClassName: ${NAME}, nodeSelector: {e2e-p5-pc: none}, containers: [{name: app, image: 'busybox:1.37'}]}`
     kubectl(`delete namespace/${NAME} priorityclass/${NAME} --ignore-not-found --timeout=120s`)
@@ -172,4 +172,17 @@ test.describe('Phase 5 — detail modal sections', () => {
     await openDrawer(page, '/cluster/priorityclasses', 'system-cluster-critical')
     await expectCount(page, 'Used By Pods', expected)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

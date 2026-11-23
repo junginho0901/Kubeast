@@ -14,7 +14,7 @@ const TABLE_ANSWER = ['Pods by phase:', '', '| Namespace | Running | Pending |',
 async function newSession(page: Page, title: string, messages?: { role: string; content: string }[]): Promise<string> {
   const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
   expect(created.ok(), `create session: ${created.status()}`).toBeTruthy()
-  const id = (await created.json()).id as string
+  const id = withUndo((await created.json()).id as string, (i) => dropSession(page, i))
   if (messages) {
     const saved = await page.request.post(`/api/v1/sessions/${id}/messages?cluster=self`, { headers: XRW, data: { messages } })
     expect(saved.ok(), `save messages: ${saved.status()}`).toBeTruthy()
@@ -143,4 +143,17 @@ test.describe('Chat answers', () => {
       return last?.role === 'assistant' ? last.content.trim() : null
     }).toBe(copied)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

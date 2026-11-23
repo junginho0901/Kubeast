@@ -51,18 +51,43 @@ export function getAuthHeaders(): Record<string, string> {
   return { ...CSRF_HEADER }
 }
 
+// What the tab holds for the person signed in outside the query cache — the live watch socket, the chat answers on
+// their way — registers here. A socket stays the identity it opened as and an answer goes on as its question's asker,
+// so both are let go when that person signs out and again when someone signs in (a session can end without a sign-out).
+const sessionResets = new Set<() => void>()
+
+export function onSessionChange(reset: () => void): void {
+  sessionResets.add(reset)
+}
+
+export function resetSessionState(): void {
+  for (const reset of sessionResets) {
+    try {
+      reset()
+    } catch (err) {
+      console.warn('session state reset failed', err)
+    }
+  }
+}
+
 // Ends the server session (the cookie is cleared by the response). Best-effort:
 // if the call fails the cookie simply expires with the token. The tab's floating
-// chat conversation is forgotten too, so the next sign-in starts a new one.
-export function logoutSession(): Promise<void> {
+// chat conversation is forgotten too, so the next sign-in starts a new one, and
+// the live connection, the chat streams and the values of the chat answers' placeholders of this session go
+// (resetSessionState, which signing in runs too).
+export function logoutSession({ asked }: { asked: boolean } = { asked: true }): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
+  resetSessionState()
   forgetFloatingChat()
   try {
     window.localStorage.removeItem(SIGNED_IN_KEY)
   } catch {
     // storage off
   }
-  return fetch('/api/v1/auth/logout', {
+  // `asked`: the person signed out, and the server ends the sign-in too, so the person's other tabs and any copy of the
+  // token stop. A sign-out the app makes on its own — after the server refused a request, or after a change that
+  // already ended the account's tokens — only clears the cookie (`end_sign_in=false`).
+  return fetch(asked ? '/api/v1/auth/logout' : '/api/v1/auth/logout?end_sign_in=false', {
     method: 'POST',
     headers: CSRF_HEADER,
     credentials: 'same-origin',
@@ -77,9 +102,10 @@ export function logoutSession(): Promise<void> {
 // half the TTL. An idle tab never refreshes, so the session ends at the TTL.
 // The server rebuilds the token from the database, so role changes and
 // revocations apply at the next refresh at the latest.
-let refreshInFlight: Promise<void> | null = null
+let refreshInFlight: Promise<boolean> | null = null
 
-export function refreshSession(): Promise<void> {
+// Resolves to whether the token was re-issued.
+export function refreshSession(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight
   refreshInFlight = fetch('/api/v1/auth/refresh', {
     method: 'POST',
@@ -88,8 +114,9 @@ export function refreshSession(): Promise<void> {
   })
     .then((res) => {
       if (res.status === 401) handleUnauthorized()
+      return res.ok
     })
-    .catch(() => undefined)
+    .catch(() => false)
     .finally(() => {
       refreshInFlight = null
     })
@@ -113,8 +140,13 @@ export function startSessionKeepalive(ttlMinutes: number): () => void {
     if (document.visibilityState === 'hidden') return
     if (lastActivity <= lastRefresh) return
     if (Date.now() - lastRefresh < refreshAfterMs) return
+    const before = lastRefresh
     lastRefresh = Date.now()
-    void refreshSession()
+    // A refresh the server could not make (a 503 while its database restarts, no answer) is asked again at the next
+    // tick: half the TTL later the token would have run out.
+    void refreshSession().then((refreshed) => {
+      if (!refreshed && lastRefresh > before) lastRefresh = before
+    })
   }
 
   ACTIVITY_EVENTS.forEach((ev) => window.addEventListener(ev, markActivity, { passive: true }))
@@ -146,7 +178,19 @@ export function clearRedirectAfterLogin() {
   }
 }
 
+// What a failed read of the session (GET /auth/me) says. A 401 is the server's answer that the sign-in is over, the
+// one every service gives a token that does not stand. Anything else (a 503 while the database restarts, a 429, a
+// timeout, no answer) says nothing about the sign-in: the page keeps what it shows and asks again.
+export function sessionReadSaysSignedOut(error: unknown): boolean {
+  return (error as { response?: { status?: unknown } } | null | undefined)?.response?.status === 401
+}
+
+/** The retry of RequireAuth's /auth/me read: never after the server's answer that the sign-in is over, else on and on
+ * at react-query's growing waits (up to 30 s). */
+export const retrySessionRead = (_failureCount: number, error: unknown): boolean => !sessionReadSaysSignedOut(error)
+
 // A WebSocket the server closed because the session it opened with no longer stands (auth.SessionEndedCloseCode).
+// One the server closed because it could not check the session (1013, auth.SessionRetryCloseCode) connects again.
 export const SESSION_ENDED_CLOSE_CODE = 4401
 // The event an event stream ends with for the same reason; its data is the reason code.
 export const SESSION_ENDED_EVENT = 'session-ended'
@@ -181,7 +225,8 @@ export function handleUnauthorized() {
   handlingUnauthorized = true
 
   noteSessionEnded()
-  void logoutSession()
+  // The server refused a request, possibly for a reason other than the sign-in: the cookie goes, the sign-in is not ended.
+  void logoutSession({ asked: false })
 
   try {
     const path = window.location.pathname + window.location.search

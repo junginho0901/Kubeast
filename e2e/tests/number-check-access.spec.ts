@@ -58,7 +58,7 @@ async function roleIdOf(request: APIRequestContext, admin: string, name: string)
 async function createUser(request: APIRequestContext, admin: string, email: string, roleId: number): Promise<string> {
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: `E2E n4c ${email.split('@')[0]}`, email, password: PW, role_id: roleId } })
   expect(res.status(), `create ${email}: ${await res.text()}`).toBe(201)
-  return (await res.json()).id
+  return madeUser((await res.json()).id, bearer(admin))
 }
 
 // users and roles of this spec, from this run or one that stopped (their requests and keys go with them)
@@ -169,13 +169,36 @@ test.describe('number check: access requests and access review', () => {
         soft(seen.slice(0, perPage), 'History: the first page = the newest decisions').toEqual(ids.slice(-perPage).reverse())
       })
 
-      await test.step('the History search finds the first decision', async () => {
-        await page.getByTestId('access-requests-search').fill(`${run} #001.`)
+      soft(await flashes(page, '__arFlash'), 'the table never emptied while switching tabs or turning pages').toEqual([])
+
+      await test.step('the History search: the spinner and none of the rows before it while its answer is held, then the first decision', async () => {
+        const before = await shownIds()
+        const q = `${run} #001.`
+        const isSearch = (url: URL) => url.pathname === '/api/v1/auth/admin/access-requests' && url.searchParams.get('status') === 'decided' && url.searchParams.get('q') === q
+        let release = () => {}
+        const gate = new Promise<void>((resolve) => { release = resolve })
+        let held = 0
+        const hold = async (route: Obj) => {
+          held++
+          await gate
+          try { await route.continue() } catch { /* the page went on */ }
+        }
+        await page.route(isSearch, hold)
+        try {
+          await page.getByTestId('access-requests-search').fill(q)
+          await expect.poll(() => held, { timeout: 15_000, message: 'the search answer is held' }).toBeGreaterThan(0)
+          await expect(history.locator('.animate-spin')).toHaveCount(1)
+          const shown = await shownIds()
+          soft(shown.filter((id) => before.includes(id)), 'History search: rows of the page before while its answer is held').toEqual([])
+          soft(shown, 'History search: rows while its answer is held').toEqual([])
+          soft(await pager.innerText(), 'History search: the footer while its answer is held').toContain(EN.common.paginationEmpty)
+        } finally {
+          release()
+          await page.unroute(isSearch, hold)
+        }
         await soft.poll(shownIds, { timeout: 15_000, message: 'History search: the first request' }).toEqual([ids[0]])
         await soft.poll(() => pager.innerText(), { timeout: 15_000 }).toContain(range(1, 1, 1))
       })
-
-      soft(await flashes(page, '__arFlash'), 'the table never emptied while switching tabs, turning pages or searching').toEqual([])
     } finally {
       await cleanup(request, admin)
     }
@@ -305,4 +328,15 @@ test.describe('number check: access requests and access review', () => {
       await cleanup(request, admin)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

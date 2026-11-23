@@ -32,6 +32,9 @@ auth:
     customRoles:
       - name: e2e-chart-bound
         clusterRoles: [view]
+    # on in dev (off in the chart): kind authorizes with Node and RBAC only (docs/cluster-requirements.md §1)
+    sharedReadChecks:
+      enabled: true
   accessRequests:
     enabled: true
     sweepSeconds: 5
@@ -141,6 +144,9 @@ features:
     enabled: true
     paths: [/var/log/app/*.log]
     namespaces: [default]
+  # The AI's anomaly_rank and its route GET /namespaces/{namespace}/anomalies (ai-anomaly-rank.spec.ts).
+  anomalyRank:
+    enabled: true
   # Alert → AI investigation (investigator-rbac.spec.ts, alert-investigation.spec.ts); the second cluster gets the
   # same RBAC and an Alertmanager pointed at this install from scripts/add-kind-cluster.sh --addons.
   alertInvestigation:

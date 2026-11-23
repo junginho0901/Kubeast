@@ -131,7 +131,7 @@ test.describe('the screens\' buttons through the AI', () => {
 
   test('an admin cordons and uncordons a node of the second cluster as the button does', async ({ request }) => {
     const second = kubectlFor('kubeast-b')
-    const node = second(`get nodes -o jsonpath={.items[0].metadata.name}`)
+    const node = withUndo(second(`get nodes -o jsonpath={.items[0].metadata.name}`), (n) => second(`uncordon ${n}`))
     try {
       const cordoned = await rpc(request, admin, 'tools/call', { name: 'k8s_cordon_node', arguments: { cluster: 'default', resource_name: node } })
       expect(cordoned.isError, JSON.stringify(cordoned)).toBeFalsy()
@@ -159,4 +159,17 @@ test.describe('the screens\' buttons through the AI', () => {
     const both = await userWithRole(request, `e2e-btn-two-${STAMP}`, ['ai.mcp.use', 'ai.tool.alert_investigate', 'resource.alert.investigate', 'resource.*.read'])
     expect(await listed(request, both)).toContain('alert_investigate')
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

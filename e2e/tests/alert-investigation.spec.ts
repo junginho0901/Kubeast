@@ -18,7 +18,7 @@ const READ_TOOLS = new Set([
   'k8s_find_resource', 'k8s_explain', 'issues', 'prometheus_query', 'prometheus_metrics', 'prometheus_labels',
   'prometheus_rules', 'prometheus_targets', 'logsearch', 'loki_query', 'loki_labels', 'loki_patterns',
   'traces_search', 'traces_get', 'traces_tags', 'traces_metrics', 'traces_compare', 'alerts_list',
-  'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'network_policy_check', 'network_flows', 'network_drops', 'network_top_flows', 'resource_graph', 'timeline', 'gpu',
+  'policy_reports', 'helm_read', 'cost', 'optimization', 'can_i', 'network_policy_check', 'network_flows', 'network_drops', 'network_top_flows', 'resource_graph', 'timeline', 'gpu', 'anomaly_rank',
   'k8s_jq_query', 'k8s_tabular_query', 'k8s_count', 'gitops_status',
   'clusters_list',
   'pod_rbac',
@@ -53,7 +53,7 @@ function firing(name: string, fingerprint: string, labels: Record<string, string
     status: 'firing',
     labels: { alertname: name, severity: 'critical', namespace: 'default', deployment: 'e2e-unschedulable', ...labels },
     annotations: { summary: 'Deployment default/e2e-unschedulable has had no ready replica for 10 minutes.' },
-    startsAt: new Date().toISOString(),
+    startsAt: new Date(Date.now() - 60_000).toISOString(), // before delivery, as Alertmanager sends it
     generatorURL: 'http://prometheus.e2e/graph',
     fingerprint,
   }
@@ -97,7 +97,7 @@ async function readerFollowsTheLink(request: APIRequestContext, browser: Browser
   const password = 'E2e-alerts-throwaway-1!'
   const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E alerts link', email, password, role_id: member.id } })
   expect(created.status()).toBe(201)
-  const userId = (await created.json()).id as string
+  const userId = madeUser((await created.json()).id as string, bearer(admin))
   const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] }, locale: 'en-US' })
   try {
     await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })
@@ -111,6 +111,7 @@ async function readerFollowsTheLink(request: APIRequestContext, browser: Browser
     await page.goto(`${url.pathname}${url.search}`)
     await expect(page.getByRole('heading', { name: alertname })).toHaveText(alertname, { timeout: 30_000 })
     await expect(page).toHaveURL(/\/alerts\?/)
+    await expect(page.getByTestId('alert-report'), 'the alert window links its investigation').toBeVisible({ timeout: 20_000 })
     await page.getByTestId('alert-report').click()
     await expect(page.getByTestId('investigation-meta')).toHaveCount(1, { timeout: 20_000 })
   } finally {
@@ -204,7 +205,7 @@ test.describe('alert investigation', () => {
     const email = `e2e-alerts-${Date.now().toString(36)}@kubeast.local`
     const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E alerts reader', email, password: 'E2e-alerts-throwaway-1!', role_id: member.id } })
     expect(created.status()).toBe(201)
-    const userId = (await created.json()).id as string
+    const userId = madeUser((await created.json()).id as string, bearer(admin))
     try {
       await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })
       const reader = await login(request, email, 'E2e-alerts-throwaway-1!')
@@ -230,4 +231,15 @@ test.describe('alert investigation', () => {
     expect(d.fingerprint).toMatch(/^[0-9a-f]{16}$/)
     expect(d.namespace).toBe('kube-system')
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

@@ -78,6 +78,7 @@ export function StorageModal({
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
   const na = tr('common.notAvailable', 'N/A')
+  const empty = tr('common.empty', '-')
 
   // Outside-click → close namespace dropdown.
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -128,6 +129,7 @@ export function StorageModal({
             <button
               onClick={onClose}
               className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              aria-label={tr('common.close', 'Close')}
             >
               <X className="w-5 h-5 text-slate-400" />
             </button>
@@ -249,6 +251,7 @@ export function StorageModal({
               <button
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded-sm transition-colors"
+                aria-label={tr('common.clearSearch', 'Clear the search')}
               >
                 <X className="w-4 h-4 text-slate-400" />
               </button>
@@ -295,7 +298,7 @@ export function StorageModal({
                               <span className="font-medium">{tr('dashboard.labels.namespaceShort', 'ns:')}</span> {pvc.namespace}
                             </p>
                             <p className="text-xs text-slate-400">
-                              {pvc.capacity || na} · {pvc.storage_class || na} · {tr('dashboard.storage.pvLabel', 'PV')}: {pvc.volume_name || na}
+                              {pvc.capacity || empty} · {pvc.storage_class || empty} · {tr('dashboard.storage.pvLabel', 'PV')}: {pvc.volume_name || empty}
                             </p>
                             {pvc.usage ? (
                               <div className="flex flex-wrap items-center gap-2" data-testid="pvc-usage">
@@ -365,7 +368,7 @@ export function StorageModal({
                           </div>
                           <div className="mt-1 space-y-0.5">
                             <p className="text-xs text-slate-400">
-                              {pv.capacity || na} · {pv.storage_class || na} · {tr('dashboard.storage.reclaimLabel', 'Reclaim')}: {pv.reclaim_policy || na}
+                              {pv.capacity || empty} · {pv.storage_class || empty} · {tr('dashboard.storage.reclaimLabel', 'Reclaim')}: {pv.reclaim_policy || empty}
                             </p>
                             <p className="text-xs text-slate-400">
                               <span className="font-medium">{tr('dashboard.storage.claimLabel', 'Claim')}:</span> {claim}

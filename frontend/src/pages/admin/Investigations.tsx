@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { FileSearch, RefreshCw, Siren } from 'lucide-react'
 
@@ -18,10 +18,12 @@ import { duration, severityClass, skipReason, statusClass } from '@/utils/invest
 import { formatWhen } from './accessRequestFormat'
 import { investigationsView } from './investigationsView'
 import { serverPageRead } from '@/utils/fitServerPage'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { utcTitle } from '@/utils/time'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { failureOf } from '@/hooks/useRefresh'
+import { unlessRefused } from '@/services/queryDefaults'
 
 // Admin → Investigations: the reports the alert investigator wrote (features.alertInvestigation).
 // Opening one is audited server-side (ai.investigation.view).
@@ -48,16 +50,18 @@ export default function Investigations() {
   // with Fit the first page is one block cut at the rows that fit (utils/fitServerPage), so opening the list is one read
   const read = serverPageRead(page, rowsPerPage, fit)
 
-  // The rows on screen stay while another page, filter or page size loads; the range, page and AI context are theirs.
+  // The rows on screen stay while another page or page size loads, with their range, page and AI context; another
+  // status or cluster waits for its own answer.
+  const listKey = ['investigations', 'list', applied, page, read]
   const { data, isLoading, refetch, isFetching, error: listError, errorUpdatedAt } = useQuery({
-    queryKey: ['investigations', 'list', applied, page, read],
+    queryKey: listKey,
     queryFn: async () => ({
       ...(await api.listInvestigations({ ...applied, ...read })),
       filter: applied, page, limit: read.limit,
     }),
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(listKey, [3, 4]),
     // while something is queued or running, follow it
-    refetchInterval: (q) => ((q.state.data?.items ?? []).some((r) => r.status === 'queued' || r.status === 'running') ? 5_000 : 30_000),
+    refetchInterval: (q) => unlessRefused(q.state.error, (q.state.data?.items ?? []).some((r) => r.status === 'queued' || r.status === 'running') ? 5_000 : 30_000),
   })
   const view = investigationsView(data, page, rowsPerPage)
   const { rows, total, shownPage, shownFilter } = view

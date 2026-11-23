@@ -115,7 +115,7 @@ test.describe('LogQL written by hand', () => {
   test("a read across namespaces leaves the node shell's namespace out for a Read user and not for an admin", async ({ request }) => {
     const id = Date.now().toString(36)
     const shellNs = 'kubeast-node-shell'
-    const shellJob = `e2e-logql-shell-${id}`
+    const shellJob = withUndo(`e2e-logql-shell-${id}`, (j) => request.delete(`/api/v1/namespaces/${shellNs}/jobs/${j}?cluster=${CLUSTER}`, { headers: bearer(admin), failOnStatusCode: false }))
     const shellMarker = `${shellJob}-marker`
     const email = `${shellJob}@kubeast.local`
     const inShell = `{k8s_namespace_name="${shellNs}"} |= "${shellMarker}"`
@@ -151,7 +151,7 @@ test.describe('LogQL written by hand', () => {
       const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
       const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E logql shell', email, password: PW, role_id: member.id } })
       expect(created.status()).toBe(201)
-      userId = (await created.json()).id
+      userId = madeUser((await created.json()).id, bearer(admin))
       const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read' } })
       expect(grant.ok(), await grant.text()).toBeTruthy()
       const reader = await login(request, email, PW)
@@ -186,7 +186,7 @@ test.describe('LogQL written by hand', () => {
       const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
       const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E logql', email, password: PW, role_id: member.id } })
       expect(created.status()).toBe(201)
-      userId = (await created.json()).id
+      userId = madeUser((await created.json()).id, bearer(admin))
       const before = await login(request, email, PW)
       const refused = await logql(request, before, CLUSTER, `{k8s_container_name="say"} |= "${marker}"`)
       expect(refused.status(), 'no grant on the cluster').toBe(403)
@@ -246,4 +246,28 @@ test.describe('LogQL written by hand', () => {
     await page.getByTestId('logsearch-submit').click()
     await expect(page.getByTestId('logsearch-error')).toContainText(/unterminated/, { timeout: 20000 })
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

@@ -5,6 +5,8 @@ import path from 'node:path'
 
 import { test, expect, type Locator, type Page } from '@playwright/test'
 
+import { waitUntilListed } from './number-check.cr-shared'
+
 // Every screen that opens a drawer for an object it names passes the object's apiVersion, so one Kind of two groups
 // opens the right group's object with its own CRD: on default, in a namespace of this run's own, a Widget of
 // links-a.kubeast.io and one of links-b.kubeast.io with the same name, each controlling a pod, Warning events about
@@ -184,6 +186,7 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
     try {
       kc('apply --server-side --field-manager=e2e-detail-links -f -', JSON.stringify({ apiVersion: 'v1', kind: 'List', items: GROUPS.flatMap((g) => [crd(g, 'Widget', 'widgets', 'Namespaced'), crd(g, 'Gizmo', 'gizmos', 'Cluster')]) }))
       kc(`wait --for=condition=Established ${CRDS.map((c) => `crd/${c}`).join(' ')} --timeout=60s`)
+      await waitUntilListed(kc, CRDS)
       kc(`create namespace ${NS}`)
       kc(`label namespace ${NS} ${LABEL}`)
       kc('apply --server-side --field-manager=e2e-detail-links -f -', JSON.stringify({
@@ -323,7 +326,7 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
             })),
           },
         })
-        expect((await post('firing')).ok(), 'the webhook took the alerts').toBe(true)
+        expect((await withUndo(post('firing'), () => post('resolved'))).ok(), 'the webhook took the alerts').toBe(true)
         try {
           const items = (await (await page.request.get('/api/v1/alerts/inbox', { params: { cluster: 'default', q: RUN, limit: 200 } })).json()).items as Obj[]
           for (const g of GROUPS) {
@@ -350,10 +353,25 @@ test.describe('number check — the drawer a screen opens for one Kind of two gr
         await p.goto('/cluster/search?cluster=default')
         await p.locator('.monaco-editor').first().click()
         await p.keyboard.type('true')
+        // the editor's word suggestions (true, TextTrackCue, …) open over the first row until it loses focus, as a click elsewhere makes it
+        await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
         return p.locator('table tbody tr').getByRole('button', { name: GIZMO, exact: true })
       }, () => GROUPS.map((g) => wantOf(gizmo(g), 'gizmos')))
     } finally {
       cleanup()
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

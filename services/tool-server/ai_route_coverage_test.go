@@ -74,8 +74,9 @@ func TestRouteCoverage_EachToolIsRegisteredAndNotAWrite(t *testing.T) {
 }
 
 func TestRouteCoverage_EachRowTakesTheToolsArguments(t *testing.T) {
+	t.Setenv("AI_TIMELINE_CHANGES", "true") // the rows are the tools' arguments with every feature on (timeline's view)
 	for key, row := range coveredRoutes(t) {
-		if err := validateToolArgs(row.Args); err != nil {
+		if err := validateCallArgs(row.Tool, row.Args); err != nil {
 			t.Errorf("%s: %v", key, err)
 		}
 	}
@@ -205,6 +206,7 @@ func callForCoverage(t *testing.T, row aiRouteCoverage, handler ToolHandler) (*c
 		_, _ = w.Write([]byte(answer))
 	}))
 	defer srv.Close()
+	kubectlAsNoOne(t)
 	origK8s, origAuth, origAI, origKubectl := k8sServiceURL, authServiceURL, aiServiceURL, kubectlExec
 	k8sServiceURL, authServiceURL, aiServiceURL = srv.URL, srv.URL, srv.URL
 	kubectlExec = func(_ context.Context, args []string, _ *string) ([]byte, error) {

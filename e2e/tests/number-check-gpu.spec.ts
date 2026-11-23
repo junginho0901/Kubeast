@@ -490,10 +490,10 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
 
       if (kubectl(`get namespace ${PLUGIN.namespace} --ignore-not-found -o name`) === '') {
         kubectl(`create namespace ${PLUGIN.namespace}`)
-        madeNamespace = true
+        madeNamespace = withUndo(true, () => kubectl(`delete namespace ${PLUGIN.namespace} --ignore-not-found --wait=true --timeout=120s`))
       }
       kubectl('apply -f -', ds)
-      made = true
+      made = withUndo(true, () => kubectl(`-n ${PLUGIN.namespace} delete ds ${PLUGIN.name} --ignore-not-found --wait=true`))
       await waitFor('the plugin pod scheduled, not ready', () => { const s = dsStatus(); return s.desiredNumberScheduled === 1 && s.numberReady === 0 }, 60_000)
       await expect(async () => {
         await page.reload()
@@ -521,8 +521,8 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     test.setTimeout(180_000)
     await prepare(page)
     try {
-      kubectl(`label node ${NODE} --overwrite nvidia.com/mig.strategy=none`)
-      kubectl(`cordon ${NODE}`)
+      withUndo(kubectl(`label node ${NODE} --overwrite nvidia.com/mig.strategy=none`), () => kubectl(`label node ${NODE} --overwrite nvidia.com/mig.strategy=mixed`))
+      withUndo(kubectl(`cordon ${NODE}`), () => kubectl(`uncordon ${NODE}`))
       expect((await statusCells('/api/v1/nodes'))[NODE], 'kubectl get nodes').toBe('Ready,SchedulingDisabled')
       await expect(async () => {
         await page.goto(url('/gpu/dashboard'))
@@ -1056,7 +1056,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     const password = `gpu-${id}-pw`
     const created = await request.post('/api/v1/auth/admin/users', { headers, data: { name: `E2E gpu ${id}`, email, password } })
     expect(created.status(), await created.text()).toBe(201)
-    const userId = (await created.json()).id
+    const userId = madeUser((await created.json()).id, headers)
     const binding = JSON.stringify({
       apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: 'e2e-gpu-num-read', namespace: NS },
       roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'ClusterRole', name: 'view' },
@@ -1114,4 +1114,28 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       kubectl(`delete rolebinding e2e-gpu-num-read -n ${NS} --ignore-not-found`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

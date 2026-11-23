@@ -1,6 +1,7 @@
 """Alert → AI investigation: the webhook's gates, the investigation loop, the admin reads."""
 
 import asyncio
+import contextlib
 import json
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -43,6 +44,11 @@ class FakeStore:
         self.pause = pause
         self.bumped = []
         self.inbox = []
+        self.locked = []
+        self._locks = {}
+        # what each decision call got as held=, and what alert_locked yields (the real one: its session on PostgreSQL)
+        self.held = []
+        self.lock_session = None
 
     def install(self, monkeypatch):
         async def record(db, **f):
@@ -51,41 +57,57 @@ class FakeStore:
 
         monkeypatch.setattr(inbox, "record", record)
 
-        async def find_recent(db, cluster, fingerprint, since):
+        async def find_recent(db, cluster, fingerprint, since, held=None):
+            self.held.append(("find_recent", held))
             for r in self.rows:
                 if r["cluster"] == cluster and r["fingerprint"] == fingerprint and r["received_at"] >= since and r["status"] != "skipped":
                     return SimpleNamespace(**r)
             return None
 
-        async def bump_repeat(db, inv_id, now):
+        async def bump_repeat(db, inv_id, now, held=None):
+            self.held.append(("bump_repeat", held))
             self.bumped.append(inv_id)
 
-        async def find_recent_skipped(db, cluster, fingerprint, since):
+        async def find_recent_skipped(db, cluster, fingerprint, since, held=None):
+            self.held.append(("find_recent_skipped", held))
             for r in reversed(self.rows):
                 if r["cluster"] == cluster and r["fingerprint"] == fingerprint and r["received_at"] >= since and r["status"] == "skipped":
                     return SimpleNamespace(**r)
             return None
 
-        async def fold_skip(db, inv_id, reason, now):
+        async def fold_skip(db, inv_id, reason, now, held=None):
+            self.held.append(("fold_skip", held))
             row = next(r for r in self.rows if r["id"] == inv_id)
             row.update(repeat_count=row.get("repeat_count", 1) + 1, last_seen_at=now, skip_reason=reason)
 
-        async def count_since(db, since):
+        async def count_since(db, since, held=None):
+            self.held.append(("count_since", held))
             return sum(1 for r in self.rows if r["received_at"] >= since and r["status"] != "skipped")
 
-        async def tokens_since(db, since):
+        async def tokens_since(db, since, held=None):
+            self.held.append(("tokens_since", held))
             return self.tokens
 
-        async def insert(db, **f):
+        async def insert(db, held=None, **f):
+            self.held.append(("insert", held))
+            await asyncio.sleep(0)  # a round trip: another delivery runs meanwhile
             f.setdefault("id", f"inv-{len(self.rows)}")
             self.rows.append(f)
             return f["id"]
 
-        async def pause_reason(db, minutes, now):
+        @contextlib.asynccontextmanager
+        async def alert_locked(db, cluster, fingerprint, starts_at):
+            async with self._locks.setdefault((cluster, fingerprint, starts_at), asyncio.Lock()):
+                self.locked.append((cluster, fingerprint, starts_at))
+                yield self.lock_session
+
+        async def pause_reason(db, minutes, now, held=None):
+            self.held.append(("pause_reason", held))
             return self.pause if minutes else ""
 
         for name, fn in dict(find_recent=find_recent, bump_repeat=bump_repeat, count_since=count_since, tokens_since=tokens_since, insert=insert,
-                             pause_reason=pause_reason, find_recent_skipped=find_recent_skipped, fold_skip=fold_skip).items():
+                             pause_reason=pause_reason, find_recent_skipped=find_recent_skipped, fold_skip=fold_skip,
+                             alert_locked=alert_locked).items():
             monkeypatch.setattr(store, name, fn)
 
 
@@ -109,6 +131,16 @@ def test_parse_time():
     assert webhook.parse_time("2026-10-13T11:59:00Z") == datetime(2026, 10, 13, 11, 59)
     assert webhook.parse_time("0001-01-01T00:00:00Z") is None
     assert webhook.parse_time("garbage") is None
+
+
+def test_parse_time_reads_an_offset_as_the_utc_moment_it_names():
+    """The columns keep naive UTC: a sender writing its own zone names the same moment as one writing Z."""
+    moment = datetime(2026, 10, 13, 11, 59, 0, 123456)
+    for text in ("2026-10-13T11:59:00.123456789Z", "2026-10-13T20:59:00.123456789+09:00", "2026-10-13T06:59:00.123456789-05:00",
+                 "2026-10-14T02:59:00.123456+15:00", "2026-10-13T11:59:00.123456+00:00"):
+        assert webhook.parse_time(text) == moment, text
+    assert webhook.parse_time("2026-10-13T11:59:00") == datetime(2026, 10, 13, 11, 59)  # no offset: read as UTC
+    assert webhook.parse_time("9999-12-31T23:00:00-05:00") is None  # past what a datetime holds in UTC
 
 
 @pytest.mark.asyncio
@@ -137,6 +169,107 @@ async def test_gates_fold_a_repeat_into_the_recent_row(monkeypatch):
     assert counts["accepted"] == 1
     counts = await webhook.gate_and_queue(None, cfg(), "default", am_message(alert(fp="a")), NOW)
     assert counts["accepted"] == 1
+
+
+@pytest.mark.asyncio
+async def test_one_alert_arriving_twice_at_once_queues_one_investigation(monkeypatch):
+    """Two deliveries of one alert at one moment (two replicas, an Alertmanager HA pair) decide under the alert's
+    inbox row lock one after the other: one investigation, and the other delivery folds into it."""
+    fs = FakeStore()
+    fs.install(monkeypatch)
+    msg = am_message(alert(fp="a"))
+    first, second = await asyncio.gather(*(webhook.gate_and_queue(None, cfg(dedupe_hours=24), "self", msg, NOW) for _ in range(2)))
+    assert len(fs.rows) == 1 and fs.bumped == [fs.rows[0]["id"]]
+    assert sorted((c["accepted"], c["duplicate"]) for c in (first, second)) == [(0, 1), (1, 0)]
+    # the lock is the inbox row of this cluster, alert and start, the row inbox.record stored it in
+    assert fs.locked == [("self", "a", datetime(2026, 10, 13, 11, 59))] * 2
+
+
+@pytest.mark.asyncio
+async def test_one_skipped_alert_arriving_twice_at_once_writes_one_skipped_row(monkeypatch):
+    fs = FakeStore(rows=[{"id": f"r{i}", "cluster": "self", "fingerprint": f"x{i}", "status": "done", "received_at": NOW - timedelta(minutes=10)} for i in range(2)])
+    fs.install(monkeypatch)
+    msg = am_message(alert(fp="a"))
+    counts = await asyncio.gather(*(webhook.gate_and_queue(None, cfg(max_per_hour=2), "self", msg, NOW) for _ in range(2)))
+    assert [c["skipped"] for c in counts] == [1, 1]
+    skipped = [r for r in fs.rows if r["status"] == "skipped"]
+    assert len(skipped) == 1 and skipped[0].get("repeat_count") == 2
+
+
+def _fake_hourly_lock(monkeypatch):
+    """store.hourly_cap_locked as one lock of this process; the list it returns grows each time it is entered."""
+    held, entered = asyncio.Lock(), []
+
+    @contextlib.asynccontextmanager
+    async def hourly_cap_locked(db, lock):
+        async with held:
+            entered.append(lock)
+            yield
+
+    monkeypatch.setattr(store, "hourly_cap_locked", hourly_cap_locked)
+    return entered
+
+
+@pytest.mark.asyncio
+async def test_two_different_alerts_at_once_queue_no_more_than_the_hourly_cap(monkeypatch):
+    """One investigation left in the hour and two different alerts at one moment (two replicas): the count and the
+    row it allows are one step, so the second counts the first one's row and is skipped."""
+    fs = FakeStore(rows=[{"id": "r0", "cluster": "self", "fingerprint": "x0", "status": "done", "received_at": NOW - timedelta(minutes=10)}])
+    fs.install(monkeypatch)
+    entered = _fake_hourly_lock(monkeypatch)
+    settings = cfg(max_per_hour=2)
+    counts = await asyncio.gather(*(webhook.gate_and_queue(None, settings, "self", am_message(alert(fp=fp)), NOW) for fp in ("a", "b")))
+    assert sorted((c["accepted"], c["skipped"]) for c in counts) == [(0, 1), (1, 0)]
+    assert [r["status"] for r in fs.rows[1:]].count("queued") == 1 and len(entered) == 2
+
+
+@pytest.mark.asyncio
+async def test_without_an_hourly_cap_no_delivery_waits_for_the_hourly_lock(monkeypatch):
+    fs = FakeStore()
+    fs.install(monkeypatch)
+    entered = _fake_hourly_lock(monkeypatch)
+    counts = await asyncio.gather(*(webhook.gate_and_queue(None, cfg(max_per_hour=0), "self", am_message(alert(fp=fp)), NOW) for fp in ("a", "b")))
+    assert [c["accepted"] for c in counts] == [1, 1] and entered == []
+
+
+async def test_the_hourly_lock_asks_nothing_of_sqlite(sqlite_db):
+    async with store.alert_locked(sqlite_db, "self", "a", None) as lock:
+        assert lock is None  # sqlite: each call commits in a session of its own, as before
+        async with store.hourly_cap_locked(sqlite_db, lock):
+            assert await store.count_since(sqlite_db, NOW - timedelta(hours=1), held=lock) == 0
+
+
+@pytest.mark.asyncio
+async def test_the_decision_reads_and_writes_through_the_session_holding_the_lock(monkeypatch):
+    """On PostgreSQL alert_locked yields its session; every read and write of the decision goes through it, so a
+    delivery waiting for the locks holds one connection and the one deciding needs no other."""
+    session = object()
+    fs = FakeStore(rows=[{"id": "r0", "cluster": "self", "fingerprint": "dup", "status": "done", "received_at": NOW - timedelta(minutes=10)},
+                         {"id": "r1", "cluster": "self", "fingerprint": "x1", "status": "done", "received_at": NOW - timedelta(minutes=10)}])
+    fs.lock_session = session
+    fs.install(monkeypatch)
+    _fake_hourly_lock(monkeypatch)
+    capped = cfg(max_per_hour=2, dedupe_hours=24)
+    counts = await webhook.gate_and_queue(None, capped, "self", am_message(alert(fp="dup"), alert(fp="new")), NOW)
+    assert (counts["duplicate"], counts["skipped"]) == (1, 1)  # a repeat folded; the hourly cap reached
+    budget = cfg(max_per_hour=0, dedupe_hours=24, daily_token_budget=5000, provider_pause_minutes=30)
+    assert (await webhook.gate_and_queue(None, budget, "self", am_message(alert(fp="other")), NOW))["accepted"] == 1
+    again = await webhook.gate_and_queue(None, capped, "self", am_message(alert(fp="new")), NOW)
+    assert again["skipped"] == 1  # folded into the skipped row of "new"
+    assert {name for name, _ in fs.held} == {"find_recent", "bump_repeat", "count_since", "tokens_since", "pause_reason",
+                                             "find_recent_skipped", "fold_skip", "insert"}
+    assert all(held is session for _, held in fs.held)
+
+
+def test_the_alert_lock_is_a_row_lock_on_its_inbox_row():
+    from sqlalchemy.dialects import postgresql
+
+    sql = str(store.alert_row_lock("self", "a", datetime(2026, 10, 13, 11, 59)).compile(dialect=postgresql.dialect()))
+    assert "FROM alert_inbox" in sql and sql.endswith("FOR UPDATE")
+    assert all(f"alert_inbox.{c} = " in sql for c in ("cluster", "fingerprint", "starts_at"))
+    # without startsAt, the alert's newest row, as inbox.record finds it
+    sql = str(store.alert_row_lock("self", "a", None).compile(dialect=postgresql.dialect()))
+    assert "starts_at = " not in sql and "ORDER BY alert_inbox.starts_at DESC" in sql and sql.endswith("FOR UPDATE")
 
 
 @pytest.mark.asyncio
@@ -932,6 +1065,95 @@ async def test_worker_skips_a_queued_alert_while_paused(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_a_run_whose_fields_the_row_refuses_is_failed_with_why_and_keeps_its_tokens(monkeypatch):
+    service = FakeService([completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})]),
+                           completion(content="## Summary\nok")])
+    audits, writes = [], []
+    install_loop(monkeypatch, service, audits)
+
+    async def finish(db, inv_id, **fields):
+        writes.append(fields)
+        if len(writes) == 1:
+            raise ValueError("unsupported Unicode escape sequence")
+
+    monkeypatch.setattr(runner.store, "finish", finish)
+    assert await runner.run_one(cfg(max_steps=2), None, row()) == "failed"
+    first, second = writes
+    assert first["status"] == "done" and first["report"] == "## Summary\nok"
+    assert second["error"] == "the run's fields could not be stored: ValueError: unsupported Unicode escape sequence"
+    assert set(second) == {"status", "error", "provider", "model", "prompt_tokens", "completion_tokens", "total_tokens"}
+    assert second["status"] == "failed" and second["total_tokens"] == 22  # still counted in the daily budget
+    run = audits[-1]
+    assert run["action"] == "ai.investigation.run" and run["result"] == "failure" and run["after"]["status"] == "failed"
+    assert run["after"]["total_tokens"] == 22 and run["error"] == second["error"]
+    assert (run["after"]["tool_calls"], run["after"]["iterations"]) == (1, 2)  # counted before the fields were dropped
+
+
+@pytest.mark.asyncio
+async def test_a_failed_run_whose_row_refuses_its_fields_keeps_its_own_error(monkeypatch):
+    """A provider's refusal stays the row's error, so pause_reason still holds the next runs back."""
+    writes = []
+
+    async def refused(c, r, progress=None):
+        raise RuntimeError("credit balance too low")
+
+    async def audit(**kw):
+        return True
+
+    async def finish(db, inv_id, **fields):
+        writes.append(fields)
+        if len(writes) == 1:
+            raise OSError("connection reset")
+
+    monkeypatch.setattr(runner, "investigate", refused)
+    monkeypatch.setattr(runner, "classify", lambda e: SimpleNamespace(blocks=True, kind="credit", retry_at=None))
+    monkeypatch.setattr(runner, "write_audit", audit)
+    monkeypatch.setattr(runner.store, "finish", finish)
+    assert await runner.run_one(cfg(), None, row()) == "failed"
+    first, second = writes
+    assert second["status"] == "failed" and second["error"] == first["error"]
+    assert second["error"].startswith(store.REFUSAL_PREFIX)
+
+
+@pytest.mark.asyncio
+async def test_the_worker_logs_a_run_whose_end_could_not_be_stored_and_takes_the_next_row(monkeypatch, caplog):
+    """A run whose store.finish raised (the database refusing a value) does not end the worker: the next rows run."""
+    stop = asyncio.Event()
+    queued, ran = [row(id="inv-nul"), row(id="inv-next")], []
+
+    async def get_db():
+        return object()
+
+    async def claim_next(db):
+        if queued:
+            return queued.pop(0)
+        stop.set()
+        return None
+
+    async def nothing(*a, **k):
+        return 0
+
+    async def not_paused(db, minutes, now):
+        return ""
+
+    async def run_one(c, db, r):
+        ran.append(r.id)
+        if r.id == "inv-nul":
+            raise ValueError("unsupported Unicode escape sequence")
+
+    monkeypatch.setattr(runner, "get_db_service", get_db)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner.store, "fail_stale_running", nothing)
+    monkeypatch.setattr(runner.store, "pause_reason", not_paused)
+    monkeypatch.setattr(runner.store, "tokens_since", nothing)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    monkeypatch.setattr(runner, "POLL_SECONDS", 0.01)
+    await asyncio.wait_for(runner.worker(stop), timeout=5)
+    assert ran == ["inv-nul", "inv-next"]
+    assert "investigation inv-nul: not finished" in caplog.text and "unsupported Unicode escape" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_a_tool_is_not_run_when_the_audit_store_goes_down_mid_investigation(monkeypatch):
     # up when the run starts, down by the first tool call: the tool does not read the cluster and its row is a failure
     service = FakeService([
@@ -1104,3 +1326,144 @@ async def test_a_subscription_run_whose_closing_call_fails_keeps_the_turns_token
     assert await runner.run_one(cfg(max_steps=5), None, row()) == "failed"
     assert (finished[0].get("total_tokens"), finished[0].get("model")) == (35, "claude-haiku-5-5")
     assert (audits[-1]["after"].get("total_tokens"), audits[-1]["after"].get("requested_by", "absent")) == (35, None)  # None: the webhook's
+
+
+@pytest.mark.asyncio
+async def test_a_stopping_worker_puts_its_running_row_back_in_the_queue_once(sqlite_db):
+    db = sqlite_db
+    inv_id = await store.insert(db, cluster="self", fingerprint="fp-stop", status="queued", received_at=NOW)
+    row = await store.claim_next(db)
+    assert row is not None and (row.id, row.status) == (inv_id, "running") and row.started_at is not None
+    assert await store.requeue_or_fail(db, inv_id) == "queued"
+    back = await store.get(db, inv_id)
+    assert (back.status, back.started_at, back.stop_requeues) == ("queued", None, 1)
+    again = await store.claim_next(db)  # a replica or the next pod takes it from the start
+    assert again is not None and again.id == inv_id
+    # cut a second time: it ends failed and does not come back
+    assert await store.requeue_or_fail(db, inv_id) == "failed"
+    ended = await store.get(db, inv_id)
+    assert (ended.status, ended.error, ended.stop_requeues) == ("failed", store.STOPPED_TWICE, 1)
+    assert ended.finished_at is not None
+    assert await store.claim_next(db) is None
+    assert await store.requeue_or_fail(db, inv_id) == ""  # a row that ended stays as it ended
+    assert (await store.get(db, inv_id)).status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_the_worker_requeues_the_row_it_runs_when_it_is_cancelled(monkeypatch):
+    held = SimpleNamespace(id="inv-held", requested_by="")
+    claimed, requeued = [], []
+
+    async def claim_next(_db):
+        if claimed:
+            return None
+        claimed.append(held.id)
+        return held
+
+    async def no_stale(*_a, **_k):
+        return 0
+
+    async def no_refusal(*_a, **_k):
+        return ""
+
+    running = asyncio.Event()
+
+    async def run_one(*_a, **_k):
+        running.set()
+        await asyncio.sleep(60)
+
+    async def requeue_or_fail(_db, inv_id):
+        requeued.append(inv_id)
+        return "queued"
+
+    async def db_service():
+        return object()
+
+    monkeypatch.setattr(runner, "get_db_service", db_service)
+    monkeypatch.setattr(runner, "fail_stale", no_stale)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner, "claim_refusal", no_refusal)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    monkeypatch.setattr(runner.store, "requeue_or_fail", requeue_or_fail)
+    task = asyncio.create_task(runner.worker(asyncio.Event()))
+    await asyncio.wait_for(running.wait(), timeout=2)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert requeued == ["inv-held"]
+
+
+@pytest.mark.asyncio
+async def test_a_worker_told_to_stop_ends_the_run_it_holds_and_takes_no_other(monkeypatch):
+    claimed, finished, requeued = [], [], []
+
+    async def claim_next(_db):
+        claimed.append(f"inv-{len(claimed)}")
+        return SimpleNamespace(id=claimed[-1], requested_by="")
+
+    async def no_stale(*_a, **_k):
+        return 0
+
+    async def no_refusal(*_a, **_k):
+        return ""
+
+    running, release = asyncio.Event(), asyncio.Event()
+
+    async def run_one(_cfg, _db, row):
+        running.set()
+        await release.wait()
+        finished.append(row.id)
+
+    async def requeue_or_fail(_db, inv_id):
+        requeued.append(inv_id)
+        return "queued"
+
+    async def db_service():
+        return object()
+
+    monkeypatch.setattr(runner, "get_db_service", db_service)
+    monkeypatch.setattr(runner, "fail_stale", no_stale)
+    monkeypatch.setattr(runner.store, "claim_next", claim_next)
+    monkeypatch.setattr(runner, "claim_refusal", no_refusal)
+    monkeypatch.setattr(runner, "run_one", run_one)
+    monkeypatch.setattr(runner.store, "requeue_or_fail", requeue_or_fail)
+    stop = asyncio.Event()
+    task = asyncio.create_task(runner.worker(stop))
+    await asyncio.wait_for(running.wait(), timeout=2)
+    stop.set()
+    release.set()
+    await asyncio.wait_for(task, timeout=2)
+    assert (claimed, finished, requeued) == (["inv-0"], ["inv-0"], [])
+
+
+@pytest.mark.asyncio
+async def test_the_stop_signal_stops_the_worker_taking_runs_before_uvicorn_ends_the_lifespan(monkeypatch):
+    # uvicorn 0.54 waits up to --timeout-graceful-shutdown for the answers in flight before the lifespan ends: the
+    # worker's stop is set when SIGTERM comes, and uvicorn's own handler still gets the signal.
+    import signal
+
+    import uvicorn
+
+    import main
+
+    seen = {}
+
+    async def worker(stop):
+        seen["stop"] = stop
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(runner, "worker", worker)
+    monkeypatch.setattr(main.investigation_settings, "load", lambda: SimpleNamespace(enabled=True))
+    server = uvicorn.Server(uvicorn.Config(main.app))
+    original = signal.signal(signal.SIGTERM, server.handle_exit)
+    try:
+        async with main.lifespan(main.app):
+            await asyncio.sleep(0)
+            stop = seen["stop"]
+            assert not stop.is_set()
+            signal.raise_signal(signal.SIGTERM)
+            await asyncio.wait_for(stop.wait(), timeout=2)
+            assert server.should_exit  # uvicorn starts its graceful wait as before
+        assert signal.getsignal(signal.SIGTERM) == server.handle_exit
+    finally:
+        signal.signal(signal.SIGTERM, original)

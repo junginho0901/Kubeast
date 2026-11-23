@@ -63,7 +63,7 @@ const client = (rows: unknown, error: unknown) => {
   return qc
 }
 const render = (qc: QueryClient, lng = 'en') => renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
-  createElement(QueryClientProvider, { client: qc }, createElement(MonitoringPods, { metricsUnavailable: false, onMetricsUnavailable: () => {}, namespaces: [{ name: 'shop' }] as never }))))
+  createElement(QueryClientProvider, { client: qc }, createElement(MonitoringPods, { pageNotice: false, onMetricsUnavailable: () => {}, namespaces: [{ name: 'shop' }] as never }))))
 
 describe('choosing another namespace on the Pods tab', () => {
   const WEB_ROWS = [{ namespace: 'web', name: 'front-0', cpu: '7m', memory: '8Mi', timestamp: '2026-11-07T03:59:15Z' }]
@@ -225,6 +225,49 @@ describe('numbers a refresh of the Pods tab could not replace', () => {
   })
 })
 
+// A read the cluster refused (403, the cluster's words in detail) is not a failure: the tab says so with that reason, keeps
+// no numbers read before it and asks it no more on its 5 s, until it is opened again or another cluster or namespace is
+// chosen, each a query of its own.
+describe('a pod metrics read the cluster refused', () => {
+  const REFUSED = 'pods.metrics.k8s.io is forbidden: User "u1" cannot list resource "pods" in API group "metrics.k8s.io" in the namespace "shop"'
+  beforeEach(() => {
+    picked.done = false
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW })
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('says so in the cluster\'s words instead of a failure that retries', () => {
+    const html = render(client(null, httpError(403, { detail: REFUSED })))
+    expect(html).toContain('data-testid="pod-metrics-forbidden"')
+    expect(html).toContain('You do not have permission to view metrics in this cluster.')
+    expect(html).toContain(REFUSED.replace(/"/g, '&quot;'))
+    expect(html).not.toContain('Failed to load pod metrics')
+    expect(html).not.toContain('Retrying automatically')
+  })
+
+  it('shows no numbers read before it, nor a failed refresh', () => {
+    const html = render(client(ROWS, httpError(403, { detail: REFUSED })))
+    expect(html).toContain('data-testid="pod-metrics-forbidden"')
+    expect(html).not.toContain('123m')
+    expect(html).not.toContain('pod-metrics-refresh-failed')
+    // the floating chat is told the refusal with the cluster's reason, and none of the old numbers
+    expect(chat.current?.summary).toBe('Pod 모니터링 — shop 메트릭 볼 권한 없음')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, metrics_refused: { reason: REFUSED } })
+  })
+
+  it('is not asked again on the tab\'s 5 s, nor tried again; a failure is, as before', () => {
+    read.options.length = 0
+    render(client(null, null))
+    const options = read.options.filter((o) => o.queryKey[0] === 'pod-metrics').at(-1)
+    expect(options.queryKey).toEqual(KEY)
+    expect(options.refetchInterval({ state: { error: httpError(403, { detail: REFUSED }) } })).toBe(false)
+    expect(options.refetchInterval({ state: { error: httpError(503) } })).toBe(5000)
+    expect([options.retry(0, httpError(403)), options.retry(0, httpError(503)), options.retry(2, httpError(503))]).toEqual([false, true, false])
+  })
+})
+
 // The class of the innermost element that holds every one of the marked elements, read from the markup's tags.
 function innermostHolding(html: string, testIds: string[]): string | null {
   const stack: { cls: string; found: Set<string> }[] = []
@@ -281,5 +324,146 @@ describe('what sits above the pod table', () => {
     const html = render(client(ROWS, null))
     const number = (label: string) => html.split(label)[1]?.match(/text-2xl[^>]*>([^<]*)</)?.[1]
     expect([number(en.monitoring.pods.totalPods), number(en.monitoring.pods.totalCpu), number(en.monitoring.pods.totalMemory)]).toEqual(['1', '123m', '45Mi'])
+  })
+})
+
+// The floating chat is told what the tab draws where its rows go, never a count of usage the screen does not show, and the
+// cards say no number the tab contradicts: an empty answer for one namespace ("No pods in … namespace", the cards at 0),
+// for every namespace (not available, no cards; for a grant limited to namespaces none of their pods, the cards at 0),
+// a failed read after an empty one, the answer that says metrics-server
+// is missing, the page's notice and #900's not-served answer (404) each go as the tab says them.
+describe('what the Pods tab tells the floating chat in place of rows', () => {
+  const HINT = en.monitoring.metricsServerHint
+  const NOT_AVAILABLE = en.monitoring.pods.unavailableAll
+  const textOf = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ')
+  const answered = (namespace: string, rows: unknown, error?: unknown) => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
+    const key = ['pod-metrics', 'c1', namespace]
+    if (rows) qc.setQueryData(key, rows)
+    if (error) {
+      const q = qc.getQueryCache().build(qc, { queryKey: key })
+      q.setState({ ...q.state, status: 'error', error: error as Error, errorUpdatedAt: Date.now(), errorUpdateCount: 1 })
+    }
+    return qc
+  }
+  const renderOn = (namespace: string, qc: QueryClient, { notice = false, lng = 'en' } = {}) => {
+    picked.done = false
+    picked.namespace = namespace
+    return renderToStaticMarkup(createElement(I18nextProvider, { i18n: i18n.cloneInstance({ lng }) },
+      createElement(QueryClientProvider, { client: qc }, createElement(MonitoringPods, { pageNotice: notice, onMetricsUnavailable: () => {}, namespaces: [{ name: 'shop' }] as never }))))
+  }
+  const card = (html: string, label: string) => html.split(label)[1]?.match(/text-2xl[^>]*>([^<]*)</)?.[1]
+  const saysWhatTheTabShows = (html: string, skip: string[] = []) => {
+    const parts = (chat.current?.summary ?? '').split(' — ').filter((p) => !skip.includes(p))
+    expect(parts.length).toBeGreaterThan(1)
+    for (const part of parts) expect(textOf(html)).toContain(part)
+    expect(chat.current?.summary).not.toContain('실시간')
+  }
+  beforeEach(() => { chat.current = null })
+  afterEach(() => { picked.namespace = 'shop' })
+
+  it('one namespace answered empty: "No pods in … namespace" and 0, as the tab and its cards say', () => {
+    const html = renderOn('shop', answered('shop', []))
+    expect(html).toContain('data-testid="pod-metrics-none-in-namespace"')
+    expect(card(html, en.monitoring.pods.totalPods)).toBe('0')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, total_count: 0 })
+    expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — No pods in shop namespace`)
+    saysWhatTheTabShows(html)
+  })
+
+  it('every namespace answered empty: not available with its hint, and no cards at 0', () => {
+    const html = renderOn('all', answered('all', []))
+    expect(html).toContain('data-testid="pod-metrics-not-available"')
+    expect(html).not.toContain(en.monitoring.pods.totalPods)
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'all' }, no_samples: true })
+    expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — ${NOT_AVAILABLE} — ${HINT}`)
+    saysWhatTheTabShows(html)
+  })
+
+  // k8s-service reads every namespace of a grant limited to namespaces as those namespaces and answers 200 [] when
+  // none of their pods has metrics; metrics-server missing is its own answer (404 or 503), held above.
+  it('every namespace answered empty for a grant limited to namespaces: none of their pods, not metrics-server missing', () => {
+    const qc = answered('all', [])
+    qc.setQueryData(['me'], { cluster_namespaces: { c1: ['team-a', 'team-b'] } })
+    const html = renderOn('all', qc)
+    expect(html).toContain('data-testid="pod-metrics-none-in-grant"')
+    expect(html).not.toContain('data-testid="pod-metrics-not-available"')
+    expect(textOf(html)).not.toContain(HINT)
+    expect(textOf(html)).toContain('limited to the namespaces team-a, team-b')
+    expect(card(html, en.monitoring.pods.totalPods)).toBe('0')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'all' }, total_count: 0, access_limited_to_namespaces: ['team-a', 'team-b'] })
+    saysWhatTheTabShows(html)
+
+    renderOn('all', qc, { lng: 'ko' })
+    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — ${ko.monitoring.pods.noneInGrant} — ${ko.monitoring.pods.noneInGrantHint.replace('{{namespaces}}', 'team-a, team-b')}`)
+  })
+
+  it('a grant limited to namespaces, one of them chosen and answered empty: "No pods in … namespace", as for anyone', () => {
+    const qc = answered('team-a', [])
+    qc.setQueryData(['me'], { cluster_namespaces: { c1: ['team-a', 'team-b'] } })
+    const html = renderOn('team-a', qc)
+    expect(html).toContain('data-testid="pod-metrics-none-in-namespace"')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'team-a' }, total_count: 0 })
+  })
+
+  it('an empty answer, then a read that failed: the failure with its reason and no card of the empty answer', () => {
+    const html = renderOn('shop', answered('shop', [], httpError(500, { detail: 'etcd timed out' })))
+    expect(html).toContain('data-testid="pod-metrics-error"')
+    expect(html).not.toContain(en.monitoring.pods.totalPods)
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, metrics_error: { reason: 'etcd timed out' } })
+    saysWhatTheTabShows(html)
+  })
+
+  it('the answer that says metrics-server is missing, on one namespace: not available, not "No pods"', () => {
+    const html = renderOn('shop', answered('shop', null, httpError(503, { detail: 'metrics_unavailable' })))
+    expect(html).toContain('data-testid="pod-metrics-not-available"')
+    expect(html).not.toContain('No pods in shop namespace')
+    expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, metrics_unavailable: true })
+    expect(chat.current?.summary).not.toContain(en.monitoring.metricsUnavailable)
+    saysWhatTheTabShows(html)
+  })
+
+  it('the page\'s notice on: its words first, then the tab\'s, and no "No pods"', () => {
+    const html = renderOn('shop', answered('shop', null, httpError(503, { detail: 'metrics_unavailable' })), { notice: true })
+    expect(html).toContain('data-testid="pod-metrics-not-available"')
+    expect(html).not.toContain('No pods in shop namespace')
+    expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — ${en.monitoring.metricsUnavailable} — ${NOT_AVAILABLE} — ${HINT}`)
+    saysWhatTheTabShows(html, [en.monitoring.metricsUnavailable])
+  })
+
+  it('#900\'s not-served answer (404): the layer is the block the tab draws for it, whichever the client reads it as', () => {
+    const notServed = httpError(404, { detail: 'the server could not find the requested resource' })
+    for (const qc of [answered('shop', null, notServed), answered('shop', [], notServed)]) {
+      const html = renderOn('shop', qc)
+      const drawn = html.includes('data-testid="pod-metrics-not-available"') ? 'not-available' : html.includes('data-testid="pod-metrics-error"') ? 'error' : 'other'
+      expect(drawn).not.toBe('other')
+      expect(html).not.toContain(en.monitoring.pods.totalPods)
+      expect(chat.current?.data).toEqual(drawn === 'not-available'
+        ? { tab: 'pods', filters: { namespace: 'shop' }, metrics_unavailable: true }
+        : { tab: 'pods', filters: { namespace: 'shop' }, metrics_error: { reason: 'the server could not find the requested resource' } })
+      saysWhatTheTabShows(html)
+    }
+  })
+
+  it('says it in the screen\'s language', () => {
+    renderOn('shop', answered('shop', []), { lng: 'ko' })
+    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — shop Namespace에 Pod가 없습니다`)
+  })
+
+  it('tells nothing before a namespace is chosen', () => {
+    renderOn('', answered('', null))
+    expect(chat.current).toBeNull()
+  })
+
+  it('before a namespace is chosen, with the page\'s notice on: the notice, then the prompt the tab shows', () => {
+    const html = renderOn('', answered('', null), { notice: true })
+    expect(chat.current).toEqual({
+      source: 'base',
+      summary: `${en.monitoring.pods.title} — ${en.monitoring.metricsUnavailable} — ${en.monitoring.namespace.promptTitle} — ${en.monitoring.namespace.promptSubtitle}`,
+      data: { tab: 'pods', filters: { namespace: '' }, metrics_unavailable: true },
+    })
+    saysWhatTheTabShows(html, [en.monitoring.metricsUnavailable])
+    renderOn('', answered('', null), { notice: true, lng: 'ko' })
+    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — ${ko.monitoring.metricsUnavailable} — ${ko.monitoring.namespace.promptTitle} — ${ko.monitoring.namespace.promptSubtitle}`)
   })
 })

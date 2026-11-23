@@ -17,12 +17,14 @@ const SEND_RE = /^전송$|^send$/i
 
 // kubectl reads the ai-service log on the kind cluster the suite runs against:
 // KUBECONFIG when set, else the repo-local .kubeconfig-kind, never the shell's
-// default kubeconfig.
+// default kubeconfig. It reads every ai-service pod (the chart's app label), as
+// the turn may land on any replica; with a label kubectl prints only the last
+// 10 lines of each unless --tail says otherwise.
 const LOCAL_KUBECONFIG = path.resolve(__dirname, '../../.kubeconfig-kind')
 const KUBECONFIG = process.env.KUBECONFIG || (fs.existsSync(LOCAL_KUBECONFIG) ? LOCAL_KUBECONFIG : '')
 function aiServiceLog(since: string): string {
   if (!KUBECONFIG) throw new Error('KUBECONFIG is unset and .kubeconfig-kind is missing: refusing to run kubectl against the default kubeconfig')
-  return execFileSync('kubectl', ['-n', NS, 'logs', 'deploy/ai-service', '--all-containers', `--since=${since}`], {
+  return execFileSync('kubectl', ['-n', NS, 'logs', '-l', 'app=ai-service', '--all-containers', '--prefix', '--tail=-1', `--since=${since}`], {
     encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, KUBECONFIG },
   })
 }
@@ -38,7 +40,7 @@ test('a chat turn leaves no model response dump or credential in the ai-service 
   )
   await input.fill(`DB 비밀번호는 ${MARKER} 입니다. 이 값을 담는 ConfigMap YAML 예시를 그대로 적어 보여줘.`)
   await page.getByRole('button', { name: SEND_RE }).click()
-  const sessionId = (await streamPromise).url().match(/\/sessions\/([^/]+)\/chat/)?.[1]
+  const sessionId = withUndo((await streamPromise).url().match(/\/sessions\/([^/]+)\/chat/)?.[1], (i) => i && page.request.delete(`/api/v1/sessions/${i}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, failOnStatusCode: false }))
   try {
     await expect(input).toBeEnabled({ timeout: 120_000 })
 
@@ -54,4 +56,17 @@ test('a chat turn leaves no model response dump or credential in the ai-service 
     // The conversation is titled with the planted value: do not leave it in the list.
     if (sessionId) await page.request.delete(`/api/v1/sessions/${sessionId}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
   }
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

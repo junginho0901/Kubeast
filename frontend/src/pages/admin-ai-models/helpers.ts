@@ -1,12 +1,21 @@
-import { PROVIDER_CATALOG, type ProviderDef } from '@/constants/modelCatalog'
+import { PROVIDER_CATALOG, getDefaultModel, modelNoteText, noToolsText, providerLabel, type ProviderDef } from '@/constants/modelCatalog'
 import { DropdownOption } from '@/components/CustomDropdown'
 
-export const providerOptions: DropdownOption[] = PROVIDER_CATALOG.map((p) => ({
-  value: p.id,
-  label: p.label,
-  icon: p.icon,
-  testId: `provider-option-${p.id}`,
-}))
+/** The model a pick from a list starts on: the provider's default where the list has it, else the list's first. */
+export function listDefault(providerId: string, names: string[]): string {
+  const preferred = getDefaultModel(providerId)
+  return preferred && names.includes(preferred) ? preferred : names[0] ?? ''
+}
+
+const fallbackText = (_key: string, fallback: string) => fallback
+
+export const providerOptions = (tr: (key: string, fallback: string) => string = fallbackText): DropdownOption[] =>
+  PROVIDER_CATALOG.map((p) => ({
+    value: p.id,
+    label: providerLabel(p, tr),
+    icon: p.icon,
+    testId: `provider-option-${p.id}`,
+  }))
 
 // ai-service says why in detail (e.g. audit unavailable); axios' own message only has the status code.
 export function modelListError(answered: string | undefined, failed: unknown): string | undefined {
@@ -17,13 +26,17 @@ export function modelListError(answered: string | undefined, failed: unknown): s
   return (typeof detail === 'string' && detail) || message || String(failed)
 }
 
-export function modelOptions(provDef: ProviderDef, fetched?: { name: string; label?: string }[]): DropdownOption[] {
+export function modelOptions(
+  provDef: ProviderDef,
+  fetched?: { name: string; label?: string }[],
+  tr: (key: string, fallback: string) => string = fallbackText,
+): DropdownOption[] {
   if (!fetched?.length) {
     return provDef.models.map((m) => ({
       value: m.name,
       label: m.label ?? m.name,
-      listHint: m.note,
-      hint: !m.functionCalling ? 'no tools' : undefined,
+      listHint: m.note && modelNoteText(m.note, tr),
+      hint: !m.functionCalling ? noToolsText(tr) : undefined,
       testId: `model-option-${m.name}`,
     }))
   }
@@ -33,8 +46,8 @@ export function modelOptions(provDef: ProviderDef, fetched?: { name: string; lab
     return {
       value: f.name,
       label: f.label ?? known?.label ?? f.name,
-      listHint: f.label ? undefined : known?.note,
-      hint: known && !known.functionCalling ? 'no tools' : undefined,
+      listHint: f.label || !known?.note ? undefined : modelNoteText(known.note, tr),
+      hint: known && !known.functionCalling ? noToolsText(tr) : undefined,
       testId: `model-option-${f.name}`,
     }
   })

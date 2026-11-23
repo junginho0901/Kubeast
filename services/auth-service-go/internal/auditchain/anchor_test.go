@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestAnchorOnceWritesTheDigestAndLinksToThePreviousOne(t *testing.T) {
 	if first.ID != 1 || first.FromSeq != 1 || first.ToSeq != 7 || first.Rows != 7 || first.Sink != "archive" || first.Actor != "system" || first.PrevAnchorHash != nil {
 		t.Fatalf("first anchor = %+v", first)
 	}
-	if first.ObjectKey != "digests/2026/10/08/000509Z-1-7.json" {
+	if want := fmt.Sprintf("digests/2026/10/08/000509Z-1-7-%x.json", first.AnchorHash[:4]); first.ObjectKey != want {
 		t.Errorf("object key = %s", first.ObjectKey)
 	}
 	body := objects.objects[first.ObjectKey]
@@ -74,6 +75,37 @@ func TestAnchorOnceWritesTheDigestAndLinksToThePreviousOne(t *testing.T) {
 	}
 }
 
+func TestTwoEmptyAnchorsInOneSecondKeepBothDigests(t *testing.T) {
+	f := chainOf(3)
+	objects := newFakeObjects()
+	now := time.Date(2026, 11, 14, 3, 0, 0, 0, time.UTC)
+	a := &Anchorer{Store: f, Objects: objects, Sink: "archive", Now: func() time.Time { return now }}
+	if _, err := a.AnchorOnce(context.Background(), "system"); err != nil {
+		t.Fatal(err)
+	}
+	// Nothing sealed since: both anchors cover the same empty range in the same second.
+	first, err := a.AnchorOnce(context.Background(), "admin@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := a.AnchorOnce(context.Background(), "admin@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.FromSeq != second.FromSeq || first.ToSeq != second.ToSeq {
+		t.Fatalf("ranges differ: %d-%d and %d-%d", first.FromSeq, first.ToSeq, second.FromSeq, second.ToSeq)
+	}
+	if first.ObjectKey == second.ObjectKey {
+		t.Fatalf("both anchors use object key %s", first.ObjectKey)
+	}
+	for _, an := range []Anchor{first, second} {
+		sum := sha256.Sum256(objects.objects[an.ObjectKey])
+		if hex.EncodeToString(sum[:]) != hex.EncodeToString(an.AnchorHash) {
+			t.Errorf("digest of anchor %d was overwritten", an.ID)
+		}
+	}
+}
+
 func TestAnchorOnceStartsAtTheOldestSealedRowAfterAPurge(t *testing.T) {
 	f := chainOf(9)
 	f.rows = f.rows[4:] // seq 1..4 purged before the first anchor
@@ -89,7 +121,7 @@ func TestRunOnceRecordsTheSystemAuditActionOnSuccessAndFailure(t *testing.T) {
 	objects := newFakeObjects()
 	aud := &memAudit{}
 	a := &Anchorer{Store: f, Objects: objects, Sink: "archive", Audit: aud}
-	if _, err := a.RunOnce(context.Background()); err != nil {
+	if _, _, err := a.RunOnce(context.Background(), 24*time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	if len(aud.recs) != 1 || aud.recs[0].Action != ActionAnchor || aud.recs[0].ActorEmail != "system" || aud.recs[0].Result != audit.ResultSuccess || aud.recs[0].TargetID != "archive" {
@@ -104,7 +136,7 @@ func TestRunOnceRecordsTheSystemAuditActionOnSuccessAndFailure(t *testing.T) {
 		t.Error("LastAt not set after a successful anchor")
 	}
 	objects.putErr = errors.New("bucket gone")
-	if _, err := a.RunOnce(context.Background()); err == nil {
+	if _, _, err := a.RunOnce(context.Background(), 24*time.Hour); err == nil {
 		t.Fatal("expected the put error")
 	}
 	if len(aud.recs) != 2 || aud.recs[1].Result != audit.ResultFailure || aud.recs[1].Error == "" {
@@ -112,5 +144,45 @@ func TestRunOnceRecordsTheSystemAuditActionOnSuccessAndFailure(t *testing.T) {
 	}
 	if len(f.anchors) != 1 {
 		t.Errorf("a failed put must not insert an anchor row: %d", len(f.anchors))
+	}
+}
+
+// flakyLastAnchor fails the first fails reads of the last anchor.
+type flakyLastAnchor struct {
+	*fakeStore
+	fails, calls int
+}
+
+func (f *flakyLastAnchor) LastAnchor(ctx context.Context) (*Anchor, error) {
+	f.calls++
+	if f.calls <= f.fails {
+		return nil, errors.New("database not ready")
+	}
+	return f.fakeStore.LastAnchor(ctx)
+}
+
+func TestRunReadsTheLastAnchorAgainWhenTheReadAtStartFails(t *testing.T) {
+	t0 := time.Date(2026, 11, 19, 6, 0, 0, 0, time.UTC)
+	last := t0.Add(-time.Hour)
+	f := chainOf(1)
+	f.anchors = []Anchor{{ID: 1, CreatedAt: last, Actor: scheduledActor}}
+	s := &flakyLastAnchor{fakeStore: f, fails: 2}
+	a := &Anchorer{Store: s, Objects: newFakeObjects(), Sink: "archive", Now: func() time.Time { return t0 }, readRetry: time.Millisecond}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { a.Run(ctx, 24*time.Hour); close(done) }()
+	for deadline := time.Now().Add(2 * time.Second); a.LastAt() == 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-done
+	if a.LastAt() != last.Unix() {
+		t.Errorf("LastAt = %d, want the last anchor's %d", a.LastAt(), last.Unix())
+	}
+	if s.calls != 3 {
+		t.Errorf("last anchor reads = %d, want 3 (two failures, then the read)", s.calls)
+	}
+	if len(f.anchors) != 1 {
+		t.Errorf("anchors = %d: the last anchor is less than a period old, nothing is due", len(f.anchors))
 	}
 }

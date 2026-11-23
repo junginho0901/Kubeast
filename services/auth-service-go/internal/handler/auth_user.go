@@ -293,7 +293,8 @@ func (h *AuthHandler) clearAuthCookie(w http.ResponseWriter, _ *http.Request) {
 // the current database state (role, cluster grants, token_version), so a
 // change made after login takes effect without a password prompt and the
 // browser session slides as long as the user stays active. The current token
-// must still be valid (the auth middleware checks signature, expiry and tv).
+// must still be valid (the auth middleware checks signature, expiry and tv)
+// and its sign-in not signed out (the middleware marks it, security.SignedOut).
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	payload, ok := auth.FromContext(r.Context())
 	if !ok {
@@ -308,7 +309,11 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}
@@ -318,6 +323,15 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	authTime := time.Unix(payload.AuthTime, 0)
 	if payload.AuthTime <= 0 {
 		authTime = time.Now()
+	}
+	// A signed-out sign-in is over however recent: answered as a session past
+	// its absolute lifetime.
+	if security.SignedOut(r.Context()) {
+		reason := jsonRaw(map[string]interface{}{"reason": "session_signed_out", "auth_time": authTime.UTC().Format(time.RFC3339)})
+		h.writeAuditFailure(r, "user.token.refresh", &user.ID, &user.Email, &user.ID, &user.Email, "session_signed_out", reason)
+		h.clearAuthCookie(w, r)
+		response.Error(w, http.StatusUnauthorized, "Session expired; sign in again")
+		return
 	}
 	if limit := time.Duration(h.cfg.SessionAbsoluteHours) * time.Hour; limit > 0 && time.Since(authTime) > limit {
 		reason := jsonRaw(map[string]interface{}{"reason": "session_absolute_lifetime", "auth_time": authTime.UTC().Format(time.RFC3339), "limit_hours": h.cfg.SessionAbsoluteHours})
@@ -363,19 +377,29 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 // Logout handles POST /auth/logout
 //
-// Audit 정책: cookie 의 JWT 에서 user 정보 추출해 기록. cookie 없거나 expired 면
+// Audit 정책: cookie 의 JWT 에서 user 정보 추출해 기록. cookie 없거나 서명이 틀리면
 // audit 없이 진행 (silent logout). 세션 종료는 보안 사고 대응 timeline 의 마지막
 // 지점이라 누락 시 "user 가 언제까지 활동" 추적 어렵다.
+//
+// When the person asked to sign out, the sign-in the token belongs to ends on
+// the server too (ended_sign_ins): refresh refuses its tokens, every service
+// refuses its requests and its open terminals, followed logs and live lists
+// end at their next check. The console's own sign-out after a refused request
+// sends end_sign_in=false and only clears the cookie; a request without it
+// ends the sign-in. A token an API key was exchanged for and a system token
+// belong to no sign-in.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	// Public route (no auth middleware): the session may already be expired
-	// and logout must still succeed. The actor is read from the token the
-	// browser or client sends — signature checked, expiry ignored — so the
-	// audit row names who signed out.
+	// and logout must still succeed. The actor and the sign-in are read from
+	// the token the browser or client sends — signature checked, expiry
+	// ignored, since a connection held open outlives its token — so the audit
+	// row names who signed out. A token whose signature is not ours ends
+	// nothing.
 	if tokenStr := h.sessionToken(r); tokenStr != "" {
 		if claims, err := h.jwtMgr.ClaimsIgnoringExpiry(tokenStr); err == nil {
 			userID, _ := claims["sub"].(string)
 			email, _ := claims["email"].(string)
-			h.writeAuditLog(r, "user.logout", &userID, &email, &userID, &email, nil, nil)
+			h.endSignIn(r, userID, email, security.SignInTime(claims), r.URL.Query().Get("end_sign_in") != "false")
 		}
 	}
 
@@ -390,6 +414,30 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 	})
 	response.JSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// endSignIn writes the user.logout row and, when end is set, records the end
+// of the user's sign-in at signIn; the row says whether it ended
+// (sign_in_ended). The browser is signed out whether or not the end could be
+// stored (its cookie is cleared all the same, and refusing would keep the
+// person signed in on that browser while the database is down); a failure is
+// logged and its row says so.
+func (h *AuthHandler) endSignIn(r *http.Request, userID, email string, signIn int64, end bool) {
+	if userID == "" || signIn <= 0 {
+		h.writeAuditLog(r, "user.logout", &userID, &email, &userID, &email, nil, nil)
+		return
+	}
+	at := time.Unix(signIn, 0).UTC().Format(time.RFC3339)
+	if !end {
+		h.writeAuditLog(r, "user.logout", &userID, &email, &userID, &email, nil, jsonRaw(map[string]interface{}{"auth_time": at, "sign_in_ended": false}))
+		return
+	}
+	if err := h.repo.EndSignIn(r.Context(), userID, signIn); err != nil {
+		slog.ErrorContext(r.Context(), "sign-out: the end of the sign-in could not be stored; its other tokens and connections go on", "user", email, "error", err)
+		h.writeAuditFailure(r, "user.logout", &userID, &email, &userID, &email, "sign_in_end_not_stored", jsonRaw(map[string]interface{}{"auth_time": at, "sign_in_ended": false}))
+		return
+	}
+	h.writeAuditLog(r, "user.logout", &userID, &email, &userID, &email, nil, jsonRaw(map[string]interface{}{"auth_time": at, "sign_in_ended": true}))
 }
 
 // sessionToken returns the raw session token from the cookie or the
@@ -418,12 +466,22 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}
 
-	permissions, _ := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
+	// Each read below is the person's access: one that failed answers 503 like the account read above, never an answer
+	// with less access than the person has, which the console would draw as a change of access.
+	permissions, err := h.repo.GetPermissionsByRoleID(r.Context(), user.RoleID)
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
 	// A key's token carries what that key can do, which is what its holder asks here, and a key cut down to one cluster
 	// says nothing of the owner's others.
 	if payload.APIKeyID != "" {
@@ -433,19 +491,22 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	// The browser holds the token only as an HttpOnly cookie, so it cannot
 	// read the per-cluster matrix from the JWT; hand it over here (same
 	// buildPermissionMatrix the token is issued from).
-	matrix, _ := h.buildPermissionMatrix(r.Context(), user.ID, permissions)
-	if matrix == nil {
-		matrix = auth.PermissionMatrix{}
+	matrix, err := h.buildPermissionMatrix(r.Context(), user.ID, permissions)
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
 	}
-	clusterRoles, _ := h.repo.ListUserClusterRoleNames(r.Context(), user.ID)
-	if clusterRoles == nil {
-		clusterRoles = map[string]string{}
+	clusterRoles, err := h.repo.ListUserClusterRoleNames(r.Context(), user.ID)
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
 	}
 	// Namespace-scoped grants: the namespace selector and the notices read
 	// the same map the token carries ("ns" claim).
-	clusterNamespaces, _ := h.repo.ListUserClusterNamespaces(r.Context(), user.ID)
-	if clusterNamespaces == nil {
-		clusterNamespaces = map[string][]string{}
+	clusterNamespaces, err := h.repo.ListUserClusterNamespaces(r.Context(), user.ID)
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
 	}
 	h.writeMe(w, user, permissions, matrix, clusterRoles, clusterNamespaces)
 }
@@ -488,7 +549,11 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.repo.GetUserByID(r.Context(), payload.UserID)
-	if err != nil || user == nil {
+	if err != nil {
+		auth.RefuseSessionUnreadable(w)
+		return
+	}
+	if user == nil {
 		response.Error(w, http.StatusUnauthorized, "User not found")
 		return
 	}

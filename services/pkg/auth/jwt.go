@@ -52,6 +52,16 @@ type TokenPayload struct {
 	System string
 }
 
+// SignIn names the sign-in a token belongs to: its AuthTime, which every refresh carries over, so together with UserID
+// it is one sign-in (two sign-ins of one user in the same second share it). A token an API key was exchanged for and a
+// system token belong to no sign-in: 0.
+func (p TokenPayload) SignIn() int64 {
+	if p.APIKeyID != "" || p.System != "" {
+		return 0
+	}
+	return p.AuthTime
+}
+
 // PendingAllowedPaths are the only paths a token with the "pending" role may
 // call: the account exists but no administrator has granted a role yet, so it
 // must not reach anything beyond seeing its own state, keeping the session
@@ -179,14 +189,19 @@ type JWKSConfig struct {
 	Issuer   string
 	Audience string
 	// TokenVersionURL is auth-service's token-version lookup
-	// (…/internal/token-version); "<url>/<sub>" answers {"tv": n} for the
-	// bearer's own subject. Empty disables the check (token_version.go).
+	// (…/internal/token-version); "<url>/<sub>" answers {"tv": n,
+	// "signed_out": [auth_time…]} for the bearer's own subject. Empty disables
+	// the check (token_version.go).
 	TokenVersionURL string
 	// TokenVersionCacheTTL is how long a fetched version is trusted without
 	// asking again (default 30s); TokenVersionStaleTTL is how long a cached
 	// version still counts when auth-service cannot be reached (default 5m).
 	TokenVersionCacheTTL time.Duration
 	TokenVersionStaleTTL time.Duration
+	// TokenVersionFailurePause is how long a user whose version auth-service could not read is answered from that
+	// failure without asking again (default 2s, below auth-service's Retry-After; negative asks every time), so an
+	// outage does not send every request of the user to auth-service and its database.
+	TokenVersionFailurePause time.Duration
 }
 
 // JWTValidator validates JWTs using JWKS public keys.
@@ -198,9 +213,10 @@ type JWTValidator struct {
 	fetchMu    sync.Mutex // serializes refetches
 	httpClient *http.Client
 
-	tvMu    sync.Mutex
-	tv      map[string]tokenVersionEntry // per subject (token_version.go)
-	tvCalls map[string]*tokenVersionCall // per token, the lookups under way
+	tvMu     sync.Mutex
+	tv       map[string]tokenVersionEntry // per subject (token_version.go)
+	tvCalls  map[string]*tokenVersionCall // per token, the lookups under way
+	tvPaused map[string]time.Time         // per subject, until when a failed lookup is not asked again
 }
 
 // NewJWTValidator creates a new validator.
@@ -211,12 +227,16 @@ func NewJWTValidator(cfg JWKSConfig) *JWTValidator {
 	if cfg.TokenVersionStaleTTL <= 0 {
 		cfg.TokenVersionStaleTTL = 5 * time.Minute
 	}
+	if cfg.TokenVersionFailurePause == 0 {
+		cfg.TokenVersionFailurePause = 2 * time.Second
+	}
 	return &JWTValidator{
 		cfg:        cfg,
 		keys:       make(map[string]*rsa.PublicKey),
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		tv:         make(map[string]tokenVersionEntry),
 		tvCalls:    make(map[string]*tokenVersionCall),
+		tvPaused:   make(map[string]time.Time),
 	}
 }
 
@@ -371,7 +391,8 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		email = ""
 	}
 
-	role := strings.TrimSpace(strings.ToLower(fmt.Sprintf("%v", claims["role"])))
+	// The account level's name as stored: a built-in is known by its exact name (IsBuiltinRole).
+	role := strings.TrimSpace(fmt.Sprintf("%v", claims["role"]))
 	if role == "" || role == "<nil>" {
 		role = "read"
 	}
@@ -391,11 +412,6 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		claimedTV = int(f)
 	}
 	akid, _ := claims["akid"].(string)
-	if v.cfg.TokenVersionURL != "" {
-		if err := v.checkTokenVersion(tokenStr, userID, akid, claimedTV); err != nil {
-			return TokenPayload{}, err
-		}
-	}
 	var authTime int64
 	if f, ok := claims["auth_time"].(float64); ok && f > 0 {
 		authTime = int64(f)
@@ -407,7 +423,13 @@ func (v *JWTValidator) Validate(tokenStr string) (TokenPayload, error) {
 		expiresAt = int64(f)
 	}
 	sys, _ := claims["sys"].(string)
-	return TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), Namespaces: ParseNamespaces(claims["ns"]), TokenVersion: claimedTV, AuthTime: authTime, ExpiresAt: expiresAt, APIKeyID: akid, System: sys}, nil
+	payload := TokenPayload{UserID: userID, Email: email, Role: role, Perms: perms, Roles: ParseRoles(claims["roles"]), Namespaces: ParseNamespaces(claims["ns"]), TokenVersion: claimedTV, AuthTime: authTime, ExpiresAt: expiresAt, APIKeyID: akid, System: sys}
+	if v.cfg.TokenVersionURL != "" {
+		if err := v.checkTokenVersion(tokenStr, userID, akid, claimedTV, payload.SignIn()); err != nil {
+			return TokenPayload{}, err
+		}
+	}
+	return payload, nil
 }
 
 // CSRFHeader must accompany cookie-authenticated requests that can change
@@ -476,11 +498,15 @@ func (v *JWTValidator) MiddlewareWithCookie(cookieName string, next http.Handler
 		}
 
 		payload, err := v.Validate(tokenStr)
+		if errors.Is(err, ErrSessionUnreadable) {
+			RefuseSessionUnreadable(w)
+			return
+		}
 		if err != nil {
 			http.Error(w, `{"detail":"Invalid token"}`, http.StatusUnauthorized)
 			return
 		}
-		if payload.Role == "pending" && !pendingAllowed(r) {
+		if payload.Role == "Pending" && !pendingAllowed(r) {
 			http.Error(w, `{"detail":"Account pending approval"}`, http.StatusForbidden)
 			return
 		}

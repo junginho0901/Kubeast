@@ -117,7 +117,7 @@ test.describe('Investigate now in the Alerts inbox', () => {
   // one inbox row of a new info alert (kept, not investigated by the webhook)
   async function newAlert(request: APIRequestContext, run: string, label: string): Promise<{ id: string; labels: Obj; fingerprint: string }> {
     const labels = { alertname: `E2EN4a2${label}${run}`, severity: 'info', namespace: badNamespace(run) }
-    const fingerprint = `n4a2-${label.toLowerCase()}-${run}`
+    const fingerprint = withUndo(`n4a2-${label.toLowerCase()}-${run}`, (f) => post(request, 'resolved', labels, f, { endsAt: new Date().toISOString() }))
     expect((await (await post(request, 'firing', labels, fingerprint)).json()).stored).toBe(1)
     const list = await (await request.get('/api/v1/alerts/inbox', { headers: bearer(admin), params: { cluster: INBOX.cluster, q: run, limit: 50 } })).json()
     const item = (list.items as Obj[]).find((i) => i.fingerprint === fingerprint)
@@ -145,7 +145,7 @@ test.describe('Investigate now in the Alerts inbox', () => {
     test.setTimeout(150_000)
     const run = Date.now().toString(36)
     const since = new Date(Date.now() - 5_000).toISOString()
-    const alert = await newAlert(request, run, 'Now')
+    const alert = withUndo(await newAlert(request, run, 'Now'), async (a) => { psql(`DELETE FROM alert_investigations WHERE cluster = '${INBOX.cluster}' AND fingerprint = '${a.fingerprint}'`); await post(request, 'resolved', a.labels, a.fingerprint, { endsAt: new Date().toISOString() }) })
     try {
       const before = await windowOf(request, admin, alert.id)
       expect(before.investigation, 'info alerts are not investigated by the webhook').toBeNull()
@@ -239,7 +239,7 @@ test.describe('Investigate now in the Alerts inbox', () => {
     test.setTimeout(150_000)
     const run = Date.now().toString(36)
     const since = new Date(Date.now() - 5_000).toISOString()
-    const alert = await newAlert(request, run, 'Held')
+    const alert = withUndo(await newAlert(request, run, 'Held'), async (a) => { psql(`DELETE FROM alert_investigations WHERE id LIKE 'inv-e2e-n4a2-${run}-%' OR (cluster = '${INBOX.cluster}' AND fingerprint = '${a.fingerprint}')`); await post(request, 'resolved', a.labels, a.fingerprint, { endsAt: new Date().toISOString() }) })
     const ids = { skipped: `inv-e2e-n4a2-${run}-s`, running: `inv-e2e-n4a2-${run}-r`, spent: `inv-e2e-n4a2-${run}-b` }
     const sent: { base?: Obj; overlays?: Obj[] }[] = []
     const fulfil = async (route: Route, answer: Parameters<Route['fulfill']>[0]) => {
@@ -340,7 +340,7 @@ test.describe('Investigate now in the Alerts inbox', () => {
     test.setTimeout(120_000)
     const run = Date.now().toString(36)
     const since = new Date(Date.now() - 5_000).toISOString()
-    const alert = await newAlert(request, run, 'Role')
+    const alert = withUndo(await newAlert(request, run, 'Role'), async (a) => { psql(`DELETE FROM alert_investigations WHERE cluster = '${INBOX.cluster}' AND fingerprint = '${a.fingerprint}'`); await post(request, 'resolved', a.labels, a.fingerprint, { endsAt: new Date().toISOString() }) })
     const userIds: string[] = []
     let roleId = 0
     const pages: Page[] = []
@@ -354,7 +354,7 @@ test.describe('Investigate now in the Alerts inbox', () => {
       const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: `E2E n4a2 ${label}`, email, password: PW, role_id: member.id } })
       expect(created.status(), await created.text()).toBe(201)
       const userId = (await created.json()).id
-      userIds.push(userId)
+      userIds.push(madeUser(userId, bearer(admin)))
       const put = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${INBOX.cluster}`, { headers: bearer(admin), data: { role } })
       expect(put.ok(), await put.text()).toBeTruthy()
       return { email, token: await login(request, email, PW) }
@@ -379,7 +379,7 @@ test.describe('Investigate now in the Alerts inbox', () => {
       const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: roleName, description: 'e2e', permissions: ['menu.*', 'resource.*.read', 'resource.alert.investigate'] } })
       expect.soft(role.status(), 'a role may carry resource.alert.investigate').toBe(201)
       if (role.status() === 201) {
-        roleId = (await role.json()).id
+        roleId = withUndo((await role.json()).id, (i) => request.delete(`/api/v1/auth/admin/roles/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
         const asker = await user('asker', roleName)
         const state = (await windowOf(request, asker.token, alert.id)).investigate_now
         expect.soft({ allowed: state?.allowed, reason: state?.reason }, 'the server lets that role ask').toEqual({ allowed: true, reason: '' })
@@ -396,4 +396,28 @@ test.describe('Investigate now in the Alerts inbox', () => {
       await post(request, 'resolved', alert.labels, alert.fingerprint, { endsAt: new Date().toISOString() })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

@@ -47,7 +47,7 @@ async function createUser(request: APIRequestContext, admin: string, email: stri
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E MCP', email, password: PW, role_id: member.id } })
   expect(res.status(), `create ${email}`).toBe(201)
-  return (await res.json()).id
+  return madeUser((await res.json()).id, bearer(admin))
 }
 
 async function grant(request: APIRequestContext, admin: string, userId: string, cluster: string, role: string) {
@@ -133,7 +133,7 @@ test.describe('MCP server', () => {
       expect(ownResult.content[0].text as string).not.toContain(pw)
 
       // A Secret's values never reach the agent.
-      const secretName = `e2e-mcp-${s}`
+      const secretName = withUndo(`e2e-mcp-${s}`, (n) => kubectl(`-n default delete secret ${n} --ignore-not-found`))
       const secretValue = `e2e-mcp-fake-value-${s}`
       kubectl(`-n default create secret generic ${secretName} --from-literal=token=${secretValue}`)
       try {
@@ -205,4 +205,28 @@ test.describe('MCP server', () => {
       for (const id of [writerId, readerId]) if (id) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

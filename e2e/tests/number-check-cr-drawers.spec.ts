@@ -8,7 +8,7 @@ import { test, expect, type Page } from '@playwright/test'
 
 import { arg } from './number-check.gateway-shared'
 import { goToPageWith } from './list-pages'
-import { CR_CRD, GWPOL_CRD, VPA17_MISSING, crInstances, numbersPolicies, vpa17, vpaFixture, vpaPrintsWideColumns, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
+import { CR_CRD, GWPOL_CRD, VPA17_MISSING, crInstances, numbersPolicies, vpa17, vpaFixture, vpaPrintsWideColumns, waitUntilListed, writeNumbersPolicyStatus, writeVpaStatus, writeWidgetStatus } from './number-check.cr-shared'
 
 // The VPA, CustomResourceDefinition and custom resource drawers, the drawer of a kind Kubeast has no view for, and the
 // policy violations of a drawer opened from Policy Reports show what the cluster has: on test2, in a namespace of its
@@ -579,6 +579,7 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', GWPOL_CRD)
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', JSON.stringify(ALT_CRD))
       k.kubectl(`wait --for=condition=Established crd/widgets.numbers.kubeast.io crd/backendtlspolicies.numbers.kubeast.io crd/${ALT_CRD_NAME} --timeout=60s`)
+      await waitUntilListed(k.kubectl, ['widgets.numbers.kubeast.io', 'backendtlspolicies.numbers.kubeast.io', ALT_CRD_NAME])
       k.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', vpaFixture(NS))
       writeVpaStatus(k.kubectl, NS)
       k.kubectl(`patch verticalpodautoscaler num-vpa-b -n ${NS} --type=merge -p=${arg({ spec: { resourcePolicy: { containerPolicies: POLICIES } } })}`)
@@ -647,6 +648,8 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
         await p.getByRole('button', { name: NS, exact: true }).click()
         await p.locator('.monaco-editor').first().click()
         await p.keyboard.type('true')
+        // the editor's word suggestions open over the first row until it loses focus (number-check-detail-links.spec.ts)
+        await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
         await p.locator('table tbody tr').getByRole('button', { name, exact: true }).click({ timeout: 20_000 })
       }
       const vpa = async (name: string): Promise<VPA> => {
@@ -741,7 +744,7 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
       if (polr) {
         const bk = b!
         const run = Date.now().toString(36)
-        const cpolr = `num-cpolr-${run}`
+        const cpolr = withUndo(`num-cpolr-${run}`, (c) => { bk.kubectl(`delete clusterpolicyreport ${c} --ignore-not-found`); bk.kubectl(`delete namespace ${NS} --wait=true --timeout=180s --ignore-not-found`) })
         const nsPolicy = `num-ns-owner-${run}`
         try {
           bk.kubectl('apply --server-side --field-manager=e2e-cr-drawers -f -', POLR_FIXTURE)
@@ -822,4 +825,17 @@ test.describe('number check — VPA, CRD, custom resource and fallback drawers',
       cleanup()
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

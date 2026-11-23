@@ -69,8 +69,8 @@ async function people(request: APIRequestContext) {
   const raw = await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const users: string[] = []
-  const roles: number[] = []
-  const imps: string[] = []
+  const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: bearer(admin), failOnStatusCode: false }) })
+  const imps = withUndo<string[]>([], (names) => { for (const imp of names) { tryKubectl(`delete clusterrolebinding ${imp} --ignore-not-found`); tryKubectl(`delete clusterrole ${imp} --ignore-not-found`) } })
   return {
     admin,
     // A custom role, its group bound to the default edit ClusterRole in the namespace: the cluster lets it do everything here.
@@ -89,7 +89,7 @@ async function people(request: APIRequestContext) {
       const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E AI parity', email, password: PW, role_id: member.id } })
       expect(res.status(), `create ${email}`).toBe(201)
       const id = (await res.json()).id as string
-      users.push(id)
+      users.push(madeUser(id, bearer(admin)))
       const put = await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: grant } })
       expect(put.ok(), `grant ${grant}: ${await put.text()}`).toBeTruthy()
       return { token: await login(request, email, PW), email }
@@ -108,7 +108,7 @@ async function people(request: APIRequestContext) {
 const POD = 'parity-runner'
 
 function fixture(ns: string) {
-  kubectl(`create namespace ${ns}`)
+  withUndo(kubectl(`create namespace ${ns}`), () => tryKubectl(`delete namespace ${ns} --wait=false`))
   kubectl(`-n ${ns} create configmap parity-cm --from-literal=a=1`)
   kubectl(`-n ${ns} create secret generic parity-secret --from-literal=a=fake-e2e-value`)
   kubectl(`-n ${ns} create deployment parity-web --image=registry.k8s.io/pause:3.10`)
@@ -282,4 +282,28 @@ test.describe('the AI asks what the screens ask', () => {
       tryKubectl(`delete namespace ${ns} --wait=false`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

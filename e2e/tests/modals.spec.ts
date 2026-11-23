@@ -4,7 +4,7 @@ import { turnToRow } from './list-pages'
 // Create, edit and confirm windows share one frame (re-QA #19 #38 #53 #66 #68):
 // Escape closes them, Tab stays inside, system objects ask for their name
 // before a delete, and admin confirmations are in-app windows instead of the
-// browser's window.confirm. Nothing here is created or deleted on a cluster
+// browser's window.confirm. The Dashboard's windows close with a button named Close. Nothing here is created or deleted on a cluster
 // except a temporary custom role that the last test removes.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
@@ -99,9 +99,36 @@ test.describe('modal windows', () => {
     await page.keyboard.press('Escape')
   })
 
+  test('the Dashboard windows close with the button named Close; a search typed in one clears with Clear the search', async ({ page }) => {
+    // the top-right X of each window and of its search box showed only an aria-hidden icon: a button with no name
+    await page.goto('/?cluster=self')
+    const quick = (label: string) => () => page.locator('button').filter({ hasText: label }).first().click()
+    const windows = [
+      { title: 'Pods', open: () => page.getByTestId('stat-pods').click(), search: 'Search...' },
+      { title: 'Issues', open: quick('Check issues') },
+      { title: 'Storage analysis', open: quick('Storage analysis') },
+      { title: 'Optimization suggestions', open: quick('Optimization suggestions') },
+    ]
+    for (const w of windows) {
+      await w.open()
+      const heading = page.locator('h2').filter({ hasText: new RegExp(`^\\s*${w.title}\\s*$`) })
+      await expect(heading).toHaveCount(1)
+      if (w.search) {
+        const box = page.getByPlaceholder(w.search, { exact: true })
+        await box.fill('e2e-close-name')
+        await page.getByRole('button', { name: 'Clear the search', exact: true }).click()
+        await expect(box, `${w.title}: the search is cleared`).toHaveValue('')
+      }
+      const close = page.getByRole('button', { name: 'Close', exact: true })
+      await expect(close, `${w.title}: one button named Close`).toHaveCount(1)
+      await close.click()
+      await expect(heading, `${w.title}: closed by it`).toHaveCount(0)
+    }
+  })
+
   test('admin confirmations are in-app windows, not window.confirm (#68)', async ({ page, request }) => {
     const headers = await adminHeaders(request)
-    const name = `E2EModalRole${Date.now()}`
+    const name = withUndo(`E2EModalRole${Date.now()}`, async (n) => { const role = ((await (await request.get('/api/v1/auth/roles', { headers })).json()) as Array<{ id: number; name: string }>).find((r) => r.name === n); if (role) await request.delete(`/api/v1/auth/admin/roles/${role.id}`, { headers }) })
     const created = await request.post('/api/v1/auth/admin/roles', { headers, data: { name, description: 'modals.spec', permissions: ['menu.dashboard'] } })
     expect(created.ok(), await created.text()).toBeTruthy()
     const roleExists = async () => ((await (await request.get('/api/v1/auth/roles', { headers })).json()) as Array<{ name: string }>).some((r) => r.name === name)
@@ -130,4 +157,17 @@ test.describe('modal windows', () => {
       }
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

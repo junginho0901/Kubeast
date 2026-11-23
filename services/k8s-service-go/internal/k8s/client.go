@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,9 +42,12 @@ import (
 // cluster's kubeconfig is reloaded, so in-flight requests keep using the bundle
 // they captured and never observe a torn state.
 type clientBundle struct {
-	clientset  *kubernetes.Clientset
-	dynamic    dynamic.Interface
-	discovery  discovery.DiscoveryInterface
+	clientset *kubernetes.Clientset
+	dynamic   dynamic.Interface
+	discovery discovery.DiscoveryInterface
+	// ownVersion reads the server version for Kubeast's own reads (/health, the shared version): the same transports,
+	// no client-side rate limit, so it waits behind no one's requests in clientset's turn limiter; it reads nothing else.
+	ownVersion discovery.ServerVersionInterfaceWithContext
 	restConfig *rest.Config
 	// authz is clientset's authorization API (SelfSubjectAccessReview as the
 	// caller), kept as an interface so tests can answer it.
@@ -70,6 +74,24 @@ type clientBundle struct {
 	// events is one read of an object's events as kubeast:cache for everyone asking; eventsRefused the namespaces it was refused, until when
 	events        flight.Group[*corev1.EventList]
 	eventsRefused sync.Map
+	// eventWindows is one read of a namespace's or the cluster's events as kubeast:cache for everyone asking (events_stream.go)
+	eventWindows flight.Group[*eventWindow]
+	// deploymentWindows, replicaSetWindows and revisionWindows are one read of a namespace's or the cluster's kind of
+	// those the Timeline's rollouts read as kubeast:cache for everyone asking (timeline_rollouts.go); rolloutsRefused the
+	// kinds and namespaces it was refused, until when
+	deploymentWindows flight.Group[map[string]bool]
+	replicaSetWindows flight.Group[[]rolloutRS]
+	revisionWindows   flight.Group[[]rolloutCR]
+	rolloutsRefused   sync.Map
+	// metricsServed is this cluster's answer to whether it serves metrics.k8s.io and when it was taken; metricsServedRead
+	// is one read of it for everyone asking (metrics.go)
+	metricsServed     atomic.Pointer[metricsVerdict]
+	metricsServedRead flight.Group[metricsServing]
+
+	// configVersion is the registry's config_version of the Info this bundle
+	// was built from (internal/clustersync drops it once the registry has
+	// another).
+	configVersion int64
 
 	// cacheClient is the identity the overview informers watch as; inf is the
 	// running set, if any (informer_cache.go). id names the cluster in logs.
@@ -80,6 +102,10 @@ type clientBundle struct {
 	infMu       sync.Mutex
 	inf         *clusterInformers
 	infFailedAt time.Time
+	// noInformers: the overview informers never start here (ServiceOptions.NoInformers); readers list instead.
+	noInformers bool
+	// sharesChecks: this cluster's screens share an allowed read check by group (shared_read_checks.go).
+	sharesChecks bool
 }
 
 // Close stops the bundle's informers (LRU eviction, kubeconfig rotation).
@@ -111,17 +137,23 @@ type Service struct {
 
 	// health tracks per-cluster reachability in memory for fail-fast (step 15).
 	health *clusterHealth
+	// healthRead is HealthCheck's last read of the default cluster, which every caller shares.
+	healthRead healthReading
 	// promQ coalesces + caches Prometheus queries per cluster (step 15).
 	promQ *promQueryCache
 	// limiters holds per-cluster rate limiters + circuit breakers (step 15).
 	limiters *clusterLimiters
-	// accessChecks is one access question to the cluster at a time per identity and question.
-	accessChecks flight.Group[bool]
-	answered     answeredChecks
+	// accessChecks is one access question to the cluster at a time per identity and question; accessAnswers its answers.
+	accessChecks  flight.Group[bool]
+	accessAnswers accessAnswers
+	answered      answeredChecks
 
 	watchEnabled bool
 
 	cache *cache.Cache
+
+	// changes tells the other replicas of a cluster this one invalidated (internal/clustersync).
+	changes ChangeNotifier
 
 	// These discovery caches are PER CLUSTER — Gateway/DRA CRD versions and the
 	// API-resource set differ between clusters, so they're keyed by cluster.ID to
@@ -135,10 +167,15 @@ type Service struct {
 	apiResourcesCache map[cluster.ID][]metav1.APIResourceList
 	apiResourcesAt    map[cluster.ID]time.Time
 	apiResourcesRead  map[cluster.ID]time.Time // when the lists were read, which apiResourcesAt shortens for a partial answer
+	// apiResourcesFailed: the API groups of that read that did not answer (an aggregated API whose server is down)
+	apiResourcesFailed map[cluster.ID][]string
 	// apiResourcesSF is one discovery read per cluster at a time; apiResourcesGen moves when the caches are cleared, so
 	// a read that started before is not kept.
 	apiResourcesSF  singleflight.Group
 	apiResourcesGen uint64
+
+	// changesFlight is one read of the Timeline's changes per identity, grant and window at a time (timeline_changes.go).
+	changesFlight singleflight.Group
 }
 
 var errNotLoaded = fmt.Errorf("kubeconfig not loaded")
@@ -155,7 +192,7 @@ type ServiceOptions struct {
 	ReviewQPS      int           // the callers' access checks on a rate of their own; 0 = the client's
 	ReviewBurst    int           // 0 = ReviewQPS
 	BreakerFails   int           // open breaker after N consecutive fails; 0 = off
-	BreakerOpen    time.Duration // breaker open duration before half-open
+	BreakerOpen    time.Duration // breaker open duration before half-open; 0 = 30 s
 	// Impersonation makes every API call carry the signed-in user as
 	// Impersonate-User/-Group headers (Kubernetes user impersonation), so the
 	// cluster authorizes and audits the person instead of Kubeast's credential.
@@ -167,6 +204,13 @@ type ServiceOptions struct {
 	InstallNamespace   string
 	NodeShellNamespace string
 	Gitops             gitops.Config // Argo CD guard (chart gitops.argocd)
+	// SharedReadChecks shares a screen's allowed read check among people of the same groups, but on the clusters
+	// SharedReadChecksExclude names (chart auth.impersonation.sharedReadChecks, shared_read_checks.go).
+	SharedReadChecks        bool
+	SharedReadChecksExclude []string
+	// NoInformers keeps the overview informers from starting: a server of role "stream" serves no list, and whatever
+	// would read them lists instead, as before the first sync.
+	NoInformers bool
 }
 
 // impersonationEnabled and execCommands are read by buildClientBundle (set once
@@ -175,6 +219,7 @@ var (
 	impersonationEnabled bool
 	execCommands         []string
 	clientRates          rates
+	informersOff         bool
 )
 
 // rates are ServiceOptions' client rates, read by buildClientBundle.
@@ -188,13 +233,21 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 	execCommands = opts.ExecCommands
 	clientRates = rates{opts.ClientQPS, opts.ClientBurst, opts.ReviewQPS, opts.ReviewBurst}
 	installNamespace, nodeShellNamespace = opts.InstallNamespace, opts.NodeShellNamespace
+	informersOff = opts.NoInformers
+	sharedReadChecks.on, sharedReadChecks.exclude = opts.SharedReadChecks, opts.SharedReadChecksExclude
+	switch {
+	case opts.SharedReadChecks && opts.Impersonation:
+		slog.Info("k8s: allowed read checks of screens are shared by group", "user_prefix", groupCheckUserPrefix, "excluded_clusters", opts.SharedReadChecksExclude)
+	case opts.SharedReadChecks:
+		slog.Warn("k8s: shared read checks need auth.impersonation.enabled; every check is asked as Kubeast's own credential, as before")
+	}
 	s := &Service{
 		registry:          registry,
 		gitops:            opts.Gitops,
 		watchEnabled:      watchEnabled,
 		cache:             c,
 		maxClusters:       opts.MaxClusters,
-		health:            newClusterHealth(opts.BreakerFails),
+		health:            newClusterHealth(opts.BreakerFails, opts.BreakerOpen),
 		promQ:             newPromQueryCache(opts.QueryCacheTTL),
 		limiters:          newClusterLimiters(opts.RateLimitQPS, opts.RateLimitBurst),
 		resolveCache:      map[string]resolvedEntry{},
@@ -203,6 +256,7 @@ func NewService(ctx context.Context, registry cluster.Registry, watchEnabled boo
 		apiResourcesRead:  map[cluster.ID]time.Time{},
 	}
 
+	s.warnUnknownExcludes(ctx)
 	defaultID, err := registry.Default(ctx)
 	if err != nil {
 		// Not configured yet: no clusters registered (ErrNotFound), the schema
@@ -269,13 +323,14 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	if clientRates.burst > 0 {
 		cfg.Burst = clientRates.burst
 	}
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return answerNotice{base: rt, id: info.ID} })
 	// The overview informers run outside any user request: with impersonation
 	// on they act as a fixed viewer identity instead of the per-request user
 	// the wrapped transport adds.
 	cacheCfg := rest.CopyConfig(cfg)
 	if impersonationEnabled {
 		id := string(info.ID)
-		cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return auth.ImpersonationRoundTripper(rt, id) })
+		wrapPerson(cfg, id)
 		cacheCfg.Impersonate = rest.ImpersonationConfig{UserName: overviewCacheUser, Groups: []string{auth.GroupAuthenticated, auth.GroupViewer}}
 	}
 	cacheClient, err := kubernetes.NewForConfig(cacheCfg)
@@ -291,7 +346,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	cfg.Wrap(kubetrail.RoundTripper)
 	// on a copy, so the dynamic client and UserRESTConfigFor keep rates of their own as before
 	userCfg := rest.CopyConfig(cfg)
-	userCfg.RateLimiter = newTurnLimiter(cfg.QPS, cfg.Burst)
+	userCfg.RateLimiter = newTurnLimiter(cfg.QPS, cfg.Burst, clientWait.forLimiter(limiterUser))
 	clientset, err := kubernetes.NewForConfig(userCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create clientset: %w", err)
@@ -301,7 +356,7 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		// the same wrapped transports, so a review carries the caller's impersonation as before
 		reviewCfg := rest.CopyConfig(cfg)
 		reviewCfg.QPS, reviewCfg.Burst = float32(clientRates.reviewQPS), max(clientRates.reviewBurst, clientRates.reviewQPS)
-		reviewCfg.RateLimiter = newTurnLimiter(reviewCfg.QPS, reviewCfg.Burst)
+		reviewCfg.RateLimiter = newTurnLimiter(reviewCfg.QPS, reviewCfg.Burst, clientWait.forLimiter(limiterReview))
 		reviews, err := kubernetes.NewForConfig(reviewCfg)
 		if err != nil {
 			return nil, fmt.Errorf("create review clientset: %w", err)
@@ -312,22 +367,47 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic client: %w", err)
 	}
+	ownCfg := rest.CopyConfig(cfg)
+	ownCfg.QPS, ownCfg.RateLimiter = -1, nil
+	ownVersion, err := discovery.NewDiscoveryClientForConfig(ownCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create own version client: %w", err)
+	}
 	promExt, promSvc := promSourceFromInfo(info)
-	return &clientBundle{
-		clientset:   clientset,
-		authz:       authz,
-		dynamic:     dynClient,
-		discovery:   clientset.Discovery(),
-		restConfig:  cfg,
-		prom:        &promCache{},
-		promExt:     promExt,
-		promSvc:     promSvc,
-		logStore:    logStoreFromInfo(info),
-		cost:        &costCache{},
-		id:          info.ID,
-		protected:   protected,
-		cacheClient: cacheClient,
-	}, nil
+	b := &clientBundle{
+		clientset:     clientset,
+		authz:         authz,
+		dynamic:       dynClient,
+		discovery:     clientset.Discovery(),
+		ownVersion:    ownVersion,
+		restConfig:    cfg,
+		prom:          &promCache{},
+		promExt:       promExt,
+		promSvc:       promSvc,
+		logStore:      logStoreFromInfo(info),
+		cost:          &costCache{},
+		configVersion: info.ConfigVersion,
+		id:            info.ID,
+		protected:     protected,
+		cacheClient:   cacheClient,
+		noInformers:   informersOff,
+	}
+	b.sharesChecks = sharesChecksOn(info.ID)
+	return b, nil
+}
+
+// wrapPerson makes cfg's requests go out as the person in their context, and a shared read check under it
+// (groupCheckTransport, wrapped first so it sees the person's headers). Kubeast's own reads are looked for under the
+// path of cfg's server URL, which client-go puts before every request's path (the base URL of its REST clients).
+func wrapPerson(cfg *rest.Config, id string) {
+	var serverPath string
+	if base, _, err := rest.DefaultServerUrlFor(cfg); err == nil {
+		serverPath = base.Path
+	}
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return groupCheckTransport{base: rt} })
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
+		return auth.ImpersonationRoundTripperAt(rt, id, serverPath)
+	})
 }
 
 // pool lazily builds the LRU client-bundle pool. Lazy so a zero-value Service
@@ -419,16 +499,86 @@ func (s *Service) ClusterKubeconfig(ctx context.Context, id cluster.ID) (blob st
 	return info.KubeconfigBlob, false, nil
 }
 
+// ChangeNotifier tells the other replicas that this one invalidated a cluster (internal/clustersync).
+type ChangeNotifier interface {
+	Changed(id cluster.ID)
+}
+
+// SetChangeNotifier makes Invalidate tell the other replicas; without one it acts on this replica only.
+func (s *Service) SetChangeNotifier(n ChangeNotifier) { s.changes = n }
+
 // Invalidate drops a cluster's cached bundle (e.g. after a kubeconfig rotation)
 // so the next access rebuilds it from the registry — no rollout required.
 func (s *Service) Invalidate(id cluster.ID) {
+	s.dropBundle(id)
+	s.invalidateCaches()
+	if s.changes != nil {
+		s.changes.Changed(id)
+	}
+}
+
+// DropCluster is Invalidate for a change another replica took. That replica flushed the cache in Redis, so this one
+// flushes only a cache of its own (Redis did not answer at start) and tells no one.
+func (s *Service) DropCluster(id cluster.ID) {
+	s.dropBundle(id)
+	s.dropDerivedCaches()
+	if s.cache != nil && !s.cache.IsConnected() {
+		_ = s.cache.FlushAll(context.Background())
+	}
+}
+
+// ClusterVersions is the config_version each cluster this process keeps a bundle of was built from.
+func (s *Service) ClusterVersions() map[cluster.ID]int64 {
+	p := s.pool()
+	out := make(map[cluster.ID]int64, p.Len())
+	for _, id := range p.Keys() {
+		if b, ok := p.Peek(id); ok {
+			out[id] = b.configVersion
+		}
+	}
+	return out
+}
+
+// ClientOf is the cluster a request reads and the registry config_version its client was built from, the same on every
+// replica that built it from the same registration; false when no client is built.
+func (s *Service) ClientOf(ctx context.Context) (cluster.ID, int64, bool) {
+	if s == nil {
+		return "", 0, false
+	}
+	b := s.bundleForCtx(ctx)
+	if b == nil {
+		return "", 0, false
+	}
+	return b.id, b.configVersion, true
+}
+
+// DropStale is Invalidate for a change read from the registry's versions (internal/clustersync): the bundle of id built
+// from builtFrom goes, a bundle built since stays. No replica may have been told of the change, so the cache goes
+// everywhere, as on the replica auth-service tells; the others are not told, each reads the versions itself.
+func (s *Service) DropStale(id cluster.ID, builtFrom int64) {
+	p := s.pool()
+	if b, ok := p.Peek(id); ok && b.configVersion == builtFrom {
+		p.Remove(id) // evict callback Closes the bundle
+	}
+	s.defaultBundle.Store(nil)
+	s.MarkClusterUp(id)
+	s.invalidateCaches()
+}
+
+func (s *Service) dropBundle(id cluster.ID) {
 	s.pool().Remove(id) // evict callback Closes the bundle
 	s.defaultBundle.Store(nil)
 	// Reset the breaker: invalidation (e.g. a kubeconfig rotation that fixes a
 	// down cluster) gives the cluster a fresh chance, so the next request is
 	// actually tried instead of fail-fast 503'd until the next health poll.
 	s.MarkClusterUp(id)
-	s.invalidateCaches()
+	if sharedReadChecks.on && len(sharedReadChecks.exclude) > 0 {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			s.warnUnknownExcludes(ctx)
+		}()
+	}
 }
 
 // defaultClientBundle resolves (and caches) the default cluster's bundle for the
@@ -445,23 +595,30 @@ func (s *Service) defaultClientBundle() *clientBundle {
 	return b
 }
 
-// invalidateCaches clears state derived from a clientBundle.
+// invalidateCaches clears state derived from a clientBundle, and the cache.
 func (s *Service) invalidateCaches() {
-	s.apiResourcesMu.Lock()
-	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
-	s.apiResourcesAt = map[cluster.ID]time.Time{}
-	s.apiResourcesRead = map[cluster.ID]time.Time{}
-	s.apiResourcesGen++
-	s.apiResourcesMu.Unlock()
-
-	s.invalidateResolveCache()
-
-	s.promQ.clear()
-
+	s.dropDerivedCaches()
 	if s.cache != nil {
 		// Best-effort: ignore errors from Redis flush.
 		_ = s.cache.FlushAll(context.Background())
 	}
+}
+
+// dropDerivedCaches clears the discovery, Prometheus, access check and health answers this process keeps.
+func (s *Service) dropDerivedCaches() {
+	s.apiResourcesMu.Lock()
+	s.apiResourcesCache = map[cluster.ID][]metav1.APIResourceList{}
+	s.apiResourcesAt = map[cluster.ID]time.Time{}
+	s.apiResourcesRead = map[cluster.ID]time.Time{}
+	s.apiResourcesFailed = map[cluster.ID][]string{}
+	s.apiResourcesGen++
+	s.apiResourcesMu.Unlock()
+
+	s.invalidateResolveCache()
+	s.forgetHealthRead()
+
+	s.promQ.clear()
+	s.accessAnswers.clear()
 }
 
 // --- Context-less accessors (default cluster) ---
@@ -559,9 +716,10 @@ var ErrNoUser = errors.New("no signed-in user in context")
 // UserRESTConfigFor returns a REST config that acts as the user in ctx even
 // for requests issued outside ctx. The per-request round tripper impersonates
 // only when the request's own context carries the user; a library that calls
-// the API with its own context (the Helm SDK) would otherwise go out as the
-// service account. The identity is pinned on a copy of the cluster config, the
-// same way the overview cache pins its fixed identity.
+// the API with its own context (the Helm SDK) would otherwise be refused
+// (auth.ErrNoPerson). The identity is pinned on a copy of the cluster config,
+// the same way the overview cache pins its fixed identity, and the pinned
+// transport hands it to the per-request one (auth.WithPinnedPerson).
 func (s *Service) UserRESTConfigFor(ctx context.Context) (*rest.Config, error) {
 	b, err := s.ForCtx(ctx)
 	if err != nil {
@@ -579,9 +737,11 @@ func (s *Service) UserRESTConfigFor(ctx context.Context) (*rest.Config, error) {
 		user, groups := p.Impersonation(string(b.id))
 		cfg.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: groups}
 	}
-	// This config's callers send their own contexts, which the bundle's check cannot read a user from.
+	// This config's callers send their own contexts, which the bundle's check cannot read a user from, nor the breaker
+	// the request's record of its calls.
+	calls, _ := ctx.Value(clusterCallsKey{}).(*ClusterCalls)
 	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper {
-		return &guardedTransport{base: rt, rules: b.protected, clusterID: string(b.id), pinned: &p}
+		return &guardedTransport{base: rt, rules: b.protected, clusterID: string(b.id), pinned: &p, calls: calls}
 	})
 	return cfg, nil
 }
@@ -702,13 +862,98 @@ func (s *Service) Cache() *cache.Cache { return s.cache }
 // WatchEnabled reports whether hot-reload is configured for this service.
 func (s *Service) WatchEnabled() bool { return s.watchEnabled }
 
-// HealthCheck pings the default cluster's K8s API server.
+// healthReadBudget bounds HealthCheck's GET /version; healthReadEvery is how long one read's answer stands for every
+// caller, so open tabs asking /health every 5 s cost one read per replica in that time however many they are.
+const (
+	healthReadBudget = 1500 * time.Millisecond
+	healthReadEvery  = 5 * time.Second
+)
+
+// healthReading is the last answer of HealthCheck's read and the read under way.
+type healthReading struct {
+	mu      sync.Mutex
+	at      time.Time
+	err     error
+	running *healthRun // nil when none is under way
+	gen     uint64     // forgetHealthRead's count: a read started before the last one keeps no answer
+}
+
+// healthRun is one read: err is set before done closes.
+type healthRun struct {
+	done chan struct{}
+	err  error
+	gen  uint64
+}
+
+// HealthCheck says whether the default cluster's API server answered GET /version, asked as Kubeast itself. One read
+// answers every caller for healthReadEvery; a caller waits for the read under way until its ctx ends, as finding the
+// default cluster's bundle is not bounded by the read's own budget.
 func (s *Service) HealthCheck(ctx context.Context) error {
+	h := &s.healthRead
+	h.mu.Lock()
+	if !h.at.IsZero() && time.Since(h.at) < healthReadEvery {
+		err := h.err
+		h.mu.Unlock()
+		return err
+	}
+	run := h.running
+	if run == nil {
+		run = &healthRun{done: make(chan struct{}), gen: h.gen}
+		h.running = run
+		go s.runHealthRead(run)
+	}
+	h.mu.Unlock()
+	select {
+	case <-run.done:
+		return run.err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// runHealthRead answers run and, unless forgetHealthRead came meanwhile, keeps its answer for the next callers.
+func (s *Service) runHealthRead(run *healthRun) {
+	defer close(run.done)
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("health read panicked", "panic", r, "stack", string(debug.Stack()))
+			run.err = fmt.Errorf("health read panicked: %v", r)
+		}
+		h := &s.healthRead
+		h.mu.Lock()
+		h.running = nil
+		if run.gen == h.gen {
+			h.at, h.err = time.Now(), run.err
+		}
+		h.mu.Unlock()
+	}()
+	run.err = s.readHealth()
+}
+
+// forgetHealthRead drops the kept answer when a cluster is dropped, as the default may be the one: a read under way
+// still answers those waiting on it, and its answer is not kept, so the next call reads again — one read at a time.
+func (s *Service) forgetHealthRead() {
+	h := &s.healthRead
+	h.mu.Lock()
+	h.at, h.err = time.Time{}, nil
+	h.gen++
+	h.mu.Unlock()
+}
+
+// readHealth is one GET /version of the default cluster within healthReadBudget once its bundle is found, through the
+// bundle's own client, which waits behind no one's requests.
+func (s *Service) readHealth() error {
 	b := s.defaultClientBundle()
 	if b == nil {
 		return errNotLoaded
 	}
-	_, err := b.clientset.Discovery().ServerVersion()
+	vr := b.versionReader()
+	if vr == nil {
+		return errNotLoaded
+	}
+	ctx, cancel := context.WithTimeout(auth.AsKubeast(context.Background()), healthReadBudget)
+	defer cancel()
+	_, err := vr.ServerVersionWithContext(ctx)
 	return err
 }
 

@@ -45,7 +45,7 @@ test.describe('AI chat — tool disclosure and the action row', () => {
     // chat sessions belong to a cluster
     const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
     expect(created.ok(), `create session: ${created.status()}`).toBeTruthy()
-    const sessionId = (await created.json()).id as string
+    const sessionId = withUndo((await created.json()).id as string, (i) => page.request.delete(`/api/v1/sessions/${i}?cluster=self`, { headers: XRW, failOnStatusCode: false }))
     try {
       const saved = await page.request.post(`/api/v1/sessions/${sessionId}/messages?cluster=self`, {
         headers: XRW,
@@ -119,4 +119,17 @@ test.describe('AI chat — tool disclosure and the action row', () => {
     await expect(actions.getByRole('button', { name: /^copy$|^복사$/i })).toBeVisible()
     await expect(actions.getByTestId('turn-usage')).toHaveText(/tokens|토큰/)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

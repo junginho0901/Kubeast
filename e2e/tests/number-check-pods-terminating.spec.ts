@@ -216,10 +216,10 @@ test.describe('Pods being deleted', () => {
       const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
       const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E pods terminating', email, password: PW, role_id: member.id } })
       expect(created.status(), `create ${email}`).toBe(201)
-      userId = (await created.json()).id
+      userId = madeUser((await created.json()).id, bearer(admin))
       const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read', namespaces: [NS] } })
       expect(grant.status(), await grant.text()).toBe(200)
-      k(`create clusterrole ${RBAC}-imp --verb=impersonate --resource=groups --resource-name=kubeast:role:read`)
+      withUndo(k(`create clusterrole ${RBAC}-imp --verb=impersonate --resource=groups --resource-name=kubeast:role:read`), () => { tryK(`delete clusterrolebinding ${RBAC}-imp --ignore-not-found`); tryK(`delete clusterrole ${RBAC}-imp --ignore-not-found`) })
       k(`create clusterrolebinding ${RBAC}-imp --clusterrole=${RBAC}-imp --serviceaccount=kubeast:k8s-service`)
       k(`-n ${NS} create rolebinding ${RBAC}-view --clusterrole=view --group=kubeast:role:read`)
       const user = await login(request, email, PW)
@@ -279,4 +279,28 @@ test.describe('Pods being deleted', () => {
     await expect.poll(() => podRows.count(), { timeout: 60_000, message: 'the replacement pod' }).toBe(2)
     await expect(status).toHaveText('Terminating')
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

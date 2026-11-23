@@ -7,8 +7,9 @@ import { test, expect, type APIRequestContext, type Browser, type Page } from '@
 
 // A terminal, a followed log and a live list are authenticated once, when they open. They end when the session behind
 // them stops standing (services/pkg/auth LiveSessions), within one check of 30 seconds and one cached answer, and say
-// why. A global admin.* key opens pages, not clusters: only what its page reads. The node shell's pods keep their logs
-// to those holding resource.node.shell. A list that stopped following says so. The users and objects are removed after.
+// why — also when the sign-in they opened with was signed out in another page. A global admin.* key opens pages, not
+// clusters: only what its page reads. The node shell's pods keep their logs to those holding resource.node.shell. A
+// list that stopped following says so. The users and objects are removed after.
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -145,9 +146,11 @@ test.describe.serial('open connections and what a global key opens', () => {
     expect(seen.log?.reason).toBe('session_revoked')
     expect(seen.log?.lines ?? 0).toBeGreaterThan(0)
 
-    const rows = (await (await request.get(`/api/v1/auth/admin/audit-logs?action=k8s.session.end&actor_email=${encodeURIComponent(email)}&limit=20`, { headers: bearer(admin) })).json()) as { items?: { ActorEmail?: string; After?: { stream?: string; reason?: string } }[] }
-    const streams = (rows.items ?? []).filter((r) => r.ActorEmail === email).map((r) => r.After?.stream).sort()
-    expect(streams).toEqual(['exec', 'pod-logs'])
+    // A terminal's row comes after its close: the shell is hung up first (remote_shell.go hangUp).
+    await expect.poll(async () => {
+      const rows = (await (await request.get(`/api/v1/auth/admin/audit-logs?action=k8s.session.end&actor_email=${encodeURIComponent(email)}&limit=20`, { headers: bearer(admin) })).json()) as { items?: { ActorEmail?: string; After?: { stream?: string; reason?: string } }[] }
+      return (rows.items ?? []).filter((r) => r.ActorEmail === email).map((r) => r.After?.stream).sort()
+    }, { timeout: 10_000 }).toEqual(['exec', 'pod-logs'])
     await page.context().close()
   })
 
@@ -164,6 +167,58 @@ test.describe.serial('open connections and what a global key opens', () => {
 
     await expect(page).toHaveURL(/\/login/, { timeout: SESSION_END_WAIT })
     await expect(page.getByText(tr('login.sessionEnded'))).toHaveText(tr('login.sessionEnded'))
+    await page.context().close()
+  })
+
+  test('signing out in one page ends what another page of the same browser holds open, and its token is refused', async ({ request, browser }) => {
+    test.setTimeout(SESSION_END_WAIT + 90_000)
+    const email = `e2e-open-conn-f-${STAMP}@kubeast.local`
+    const id = await createUser(request, admin, email, roleId)
+    users.push(id)
+    expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Admin' } })).ok()).toBeTruthy()
+    const page = await signIn(browser, email)
+    const copied = (await page.context().cookies()).find((c) => c.name === 'kubeast.token')?.value ?? ''
+    expect(copied, 'the sign-in left its cookie').not.toBe('')
+    // The second page of the same browser: a file of the same origin, so no screen answers the end for it.
+    const other = await page.context().newPage()
+    await other.goto('/color-mode.js')
+    await openConnections(other)
+    await other.waitForTimeout(3_000)
+    expect(await seenOn(other), 'nothing ends on its own').toEqual({})
+
+    await page.getByRole('button', { name: /Log out|로그아웃/ }).click()
+    await expect(page).toHaveURL(/\/login/)
+
+    // auth-service reads the sign-in on every request: refused at once, refresh with the expired session's answer.
+    const refreshed = await request.post('/api/v1/auth/refresh', { headers: bearer(copied), failOnStatusCode: false })
+    expect(refreshed.status()).toBe(401)
+    expect((await refreshed.json()).detail).toBe('Session expired; sign in again')
+    expect((await request.get('/api/v1/auth/me', { headers: bearer(copied), failOnStatusCode: false })).status()).toBe(401)
+
+    await expect.poll(async () => {
+      const seen = await seenOn(other)
+      return Boolean(seen.socket && seen.terminal && seen.log)
+    }, { timeout: SESSION_END_WAIT, intervals: [2_000] }).toBe(true)
+    const seen = await seenOn(other)
+    expect(seen.socket).toEqual({ code: 4401, reason: 'session_signed_out' })
+    expect(seen.terminal?.code).toBe(4401)
+    expect(seen.terminal?.reason).toBe('session_signed_out')
+    expect(seen.terminal?.text).toContain('this sign-in was signed out')
+    expect(seen.log?.reason).toBe('session_signed_out')
+
+    // k8s-service reads it through a cached answer of at most 30 seconds.
+    await expect.poll(async () => (await request.get('/api/v1/cluster/namespaces/default/pods?cluster=self', { headers: bearer(copied), failOnStatusCode: false })).status(),
+      { timeout: 45_000, intervals: [2_000] }).toBe(401)
+
+    type Row = { ActorEmail?: string; Result?: string; Error?: string; After?: { stream?: string; reason?: string; auth_time?: string } }
+    const rows = async (action: string) => ((await (await request.get(`/api/v1/auth/admin/audit-logs?action=${action}&actor_email=${encodeURIComponent(email)}&limit=20`, { headers: bearer(admin) })).json()) as { items?: Row[] }).items?.filter((r) => r.ActorEmail === email) ?? []
+    const signOuts = await rows('user.logout')
+    expect(signOuts.map((r) => r.Result)).toEqual(['success'])
+    expect(signOuts[0].After?.auth_time, 'the row names the sign-in that ended').toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    // A terminal's row comes after its close: the shell is hung up first (remote_shell.go hangUp).
+    await expect.poll(async () => (await rows('k8s.session.end')).map((r) => [r.After?.stream, r.After?.reason]).sort(), { timeout: 10_000 })
+      .toEqual([['exec', 'session_signed_out'], ['pod-logs', 'session_signed_out']])
+    expect((await rows('user.token.refresh')).filter((r) => r.Result === 'failure').map((r) => r.Error)).toEqual(['session_signed_out'])
     await page.context().close()
   })
 
@@ -322,14 +377,14 @@ test.describe('a list that does not follow, and what the floating chat is told',
     test.setTimeout(90_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const roles = (await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()) as RoleRow[]
-    const namespace = `e2e-open-conn-list-${STAMP}`
+    const namespace = withUndo(`e2e-open-conn-list-${STAMP}`, (n) => kubectl(`delete namespace ${n} --ignore-not-found --wait=false`))
     const email = `e2e-open-conn-list-${STAMP}@kubeast.local`
     let id = ''
     kubectl(`create namespace ${namespace}`)
     try {
       kubectl(`-n ${namespace} create role e2e-list-only --verb=list --resource=configmaps`)
       kubectl(`-n ${namespace} create rolebinding e2e-list-only --role=e2e-list-only --group=kubeast:role:read`)
-      id = await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id)
+      id = madeUser(await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id), bearer(admin))
       expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read', namespaces: [namespace] } })).ok()).toBeTruthy()
 
       const page = await signIn(browser, email)
@@ -363,13 +418,13 @@ test.describe('a list that does not follow, and what the floating chat is told',
     test.setTimeout(150_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     const roles = (await (await request.get('/api/v1/auth/roles', { headers: bearer(admin) })).json()) as RoleRow[]
-    const namespace = `e2e-open-conn-scope-${STAMP}`
+    const namespace = withUndo(`e2e-open-conn-scope-${STAMP}`, (n) => kubectl(`delete namespace ${n} --ignore-not-found --wait=false`))
     const email = `e2e-open-conn-scope-${STAMP}@kubeast.local`
     let id = ''
     kubectl(`create namespace ${namespace}`)
     try {
       kubectl(`-n ${namespace} create rolebinding e2e-view --clusterrole=view --group=kubeast:role:read`)
-      id = await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id)
+      id = madeUser(await createUser(request, admin, email, roles.find((r) => r.name.toLowerCase() === 'member')!.id), bearer(admin))
       expect((await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read', namespaces: [namespace] } })).ok()).toBeTruthy()
       const token = await login(request, email, PW)
 
@@ -413,4 +468,28 @@ test.describe('a list that does not follow, and what the floating chat is told',
       kubectl(`delete namespace ${namespace} --ignore-not-found --wait=false`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

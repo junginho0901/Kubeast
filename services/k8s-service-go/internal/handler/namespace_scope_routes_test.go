@@ -128,6 +128,16 @@ func (a *standIn) serve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]interface{}{"kind": "APIGroupList", "apiVersion": "v1", "groups": groups})
 		return
 	}
+	// a group's discovery document, as the API server serves one for each group it lists
+	if group, ok := strings.CutPrefix(r.URL.Path, "/apis/"); ok && !strings.Contains(group, "/") {
+		for gv := range standInKinds {
+			if g, version, _ := strings.Cut(gv, "/"); g == group {
+				v := map[string]string{"groupVersion": gv, "version": version}
+				writeJSON(w, 200, map[string]interface{}{"kind": "APIGroup", "apiVersion": "v1", "name": group, "versions": []map[string]string{v}, "preferredVersion": v})
+				return
+			}
+		}
+	}
 	a.mu.Lock()
 	a.calls = append(a.calls, apiCall{r.Method, r.URL.Path, r.URL.RawQuery, r.Header.Get("Impersonate-User")})
 	a.mu.Unlock()
@@ -322,6 +332,20 @@ func (a *standIn) callerCalls() []apiCall {
 	return out
 }
 
+// callerReads are callerCalls and the lists of events and of the Timeline's rollout kinds made as kubeast:cache, which
+// k8s-service makes once for everyone whose own access check says they may list them, in place of their own lists.
+func (a *standIn) callerReads() []apiCall {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var out []apiCall
+	for _, c := range a.calls {
+		if c.user == signedInUser || (c.user == "kubeast:cache" && readForEveryone.MatchString(c.path)) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func (a *standIn) reset() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -350,6 +374,10 @@ func wideLists(calls []apiCall) []string {
 }
 
 var namespacePath = regexp.MustCompile(`/namespaces/([^/]+)`)
+
+// readForEveryone is the paths of the lists k8s-service makes once as kubeast:cache for everyone who may list them:
+// events, and the Deployments, ReplicaSets and ControllerRevisions of the Timeline's rollouts.
+var readForEveryone = regexp.MustCompile(`(/events|^/apis/apps/v1/(namespaces/[^/]+/)?(deployments|replicasets|controllerrevisions))$`)
 
 // namespacesReached are the namespaces the caller's calls went into, the namespace objects read by name among them.
 func namespacesReached(calls []apiCall) map[string]bool {
@@ -608,15 +636,15 @@ func TestScopedGrantKeepsItsOwnNamespaces(t *testing.T) {
 			}
 			if tc.want != "" {
 				var got []string
-				for _, c := range rig.api.callerCalls() {
+				for _, c := range rig.api.callerReads() {
 					got = append(got, c.method+" "+c.path)
 				}
 				if !slices.Contains(got, tc.want) {
 					t.Errorf("status %d, the cluster got %v, want %s: %.200s", w.Code, got, tc.want, w.Body.String())
 				}
 			}
-			if reached := namespacesReached(rig.api.callerCalls()); reached[outside] {
-				t.Errorf("reached the namespace outside: %+v", rig.api.callerCalls())
+			if reached := namespacesReached(rig.api.callerReads()); reached[outside] {
+				t.Errorf("reached the namespace outside: %+v", rig.api.callerReads())
 			}
 		})
 	}
@@ -700,7 +728,7 @@ func TestScopedListsNarrowToTheGrant(t *testing.T) {
 			if strings.Contains(w.Body.String(), notWant) {
 				t.Errorf("%q is in the answer: %.400s", notWant, w.Body.String())
 			}
-			if wide := wideLists(rig.api.callerCalls()); len(wide) != 0 {
+			if wide := wideLists(rig.api.callerReads()); len(wide) != 0 {
 				t.Errorf("listed across namespaces: %v", wide)
 			}
 		})
@@ -750,7 +778,7 @@ func TestUnscopedCallerIsUnchanged(t *testing.T) {
 				t.Fatalf("refused: %.300s", w.Body.String())
 			}
 			var got []string
-			for _, c := range rig.api.callerCalls() {
+			for _, c := range rig.api.callerReads() {
 				got = append(got, c.method+" "+c.path)
 			}
 			if !slices.Contains(got, tc.want) {

@@ -1,11 +1,14 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ModelConfigResponse } from '@/services/api'
-import { PROVIDER_CATALOG, getProvider, type ProviderDef } from '@/constants/modelCatalog'
+import { PROVIDER_CATALOG, getDefaultModel, getProvider, type ProviderDef } from '@/constants/modelCatalog'
 import { urlProblem } from '@/utils/urlField'
-import { buildOptions, modelListError, modelOptions, splitLimits, type LimitsError } from './helpers'
+import { useResultFor } from '@/hooks/useResultFor'
+import { buildOptions, listDefault, modelListError, modelOptions, splitLimits, type LimitsError } from './helpers'
 
 export function useModelForm() {
+  const { t } = useTranslation()
   const qc = useQueryClient()
 
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -31,7 +34,10 @@ export function useModelForm() {
   const [formLimitsError, setFormLimitsError] = useState<LimitsError | null>(null)
 
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  // the Test answer, of the values it tested (provider, model, base URL, key variable, CA, options): an edit of any drops it
+  const [testResult, setTestResult] = useResultFor<{ success: boolean; message: string }>(
+    [formProvider, formModel, formBaseUrl, formApiKeyEnv.trim(), formCaCert.trim(), formOptions.trim()],
+  )
 
 
   const { data: configs, isLoading } = useQuery({
@@ -92,14 +98,17 @@ export function useModelForm() {
     retry: false,
   })
   const fetchedModels = providerModels.data?.models
-  const currentModelOptions = useMemo(() => modelOptions(currentProviderDef, fetchedModels), [currentProviderDef, fetchedModels])
-  // A new config starts on the provider's first listed model when the built-in default is not one of them;
+  const currentModelOptions = useMemo(
+    () => modelOptions(currentProviderDef, fetchedModels, (key, fallback) => t(key, { defaultValue: fallback })),
+    [currentProviderDef, fetchedModels, t],
+  )
+  // A new config starts on the provider's default when the provider lists it, else on the first listed model;
   // an edited config keeps its stored model.
   useEffect(() => {
     if (isCreating && !formCustomModel && fetchedModels?.length && !fetchedModels.some((m) => m.name === formModel)) {
-      setFormModel(fetchedModels[0].name)
+      setFormModel(listDefault(formProvider, fetchedModels.map((m) => m.name)))
     }
-  }, [isCreating, formCustomModel, fetchedModels, formModel])
+  }, [isCreating, formCustomModel, fetchedModels, formModel, formProvider])
   const modelList = {
     noList: formProvider === 'claude-code',  // Claude Code has no model list API
     loading: providerModels.isFetching,
@@ -164,12 +173,39 @@ export function useModelForm() {
     setFormProvider(newProvider)
     const prov = getProvider(newProvider)
     if (prov) {
-      setFormModel(prov.models[0]?.name ?? '')
+      setFormModel(getDefaultModel(newProvider))
       setFormCustomModel(false)
       setFormBaseUrl(prov.defaultBaseUrl ?? '')
       setFormApiKeyEnv(prov.defaultApiKeyEnv ?? '')
       setTestResult(null)
     }
+  }
+
+  // The options a save stores (the JSON field and the two limits), or undefined once the form says why it cannot
+  const readOptions = (): { options: Record<string, unknown> | null } | undefined => {
+    const optsRaw = formOptions.trim()
+    let rest: Record<string, unknown> | null = null
+    if (optsRaw) {
+      try {
+        const parsed = JSON.parse(optsRaw)
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          setFormOptionsError(t('admin.aiModels.optionsNotObject', { defaultValue: 'Options must be a JSON object, e.g. {"temperature": 0.7}' }))
+          return undefined
+        }
+        rest = parsed
+        setFormOptionsError(null)
+      } catch {
+        setFormOptionsError(t('admin.aiModels.optionsInvalidJson', { defaultValue: 'Invalid JSON' }))
+        return undefined
+      }
+    }
+    const built = buildOptions(rest, formMaxTokens, formToolResultChars)
+    if ('error' in built) {
+      setFormLimitsError(built.error)
+      return undefined
+    }
+    setFormLimitsError(null)
+    return built
   }
 
   const handleSubmit = () => {
@@ -192,28 +228,8 @@ export function useModelForm() {
       payload.ca_cert = null  // 편집 중 비우면 제거
     }
     // 생성 옵션(JSON) — 파싱 검증
-    const optsRaw = formOptions.trim()
-    let rest: Record<string, unknown> | null = null
-    if (optsRaw) {
-      try {
-        const parsed = JSON.parse(optsRaw)
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          setFormOptionsError('Options must be a JSON object, e.g. {"temperature": 0.7}')
-          return
-        }
-        rest = parsed
-        setFormOptionsError(null)
-      } catch {
-        setFormOptionsError('Invalid JSON')
-        return
-      }
-    }
-    const built = buildOptions(rest, formMaxTokens, formToolResultChars)
-    if ('error' in built) {
-      setFormLimitsError(built.error)
-      return
-    }
-    setFormLimitsError(null)
+    const built = readOptions()
+    if (!built) return
     if (built.options) {
       payload.options = built.options
     } else if (editingId) {
@@ -228,9 +244,12 @@ export function useModelForm() {
 
   const handleTest = async () => {
     if (!formApiKeyEnv.trim() && currentProviderDef.needsApiKey !== false) {
-      setTestResult({ success: false, message: 'Enter the name of the env var that holds the API key' })
+      setTestResult({ success: false, message: t('admin.aiModels.apiKeyEnvMissing', { defaultValue: 'Enter the name of the env var that holds the API key' }) })
       return
     }
+    // the chat sends the saved options with every call, so the test sends them too
+    const built = readOptions()
+    if (!built) return
     setTesting(true)
     setTestResult(null)
     try {
@@ -240,12 +259,13 @@ export function useModelForm() {
         base_url: formBaseUrl || undefined,
         api_key_env: formApiKeyEnv.trim() || undefined,
         ca_cert: formCaCert.trim() || undefined,
+        options: built.options ?? undefined,
       })
       setTestResult(result)
     } catch (e: any) {
       // ai-service says why in detail (e.g. the key variable is not set); axios' message only has the status
       const detail = e?.response?.data?.detail
-      setTestResult({ success: false, message: (typeof detail === 'string' && detail) || e?.message || 'Test failed' })
+      setTestResult({ success: false, message: (typeof detail === 'string' && detail) || e?.message || t('admin.aiModels.testFailed', { defaultValue: 'Test failed' }) })
     } finally {
       setTesting(false)
     }

@@ -51,7 +51,7 @@ async function createUser(request: APIRequestContext, admin: string, email: stri
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E MCP write', email, password: PW, role_id: member.id } })
   expect(res.status(), `create ${email}`).toBe(201)
-  return (await res.json()).id
+  return madeUser((await res.json()).id, bearer(admin))
 }
 
 async function grant(request: APIRequestContext, admin: string, userId: string, cluster: string, role: string) {
@@ -97,7 +97,7 @@ async function auditRows(request: APIRequestContext, admin: string, actorEmail: 
 
 // A namespace with a Deployment to scale and a ConfigMap to delete; replicas changes need no running pods.
 function fixture(s: string) {
-  const ns = `e2e-mcpw-${s}`
+  const ns = withUndo(`e2e-mcpw-${s}`, (n) => tryKubectl(`delete namespace ${n} --wait=false`))
   kubectl(`create namespace ${ns}`)
   kubectl(`-n ${ns} create deployment web --image=registry.k8s.io/pause:3.10 --replicas=1`)
   kubectl(`-n ${ns} create configmap scratch --from-literal=a=b`)
@@ -352,4 +352,28 @@ test.describe('MCP write tools', () => {
       if (ns) tryKubectl(`delete namespace ${ns} --wait=false`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

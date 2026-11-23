@@ -207,7 +207,7 @@ test.describe.serial('session recording', () => {
     const member = roles.find((r: any) => r.name === 'Member')
     const made = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E rec reader', email, password: pw, role_id: member.id } })
     expect(made.status()).toBe(201)
-    const userId = (await made.json()).id
+    const userId = madeUser((await made.json()).id, bearer(admin))
     try {
       await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Write' } })
       const user = await login(request, email, pw)
@@ -225,7 +225,7 @@ test.describe.serial('session recording', () => {
   // locally, no part uploaded (e2e-rec-lost-*, removed after).
   test('the list pages, and an interrupted recording shows what was kept', async ({ page, request }) => {
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
-    const lostId = `e2e-rec-lost-${stamp()}`
+    const lostId = withUndo(`e2e-rec-lost-${stamp()}`, (i) => psql(`DELETE FROM session_recordings WHERE id = '${i}'`))
     psql(`DELETE FROM session_recordings WHERE id LIKE 'e2e-rec-lost-%'`)
     psql(`INSERT INTO session_recordings (id, kind, user_email, cluster, target, storage, status, bytes, uploaded_bytes, parts, started_at, ended_at)
       VALUES ('${lostId}', 'exec', 'e2e-rec-lost@kubeast.local', 'self', 'e2e-rec-lost', 's3', 'interrupted', 4096, 0, 0, now(), now())`)
@@ -265,4 +265,28 @@ test.describe.serial('session recording', () => {
       psql(`DELETE FROM session_recordings WHERE id = '${lostId}'`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

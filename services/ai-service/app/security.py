@@ -5,10 +5,10 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, Mapping, Optional, Tuple
+from typing import Dict, FrozenSet, Iterable, Mapping, Optional, Tuple
 
 import jwt
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 
 AUTH_JWKS_URL = os.getenv("AUTH_JWKS_URL", "http://auth-service:8004/api/v1/auth/jwks.json")
@@ -19,80 +19,161 @@ _jwk_client = jwt.PyJWKClient(AUTH_JWKS_URL)
 
 # Token revocation (same rules as services/pkg/auth token_version.go).
 # auth-service bumps a user's token_version to revoke every token issued so
-# far; "tv" in a token is the version it was issued with. The current version
-# is read from auth-service at most once per TOKEN_VERSION_CACHE_SECONDS per
-# user. When auth-service cannot be reached a version fetched within
-# TOKEN_VERSION_STALE_SECONDS still counts; with nothing cached the token is
-# refused rather than trusted. Empty AUTH_TOKEN_VERSION_URL turns the check off.
+# far; "tv" in a token is the version it was issued with. A sign-out ends one
+# sign-in: the same answer lists the auth_time of each of the user's sign-ins
+# that was signed out. Both are read from auth-service at most once per
+# TOKEN_VERSION_CACHE_SECONDS per user. When auth-service cannot be reached an
+# answer fetched within TOKEN_VERSION_STALE_SECONDS still counts; with nothing
+# cached the token is refused rather than trusted, with 503 and Retry-After
+# (auth-service's 503 says its database could not be read), never as revoked.
+# Empty AUTH_TOKEN_VERSION_URL turns the check off.
 AUTH_TOKEN_VERSION_URL = os.getenv(
     "AUTH_TOKEN_VERSION_URL", "http://auth-service:8004/api/v1/auth/internal/token-version"
 )
 TOKEN_VERSION_CACHE_SECONDS = 30.0
 TOKEN_VERSION_STALE_SECONDS = 300.0
+SESSION_UNREADABLE_RETRY_AFTER = 5
+# A user whose version auth-service could not read is answered from that failure for this long without asking again
+# (pkg/auth TokenVersionFailurePause), so an outage does not send each of the user's requests to auth-service.
+TOKEN_VERSION_FAILURE_PAUSE_SECONDS = 2.0
 
 
 class TokenRevokedError(Exception):
     """The token's version is behind the user's current one, or the user is gone."""
 
 
-def _fetch_token_version(token: str, user_id: str) -> int:
-    """GET <AUTH_TOKEN_VERSION_URL>/<user_id> as the bearer. The endpoint only
-    answers for the token's own subject, so the token is the credential."""
+# auth-service marks its 404 for a user, key or system token that is gone (pkg/auth SubjectGoneCode). One before 0.7.8
+# answered a read of its database that failed with the same 404 unmarked: that is a read that failed, not a verdict.
+SUBJECT_GONE_CODE = "subject_gone"
+
+
+class UnmarkedNotFoundError(Exception):
+    """A 404 of the token-version lookup without SUBJECT_GONE_CODE."""
+
+
+def _says_subject_gone(error: urllib.error.HTTPError) -> bool:
+    try:
+        body = json.loads(error.read() or b"{}")
+    except Exception:
+        return False
+    return isinstance(body, dict) and body.get("code") == SUBJECT_GONE_CODE
+
+
+def _fetch_token_version(token: str, user_id: str) -> Tuple[int, FrozenSet[int]]:
+    """GET <AUTH_TOKEN_VERSION_URL>/<user_id> as the bearer: the version and the
+    signed-out sign-ins (none when an older auth-service leaves the list out).
+    The endpoint only answers for the token's own subject, so the token is the
+    credential."""
     req = urllib.request.Request(
         f"{AUTH_TOKEN_VERSION_URL}/{user_id}", headers={"Authorization": f"Bearer {token}"}
     )
     try:
         with urllib.request.urlopen(req, timeout=3) as resp:
-            return int(json.load(resp)["tv"])
+            body = json.load(resp)
     except urllib.error.HTTPError as e:
-        if e.code in (401, 403, 404):
+        if e.code in (401, 403) or (e.code == 404 and _says_subject_gone(e)):
             raise TokenRevokedError(f"auth-service {e.code}") from e
+        if e.code == 404:
+            raise UnmarkedNotFoundError("auth-service 404 without " + SUBJECT_GONE_CODE) from e
         raise
+    return int(body["tv"]), frozenset(int(t) for t in body.get("signed_out") or ())
 
 
-_tv_cache: Dict[str, Tuple[int, float]] = {}  # user_id[|akid] -> (version, monotonic seconds fetched)
+# user_id[|akid] -> (version, monotonic seconds fetched, signed-out sign-ins)
+_tv_cache: Dict[str, Tuple[int, float, FrozenSet[int]]] = {}
+# user_id[|akid] -> monotonic seconds until which a failed lookup is not made again
+_tv_paused: Dict[str, float] = {}
 _tv_lock = threading.Lock()
 
 
-def _compare_token_version(claimed: int, current: int) -> None:
-    if claimed != current:
+def sign_in_of(payload: Mapping) -> int:
+    """The sign-in a token belongs to (pkg/auth TokenPayload.SignIn): "auth_time",
+    or "iat" for a token issued before it; 0 for a token an API key was
+    exchanged for or a system token."""
+    if payload.get("akid") or payload.get("sys"):
+        return 0
+    for claim in ("auth_time", "iat"):
+        value = payload.get(claim)
+        if isinstance(value, (int, float)) and value > 0:
+            return int(value)
+    return 0
+
+
+def _compare_token_version(claimed: int, current: int, sign_in: int = 0, signed_out: FrozenSet[int] = frozenset()) -> None:
+    if claimed != current or (sign_in and sign_in in signed_out):
         raise HTTPException(status_code=401, detail="Token revoked")
 
 
-def check_token_version(token: str, user_id: str, claimed: int, akid: str = "") -> None:
+def check_token_version(token: str, user_id: str, claimed: int, akid: str = "", sign_in: int = 0) -> None:
     """Versions only grow, so a token claiming more than the cached version was
     issued after the cache entry (sign-in right after a role change): that
     refreshes the cache instead of waiting for it to expire. A token an API key
     was exchanged for (akid) is cached apart: auth-service answers "revoked" for
     it once the key is deleted or expired, and the user's sign-in token must not
-    keep a shared entry fresh for it (pkg/auth checkTokenVersion)."""
+    keep a shared entry fresh for it (pkg/auth checkTokenVersion). sign_in is the
+    token's sign-in (sign_in_of): one answer per user serves all of them."""
     if not AUTH_TOKEN_VERSION_URL:
         return
     now = time.monotonic()
     key = f"{user_id}|{akid}" if akid else user_id
     with _tv_lock:
         cached = _tv_cache.get(key)
+        paused_until = _tv_paused.get(key, 0.0)
     if cached and now - cached[1] < TOKEN_VERSION_CACHE_SECONDS and claimed <= cached[0]:
-        _compare_token_version(claimed, cached[0])
+        _compare_token_version(claimed, cached[0], sign_in, cached[2])
+        return
+    if now < paused_until:
+        # auth-service could not read this user's version a moment ago: answered as that failure, not asked again yet.
+        _outage_verdict(claimed, sign_in, cached, now)
         return
     try:
-        current = _fetch_token_version(token, user_id)
+        current, signed_out = _fetch_token_version(token, user_id)
     except TokenRevokedError:
         with _tv_lock:
             _tv_cache.pop(key, None)
+            _tv_paused.pop(key, None)
         raise HTTPException(status_code=401, detail="Token revoked")
+    except UnmarkedNotFoundError:
+        # Neither a verdict nor bridged: an auth-service before 0.7.8 answers a user that is gone and a read that failed
+        # alike, so the token is refused as unreadable, not passed on the version read before.
+        _outage_verdict(claimed, sign_in, None, now)
+        return
     except Exception:
-        if cached and now - cached[1] < TOKEN_VERSION_STALE_SECONDS:
-            # Outage: the signature proves auth-service issued the token at
-            # version `claimed`, so anything not older than what we last saw
-            # passes; an older one was revoked before the outage.
-            if claimed < cached[0]:
-                raise HTTPException(status_code=401, detail="Token revoked")
-            return
-        raise HTTPException(status_code=401, detail="Token version unavailable")
+        _pause_after_failure(key)
+        _outage_verdict(claimed, sign_in, cached, now)
+        return
     with _tv_lock:
-        _tv_cache[key] = (current, now)
-    _compare_token_version(claimed, current)
+        _tv_cache[key] = (current, now, signed_out)
+        _tv_paused.pop(key, None)
+    _compare_token_version(claimed, current, sign_in, signed_out)
+
+
+def _outage_verdict(claimed: int, sign_in: int, cached: Optional[Tuple[int, float, FrozenSet[int]]], now: float) -> None:
+    """A token whose version auth-service could not read. The signature proves auth-service issued it at version
+    `claimed`, so with a version read within the stale window anything not older passes; an older one was revoked
+    before the outage, and a sign-in seen signed out stays so. With none it is refused, not taken on trust, with 503 to
+    be asked again, since a 401 signs the console out (services/pkg/auth RefuseSessionUnreadable)."""
+    if cached and now - cached[1] < TOKEN_VERSION_STALE_SECONDS:
+        if claimed < cached[0] or (sign_in and sign_in in cached[2]):
+            raise HTTPException(status_code=401, detail="Token revoked")
+        return
+    raise HTTPException(
+        status_code=503,
+        detail="Session could not be checked; try again",
+        headers={"Retry-After": str(SESSION_UNREADABLE_RETRY_AFTER)},
+    )
+
+
+def _pause_after_failure(key: str) -> None:
+    """No lookup for key for TOKEN_VERSION_FAILURE_PAUSE_SECONDS, the ended pauses let go. A revocation is not held
+    back: none can be read while the lookup fails, and the first lookup after the pause reads it."""
+    if TOKEN_VERSION_FAILURE_PAUSE_SECONDS <= 0:
+        return
+    now = time.monotonic()
+    with _tv_lock:
+        for k in [k for k, until in _tv_paused.items() if until <= now]:
+            del _tv_paused[k]
+        _tv_paused[key] = now + TOKEN_VERSION_FAILURE_PAUSE_SECONDS
 
 # Cluster id the services fall back to when a request names none (mirrors
 # k8s-service ClusterMiddleware / tool-server resolveClusterKubeconfig).
@@ -202,6 +283,11 @@ def _parse_namespaces(raw) -> dict:
     return out
 
 
+# Go's strings.TrimSpace, which the Go services trim a token's role with (pkg/auth): str.strip() also takes
+# U+001C..U+001F, so a custom role "Admin\x1f" would read as the built-in Admin here.
+GO_SPACE = "\t\n\v\f\r \x85\xa0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000"
+
+
 def decode_access_token(token: str) -> TokenPayload:
     try:
         signing_key = _jwk_client.get_signing_key_from_jwt(token).key
@@ -213,14 +299,15 @@ def decode_access_token(token: str) -> TokenPayload:
             audience=JWT_AUDIENCE,
         )
         user_id = str(payload.get("sub") or "").strip()
-        role = str(payload.get("role") or "").strip().lower()
+        # the account level's name as stored: a built-in is known by its exact name
+        role = str(payload.get("role") or "").strip(GO_SPACE)
         email = str(payload.get("email") or "").strip()
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
         matrix = _parse_permission_matrix(payload.get("permissions"))
         if matrix is None:
             raise HTTPException(status_code=401, detail="Invalid token: permissions claim must be a per-cluster map")
-        check_token_version(token, user_id, int(payload.get("tv") or 0), str(payload.get("akid") or ""))
+        check_token_version(token, user_id, int(payload.get("tv") or 0), str(payload.get("akid") or ""), sign_in_of(payload))
         return TokenPayload(
             user_id=user_id,
             role=role or "read",
@@ -279,7 +366,7 @@ async def require_auth(authorization: Optional[str] = Depends(bearer_or_cookie))
     # A pending account (registered, no role granted yet) holds a session only
     # to see its own state; it must not reach the AI endpoints (L15 — same
     # rule as the Go services' shared middleware).
-    if (payload.role or "").lower() == "pending":
+    if payload.role == "Pending":
         raise HTTPException(status_code=403, detail="Account pending approval")
     return payload
 

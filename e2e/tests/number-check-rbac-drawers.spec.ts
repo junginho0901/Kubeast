@@ -66,7 +66,8 @@ async function readDrawer(page: Page): Promise<View> {
       return out
     }
     const view: View = { badges: {}, counts: {}, sections: {} }
-    for (const b of root.querySelectorAll('span.rounded-full')) {
+    // the summary badges and the yes/no text beside them (Global Default)
+    for (const b of root.querySelectorAll('span.rounded-full, span[data-summary-text]')) {
       const bm = has(b, 'py-0.5') ? /^([^:]+): (.*)$/.exec(txt(b)) : null
       if (bm) view.badges[bm[1]] = bm[2]
     }
@@ -589,7 +590,7 @@ test.describe('number check — cluster configuration, RBAC and admission drawer
       const defaultEvents = EVENTS.filter(([kind]) => eventNamespace(kind) === 'default').map(([kind, name, reason]) => eventName(kind, name, reason))
       k(`delete events -n default ${defaultEvents.join(' ')} --ignore-not-found`)
     }
-    cleanup()
+    withUndo(cleanup(), () => cleanup())
     try {
       // the pods after the rest: the priority admission plugin finds a PriorityClass in its informer, which may not
       // have the one made a moment before
@@ -722,4 +723,17 @@ test.describe('number check — cluster configuration, RBAC and admission drawer
     await page.goto(`/workloads/vpas?cluster=${CLUSTER}`)
     await expect(page.getByTestId('table-not-installed')).toHaveText('{{resource}} is not installed on this cluster (no CustomResourceDefinition).'.replace('{{resource}}', 'VerticalPodAutoscaler'), { timeout: 20_000 })
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

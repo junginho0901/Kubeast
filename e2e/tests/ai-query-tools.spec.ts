@@ -44,7 +44,7 @@ async function createReadUser(request: APIRequestContext, admin: string, email: 
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E query', email, password: PW, role_id: member.id } })
   expect(res.status(), `create ${email}`).toBe(201)
-  const id = (await res.json()).id as string
+  const id = madeUser((await res.json()).id as string, bearer(admin))
   const grant = await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })
   expect(grant.ok(), 'grant Read on self').toBeTruthy()
   return id
@@ -120,7 +120,7 @@ test.describe('AI query tools: jq, tabular, count, and the k8s_diff preview', ()
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-big-cm-'))
     const file = path.join(dir, 'value')
     fs.writeFileSync(file, 'x'.repeat(600 << 10))
-    kubectl(`create namespace ${ns}`)
+    withUndo(kubectl(`create namespace ${ns}`), () => kubectl(`delete namespace ${ns} --wait=false`, true))
     try {
       for (const name of ['big-a', 'big-b']) {
         kubectl(`-n ${ns} create configmap ${name} --from-file=value=${file}`)
@@ -192,7 +192,7 @@ test.describe('AI query tools: jq, tabular, count, and the k8s_diff preview', ()
     const file = path.join(dir, 'objects.yaml')
     // kubectl apply: the last-applied annotation holds stringData in the clear
     fs.writeFileSync(file, `${secretYaml(value)}---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: cfg\n  namespace: ${ns}\ndata:\n  mode: ${configValue}\n`)
-    kubectl(`create namespace ${ns}`)
+    withUndo(kubectl(`create namespace ${ns}`), () => kubectl(`delete namespace ${ns} --wait=false`, true))
     try {
       kubectl(`apply -f ${file}`)
       const gone = [value, b64(value), inBraces, b64(inBraces)]
@@ -273,7 +273,7 @@ test.describe('AI query tools: jq, tabular, count, and the k8s_diff preview', ()
   test('k8s_diff previews created, changed and unchanged without applying; a Read user is not offered it', async ({ request }) => {
     const admin = await login(request)
     test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
-    const name = `e2e-diff-${stamp()}`
+    const name = withUndo(`e2e-diff-${stamp()}`, (n) => kubectl(`-n default delete configmap ${n} --ignore-not-found`, true))
     const manifest = (a: string) => `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ${name}\n  namespace: default\ndata:\n  a: "${a}"\n`
     let readerId = ''
     try {
@@ -321,4 +321,28 @@ test.describe('AI query tools: jq, tabular, count, and the k8s_diff preview', ()
       if (readerId) await request.delete(`/api/v1/auth/admin/users/${readerId}`, { headers: bearer(admin) })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

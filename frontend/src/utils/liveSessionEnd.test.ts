@@ -10,10 +10,17 @@ describe('what a followed stream says when its session ended', () => {
     expect(liveSessionEndText(echo, 'session_revoked')).toContain('account or access changed')
     expect(liveSessionEndText(echo, 'session_expired')).toContain('maximum lifetime')
     expect(liveSessionEndText(echo, 'session_unverified')).toContain('could not be verified')
+    expect(liveSessionEndText(echo, 'session_signed_out')).toContain('sign-in was signed out')
+  })
+
+  it('asks for no new sign-in when the session could not be checked, which ended nothing', () => {
+    expect(liveSessionEndText(echo, 'session_unverified')).not.toMatch(/sign in/i)
+    expect((en as any).liveSession.unverified).not.toMatch(/sign in/i)
+    expect((ko as any).liveSession.unverified).not.toContain('로그인')
   })
 
   it('has every reason in both languages', () => {
-    for (const key of ['revoked', 'expired', 'unverified'] as const) {
+    for (const key of ['revoked', 'expired', 'signedOut', 'unverified'] as const) {
       expect((en as any).liveSession[key]).toBeTruthy()
       expect((ko as any).liveSession[key]).toBeTruthy()
     }

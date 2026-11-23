@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { PodListRow, PodPage, PodPageParams } from '@/services/api'
 import { readPodPageSince } from '@/services/podPageRead'
+import { unlessRefused } from '@/services/queryDefaults'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { Tx } from './DetailCommon'
 
 export type ServerPodFilter = Omit<PodPageParams, 'offset' | 'limit'>
@@ -31,6 +33,7 @@ export function useServerPods(filter: ServerPodFilter | null, pageSize = 10): {
 }
 
 // One page of a drawer's pods; `readEvery` reads it again with the revision it holds, `retry` says whether a failure is asked again at once, `check` throws on an answer the caller cannot take.
+// The rows stay while another page of the same pods loads, not while another object's (a drawer moved to another object keeps its component).
 export function useServerPodPage(
   filter: ServerPodFilter | null,
   page: number,
@@ -53,8 +56,8 @@ export function useServerPodPage(
     },
     enabled: filter !== null,
     staleTime: 30_000,
-    placeholderData: keepPreviousData,
-    refetchInterval: readEvery ? (query) => readEvery(query.state.data, query.state.error) : undefined,
+    placeholderData: keepSameRead(queryKey, [2, 3]),
+    refetchInterval: readEvery ? (query) => unlessRefused(query.state.error, readEvery(query.state.data, query.state.error)) : undefined,
     ...(retry ? { retry } : {}),
   })
 }

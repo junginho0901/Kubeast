@@ -29,7 +29,6 @@ interface Props {
   pod: PodDetail
   containerSearchQuery: string
   onContainerSearchChange: (q: string) => void
-  na: string
   emptyValue: string
   tr: (key: string, fallback: string, options?: Record<string, any>) => string
 }
@@ -38,7 +37,6 @@ export function PodSummaryTab({
   pod,
   containerSearchQuery,
   onContainerSearchChange,
-  na,
   emptyValue,
   tr,
 }: Props) {
@@ -66,12 +64,12 @@ export function PodSummaryTab({
         </div>
         <div>
           <p className="text-sm text-slate-400">{tr('clusterView.summary.node', 'Node')}</p>
-          <p className="text-ink font-medium">{pod.node || na}</p>
+          <p className="text-ink font-medium">{pod.node || emptyValue}</p>
         </div>
         <div>
           <p className="text-sm text-slate-400">{tr('clusterView.summary.createdAt', 'Created at')}</p>
           <p className="text-ink font-medium">
-            {pod.created_at ? <span title={utcTitle(pod.created_at)}>{formatTime(pod.created_at)}</span> : na}
+            {pod.created_at ? <span title={utcTitle(pod.created_at)}>{formatTime(pod.created_at)}</span> : emptyValue}
           </p>
         </div>
       </div>
@@ -98,6 +96,7 @@ export function PodSummaryTab({
               <button
                 onClick={() => onContainerSearchChange('')}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-600 rounded-sm transition-colors"
+                aria-label={tr('common.clearSearch', 'Clear the search')}
               >
                 <X className="w-4 h-4 text-slate-400" />
               </button>

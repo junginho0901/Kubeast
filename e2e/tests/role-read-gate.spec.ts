@@ -49,8 +49,8 @@ async function rolesOf(request: APIRequestContext, admin: string): Promise<RoleR
 // Custom roles and accounts of one test, its namespace, and what the chart renders for a role's group, done by hand.
 function people(request: APIRequestContext, admin: string) {
   const users: string[] = []
-  const roles: number[] = []
-  const bound: string[] = []
+  const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: bearer(admin), failOnStatusCode: false }) })
+  const bound = withUndo<string[]>([], (names) => { for (const name of names) { tryKubectl(['delete', 'clusterrolebinding', `${name}-imp`, `${name}-view`, '--ignore-not-found']); tryKubectl(['delete', 'clusterrole', `${name}-imp`, '--ignore-not-found']) } })
   return {
     async role(name: string, permissions: string[]) {
       const res = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name, description: 'e2e', permissions } })
@@ -67,7 +67,7 @@ function people(request: APIRequestContext, admin: string) {
       const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E read gate', email, password: PW, role_id: member?.id } })
       expect(res.status(), `create ${email}`).toBe(201)
       const id = (await res.json()).id as string
-      users.push(id)
+      users.push(madeUser(id, bearer(admin)))
       const put = await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: grant, ...(namespaces ? { namespaces } : {}) } })
       expect(put.ok(), `grant ${grant}: ${await put.text()}`).toBeTruthy()
       return { email, token: await login(request, email, PW) }
@@ -84,7 +84,7 @@ function people(request: APIRequestContext, admin: string) {
 }
 
 function fixture(ns: string) {
-  kubectl(['create', 'namespace', ns])
+  withUndo(kubectl(['create', 'namespace', ns]), () => tryKubectl(['delete', 'namespace', ns, '--wait=false']))
   kubectl(['-n', ns, 'create', 'configmap', 'gate-cm', '--from-literal=a=1'])
   kubectl(['-n', ns, 'run', 'gate-pod', '--image=docker.io/library/busybox:1.38.0', '--command', '--', 'sh', '-c', 'echo gate-log-line; sleep 3600'])
   kubectl(['-n', ns, 'wait', '--for=condition=Ready', 'pod/gate-pod', '--timeout=120s'])
@@ -476,4 +476,28 @@ print(json.dumps({
     await box(/^resource\.\*\.read/).check()
     await expect(hint).toHaveCount(0)
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

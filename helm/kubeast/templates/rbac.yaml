@@ -9,7 +9,8 @@ metadata:
 ---
 # With impersonation on, every request to this cluster runs as the signed-in
 # user; the two service accounts only impersonate (ClusterRole
-# kubeast-impersonator, files/impersonation-rbac.yaml) and k8s-service reads the
+# kubeast-impersonator, files/impersonation-rbac.yaml, which also gets the
+# kube-system Namespace for its UID) and k8s-service reads the
 # registered clusters' kubeconfig Secrets in its own namespace.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

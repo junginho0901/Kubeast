@@ -1,0 +1,55 @@
+{{- /*
+Pods per service: replicas.<service>, or autoscaling.<service> (templates/hpa.yaml) in its place
+(docs/high-availability.md). k8s-service and tool-server run more than one pod only with the chart's Redis: k8s-service's
+pods share their list, YAML and Helm caches through it, and both hear of a cluster's change there; without it each pod
+answers from what it alone holds. With sessionRecording.storage file k8s-service runs one pod: every pod mounts the
+store, one file volume (the same refusal as with streams.enabled, deployments.yaml). The ModelConfig controller (one
+works at a time, by leader election), postgres and redis run one pod and have no key.
+*/}}
+{{- $services := list "authService" "aiService" "k8sService" "sessionService" "frontend" "toolServer" "gateway" }}
+{{- $single := "the ModelConfig controller runs one pod (one works at a time, by leader election), and so do the chart's postgres and redis" }}
+{{- range $values := list "replicas" "autoscaling" }}
+{{- range $key, $_ := index $.Values $values }}
+{{- if not (has $key $services) }}
+{{- fail (printf "%s.%s: no such service. The keys are %s; %s." $values $key (join ", " $services) $single) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $redis := dict "k8sService" "k8s-service's pods share their list, YAML and Helm caches through the chart's Redis and hear of a cluster's change there" "toolServer" "tool-server's pods hear of a cluster's change (a kubeconfig replaced, a cluster removed) through the chart's Redis" }}
+{{- range $key, $app := include "kubeast.scaledServices" . | fromJson }}
+{{- $hpa := index $.Values.autoscaling $key | default dict }}
+{{- if $hpa.enabled }}
+{{- $min := $hpa.minReplicas }}
+{{- $max := $hpa.maxReplicas }}
+{{- if not (and (include "kubeast.wholeNumber" $min) (include "kubeast.wholeNumber" $max) (ge (int $min) 1) (ge (int $max) (int $min))) }}
+{{- fail (printf "autoscaling.%s: minReplicas and maxReplicas must be whole numbers with 1 <= minReplicas <= maxReplicas (got %v and %v)" $key $min $max) }}
+{{- end }}
+{{- $target := $hpa.targetCPUUtilizationPercentage }}
+{{- if not (and (include "kubeast.wholeNumber" $target) (ge (int $target) 1)) }}
+{{- fail (printf "autoscaling.%s.targetCPUUtilizationPercentage must be a whole number of percent, 1 or more (got %v)" $key $target) }}
+{{- end }}
+{{- $requests := (index $.Values.resources $key | default dict).requests | default dict }}
+{{- if not $requests.cpu }}
+{{- fail (printf "autoscaling.%s scales on CPU as a share of resources.%s.requests.cpu, which is not set: without a request the HPA reads no utilisation and does nothing. Set resources.%s.requests.cpu." $key $key $key) }}
+{{- end }}
+{{- if and (hasKey $redis $key) (not $.Values.redis.enabled) (gt (int $max) 1) }}
+{{- fail (printf "autoscaling.%s can run %s on up to %d pods and redis.enabled is false: %s. Set redis.enabled: true, or leave autoscaling.%s off (docs/high-availability.md)." $key $app (int $max) (index $redis $key) $key) }}
+{{- end }}
+{{- else if and (hasKey $redis $key) (not $.Values.redis.enabled) (gt (int (index $.Values.replicas $key)) 1) }}
+{{- fail (printf "replicas.%s is %d and redis.enabled is false: %s. Set redis.enabled: true, or keep replicas.%s at 1 (docs/high-availability.md)." $key (int (index $.Values.replicas $key)) (index $redis $key) $key) }}
+{{- end }}
+{{- end }}
+{{- if and .Values.sessionRecording.enabled (eq (toString .Values.sessionRecording.storage) "file") }}
+{{- $hpa := index .Values.autoscaling "k8sService" | default dict }}
+{{- $pods := "" }}
+{{- if $hpa.enabled }}
+{{- if gt (int $hpa.maxReplicas) 1 }}
+{{- $pods = printf "autoscaling.k8sService up to %d pods" (int $hpa.maxReplicas) }}
+{{- end }}
+{{- else if gt (int .Values.replicas.k8sService) 1 }}
+{{- $pods = printf "replicas.k8sService %d" (int .Values.replicas.k8sService) }}
+{{- end }}
+{{- if $pods }}
+{{- fail (printf "sessionRecording.storage file and %s: every k8s-service pod mounts the store, and one file volume is mounted by one pod — use s3 or database" $pods) }}
+{{- end }}
+{{- end }}

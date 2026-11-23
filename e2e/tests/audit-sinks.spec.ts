@@ -110,7 +110,7 @@ test.describe('audit sinks', () => {
     try {
       const made = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E sink', email, password: pw, role_id: member.id } })
       expect(made.status()).toBe(201)
-      userId = (await made.json()).id
+      userId = madeUser((await made.json()).id, bearer(admin))
       await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read' } })
       const user = await login(request, email, pw)
       const req = await request.post('/api/v1/auth/access-requests', {
@@ -133,7 +133,7 @@ test.describe('audit sinks', () => {
     test.setTimeout(240_000)
     const admin = await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)
     try {
-      kubectl(['-n', 'kubeast-devtools', 'scale', 'deploy/receiver', '--replicas=0'])
+      withUndo(kubectl(['-n', 'kubeast-devtools', 'scale', 'deploy/receiver', '--replicas=0']), () => { kubectl(['-n', 'kubeast-devtools', 'scale', 'deploy/receiver', '--replicas=1']); kubectl(['-n', 'kubeast-devtools', 'rollout', 'status', 'deploy/receiver', '--timeout=90s']) })
       kubectl(['-n', 'kubeast-devtools', 'wait', '--for=delete', 'pod', '-l', 'app=receiver', '--timeout=60s'])
       const name = `e2e-sink-outage-${stamp()}`
       await configMap(request, admin, name)
@@ -154,4 +154,28 @@ test.describe('audit sinks', () => {
       kubectl(['-n', 'kubeast-devtools', 'rollout', 'status', 'deploy/receiver', '--timeout=90s'])
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

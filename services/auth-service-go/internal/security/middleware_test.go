@@ -3,10 +3,13 @@ package security
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
@@ -34,14 +37,14 @@ func TestAuthMiddleware_TokenVersionRevokes(t *testing.T) {
 	perms := auth.PermissionMatrix{"*": {"*"}}
 	current := 3
 	revoked := map[string]bool{}
-	lookup := func(ctx context.Context, userID, apiKeyID string) (int, error) {
+	lookup := func(ctx context.Context, userID, apiKeyID string) (auth.SessionState, error) {
 		if userID != "u1" {
-			return 0, errors.New("no such user")
+			return auth.SessionState{}, fmt.Errorf("%w: no such user", auth.ErrSubjectGone)
 		}
 		if apiKeyID != "" && revoked[apiKeyID] {
-			return 0, errors.New("api key revoked")
+			return auth.SessionState{}, fmt.Errorf("%w: api key revoked", auth.ErrSubjectGone)
 		}
-		return current, nil
+		return auth.SessionState{Version: current}, nil
 	}
 	mw := AuthMiddleware(m, lookup, "kubeast.token")
 
@@ -79,6 +82,60 @@ func TestAuthMiddleware_TokenVersionRevokes(t *testing.T) {
 	}
 	if code := callWithToken(t, mw, tok2); code != http.StatusOK {
 		t.Fatalf("the sign-in token is not touched by the key, got %d", code)
+	}
+}
+
+// The database restarting is not a revocation: a token whose version could not be read is refused with 503 and
+// Retry-After, which the console does not read as signed out, and passes again once the read works. A version that
+// moved on, a user who is gone and a signed-out sign-in stay 401.
+func TestAuthMiddleware_ATokenWhoseVersionCannotBeReadIsRefusedWith503(t *testing.T) {
+	m := newTestManager(t)
+	perms := auth.PermissionMatrix{"*": {"*"}}
+	var dbErr error
+	lookup := func(ctx context.Context, userID, apiKeyID string) (auth.SessionState, error) {
+		if dbErr != nil {
+			return auth.SessionState{}, dbErr
+		}
+		if userID != "u1" {
+			return auth.SessionState{}, fmt.Errorf("%w: no rows in result set", auth.ErrSubjectGone)
+		}
+		return auth.SessionState{Version: 3, SignedOut: []int64{1763100000}}, nil
+	}
+	mw := AuthMiddleware(m, lookup, "kubeast.token")
+	serve := func(token string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })).ServeHTTP(rec, req)
+		return rec
+	}
+	tok, _ := m.CreateToken("u1", "u1@example.com", "admin", perms, nil, nil, 3)
+
+	for _, e := range []error{
+		errors.New("failed to connect to `host=postgres user=kubeast database=kubeast`: dial error (dial tcp 10.96.0.5:5432: connect: connection refused)"),
+		context.DeadlineExceeded,
+	} {
+		dbErr = e
+		rec := serve(tok)
+		if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") == "" {
+			t.Fatalf("%v: got %d (Retry-After %q) %s, want 503 with Retry-After", e, rec.Code, rec.Header().Get("Retry-After"), rec.Body)
+		}
+		if strings.Contains(rec.Body.String(), "10.96.0.5") || strings.Contains(rec.Body.String(), "postgres") {
+			t.Fatalf("the answer names the database: %s", rec.Body)
+		}
+	}
+
+	dbErr = nil
+	if rec := serve(tok); rec.Code != http.StatusOK {
+		t.Fatalf("after the database answers again: %d, want 200", rec.Code)
+	}
+	older, _ := m.CreateToken("u1", "u1@example.com", "admin", perms, nil, nil, 2)
+	gone, _ := m.CreateToken("deleted", "x@example.com", "admin", perms, nil, nil, 3)
+	ended, _ := m.CreateTokenAt("u1", "u1@example.com", "admin", perms, nil, nil, 3, time.Unix(1763100000, 0))
+	for name, token := range map[string]string{"older version": older, "user gone": gone, "signed out": ended} {
+		if rec := serve(token); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("%s: got %d, want 401", name, rec.Code)
+		}
 	}
 }
 

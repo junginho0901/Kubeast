@@ -8,8 +8,9 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 // Number check of the Alerts screen against the webhook, the inbox API and the database:
 // - one webhook message of 101 alerts (severity info, kept and not investigated) is 101 inbox rows: the webhook's
 //   answer, the API, the database and the tabs; paging the API and the screen to the end holds every row once (the
-//   rows of one message share their received time); the table never empties while the page, the tab or Refresh
-//   changes it or an alert window opens; resolving the 101 in one message closes all 101.
+//   rows of one message share their received time); the table never empties while the page or Refresh changes it or
+//   an alert window opens; another tab shows the loading line and none of the rows before it while its answer is
+//   held, then its own rows; resolving the 101 in one message closes all 101.
 // - an investigation the per-message limit skipped (a row the spec writes into the dev database as the webhook writes
 //   it — 101 critical alerts would start 100 real investigations on the dev model) says why in the catalog's words in
 //   the row, the alert window, its report and Admin → Investigations.
@@ -165,15 +166,49 @@ test.describe('number check: the Alerts screen', () => {
       const before = norm(await page.getByTestId('list-pager').innerText())
       await page.getByTestId('list-pager').getByRole('button', { name: EN.common.prev, exact: true }).click()
       await expect.poll(async () => norm(await page.getByTestId('list-pager').innerText()), { timeout: 15_000 }).not.toBe(before)
+      expect.soft(await page.evaluate(() => (window as Obj).__inboxFlash), 'the table never emptied or showed loading while it paged').toEqual([])
     })
 
-    await test.step('tabs, Refresh and an alert window keep the table filled', async () => {
-      for (const tab of ['firing', 'all']) {
-        const asked = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/alerts/inbox' && new URL(r.url()).searchParams.get('status') === (tab === 'all' ? null : tab))
-        await page.getByTestId(`alert-tab-${tab}`).click()
-        await asked
-        await expect.poll(async () => (await rangeOf(page))?.start, { timeout: 15_000 }).toBe(1)
+    await test.step('another tab shows the loading line and none of the rows before it while its answer is held, then its own first page', async () => {
+      // Resolved holds none of the 101 and Firing all of them; neither was read with this search before
+      for (const tab of ['resolved', 'firing']) {
+        const before = await rowIds(page)
+        let release = () => {}
+        const gate = new Promise<void>((resolve) => { release = resolve })
+        let held = 0
+        const hold = async (route: Obj) => {
+          if (new URL(route.request().url()).searchParams.get('status') === tab) {
+            held++
+            await gate
+          }
+          await route.continue().catch(() => {})
+        }
+        await page.route(/\/api\/v1\/alerts\/inbox(\?|$)/, hold)
+        const asked = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/alerts/inbox' && new URL(r.url()).searchParams.get('status') === tab)
+        try {
+          await page.getByTestId(`alert-tab-${tab}`).click()
+          await expect.poll(() => held, { message: `the ${tab} answer is held` }).toBeGreaterThan(0)
+          await expect(page.getByTestId('alert-inbox-table').locator('tbody').first()).toContainText(EN.common.loading)
+          const shown = await rowIds(page)
+          expect.soft(shown.filter((id) => before.includes(id)), `rows of the tab before under ${tab} while its answer is held`).toEqual([])
+          expect.soft(shown, `rows under ${tab} while its answer is held`).toEqual([])
+          expect.soft((await rangeOf(page))?.total ?? 0, `the footer under ${tab} while its answer is held`).toBe(0)
+        } finally {
+          release()
+          await page.unroute(/\/api\/v1\/alerts\/inbox(\?|$)/, hold)
+        }
+        const answer: InboxAnswer = await (await asked).json()
+        // a first page asked at a count made before its rows were measured is cut at the rows that fit: its first rows
+        const firstRows = async () => answer.items.slice(0, tab === 'firing' ? ((await rangeOf(page))?.end ?? 0) : 0).map((i) => i.id)
+        await expect.poll(async () => { const ids = await rowIds(page); return (tab !== 'firing' || ids.length > 0) && ids.join() === (await firstRows()).join() }, { timeout: 15_000, message: `the ${tab} rows once its answer came: its first rows, as many as fit` }).toBe(true)
+        expect.soft(answer.items.length, `${tab} holds its share of the 101`).toBe(tab === 'firing' ? Math.min(N, Number(new URL((await asked).url()).searchParams.get('limit'))) : 0)
+        if (tab === 'firing') await expect.poll(async () => (await rangeOf(page))?.start, { timeout: 15_000 }).toBe(1)
+        else await expect(page.getByTestId('alert-inbox-table').locator('tbody').first()).toContainText(EN.common.noSearchResults)
       }
+    })
+
+    await test.step('Refresh and an alert window keep the table filled', async () => {
+      await page.evaluate(() => { (window as Obj).__inboxFlash = [] })
       const refreshed = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/v1/alerts/inbox')
       await page.locator('.page-head').getByRole('button', { name: new RegExp(`^\\s*${EN.alertInbox.refresh}\\s*$`) }).click()
       await refreshed
@@ -201,7 +236,7 @@ test.describe('number check: the Alerts screen', () => {
     const fingerprint = `n4a-skip-${run}`
     const invId = `inv-e2e-n4a-${run}`
     const labels = { alertname: name, severity: 'info', namespace: 'default' }
-    const startsAt = new Date(Date.now() - 3 * 60_000).toISOString()
+    const startsAt = withUndo(new Date(Date.now() - 3 * 60_000).toISOString(), async (s) => { psql(`DELETE FROM alert_investigations WHERE id = '${invId}'`); await post(request, INBOX.cluster, `{}:{alertname="${name}"}`, [{ status: 'resolved', labels, annotations: {}, startsAt: s, fingerprint, endsAt: new Date().toISOString() }]) })
     const want = {
       label: EN.investigations.skip.investigation_cap,
       text: `${EN.investigations.skip.investigation_cap} — ${EN.investigations.skipWhy.investigation_cap.replace('{{limit}}', '100')}`,
@@ -250,7 +285,7 @@ test.describe('number check: the Alerts screen', () => {
     const name = `E2EN4aNone${run}`
     const labels = { alertname: name, severity: 'none', namespace: 'default' }
     const startsAt = new Date(Date.now() - 60_000).toISOString()
-    const fingerprint = `n4a-none-${run}`
+    const fingerprint = withUndo(`n4a-none-${run}`, (f) => post(request, INBOX.cluster, `{}:{alertname="${name}"}`, [{ status: 'resolved', labels, annotations: {}, startsAt, fingerprint: f, endsAt: new Date().toISOString() }]))
     await post(request, INBOX.cluster, `{}:{alertname="${name}"}`, [{ status: 'firing', labels, annotations: { summary: `n4a none ${run}` }, startsAt, fingerprint }])
     try {
       const carried = psql(`SELECT DISTINCT severity FROM alert_inbox WHERE cluster = '${INBOX.cluster}' AND severity <> '' ORDER BY severity`).split('\n').filter(Boolean)
@@ -337,4 +372,17 @@ test.describe('number check: the Alerts screen', () => {
       }
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

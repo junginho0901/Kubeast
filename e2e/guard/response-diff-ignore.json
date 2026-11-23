@@ -35,6 +35,13 @@
       "cell": "^\\$\\.items(\\.\\$length$|\\[/[^\\]]+#2\\]\\.)",
       "why": "Every lease's holder renews it every few seconds; whether a renewal falls inside a build's first live frame is timing, so one build's frame can hold a lease twice and count one more.",
       "pr": "#783"
+    },
+    {
+      "route": "^live /apis/coordination\\.k8s\\.io/v1/leases$",
+      "cell": "^\\$\\.items\\[/[^\\]#]+#[0-9]+\\]\\.",
+      "tailCopies": true,
+      "why": "A lease's holder renews it on a timer: kube-apiserver its identity lease and the kubelet its node's lease every 10 seconds, Kyverno its kyverno-health lease, and leader election (kube-scheduler, kube-controller-manager, Kyverno's controllers) every 2 seconds. A build's first live frame stays open up to 15 seconds, so how many renewals fall inside it is timing, and one build's frames can hold a lease's events past the other build's last. Only those events are taken, whole, and only while all three frames hold the lease's first event; an event both builds' frames hold is still compared cell by cell, and so is a lease one frame lacks.",
+      "pr": "#946"
     }
   ]
 }

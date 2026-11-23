@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import i18next from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import en from '../../i18n/locales/en.json'
 import ko from '../../i18n/locales/ko.json'
 import { EventsSection } from './DetailCommon'
@@ -24,6 +24,9 @@ import GenericInfo from './GenericInfo'
 import { PageContextCtx, type PageContextValue } from '@/components/PageContext'
 import { PodDescribeTab } from '@/pages/cluster-view/PodDescribeTab'
 import { applyNetworkPolicyToDrawer } from '@/pages/network/networkpolicies/networkPolicyWatchNormalize'
+
+// the shared notices tell the floating chat; this test reads the screen
+vi.mock('@/hooks/useAIContext', () => ({ useAIContext: () => {} }))
 
 // Every drawer draws its Events section: the events, "None" without any, and that they could not be read (with the
 // server's reason) instead of a "None" nobody read.
@@ -124,7 +127,7 @@ describe('drawers draw the Events section with or without events', () => {
 
   it('the Cluster View pod window\'s Describe tab: "None", or the reason', () => {
     const tr = (key: string, fallback: string, o?: Record<string, unknown>) => i18n.t(key, { defaultValue: fallback, ...o })
-    const tab = (data: Record<string, unknown>) => renderToStaticMarkup(createElement(PodDescribeTab, { data: { name: 'p', namespace: 'ns', ...data }, na: '-', tr }))
+    const tab = (data: Record<string, unknown>) => renderToStaticMarkup(createElement(PodDescribeTab, { data: { name: 'p', namespace: 'ns', ...data }, emptyValue: '-', tr }))
     const events = (html: string) => html.slice(html.indexOf('>Events</h3>'))
     expect(events(tab({ events: [] }))).toContain('>None</p>')
     expect(events(tab({ events_error: REFUSED }))).toContain('Could not load the events: events is forbidden')
@@ -133,7 +136,7 @@ describe('drawers draw the Events section with or without events', () => {
 
   it('the Cluster View pod window\'s Describe tab: Labels, Containers and Conditions say "None" as Events does', () => {
     const tr = (key: string, fallback: string, o?: Record<string, unknown>) => i18n.t(key, { defaultValue: fallback, ...o })
-    const tab = (data: Record<string, unknown>) => renderToStaticMarkup(createElement(PodDescribeTab, { data: { name: 'p', namespace: 'ns', events: [], ...data }, na: '-', tr }))
+    const tab = (data: Record<string, unknown>) => renderToStaticMarkup(createElement(PodDescribeTab, { data: { name: 'p', namespace: 'ns', events: [], ...data }, emptyValue: '-', tr }))
     const part = (html: string, title: string) => {
       const at = html.indexOf(`>${title}</h3>`)
       if (at < 0) return `no ${title} section`
@@ -165,7 +168,7 @@ describe('the drawers that gained the Events section', () => {
     { kind: 'ResourceClaim', el: inPage(createElement(ResourceClaimInfo, { name: 'x', namespace: 'ns' })), key: ['resourceclaim-describe', 'ns', 'x'] },
     { kind: 'ResourceClaimTemplate', el: inPage(createElement(ResourceClaimTemplateInfo, { name: 'x', namespace: 'ns' })), key: ['resourceclaimtemplate-describe', 'ns', 'x'] },
     { kind: 'ResourceSlice', el: inPage(createElement(ResourceSliceInfo, { name: 'x' })), key: ['resourceslice-describe', 'x'] },
-    { kind: 'a kind with no view of its own', el: inPage(createElement(GenericInfo, { name: 'x', namespace: 'ns', kind: 'Gadget', rawJson: { metadata: { name: 'x' } } })), key: ['generic-describe', 'Gadget', 'ns', 'x'] },
+    { kind: 'a kind with no view of its own', el: inPage(createElement(GenericInfo, { name: 'x', namespace: 'ns', kind: 'Gadget', rawJson: { apiVersion: 'example.com/v1', metadata: { name: 'x' } } })), key: ['generic-describe', 'Gadget', 'ns', 'x', 'example.com'] },
   ]
   for (const c of cases) {
     it(`${c.kind}: the events, "None" without any, the reason when refused`, () => {

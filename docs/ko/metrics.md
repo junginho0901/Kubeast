@@ -18,7 +18,14 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 | `kubeast_http_requests_in_flight` | gauge | `service` | 처리 중인 요청 수 |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | 감사 저장소가 행을 받을 수 있는지 나타냅니다(k8s-service: `audit.Guarded.Ready`, 2 s 캐시). 0이면 쓰기, Secret 열람, exec, AI 쓰기 툴이 503으로 거부됩니다 |
 | `kubeast_audit_write_failures_total` | counter | `service` | 기동 뒤 저장하지 못한 감사 행 수 |
-| `kubeast_ws_subscriptions` | gauge | `service` | k8s-service에 살아 있는 WebSocket 구독(로그·exec·watch) 수 |
+| `kubeast_ws_subscriptions` | gauge | `service` | k8s-service에 살아 있는 watch 수(`multicluster.wsMaxSubscriptions`에 세는 것): 실시간 목록의 WebSocket 구독과 Helm 릴리스 스트림의 Secret watch. 터미널·실시간 로그는 다음 두 줄 |
+| `kubeast_terminals_open` | gauge | `service` | k8s-service에 열려 있는 터미널(Pod exec, 노드 셸) 수 |
+| `kubeast_followed_logs_open` | gauge | `service` | k8s-service에 열려 있는 실시간 로그(컨테이너 출력, 로그 파일) 수 |
+| `kubeast_stream_cap_refusals_total` | counter | `service`, `kind` | 기동 뒤 k8s-service가 계정 상한(`multicluster.maxTerminalsPerAccount`, `maxFollowedLogsPerAccount`)에서 거절한 터미널(`kind="terminal"`)과 실시간 로그(`followed_log`) 수. 거절마다 실패 감사 행도 남습니다. 실시간 로그 거절은 200이라 요청 지표에는 안 보입니다 |
+| `kubeast_k8s_client_rate_wait_seconds` | histogram | `service`, `limiter`, `passed_over` | k8s-service가 클러스터 API 서버로 보내는 요청이 보내기 전에 클라이언트 속도를 기다린 시간입니다. 바로 나간 요청은 0이고, 클러스터를 모두 더한 값입니다(버킷 1 ms~60 s). `limiter`는 `user`(클라이언트 속도, `multicluster.clientQPS`·`clientBurst`) 또는 `review`(접근 확인 전용 속도, `multicluster.reviewQPS`를 정했을 때만)입니다. `passed_over`는 다시 묻는 접근 확인이 나중에 온 요청을 먼저 보낸 경우 `true`이며, 그렇게 양보하는 시간은 최대 10초입니다. 기다리다 그만둔 요청도 기다린 시간만큼 셉니다. dynamic 클라이언트(커스텀 리소스, apply)는 client-go의 자체 속도를 쓰므로 세지 않습니다 |
+| `kubeast_k8s_client_rate_waits_total` | counter | `service`, `limiter` | 그 속도를 조금이라도 기다린 클러스터 요청 수(차례를 받았든 못 받았든) |
+| `kubeast_k8s_access_reviews_total` | counter | `service`, `asked_as` | k8s-service가 1분 기억하는 접근 확인(화면의 list·get 확인)에 보낸 SelfSubjectAccessReview 수, 클러스터를 합친 값. `asked_as`는 `person`, 또는 리뷰 하나로 그 사람의 그룹을 가진 모두에게 답한 읽기 확인이면 `groups`(`auth.impersonation.sharedReadChecks`, [클러스터 요구 사항](cluster-requirements.md) §1). can-i, 로그 검색, 흐름, Top Talkers는 그 사람으로 따로 보내며 여기 세지 않습니다 |
+| `kubeast_shared_writes_without_place_total` | counter | `service` | 256 KiB 넘는 노드 목록 · 노드 칸 답과 묶인 읽기 답 가운데 쓰기 자리 16개를 기다린 시간이 합쳐 1초에 닿아 남은 본문을 자리 없이 쓴 수, 시작한 뒤로([아키텍처](architecture.md)). 자리가 1초 안에 내보낼 수 있는 것보다 큰 몰림 때와, 차례 기다림이 합쳐 1초가 된 느린 읽는 이 때 오릅니다. 조용할 때 오르면 자리를 쥔 채 읽지 않는 읽는 이가 있다는 뜻입니다 |
 | `kubeast_audit_sink_pending` | gauge | `service`, `sink`, `type` | 감사 싱크(`audit.sinks`)가 아직 보내지 않은 감사 행 수. 전송을 맡은 auth-service 레플리카만 냅니다 |
 | `kubeast_audit_sink_failures_total` | counter | 같음 | 그 레플리카가 전송을 시작한 뒤 실패한 전송 수 |
 | `kubeast_audit_sink_last_success_timestamp_seconds` | gauge | 같음 | 싱크 커서가 마지막으로 앞으로 나아간 시각(처음 값은 전송을 시작한 시각) |
@@ -43,7 +50,7 @@ metrics:
     from:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
-    enabled: true           # 알람 5개
+    enabled: true           # 알람 5개, 감사 앵커 싱크가 있으면 6개
 ```
 
 ServiceMonitor 하나가 라벨 `kubeast.io/metrics: "true"`가 붙은 백엔드 Service 다섯 개를 포트 이름 `http`, 경로 `/metrics`로 고릅니다.
@@ -54,15 +61,17 @@ Operator 없이 Prometheus를 쓴다면 `kubernetes_sd_configs`(role `endpoints`
 | 이름 | 식 | 뜻 |
 |---|---|---|
 | `KubeastAuditStoreDown` | `min by (service) (kubeast_audit_store_up) == 0` 2분 | 감사 DB에 쓸 수 없어 감사 대상 동작을 거부하는 중 |
-| `KubeastHighErrorRate` | 5xx 비율 > `errorRatio`(0.05) 10분 | 콘솔 오류율 |
+| `KubeastHighErrorRate` | 5xx 비율 > `errorRatio`(0.05) 10분 | 콘솔 오류율. 데이터베이스 장애가 그보다 길면 로그인한 사람의 읽기만으로도 울립니다. 세션을 읽을 수 없는 요청은 503으로 답하기 때문입니다(0.7.7은 이 알림이 세지 않는 4xx인 401로 답했습니다) |
 | `KubeastSlowRequests` | p95 > `p95Seconds`(2 s) 10분 | 콘솔 지연 |
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0`이고 마지막 전송 성공 뒤 10분이 넘게 지남, 5분 | 감사 싱크 전송이 멈춤(auth-service 로그에 오류가 남고, 보내지 못한 행은 보존 작업이 지우지 않고 남겨 둠) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0`이고 마지막 업로드 뒤 10분이 넘게 지남, 5분 | 세션 녹화 업로드가 멈춤(출력은 k8s-service 스풀에 쌓이고, 세션은 막지 않음) |
+| `KubeastAuditAnchorStalled` | `time() - max by (service) (kubeast_audit_anchor_last_timestamp_seconds)`가 `audit.integrity.anchor.hours`의 두 배를 넘음, 30분. `audit.integrity.anchor.sink`가 있을 때만 | 두 주기 동안 감사 앵커가 쓰이지 않음: 쓰기가 실패하거나 앵커 작업이 돌지 않음. 실패한 앵커는 auth-service 로그와 `audit.chain.anchor` 행에 남음([security-audit.md](security-audit.md)) |
 
 자주 쓰는 식:
 
 - 서비스별 요청률 `sum by (service) (rate(kubeast_http_requests_total[5m]))`
 - 라우트별 p95 `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`
+- 클러스터로 가는 클라이언트 속도 대기 p95 `histogram_quantile(0.95, sum by (limiter, le) (rate(kubeast_k8s_client_rate_wait_seconds_bucket[5m])))`. 0에 가까우면 화면을 늦추는 것은 이 속도가 아닙니다. API 서버가 429 없이 답하는데 몇 초씩 나오면 `multicluster.clientQPS`·`clientBurst`(접근 확인이면 `reviewQPS`)를 보세요
 
 ## 확인
 

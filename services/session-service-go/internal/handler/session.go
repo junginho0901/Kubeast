@@ -32,7 +32,7 @@ type sessionStore interface {
 	GetSession(ctx context.Context, id string) (*model.Session, error)
 	ListSessionsWithMessageCounts(ctx context.Context, userID, clusterID string, limit, offset int, beforeUpdatedAt *time.Time, beforeID *string) ([]model.Session, error)
 	UpdateSessionTitle(ctx context.Context, id, title string) error
-	DeleteSession(ctx context.Context, id string) error
+	DeleteSession(ctx context.Context, id string) ([]model.OpenApproval, error)
 	GetMessages(ctx context.Context, sessionID string, limit int) ([]model.Message, error)
 	GetMessagesBefore(ctx context.Context, sessionID string, beforeID, limit int) ([]model.Message, error)
 	AddMessage(ctx context.Context, sessionID, role, content string, toolCalls, usage *json.RawMessage) (*model.Message, error)
@@ -62,10 +62,10 @@ func (h *SessionHandler) recordSession(r *http.Request, payload auth.TokenPayloa
 	rec.ActorUserID, rec.ActorEmail = payload.UserID, payload.Email
 	rec.TargetType, rec.TargetID = "session", sessionID
 	if before != nil {
-		rec.Before = audit.MustJSON(before)
+		rec.Before = audit.MaskSensitive(audit.MustJSON(before))
 	}
 	if after != nil {
-		rec.After = audit.MustJSON(after)
+		rec.After = audit.MaskSensitive(audit.MustJSON(after))
 	}
 	rec.Result = audit.ResultSuccess
 	if err != nil {
@@ -95,6 +95,8 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
+	// updated_at is a timestamp without time zone holding UTC, and pgx sends a
+	// time's clock reading without its zone: the cursor goes as UTC.
 	var beforeUpdatedAt *time.Time
 	if v := r.URL.Query().Get("before_updated_at"); v != "" {
 		t, err := time.Parse(time.RFC3339Nano, v)
@@ -102,6 +104,7 @@ func (h *SessionHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			t, err = time.Parse("2006-01-02T15:04:05", v)
 		}
 		if err == nil {
+			t = t.UTC()
 			beforeUpdatedAt = &t
 		}
 	}
@@ -427,13 +430,20 @@ func (h *SessionHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	before := map[string]string{"title": session.Title}
-	if err := h.repo.DeleteSession(r.Context(), sessionID); err != nil {
+	open, err := h.repo.DeleteSession(r.Context(), sessionID)
+	if err != nil {
 		slog.Error("delete session failed", "error", err)
 		h.recordSession(r, payload, "ai.session.delete", sessionID, before, nil, err)
 		response.InternalError(w, r, err)
 		return
 	}
-	h.recordSession(r, payload, "ai.session.delete", sessionID, before, nil, nil)
+	// An approval deleted while approved has no outcome row of its call yet, and none will follow if the ai-service
+	// running it stopped: the delete's row names it.
+	var after any
+	if len(open) > 0 {
+		after = map[string]any{"open_approvals": open}
+	}
+	h.recordSession(r, payload, "ai.session.delete", sessionID, before, after, nil)
 
 	response.JSON(w, http.StatusOK, map[string]string{
 		"message": "Session deleted successfully",

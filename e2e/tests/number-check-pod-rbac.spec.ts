@@ -13,6 +13,7 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = any
 
+const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 const CLUSTER = 'self'
 const NS = 'e2e-pod-rbac'
 const EMPTY_NS = 'e2e-pod-rbac-empty'
@@ -274,19 +275,30 @@ test.describe('RBAC tab of the pod window — number check', () => {
     await expect(page.getByTestId('pod-rbac-warning')).toHaveCount(0)
     expect(factsOfScreen(await rowsOnScreen(page))).toEqual(factsOfRoute(plain))
 
-    // turning the group on keeps the page on screen until the new answer comes
-    await page.evaluate(() => {
-      const w = window as unknown as { __rbacGone: number; __rbacWatch: MutationObserver }
-      w.__rbacGone = 0
-      w.__rbacWatch = new MutationObserver(() => {
-        if (!document.querySelector('[data-testid="pod-rbac-summary"]')) w.__rbacGone++
-      })
-      w.__rbacWatch.observe(document.body, { childList: true, subtree: true, characterData: true })
+    // turning the group on asks again: while that answer is held the tab shows its loading line and none of the
+    // bindings or the summary read without the group, then the answer with it
+    const isBroad = (url: URL) => url.pathname === `/api/v1/cluster/namespaces/${NS}/pods/${WEB}/rbac` && url.searchParams.get('include_authenticated') === 'true'
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    let held = 0
+    await page.route(isBroad, async (route) => {
+      held++
+      await gate
+      try { await route.continue() } catch { /* the page went on */ }
     })
-    await page.getByRole('checkbox', { name: /system:authenticated/ }).check()
+    try {
+      await page.getByRole('checkbox', { name: /system:authenticated/ }).check()
+      await expect.poll(() => held, { message: 'the answer with the group is held' }).toBeGreaterThan(0)
+      await expect(page.getByText(EN.clusterView.rbac.loading, { exact: true })).toHaveCount(1)
+      await expect(page.getByTestId('pod-rbac-summary'), 'the summary read without the group, while the answer with it is held').toHaveCount(0)
+      expect(await page.getByTestId('pod-rbac-binding-name').count(), 'bindings read without the group, while the answer with it is held').toBe(0)
+      expect(await page.getByTestId('pod-rbac-binding-counts').count(), 'the counts read without the group, while the answer with it is held').toBe(0)
+    } finally {
+      release()
+      await page.unroute(isBroad)
+    }
     const want = canIList(NS, 'web-sa')
     await expect.poll(async () => factsOfScreen(await rowsOnScreen(page)), { timeout: 15_000 }).toEqual(want)
-    expect(await page.evaluate(() => (window as unknown as { __rbacGone: number }).__rbacGone), 'moments without the summary').toBe(0)
 
     const broad = await routeOf(request, token, NS, WEB, { include_authenticated: 'true' })
     expect(await countsOnScreen(page)).toEqual({ roleBindings: String(broad.role_bindings.length), clusterRoleBindings: String(broad.cluster_role_bindings.length) })
@@ -337,7 +349,7 @@ test.describe('RBAC tab of the pod window — number check', () => {
     const password = `pr-${id}-pw`
     const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: `E2E pod RBAC ${id}`, email, password } })
     expect(created.status(), await created.text()).toBe(201)
-    const userId = (await created.json()).id
+    const userId = madeUser((await created.json()).id, bearer(admin))
     const ctx = await browser.newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
     const as = ['--as', email, '--as-group', 'kubeast:authenticated', '--as-group', READ_GROUP]
     try {
@@ -454,4 +466,15 @@ test.describe('RBAC tab of the pod window — number check', () => {
     expect(body).not.toContain(FAKE_SECRET)
     expect(body).not.toContain(Buffer.from(FAKE_SECRET).toString('base64'))
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
 })

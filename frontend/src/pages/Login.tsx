@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/services/api'
 import { clearRedirectAfterLogin, clearSessionEndedNotice, getRedirectAfterLogin, sessionEndedNotice } from '@/services/auth'
-import { clearStoredCluster } from '@/contexts/ClusterContext'
+import { useCluster } from '@/contexts/ClusterContext'
 import { KeyRound, Lock, UserPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import CustomDropdown from '@/components/CustomDropdown'
@@ -22,6 +22,7 @@ const SSO_ERROR_KEYS: Record<string, [string, string]> = {
   oidc_email_unverified: ['login.errors.ssoEmailUnverified', 'The identity provider has not verified this email address.'],
   oidc_email_invalid: ['login.errors.ssoEmailInvalid', 'This name cannot be used for an account: it may not contain a colon, a space or a control character.'],
   oidc_no_email: ['login.errors.ssoNoEmail', 'The identity provider did not return an email address.'],
+  oidc_role_missing: ['login.errors.ssoRoleMissing', 'The role this sign-in gives (auth.oidc.roleMapping or auth.oidc.defaultRole) does not exist. Ask an administrator: the server log names the role.'],
   token_too_large: ['login.errors.tokenTooLarge', 'Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them.'],
 }
 
@@ -29,6 +30,7 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
+  const { forgetCluster } = useCluster()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
@@ -102,10 +104,11 @@ export default function Login() {
       setFailCount(0)
       clearRedirectAfterLogin()
       // Start the new user with a clean slate: drop the previous session's
-      // cluster selection and every cached query so a different user never sees
+      // cluster selection (this tab's and the stored one; other tabs keep theirs)
+      // and every cached query so a different user never sees
       // the prior user's selected cluster, its (now unauthorized) data, or
       // permission-derived UI. Re-seed identity from this login's response.
-      clearStoredCluster()
+      forgetCluster()
       queryClient.clear()
       queryClient.setQueryData(['me'], me)
       const needsSetup = setupStatus && !setupStatus.configured && !isFetchingSetup

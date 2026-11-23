@@ -4,7 +4,11 @@ import { api } from '@/services/api'
 import { AlertCircle, Bot, Check, Loader2, Zap } from 'lucide-react'
 import {
   PROVIDER_CATALOG,
+  getDefaultModel,
   getProvider,
+  modelNoteText,
+  noToolsText,
+  providerLabel,
   type ProviderDef,
 } from '@/constants/modelCatalog'
 import CustomDropdown, { type DropdownOption } from '@/components/CustomDropdown'
@@ -13,6 +17,7 @@ import { UrlFieldProblem } from '@/components/UrlFieldProblem'
 import { useProviderAvailability } from '@/hooks/useProviderAvailability'
 import { urlProblem } from '@/utils/urlField'
 import { failureText } from '@/utils/failureText'
+import { useResultFor } from '@/hooks/useResultFor'
 
 interface SetupAIModelPageProps {
   navigatingRef: MutableRefObject<boolean>
@@ -23,13 +28,16 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
   const navigate = useNavigate()
 
   const [selectedProvider, setSelectedProvider] = useState('openai')
-  const [aiModel, setAiModel] = useState('gpt-4o-mini')
+  const [aiModel, setAiModel] = useState(() => getDefaultModel('openai'))
   const [aiCustomModel, setAiCustomModel] = useState(false) // true = free text input
   // Env var in ai-service that holds the provider key — the key itself is never stored
   const [aiApiKeyEnv, setAiApiKeyEnv] = useState(PROVIDER_CATALOG[0].defaultApiKeyEnv)
   const [aiBaseUrl, setAiBaseUrl] = useState('')
   const [aiTesting, setAiTesting] = useState(false)
-  const [aiTestResult, setAiTestResult] = useState<{ success: boolean; message: string } | null>(null)
+  // the Test answer, of the values it tested (provider, model, base URL, key variable): an edit of any drops it
+  const [aiTestResult, setAiTestResult] = useResultFor<{ success: boolean; message: string }>(
+    [selectedProvider, aiModel, aiBaseUrl.trim(), aiApiKeyEnv.trim()],
+  )
   const [aiSaving, setAiSaving] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
 
@@ -37,7 +45,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
     setSelectedProvider(providerId)
     const prov = getProvider(providerId)
     if (prov) {
-      setAiModel(prov.models[0]?.name ?? '')
+      setAiModel(getDefaultModel(providerId))
       setAiCustomModel(false)
       setAiBaseUrl(prov.defaultBaseUrl ?? '')
       setAiApiKeyEnv(prov.defaultApiKeyEnv ?? '')
@@ -56,10 +64,10 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
       currentProviderDef.models.map((m) => ({
         value: m.name,
         label: m.label ?? m.name,
-        listHint: m.note,
-        hint: !m.functionCalling ? 'no tools' : undefined,
+        listHint: m.note && modelNoteText(m.note, tr),
+        hint: !m.functionCalling ? noToolsText(tr) : undefined,
       })),
-    [currentProviderDef],
+    [currentProviderDef, tr],
   )
 
   const handleTestConnection = async () => {
@@ -146,7 +154,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
           >
             <div className="flex items-center gap-2 text-sm font-semibold">
               <span className="text-lg">{p.icon}</span>
-              {p.label}
+              {providerLabel(p, tr)}
             </div>
             {unavailable[p.id] && (
               <div className="mt-1 text-[10px] text-slate-400">{tr('admin.aiModels.providerNotSetUp', 'Not set up')}</div>
@@ -170,7 +178,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
                 onClick={() => {
                   setAiCustomModel(!aiCustomModel)
                   if (aiCustomModel && currentProviderDef.models.length > 0) {
-                    setAiModel(currentProviderDef.models[0].name)
+                    setAiModel(getDefaultModel(currentProviderDef.id))
                   }
                 }}
                 className="text-[10px] text-slate-500 hover:text-primary-400 transition"
@@ -191,7 +199,7 @@ export default function SetupAIModelPage({ navigatingRef, tr }: SetupAIModelPage
               type="text"
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
-              placeholder={currentProviderDef.modelPlaceholder ?? tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-4o-mini')}
+              placeholder={currentProviderDef.modelPlaceholder ?? tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-6-luna')}
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
           )}

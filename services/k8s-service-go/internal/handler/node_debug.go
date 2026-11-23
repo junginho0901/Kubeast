@@ -10,7 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
 	corev1 "k8s.io/api/core/v1"
@@ -47,6 +49,9 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "node shell is disabled (NODE_SHELL_ENABLED)", http.StatusForbidden)
 		return
 	}
+	if h.refuseTerminalWhileLeaving(w) {
+		return
+	}
 
 	nodeName := chi.URLParam(r, "name")
 	// The debug pod always runs in the dedicated privileged namespace with an
@@ -63,6 +68,13 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload := map[string]interface{}{"image": image}
+	releasePlace, ok := h.takeTerminal(w, r, &debugUpgrader, func(err error) {
+		_ = h.recordAuditWithPayload(r, "k8s.node.shell", "node", nodeName, namespace, err, nil, audit.MustJSON(payload))
+	})
+	if !ok {
+		return
+	}
+	defer releasePlace()
 	var rec *recording.Session
 	if imageErr == nil { // a rejected image never opens a shell: nothing to record
 		var ok bool
@@ -90,10 +102,13 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-	ctx, release := h.holdSession(ctx)
+	// stopShell(nodeshells.ErrHeartbeatLost) ends the shell when this server cannot save its row's heartbeat.
+	ctx, stopShell := context.WithCancelCause(r.Context())
+	defer stopShell(nil)
+	ctx, release := h.holdTerminal(ctx)
 	defer release()
+	ctx, leave := h.drain.HoldTerminal(ctx)
+	defer leave()
 	// The socket's reader from here on: closing the window while the pod is
 	// still starting ends the wait (and deletes the pod) instead of the timeout.
 	in := readFrames(ctx, conn)
@@ -172,15 +187,6 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
 		return
 	}
-	_, err = clientset.CoreV1().Pods(namespace).Create(ctx, debugPod, metav1.CreateOptions{})
-	if err != nil {
-		err = fmt.Errorf("create debug pod: %w", err)
-		slog.Error("debug shell", "err", err)
-		fail(err)
-		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
-		return
-	}
-
 	// The cleanup outlives the request (ctx is cancelled by then) but still
 	// acts as the user who created the pod, like the drain goroutine.
 	cleanupCtx := context.Background()
@@ -190,15 +196,66 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	if p, ok := auth.FromContext(ctx); ok {
 		cleanupCtx = auth.WithPayload(cleanupCtx, p)
 	}
-	defer func() {
+	// The row comes before the pod: a server killed from here on leaves a row whose heartbeat stops, and another
+	// server deletes the pod it names (internal/nodeshells).
+	shellID := ""
+	if h.nodeShells != nil {
+		shellID = nodeshells.NewID()
+		debugPod.Labels[nodeshells.LabelID] = shellID
+		debugPod.Annotations = map[string]string{nodeshells.AnnotationOwner: h.nodeShells.Owner()}
+		clusterID, _ := cluster.FromContext(ctx)
+		person, _ := auth.FromContext(ctx)
+		row := nodeshells.Row{ID: shellID, Cluster: string(clusterID), Namespace: namespace, Pod: podName, Node: nodeName,
+			Person: nodeshells.PersonFor(person, string(clusterID))}
+		end := auditBase(r, audit.ServiceK8s, auditSessionEndAction, "node", nodeName, namespace)
+		if err := h.nodeShells.Begin(ctx, row, end, func() { stopShell(nodeshells.ErrHeartbeatLost) }); err != nil {
+			err = fmt.Errorf("node shell row not saved: %w", err)
+			slog.Error("debug shell", "err", err)
+			fail(err)
+			writeShellStatus(conn, shellStatus{Status: shellFailed, Message: "node shell row not saved"})
+			return
+		}
+	}
+	// deletePod deletes the pod and ends its row; a pod it could not delete leaves the row to a sweep, and so does
+	// one not found after a create that may still land (unsure).
+	deletePod := func(unsure bool) {
 		grace := int64(0)
 		bg := metav1.DeletePropagationBackground
-		_ = clientset.CoreV1().Pods(namespace).Delete(cleanupCtx, podName, metav1.DeleteOptions{
+		err := clientset.CoreV1().Pods(namespace).Delete(cleanupCtx, podName, metav1.DeleteOptions{
 			GracePeriodSeconds: &grace,
 			PropagationPolicy:  &bg,
 		})
+		if (err != nil && !apierrors.IsNotFound(err)) || (unsure && apierrors.IsNotFound(err)) {
+			if !apierrors.IsNotFound(err) {
+				slog.Warn("debug shell pod not deleted", "pod", podName, "err", err)
+			}
+			if shellID != "" {
+				h.nodeShells.Release(shellID)
+			}
+			return
+		}
+		if shellID != "" {
+			h.nodeShells.End(shellID)
+		}
 		slog.Info("debug shell pod deleted", "pod", podName)
-	}()
+	}
+	_, err = clientset.CoreV1().Pods(namespace).Create(ctx, debugPod, metav1.CreateOptions{})
+	if err != nil {
+		switch {
+		case createRefused(err): // the API server answered and made nothing
+			if shellID != "" {
+				h.nodeShells.End(shellID)
+			}
+		default: // cancelled, cut or timed out: the pod may have been made, or may be made after this delete
+			deletePod(true)
+		}
+		err = fmt.Errorf("create debug pod: %w", err)
+		slog.Error("debug shell", "err", err)
+		fail(err)
+		writeShellStatus(conn, shellStatus{Status: shellFailed, Message: response.Public(err)})
+		return
+	}
+	defer deletePod(false)
 
 	// Wait for the pod to run, telling the terminal why it is not yet
 	// (ContainerCreating, ImagePullBackOff, …) each time the reason changes.
@@ -211,11 +268,11 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 	for running := false; !running; {
 		select {
 		case <-ctx.Done():
-			// The cause: a session's end says which, where ctx.Err() only says canceled.
+			// The cause: a session's end or the server leaving says which, where ctx.Err() only says canceled.
 			fail(context.Cause(ctx))
-			if code := auth.SessionEndCode(ctx); code != "" {
-				_ = conn.WriteMessage(websocket.TextMessage, []byte(sessionEndNotice(code, r.URL.Query().Get("lang"))))
-				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(auth.SessionEndedCloseCode, code), time.Now().Add(time.Second))
+			if notice, closeCode, reason, ended := serverEnded(ctx, r.URL.Query().Get("lang")); ended {
+				_ = conn.WriteMessage(websocket.TextMessage, []byte(notice))
+				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(closeCode, reason), time.Now().Add(time.Second))
 			}
 			return
 		case _, open := <-in:
@@ -261,17 +318,28 @@ func (h *Handler) NodeDebugShellWS(w http.ResponseWriter, r *http.Request) {
 		writeShellStatus(conn, shellStatus{Status: shellAuditUnavailable})
 		return
 	}
+	// Deferred after the hold, so the recording closes before the hold is let go (endTerminal).
 	defer rec.Close()
 	writeShellStatus(conn, shellStatus{Status: shellStarting})
 
 	slog.Info("debug shell attached", "pod", podName, "node", nodeName)
-	if err := streamShell(ctx, conn, in, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec, r.URL.Query().Get("lang")); err != nil {
+	err = streamShell(ctx, conn, in, restConfig, attachURL(clientset, namespace, podName, "debugger"), rec, r.URL.Query().Get("lang"))
+	releasePlace() // the shell is over: its account's place comes back before the pod's delete, which waits on the API server
+	if err != nil {
 		slog.Error("failed to connect to K8s API", "err", err)
 		conn.WriteMessage(websocket.TextMessage, []byte("failed to connect to K8s API: "+response.Public(err)+"\r\n"))
 		return
 	}
 	h.auditSessionEnd(ctx, r, "node", nodeName, namespace, "node-shell")
 	slog.Info("debug shell ended", "pod", podName, "node", nodeName)
+}
+
+// createRefused says whether a pod create's error is the API server's answer that it made nothing: a refusal of the
+// request (forbidden, unauthorized, invalid, bad request, a name already taken, a namespace not found). A cancelled,
+// cut or timed-out request (a 504 too) may have made the pod.
+func createRefused(err error) bool {
+	return apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err) || apierrors.IsInvalid(err) ||
+		apierrors.IsBadRequest(err) || apierrors.IsAlreadyExists(err) || apierrors.IsNotFound(err) || apierrors.IsMethodNotSupported(err)
 }
 
 func boolPtr(b bool) *bool {

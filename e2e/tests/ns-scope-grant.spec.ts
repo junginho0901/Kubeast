@@ -22,7 +22,7 @@ async function createUser(request: APIRequestContext, admin: string, email: stri
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E ns scope', email, password: PW, role_id: member.id } })
   expect(res.status(), `create ${email}`).toBe(201)
-  return (await res.json()).id
+  return madeUser((await res.json()).id, bearer(admin))
 }
 
 async function grant(request: APIRequestContext, admin: string, userId: string, role: string, namespaces?: string[]) {
@@ -92,10 +92,10 @@ test.describe('namespace-scoped grants', () => {
     try {
       const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: grantorRole, permissions: ['admin.users.update', 'menu.*'] } })
       expect(role.status(), await role.text()).toBeLessThan(300)
-      roleId = (await role.json()).id
+      roleId = withUndo((await role.json()).id, (i) => request.delete(`/api/v1/auth/admin/roles/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
       const made = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E ns grantor', email, password: PW, role_id: roleId } })
       expect(made.status(), await made.text()).toBe(201)
-      grantorId = (await made.json()).id
+      grantorId = madeUser((await made.json()).id, bearer(admin))
       expect((await grant(request, admin, grantorId, 'Admin', ['team-a'])).status()).toBe(200)
       targetId = await createUser(request, admin, `e2e-ns-t-${run}@kubeast.local`)
       const grantor = await login(request, email, PW)
@@ -158,4 +158,28 @@ test.describe('namespace-scoped grants', () => {
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

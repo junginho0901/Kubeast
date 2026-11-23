@@ -31,7 +31,7 @@ test.describe('an admin press says what it made or took away', () => {
       await dialog.locator('button[type="submit"]').click()
       const res = await answer
       expect(res.status()).toBe(201)
-      id = (await res.json()).id
+      id = madeUser((await res.json()).id, XRW)
       await expect(dialog).toHaveCount(0)
       const line = page.getByTestId('yaml-created')
       await expect(line).toContainText(created(`User/${name} (${email})`))
@@ -55,7 +55,7 @@ test.describe('an admin press says what it made or took away', () => {
       await dialog.getByRole('button', { name: 'Create', exact: true }).click()
       const res = await answer
       expect(res.status()).toBe(201)
-      id = String((await res.json()).id)
+      id = withUndo(String((await res.json()).id), (i) => page.request.delete(`/api/v1/auth/admin/roles/${i}`, { headers: XRW }))
       await expect(dialog).toHaveCount(0)
       const line = page.getByTestId('yaml-created')
       await expect(line).toContainText(created(`Role/${name}`))
@@ -78,7 +78,7 @@ test.describe('an admin press says what it made or took away', () => {
       await page.getByTestId('api-key-submit').click()
       const res = await answer
       expect(res.status()).toBe(201)
-      id = (await res.json()).id
+      id = withUndo((await res.json()).id, (i) => page.request.delete(`/api/v1/auth/api-keys/${i}`, { headers: XRW }))
       await expect(page.getByTestId('api-key-created'), 'the key shown only this once is on screen').toBeInViewport()
 
       await page.getByTestId(`api-key-revoke-${id}`).click()
@@ -117,4 +117,28 @@ test.describe('an admin press says what it made or took away', () => {
     await expect(page.getByTestId('api-key-days-problem')).toHaveCount(0)
     await page.getByTestId('api-key-modal').getByRole('button', { name: 'Cancel', exact: true }).click()
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

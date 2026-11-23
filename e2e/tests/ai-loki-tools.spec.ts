@@ -187,7 +187,7 @@ test.describe('AI LogQL tools', () => {
     const binding = `e2e-loki-read-${id}`
     const refused = await tool(request, scoped, 'loki_query', { cluster: CLUSTER, namespace: NS, logql: `${podSelector} |= "${marker}"` })
     expect(refused.status, JSON.stringify(refused)).toBe('forbidden')
-    self(`-n ${NS} create rolebinding ${binding} --clusterrole=view --group=kubeast:role:read`)
+    withUndo(self(`-n ${NS} create rolebinding ${binding} --clusterrole=view --group=kubeast:role:read`), () => self(`-n ${NS} delete rolebinding ${binding} --ignore-not-found`))
     try {
       const own = await tool(request, scoped, 'loki_query', { cluster: CLUSTER, namespace: NS, logql: `${podSelector} |= "${marker}" | logfmt | level="error"`, since: '20m' })
       expect(own.returned, JSON.stringify(own)).toBe(60)
@@ -222,7 +222,7 @@ test.describe('AI LogQL tools', () => {
 
     const nodeIP = second(`get node -o 'jsonpath={.items[0].status.addresses[?(@.type=="InternalIP")].address}'`)
     const url = `http://${nodeIP}:31300/api/datasources/proxy/uid/loki`
-    const cleared = { log_search_url: '', log_search_tenant: '', log_search_cluster_label: '', log_search_auth: { type: 'none' } }
+    const cleared = withUndo({ log_search_url: '', log_search_tenant: '', log_search_cluster_label: '', log_search_auth: { type: 'none' } }, (c) => request.patch(`/api/v1/clusters/${OTHER}`, { headers: bearer(admin), data: c, failOnStatusCode: false }))
     try {
       const res = await request.patch(`/api/v1/clusters/${OTHER}`, {
         headers: bearer(admin), data: { log_search_url: url, log_search_tenant: '', log_search_cluster_label: 'kubeast-b', log_search_auth: { type: 'bearer', token } },
@@ -237,4 +237,17 @@ test.describe('AI LogQL tools', () => {
       await request.patch(`/api/v1/clusters/${OTHER}`, { headers: bearer(admin), data: cleared, failOnStatusCode: false })
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

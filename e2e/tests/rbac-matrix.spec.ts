@@ -40,7 +40,7 @@ test.describe('RBAC matrix (role × action)', () => {
         data: { name: 'E2E RBAC matrix', email, password: PASSWORD, role_id: await roleId(request, admin, 'Member') },
       })
       expect(created.status(), await created.text()).toBe(201)
-      userId = (await created.json()).id as string
+      userId = madeUser((await created.json()).id as string, admin)
 
       // The matrix lives in the JWT: log in again after every change.
       const grant = async (role: string) => {
@@ -71,7 +71,7 @@ test.describe('RBAC matrix (role × action)', () => {
       expect(await status(read, 'post', CORDON), 'Read cannot cordon').toBe(403)
 
       // YAML create / edit: each document needs resource.<kind>.create, an edit the resource's resource.<kind>.edit.
-      const cm = `e2e-rbac-write-${ts}`
+      const cm = withUndo(`e2e-rbac-write-${ts}`, (c) => request.delete(`/api/v1/cluster/namespaces/default/configmaps/${c}?cluster=${CLUSTER}`, { headers: admin, failOnStatusCode: false }))
       const cmYaml = (v: string) => `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ${cm}\n  namespace: default\ndata:\n  k: ${v}\n`
       const post = async (headers: Headers, path: string, data: object) =>
         (await request.post(`${path}?cluster=${CLUSTER}`, { headers, data, failOnStatusCode: false })).status()
@@ -112,7 +112,7 @@ test.describe('RBAC matrix (role × action)', () => {
         data: { name: customName, description: 'e2e', permissions: ['menu.dashboard', 'resource.*.read'] },
       })
       expect(role.status(), await role.text()).toBe(201)
-      customRoleId = (await role.json()).id as number
+      customRoleId = withUndo((await role.json()).id as number, (i) => request.delete(`/api/v1/auth/admin/roles/${i}`, { headers: admin, failOnStatusCode: false }))
       const custom = await grant(customName)
       expect(await status(custom, 'get', NAMESPACES), 'custom role group is not bound on the cluster').toBe(403)
     } finally {
@@ -120,4 +120,28 @@ test.describe('RBAC matrix (role × action)', () => {
       if (customRoleId) await request.delete(`/api/v1/auth/admin/roles/${customRoleId}`, { headers: admin, failOnStatusCode: false })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

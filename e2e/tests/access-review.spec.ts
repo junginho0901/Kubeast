@@ -68,13 +68,13 @@ test.describe('Access review', () => {
     const name = `e2e-review-exec-${stamp}`
     const made = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name, permissions: ['menu.dashboard', 'resource.pod.exec'] } })
     expect(made.status(), await made.text()).toBe(201)
-    const id = (await made.json()).id
+    const id = withUndo((await made.json()).id, (i) => request.delete(`/api/v1/auth/admin/roles/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
     const holder = await request.post('/api/v1/auth/admin/users', {
       headers: bearer(admin),
       data: { name: 'E2E review exec', email: `e2e-review-exec-${stamp}@example.com`, password: PW, role_id: await roleId(request, admin, 'Member') },
     })
     expect(holder.status(), await holder.text()).toBe(201)
-    const holderId = (await holder.json()).id
+    const holderId = madeUser((await holder.json()).id, bearer(admin))
     try {
       const grant = await request.put(`/api/v1/auth/admin/users/${holderId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: name } })
       expect(grant.ok(), await grant.text()).toBeTruthy()
@@ -223,9 +223,11 @@ test.describe('Access review', () => {
 
     await page.getByTestId('access-review-tab-api_keys').click()
     await expect(page.getByTestId('access-review-table')).toContainText('e2e-review')
-    await search.fill('')
     await page.getByTestId('access-review-tab-roles').click()
+    // a role's permissions wrap, so Fit may put Admin past the first page: it is found by the search, as the account is
+    await search.fill('Admin')
     await expect(page.getByTestId('access-review-table')).toContainText('Admin')
+    await search.fill('')
     await page.getByTestId('access-review-tab-users').click()
 
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('access-review-export').click()])
@@ -283,4 +285,28 @@ test.describe('Access review', () => {
     await expect(page.getByTestId('access-review-history-pager')).toContainText(/Showing \d+-\d+ of \d+|Showing 0 of 0/)
     expect(await pageScrolls(page), 'Past reviews: the page does not scroll').toBeLessThanOrEqual(1)
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

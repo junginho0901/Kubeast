@@ -141,13 +141,54 @@ describe('a list past a limit of live updates', () => {
     expect(ko.layout.watchProblem.limit).not.toContain('다른 탭')
   })
 
+  // A watch the server's memory turned away, while the watches already on go on (TestANewWatchWaitsWhileTheMemoryHeldIsPastItsShare).
+  it('reads that the server is short of memory, and asks nothing of the reader, when the limit is its memory', () => {
+    recordWatchFrame(watch('/api/v1/nodes'), { type: 'ERROR', error: { message: 'k8s-service is short of memory, cannot create new watch for now', reason: 'limit', limit_scope: 'memory' } })
+    const html = render()
+    expect(html).toContain('data-problem="server_memory"')
+    expect(html).toContain(en.layout.watchProblem.serverMemory)
+    expect(en.layout.watchProblem.serverMemory).not.toMatch(/tab/i)
+    expect(chat.current?.data).toEqual({ live_updates: 'stopped', reason: 'server_memory' })
+    expect(render('ko')).toContain(ko.layout.watchProblem.serverMemory)
+    expect(ko.layout.watchProblem.serverMemory).not.toContain('탭')
+  })
+
+  // A watch waiting past 10 s for one of the server's opening places (TestALongWaitForAnOpeningIsToldAsAWaitForItsTurn):
+  // it starts by itself, shortly — the notice comes after those 10 s and a crowd can make the wait longer, so it names
+  // no number of seconds — and memory is not what it waits for. The floating chat reads it as waiting, not stopped.
+  it('reads that the list waits for its turn to open, not that the server is short of memory, when the limit is the opening', () => {
+    recordWatchFrame(watch('/api/v1/nodes'), { type: 'ERROR', error: { message: 'k8s-service opens a few lists at a time to keep its memory in bounds; this one waits for its turn', reason: 'limit', limit_scope: 'opening' } })
+    const html = render()
+    expect(html).toContain('data-problem="server_opening"')
+    expect(html).toContain(en.layout.watchProblem.serverOpening)
+    expect(html).not.toContain(en.layout.watchProblem.serverMemory)
+    expect(en.layout.watchProblem.serverOpening).not.toMatch(/memory|tab|refresh/i)
+    expect(en.layout.watchProblem.serverOpening).toMatch(/by themselves shortly/)
+    expect(en.layout.watchProblem.serverOpening).not.toMatch(/second/i)
+    expect(chat.current?.summary).toBe(en.layout.watchProblem.serverOpening)
+    expect(chat.current?.data).toEqual({ live_updates: 'waiting', reason: 'server_opening' })
+    const koHtml = render('ko')
+    expect(koHtml).toContain(ko.layout.watchProblem.serverOpening)
+    expect(koHtml).not.toContain(ko.layout.watchProblem.serverMemory)
+    for (const word of ['메모리', '탭', '새로고침']) expect(ko.layout.watchProblem.serverOpening).not.toContain(word)
+    expect(ko.layout.watchProblem.serverOpening).toContain('곧 저절로 시작')
+    expect(ko.layout.watchProblem.serverOpening).not.toContain('초')
+  })
+
+  it('reads a scope it does not know as the tab\'s limit, as a screen before that scope did', () => {
+    recordWatchFrame(watch('/api/v1/nodes'), { type: 'ERROR', error: { message: 'm', reason: 'limit', limit_scope: 'not-yet-known' } })
+    const html = render()
+    expect(html).toContain('data-problem="limit"')
+    expect(html).toContain(en.layout.watchProblem.limit)
+  })
+
   it('says the rows go on being read and that live updates come back by themselves', () => {
-    for (const text of [en.layout.watchProblem.limit, en.layout.watchProblem.serverLimit]) {
+    for (const text of [en.layout.watchProblem.limit, en.layout.watchProblem.serverLimit, en.layout.watchProblem.serverMemory]) {
       expect(text).toMatch(/about once a minute/)
       expect(text).toMatch(/by themselves|goes back|go back/)
       expect(text).not.toMatch(/refresh/i)
     }
-    for (const text of [ko.layout.watchProblem.limit, ko.layout.watchProblem.serverLimit]) {
+    for (const text of [ko.layout.watchProblem.limit, ko.layout.watchProblem.serverLimit, ko.layout.watchProblem.serverMemory]) {
       expect(text).toContain('약 1분마다')
       expect(text).toContain('실시간 갱신으로 돌아갑니다')
       expect(text).not.toContain('새로고침')

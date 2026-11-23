@@ -10,7 +10,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useAIContext } from '@/hooks/useAIContext'
-import { useRefresh } from '@/hooks/useRefresh'
+import { refreshList, useRefresh } from '@/hooks/useRefresh'
 import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
@@ -232,11 +232,8 @@ export default function CustomResourceInstances() {
     return printerCellText(cell, tr('common.yes', 'Yes'), tr('common.no', 'No'))
   }
 
-  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(async () => {
-    const data = await api.getAllCustomResourceInstances(true)
-    queryClient.removeQueries({ queryKey: ['custom-resources', 'instances'] })
-    queryClient.setQueryData(['custom-resources', 'instances'], data)
-  })
+  const { refresh: handleRefresh, refreshing: isRefreshing, failure: refreshFailure } = useRefresh(() =>
+    refreshList(queryClient, ['custom-resources', 'instances'], () => api.getAllCustomResourceInstances(true)))
 
   const showDynamicCols = kindFilter && printerColumns.length > 0
   const baseColCount = kindFilter ? 3 : 5 // name, ns, age when kind filtered; name, ns, kind, group, age otherwise
@@ -287,7 +284,7 @@ export default function CustomResourceInstances() {
       </div>
 
       {readNotice.length > 0 && (
-        <div role="status" data-testid="cr-instances-notice" className="shrink-0 space-y-1 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-100">
+        <div role="status" data-testid="cr-instances-notice" className="shrink-0 space-y-1 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-200">
           {readNotice.map((line) => (
             <p key={line.text} data-testid={line.testId} title={line.title} className="flex items-start gap-3">
               {line.testId === 'cr-instances-forbidden'

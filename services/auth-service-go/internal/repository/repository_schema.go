@@ -55,6 +55,7 @@ var ReadAIToolPermissions = []string{
 	"ai.tool.resource_graph",
 	"ai.tool.timeline",
 	"ai.tool.gpu",
+	"ai.tool.anomaly_rank",
 	"ai.tool.k8s_jq_query",
 	"ai.tool.k8s_tabular_query",
 	"ai.tool.k8s_count",
@@ -128,6 +129,9 @@ func (r *Repository) SeedSystemRoles(ctx context.Context) error {
 	defer tx.Rollback(ctx)
 
 	for _, s := range seeds {
+		// No custom role makes a built-in's group: migration 25 renamed those and the
+		// database refuses new ones (roles_name_group_key). A new built-in name needs a
+		// migration that does the same for it before this seed writes it.
 		var roleID int
 		err := tx.QueryRow(ctx,
 			`INSERT INTO roles (name, description, is_system)

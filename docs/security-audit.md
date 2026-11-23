@@ -41,7 +41,8 @@ A terminal, a followed log and a live list are authenticated when they open. The
 - k8s-service asks every 30 seconds whether the session behind each one still stands: the user's `token_version` is the same, the user or API key still exists, and the absolute session lifetime (`auth.sessionAbsoluteHours`) has not passed.
 - When it does not, the connection ends within that interval and says why: a terminal prints the reason and hangs up its shell, a followed log adds the reason as its last line, and a live list goes to the sign-in page unless the browser already holds a newer session.
 - A terminal or followed log ended this way leaves a `k8s.session.end` row.
-- If the version cannot be read (the database is down), connections keep running for 5 minutes and then end.
+- If the version cannot be read (the database is down), connections keep running for 5 minutes and then end without ending the sign-in: a live list connects again by itself, a terminal offers Reconnect, and a followed log says to open it again.
+- New requests while the version cannot be read: auth-service refuses them at once with 503 and `Retry-After`. The other services take a request on the version they read in the last 5 minutes, and refuse it with 503 once that is older. A token older than the version read, or of a sign-in seen signed out, stays refused. None answers a token it could not check with 401, which the console reads as signed out; ai-service's MCP endpoint does, so an MCP client takes a database restart as an invalid token.
 - A session with no activity keeps its open connections while the above holds. The token's expiry alone ends nothing, or a followed log would stop every `auth.tokenTTLMinutes`.
 - Taking a permission from a custom role moves the `token_version` of the accounts holding it, so their open connections end within that interval; adding one or changing the description ends nothing.
 
@@ -136,7 +137,7 @@ To open the mail inbox, run `kubectl -n kubeast-devtools port-forward svc/mailpi
 This feature makes it possible to tell whether audit rows were changed or deleted later.
 
 - Every `audit.integrity.sealSeconds` (default 10 seconds), auth-service chains new rows with a sha256 that includes the previous row's hash (`chain_seq`, `prev_hash`, `row_hash`).
-- When `audit.integrity.anchor.sink` names an S3 sink, auth-service writes the chain head as a digest JSON to `<prefix>digests/` in that bucket every `anchor.hours` (default 24).
+- When `audit.integrity.anchor.sink` names an S3 sink, auth-service writes the chain head as a digest JSON to `<prefix>digests/` in that bucket every `anchor.hours` (whole hours, default 24).
 - The bar at the top of Admin → Audit Logs shows the seal position and the last anchor. It has a **Verify** button (by default from the last anchor, including a check against the sink objects) and an **Anchor now** button.
 - Both buttons are recorded as audit rows (`admin.audit.verify`, `admin.audit.anchor`). The periodic anchor is recorded as `audit.chain.anchor` (actor `system`).
 
@@ -181,7 +182,8 @@ An exec through an AI tool has no recording: it is one command and its result, n
   - `file`: a PVC.
 - **Interrupted sessions**: a session cut off for reasons on the k8s-service side stays as `interrupted`.
   - A graceful shutdown (rollout, drain) or a container restart uploads all the remaining output.
-  - If the pod disappears entirely, only the chunks uploaded before that remain.
+  - If the pod disappears entirely, only the chunks uploaded before that remain. Another k8s-service marks its recordings `interrupted` one to one and a half minutes after that pod last said it holds them.
+  - During a rollout the new pod starts while the old one still records; it leaves those recordings to the old pod.
   - The size in the list is the size kept (uploaded). The play button is disabled when no chunk was uploaded.
 - **When the terminal drops**: if the terminal goes away without `exit` because the browser tab was closed or the network dropped, k8s-service sends Ctrl-C and Ctrl-D to the shell to end it.
   - The container runtime does not clean up the processes of a disconnected exec.
@@ -216,7 +218,7 @@ Kubeast does not hide those lines: the hash also stands on the object in the clu
 
 Each AI tool call shows who the cluster saw it as and the cluster requests it made: the 🔐 line and "🧾 Cluster requests" in the chat's tool block, `after.access` and `after.requests` in its audit row.
 
-A write tool's arguments stay as written only while the call needs them. The answer the server saves, and the stream the page saves a stopped answer from, hold a masked copy with the same fields, so the tool block still says what was asked. The approval row holds the real arguments for the waiting card, and the same copy once the call has run, been rejected or expired. What cannot be read safely keeps its field and no value.
+A write tool's arguments stay as written only while the call needs them. The answer the server saves, and the stream the page saves a stopped answer from, hold a masked copy with the same fields, so the tool block still says what was asked. The approval row holds the real arguments for the waiting card, and the same copy once the call has run, been rejected or expired, or was ended as interrupted because its ai-service stopped during the run (`ai.tool.interrupt`, by the first ai-service to look once 10 minutes have passed since the approval: a new approval card, the card opened, or a process's first database use; until one looks, the row keeps the real arguments). What cannot be read safely keeps its field and no value.
 
 - Kubeast sends each request of a tool call with its own `Audit-ID` header: `kubeast-` and 32 hex characters.
 - The API server takes that value as the audit event's `auditID` and returns it in the response. ✓ next to a request means it came back.
@@ -225,6 +227,7 @@ A write tool's arguments stay as written only while the call needs them. The ans
   - `auditID` is the ID Kubeast showed.
   - `user` is Kubeast's own credential.
   - `impersonatedUser` is the person, or `kubeast:investigator` for an alert investigation. Its groups are the ones Kubeast showed plus `system:authenticated`, which the API server adds to every impersonated user.
+  - A tool call's access checks are asked as the person even with `auth.impersonation.sharedReadChecks` on. The screens' read checks that setting shares are in the log under `kubeast:group-check:<made at each start>` with the person's groups, not under a person ([cluster requirements](cluster-requirements.md) §1).
 - The cluster keeps such a log only with API server auditing on.
   - kubeadm and self-managed clusters: `--audit-policy-file` and `--audit-log-path` on kube-apiserver.
   - Amazon EKS: control plane logging with the `audit` log type, in CloudWatch Logs `/aws/eks/<cluster>/cluster`.

@@ -37,7 +37,7 @@ async function createUser(request: APIRequestContext, admin: string, email: stri
     data: { name: `E2E ${roleName}`, email, password: PW, role_id: await roleId(request, admin, roleName) },
   })
   expect(res.status(), `create ${email}: ${await res.text()}`).toBe(201)
-  return (await res.json()).id
+  return madeUser((await res.json()).id, bearer(admin))
 }
 
 async function grant(request: APIRequestContext, admin: string, userId: string, role: string): Promise<void> {
@@ -75,7 +75,7 @@ test.describe('access requests', () => {
     test.skip(!(await enabled(request, admin)), 'ACCESS_REQUESTS_ENABLED is off on this installation')
 
     const s = stamp()
-    const cm = `e2e-access-${s}`
+    const cm = withUndo(`e2e-access-${s}`, async (c) => { for (const name of [c, `${c}-2`]) await request.delete(`/api/v1/cluster/namespaces/default/configmaps/${name}?cluster=${CLUSTER}`, { headers: bearer(admin), failOnStatusCode: false }) })
     const reqEmail = `e2e-ar-req-${s}@example.com`
     const aprEmail = `e2e-ar-apr-${s}@example.com`
     let requester = ''
@@ -293,4 +293,28 @@ test.describe('access requests', () => {
       await deleteUser(request, admin, requester)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

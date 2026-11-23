@@ -14,15 +14,9 @@ interface Props {
   rawJson?: Record<string, unknown>
 }
 
-function ConditionBadge({ label, value }: { label: string; value: unknown }) {
-  const isOn = value === true
-  const isUnknown = value == null
-  const cls = isUnknown
-    ? 'border-slate-700 bg-slate-800/70 text-slate-300'
-    : isOn
-      ? 'border-emerald-700/60 bg-emerald-900/20 text-emerald-300'
-      : 'border-amber-700/60 bg-amber-900/20 text-amber-300'
-  return <span className={`inline-flex items-center rounded-sm px-2 py-0.5 border ${cls}`}>{label}: <Tx>{isUnknown ? 'Unknown' : isOn ? 'Yes' : 'No'}</Tx></span>
+// an endpoint condition as Yes/No text (Unknown when the slice leaves it out), not a coloured chip
+function ConditionValue({ label, value }: { label: string; value: unknown }) {
+  return <span className="text-slate-300">{label}: <Tx>{value == null ? 'Unknown' : value === true ? 'Yes' : 'No'}</Tx></span>
 }
 
 // an endpoint's zone or node hints: names from a list row, [{ name }] from the object opened by link
@@ -145,10 +139,10 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                         <span className="font-mono">{forNodes.join(', ')}</span>
                       </div>
                     )}
-                    <div className="flex flex-wrap gap-1.5 text-[11px]">
-                      <ConditionBadge label="Ready" value={ep?.conditions?.ready} />
-                      <ConditionBadge label="Serving" value={ep?.conditions?.serving} />
-                      <ConditionBadge label="Terminating" value={ep?.conditions?.terminating} />
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                      <ConditionValue label="Ready" value={ep?.conditions?.ready} />
+                      <ConditionValue label="Serving" value={ep?.conditions?.serving} />
+                      <ConditionValue label="Terminating" value={ep?.conditions?.terminating} />
                     </div>
                   </div>
                 )
@@ -162,7 +156,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
       {serviceName !== '-' && (
         <InfoSection title={peersError && !Array.isArray(nsSlices) ? 'Peer EndpointSlices for {{service}}' : 'Peer EndpointSlices for {{service}} ({{n}})'} titleValues={{ service: serviceName, n: peerSlices.length }}>
           {peersError && !Array.isArray(nsSlices) ? (
-            <ListReadFailure error={peersError} />
+            <ListReadFailure error={peersError} list={`Peer EndpointSlices for ${serviceName}`} />
           ) : peerSlices.length === 0 ? (
             <p className="text-xs text-slate-400"><Tx>No other EndpointSlice for this Service in the namespace.</Tx></p>
           ) : (

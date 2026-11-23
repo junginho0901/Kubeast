@@ -47,6 +47,8 @@ postgresql:
     key: ca.crt
 ```
 
+Behind PgBouncer, use session pooling or connect directly: k8s-service and auth-service each pick one replica for a job with a session advisory lock held on one connection, which transaction pooling does not keep to one server session.
+
 ## Backing up the in-cluster database
 
 Two independent layers; use both.
@@ -162,7 +164,7 @@ PostgreSQL's autovacuum reuses the freed space; the files do not shrink.
 | values | env | deletes |
 |---|---|---|
 | `retention.auditDays` | `RETENTION_AUDIT_DAYS` | `auth_audit_logs` rows older than N days. The stdout copy of each record (see `audit.stdout`) stays in your log pipeline under its own retention, so the database is not the only copy. With `audit.sinks`, rows a sink has not sent yet are kept until it has. Finished session recordings (`session_recordings`, and their parts with the `database` store) older than N days go too, so they leave the console list; recordings in S3 or files stay until the store's own lifecycle removes them. |
-| `retention.chatDays` | `RETENTION_CHAT_DAYS` | AI chat sessions whose last activity (`sessions.updated_at`) is older than N days, with their messages and contexts, and tool approval requests older than N days (their decisions are already audit records). |
+| `retention.chatDays` | `RETENTION_CHAT_DAYS` | AI chat sessions whose last activity (`sessions.updated_at`) is older than N days, with their messages and contexts, and tool approval requests older than N days (their decisions are already audit records; one still `approved`, whose call had no outcome row written, is named in the purge's `admin.retention.purge` row as `open_approvals`). |
 
 Example — access-log retention of one year and six months for chat:
 

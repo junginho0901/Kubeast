@@ -45,6 +45,9 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+	if h.refuseTerminalWhileLeaving(w) {
+		return
+	}
 
 	namespace := chi.URLParam(r, "namespace")
 	podName := chi.URLParam(r, "name")
@@ -61,6 +64,13 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 	}
 	// The row holds what was asked with its credentials masked; only the container gets the command as it came.
 	payload := map[string]interface{}{"container": container, "command": redact.Command([]string{command}, execRowRedactOpts)[0]}
+	releasePlace, ok := h.takeTerminal(w, r, &execUpgrader, func(err error) {
+		_ = h.recordAuditWithPayload(r, "k8s.pod.exec", "pod", podName, namespace, err, nil, audit.MustJSON(payload))
+	})
+	if !ok {
+		return
+	}
+	defer releasePlace()
 	rec, ok := h.startRecording(w, r, "exec", namespace, podName, container, "k8s.pod.exec", "pod", payload)
 	if !ok {
 		return
@@ -83,8 +93,13 @@ func (h *Handler) PodExecWS(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	ctx, release := h.holdSession(ctx)
-	defer release()
+	ctx, release := h.holdTerminal(ctx)
+	ctx, leave := h.drain.HoldTerminal(ctx)
+	// The recording closes before the drain and the probe count the terminal as ended.
+	defer endTerminal(rec, func() {
+		leave()
+		release()
+	})
 
 	// The exec runs on the request's cluster as the signed-in user: the
 	// executor builds its transport from this config, identity included.

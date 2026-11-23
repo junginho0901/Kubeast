@@ -39,7 +39,7 @@ async function createUser(request: APIRequestContext, admin: string, email: stri
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E ns api', email, password: PW, role_id: member.id } })
   expect(res.status(), `create ${email}`).toBe(201)
-  return (await res.json()).id
+  return madeUser((await res.json()).id, bearer(admin))
 }
 
 const get = (request: APIRequestContext, token: string, p: string) => request.get(`${p}${p.includes('?') ? '&' : '?'}cluster=${CLUSTER}`, { headers: bearer(token), failOnStatusCode: false })
@@ -52,7 +52,7 @@ test.describe('namespace-scoped grant enforcement', () => {
     const nsA = `e2e-nsapi-a-${s}`
     const nsB = `e2e-nsapi-b-${s}`
     const email = `e2e-nsapi-${s}@kubeast.local`
-    const rbac = `e2e-nsapi-${s}`
+    const rbac = withUndo(`e2e-nsapi-${s}`, (r) => { tryKubectl(`delete clusterrolebinding ${r}-imp --ignore-not-found`); tryKubectl(`delete clusterrole ${r}-imp --ignore-not-found`); tryKubectl(`delete namespace ${nsA} ${nsB} --ignore-not-found --wait=false`) })
     let userId = ''
     try {
       // Two namespaces with a ConfigMap each; the grant covers A only.
@@ -179,7 +179,7 @@ test.describe('namespace-scoped grant enforcement', () => {
     const nsA = `e2e-nsways-a-${s}`
     const nsB = `e2e-nsways-b-${s}`
     const email = `e2e-nsways-${s}@kubeast.local`
-    const rbac = `e2e-nsways-${s}`
+    const rbac = withUndo(`e2e-nsways-${s}`, (r) => { tryKubectl(`delete clusterrolebinding ${r}-imp --ignore-not-found`); tryKubectl(`delete clusterrole ${r}-imp --ignore-not-found`); tryKubectl(`delete namespace ${nsA} ${nsB} --ignore-not-found --wait=false`) })
     let userId = ''
     const cm = (name: string, namespace?: string) => `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ${name}\n${namespace ? `  namespace: ${namespace}\n` : ''}data:\n  k: v\n`
     const has = (ns: string, name: string) => tryKubectl(`-n ${ns} get configmap ${name} -o name`) !== null
@@ -299,7 +299,7 @@ test.describe('namespace-scoped grant enforcement', () => {
     const nsA = `e2e-nsiss-a-${s}`
     const nsB = `e2e-nsiss-b-${s}`
     const email = `e2e-nsiss-${s}@kubeast.local`
-    const rbac = `e2e-nsiss-${s}`
+    const rbac = withUndo(`e2e-nsiss-${s}`, (r) => { tryKubectl(`delete clusterrolebinding ${r}-imp --ignore-not-found`); tryKubectl(`delete clusterrole ${r}-imp --ignore-not-found`); tryKubectl(`delete namespace ${nsA} ${nsB} --ignore-not-found --wait=false`) })
     let userId = ''
     const warning = (ns: string, cm: string) => JSON.stringify({
       apiVersion: 'v1', kind: 'Event',
@@ -365,4 +365,28 @@ test.describe('namespace-scoped grant enforcement', () => {
       tryKubectl(`delete namespace ${nsA} ${nsB} --ignore-not-found --wait=false`)
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

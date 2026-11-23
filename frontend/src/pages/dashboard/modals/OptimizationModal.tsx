@@ -33,7 +33,7 @@ import { optimizationRowTarget } from '@/utils/detailTargets'
 import { aiEnabled } from '@/utils/features'
 import { useConfirm } from '@/services/confirm'
 
-import { formatBytes, formatMillicores, optimizationApply, optimizationResizeRequest } from '../utils'
+import { formatBytes, formatMillicores, optimizationApply, optimizationResizeRequest, optimizationRowKey } from '../utils'
 import { formatMoney } from '@/utils/money'
 import { useDismiss } from '@/hooks/useDismiss'
 
@@ -122,7 +122,7 @@ export function OptimizationModal({
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
-  const na = tr('common.notAvailable', 'N/A')
+  const empty = tr('common.empty', '-')
 
   // "Apply without restart": the row's recommendation on the workload's running
   // pods through the pod resize subresource. Shown when the chart switch is on,
@@ -135,7 +135,7 @@ export function OptimizationModal({
   const canResize = !!features?.inPlaceResize?.enabled && !!features?.inPlaceResize?.serverSupports && has('resource.pod.edit')
   // The cluster has an OpenCost: the server priced each row's requests (cost.go).
   const priced = !!table?.pricing
-  const rowKey = (row: OptimizationRow) => `${row.kind}/${row.api_version ?? ''}/${row.name}/${row.container}`
+  const rowKey = optimizationRowKey
   const [resizeResults, setResizeResults] = useState<Record<string, ResizeResult | { error: string }>>({})
   const resize = useMutation({
     mutationFn: (row: OptimizationRow) => api.resizeOptimization(row.namespace, optimizationResizeRequest(row)),
@@ -301,6 +301,7 @@ export function OptimizationModal({
             <button
               onClick={onClose}
               className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              aria-label={tr('common.close', 'Close')}
             >
               <X className="w-5 h-5 text-slate-400" />
             </button>
@@ -399,7 +400,7 @@ export function OptimizationModal({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="badge badge-info">
               {tr('dashboard.optimization.namespaceBadge', 'Namespace {{namespace}}', {
-                namespace: namespace || na,
+                namespace: namespace || empty,
               })}
             </span>
             {table && (

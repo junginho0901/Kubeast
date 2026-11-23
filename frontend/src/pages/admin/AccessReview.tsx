@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ClipboardCheck, Download, History, Loader2, RefreshCw, X } from 'lucide-react'
 
@@ -13,6 +13,7 @@ import {
 import { formatDuration, formatWhen } from './accessRequestFormat'
 import { apiKeyTabCount, historyPage, requestsCut } from './accessReviewView'
 import { answerPageSize } from '@/utils/fitServerPage'
+import { keepSameRead } from '@/utils/keepSameRead'
 import { ListPager } from '@/components/ListPager'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
@@ -186,10 +187,11 @@ export default function AccessReview() {
   // before it. With Fit the first page is one block, so the count the Users tab gives reads it as well as the
   // History tab's own.
   const pastQuery = historyPage(pastPage, rowsPerPage, fit)
+  const pastKey = ['access-review', 'history', pastQuery]
   const { data: past, isLoading: historyLoading, isPlaceholderData: pastLoading, error: historyError } = useQuery({
-    queryKey: ['access-review', 'history', pastQuery],
+    queryKey: pastKey,
     queryFn: async () => ({ ...(await api.listAccessReviews(pastQuery)), offset: pastQuery.offset, limit: pastQuery.limit }),
-    placeholderData: keepPreviousData,
+    placeholderData: keepSameRead(pastKey, ['offset', 'limit']),
   })
   const pastTotal = past?.total ?? 0
   // the pager follows the answer on screen, with its page size (a first-page block cut at the rows that fit)
@@ -252,7 +254,7 @@ export default function AccessReview() {
       </div>
 
       {viewId && viewed && (
-        <div className="shrink-0 rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-100 flex items-center justify-between gap-3" data-testid="access-review-snapshot-banner">
+        <div className="shrink-0 rounded-lg border border-primary-500/40 bg-primary-500/10 p-3 text-sm text-primary-200 flex items-center justify-between gap-3" data-testid="access-review-snapshot-banner">
           <span>
             <History className="inline w-4 h-4 mr-1" />
             {tr('accessReview.snapshot.viewing', 'Viewing the report as signed off on {{when}} by {{who}}.', { when: formatWhen(viewed.reviewed_at), who: viewed.reviewed_by_email })}

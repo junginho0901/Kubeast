@@ -76,6 +76,8 @@ cd e2e && npx playwright test                 # all
 npx playwright test cluster-hygiene.spec.ts   # one spec
 ```
 
+After every project that depends on the sign-in (also when a test failed, also for one spec), `tests/refusals.teardown.ts` reads the logs of the k8s-service, k8s-service-stream, tool-server and ai-service pods since the run started, and a restarted container's run before, and fails with the lines when one says `cluster request with no person refused` (k8s-service) or `kubectl not run` (tool-server, for the kubectl run of a chat, MCP or alert investigation tool call; ai-service also logs a chat's as the tool's error): a read refused for want of a person may show only as a blank on screen. Pods replaced during the run (a rollout, the fault and rollout projects) are read only from their start. It reads the install's logs, not this run's alone: run nothing else on the dev install meanwhile.
+
 Prerequisites (without them, the spec does not fail but skips and records the reason):
 
 - **Second cluster `default`** — created with `scripts/add-kind-cluster.sh default --addons`. It is a kind cluster with no `kubeast` namespace. It has:
@@ -97,6 +99,27 @@ Prerequisites (without them, the spec does not fail but skips and records the re
 `e2e/actions/` is an opt-in action suite. It runs 94 UI actions against the second cluster and checks them with `kubectl`, which takes about 12 minutes.
 
 It is not part of the default run. Run it with `E2E_ACTIONS=1 npx playwright test --project=actions`. Prerequisites are in [e2e/actions/README.md](../e2e/actions/README.md).
+
+### Faults and demo services for the AI evaluation
+
+The harder cases of `scripts/ai-eval.py` need faults and services that call each other. Two scripts put them on the second cluster; neither is an e2e prerequisite.
+
+- `scripts/kind-chaos.sh up|down`: Chaos Mesh 2.8.8 (pod kill and failure, network delay, loss and partition, DNS errors, CPU and memory stress).
+  - The chart is rendered with `deploy/kind/chaos-values.yaml` (the kind node's containerd runtime and socket) and applied server-side, so `default` keeps no Helm release.
+  - `up` again with the same version and values does nothing. `down` deletes every experiment first, then what `up` made.
+- `scripts/kind-otel-demo.sh up|down`: the OpenTelemetry Demo, chart 0.42.6, in namespace `otel-demo`.
+  - Run `scripts/kind-logsearch.sh up` and `scripts/kind-tracing.sh up` first.
+  - The demo's own Jaeger, Grafana, Prometheus and OpenSearch are off. Its collector writes traces to that Tempo, logs to that Loki and metrics to the second cluster's Prometheus (`OTELDEMO_METRICS=0` keeps the metrics out).
+  - Those metrics include who calls whom (`traces_service_graph_*`, from the collector's `service_graph` connector, with the namespace on both sides), which the AI's call graph reads.
+  - The first `up` refuses when the Docker VM has less memory available than the sum of the render's memory limits (about 6.7 GiB). The lighter fallback, Online Boutique, is described at the top of the script.
+  - A line a service both prints and sends over OTLP is in Loki twice.
+  - With metrics on, `up` also puts the demo's alert rules (`deploy/kind/otel-demo-rules.json`: error rate, 95th percentile latency, restarts) into that Prometheus, and `down` takes them out. Their alerts carry `kubeast_eval="otel-demo"`, the only ones that Prometheus sends to Alertmanager, which posts them to the webhook for `default`. An older dev install needs `deploy/kind/second-cluster.yaml` applied again first.
+- Behind a TLS-inspecting proxy, set `CHAOS_NODE_HOOK` or `OTELDEMO_NODE_HOOK` as for `CILIUM_NODE_HOOK`: a command that gets the cluster name, run before the images are pulled.
+- The case fields, the run order and the twenty-two cases of `evals/ai-hard/` are in [evals/ai/README.md](../evals/ai/README.md) "Hard cases".
+- `scripts/ai-eval.py --alerts` runs the cases that carry an `alert` through the alert investigation instead of the chat and scores the report ([evals/ai/README.md](../evals/ai/README.md) "The alert path").
+  - The alert comes through the second cluster's Alertmanager when the case's test rule is loaded there, and is posted to the webhook in Alertmanager's form otherwise (`--alert-source auto`, the default; `real` runs only the rule, `synthetic` always posts). The twenty-two cases of `evals/ai-hard/` have no test rule yet, so they are posted.
+  - It has not run on kind yet.
+- The runner signs in again before its token runs out and on a 401, and writes its report after each case, so one call can run a round longer than the dev token's 120 minutes.
 
 ### Project site (`site/`)
 

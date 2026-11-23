@@ -51,7 +51,7 @@ test.describe('Argo CD guard', () => {
     expect((await request.get('/api/v1/cluster/namespaces/default/deployments/e2e-argo-managed/describe?cluster=self', { headers: admin })).status()).toBe(200)
 
     // An unmanaged object goes through the same routes as before.
-    const name = `e2e-gitops-free-${Date.now().toString(36)}`
+    const name = withUndo(`e2e-gitops-free-${Date.now().toString(36)}`, (n) => request.delete(`/api/v1/cluster/namespaces/default/configmaps/${n}?cluster=self`, { headers: admin, failOnStatusCode: false }))
     const create = await request.post('/api/v1/cluster/resources/yaml/create?cluster=self', {
       headers: admin, data: { namespace: 'default', yaml: `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ${name}\n  namespace: default\ndata:\n  k: v\n` },
     })
@@ -103,7 +103,7 @@ test.describe('Argo CD guard', () => {
     expect(replicas(await (await request.get(describe, { headers: admin })).json()), 'replicas unchanged').toBe(before)
 
     // A free object takes the same bodies and shows the change.
-    const name = `e2e-gitops-free-${Date.now().toString(36)}`
+    const name = withUndo(`e2e-gitops-free-${Date.now().toString(36)}`, (n) => request.delete(`/api/v1/cluster/namespaces/default/configmaps/${n}?cluster=self`, { headers: admin, failOnStatusCode: false }))
     const create = await request.post('/api/v1/cluster/resources/yaml/create?cluster=self', {
       headers: admin, data: { namespace: 'default', yaml: `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ${name}\n  namespace: default\ndata:\n  k: v\n` },
     })
@@ -122,7 +122,7 @@ test.describe('Argo CD guard', () => {
       const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
       const made = await request.post('/api/v1/auth/admin/users', { headers: admin, data: { name: 'E2E gitops read', email, password, role_id: member.id } })
       expect(made.status(), await made.text()).toBe(201)
-      userId = (await made.json()).id
+      userId = madeUser((await made.json()).id, admin)
       const granted = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: admin, data: { role: 'Read' } })
       expect(granted.ok(), await granted.text()).toBeTruthy()
       const signedIn = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -218,4 +218,28 @@ test.describe('Argo CD guard', () => {
     await expect(drawer.getByText(/^(Applied|적용됨)$/)).toHaveCount(0)
     expect(writes).toHaveLength(1)
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

@@ -15,7 +15,7 @@ Install from the released chart (`oci://ghcr.io/junginho0901/charts/kubeast`), w
 Download the tagged script, check its contents, then run it (do not run an unreviewed script directly with `curl | bash`).
 
 ```bash
-curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.7/install.sh
+curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.8/install.sh
 less install.sh
 bash install.sh
 ```
@@ -33,7 +33,7 @@ bash install.sh --load-balancer
 bash install.sh --namespace my-ns
 
 # Set the chart version
-bash install.sh --version 0.7.7
+bash install.sh --version 0.7.8
 ```
 
 > Prerequisites: `kubectl`, `helm`, and a reachable Kubernetes cluster.
@@ -41,19 +41,19 @@ bash install.sh --version 0.7.7
 ### Option 2. Using Helm directly
 
 ```bash
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
   --namespace kubeast --create-namespace \
   --set ai.openaiApiKey=$OPENAI_API_KEY     # optional: can also be registered in the UI later
 
 # Lightest: console, management and audit only, without AI or cache (6 pods, docs/architecture.md "Resource usage")
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 -n kubeast --create-namespace \
-  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.7/helm/kubeast/values-minimal.yaml
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 -n kubeast --create-namespace \
+  -f https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.8/helm/kubeast/values-minimal.yaml
 ```
 
 ### Option 3. Docker Compose (single host, no cluster)
 
 ```bash
-git clone --branch v0.7.7 --depth 1 https://github.com/junginho0901/Kubeast.git
+git clone --branch v0.7.8 --depth 1 https://github.com/junginho0901/Kubeast.git
 cd Kubeast
 
 ./install-docker.sh
@@ -68,6 +68,7 @@ The script prints the address and the admin password once sign-in answers.
   - For a kind cluster, paste `kind get kubeconfig --internal --name <cluster>` and connect the containers that talk to it to kind's network: `docker network connect kind <dir>-auth-service-1`, and the same for `k8s-service` and `tool-server` (`<dir>` is the checkout folder's name, the Compose project).
 - Only the gateway port is published. Reach the other services with `docker compose exec`.
 - Running the script again (for example with another `--port`) keeps the passwords and keys in `.env`, because the database volume keeps the password it was created with.
+- Stopping or replacing a container (`docker compose stop`, `up` with a new image) gives each Kubeast service 35 s to finish (`stop_grace_period`), the chart's grace period with the default `podShutdown.preStopSeconds: 5` for a pod that runs no terminal drain. k8s-service runs none here: Compose stops a container before it starts the next, so no other server would take its terminals over. PostgreSQL and Redis get 30 s, the Kubernetes default grace period. Docker's default of 10 s would stop a service in the middle of its shutdown and can cut PostgreSQL's.
 
 `docker-compose` pulls the published images. By default it uses the version of the tag you checked out; set `KUBEAST_TAG` to change it.
 To build from source:
@@ -78,12 +79,90 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 ### Upgrade
 
+Going from 0.7.7 to 0.7.8, read [Upgrading from 0.7.7 to 0.7.8](upgrade-0.7.8.md) first: what to check before, what changes, and how to go back.
+
 ```bash
-helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.7 \
+helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
   -n kubeast --reset-then-reuse-values
 ```
 
-`--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing and the images stay at that version; the chart stops such an upgrade with this hint and leaves the release as it was. A values file of your own copied from `helm show values` of 0.7.7 or later stops the same way. One copied from 0.7.6 or earlier holds no `chartVersion`, and stops on its `global.imageTag`, that version's tag, from 0.7.8 on. Leave `chartVersion` and `global.imageTag` out of a values file of your own. A `global.imageTag` of an image you built yourself, not a release's `vX.Y.Z`, is not stopped.
+`--reset-then-reuse-values` keeps the values you set and adds what the new version brings. `--reuse-values` keeps the defaults of the version you installed, so a value a later version added is missing and the images stay at that version; the chart stops such an upgrade with this hint and leaves the release as it was. A values file of your own copied from `helm show values` of 0.7.7 or later stops the same way. One copied from 0.7.6 or earlier holds no `chartVersion`, and stops on its `global.imageTag`, that version's tag, from 0.7.8 on. Leave `chartVersion` and `global.imageTag` out of a values file of your own. A `global.imageTag` of an image you built yourself, not a release's `vX.Y.Z`, is not stopped. A value you set that the new version no longer reads stops the upgrade too, saying what to set instead; take it out of your values.
+
+Upgrading to 0.7.8 renames the custom roles whose names make another role's group or a built-in's (`ADMIN` beside `Admin`) to `<name>-renamed-<id>` and removes their cluster grants, with an audit row for each change. [Features](features.md) "Role names" says what changes and what to do after. Before the upgrade, this query on Kubeast's database (it reads only) lists the roles it will rename, the role whose group each shares (`same_group_as`), and how many grants, restores of a temporary grant, pending or approved access requests and account levels each holds. The account levels of a role whose `same_group_as` is `Pending` move to the built-in `Pending`; the others stay on the renamed role.
+
+```sql
+WITH b(name, slug) AS (VALUES ('Pending', 'pending'), ('Member', 'member'), ('Read', 'read'), ('Write', 'write'), ('Admin', 'admin')),
+s AS (
+  SELECT ro.id, ro.name, ro.is_system,
+         (SELECT coalesce(string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                                          WHEN p < 128 THEN '-'
+                                          WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                                          ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i), '')
+            FROM unnest(string_to_array(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
+                                                  E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+                 WITH ORDINALITY AS t(c, i),
+                 LATERAL ascii(c) AS p) AS slug
+    FROM roles ro),
+g AS (
+  SELECT s.*, b.name AS builtin_name, coalesce(s.name = b.name, false) AS is_builtin,
+         coalesce(b.name, first_value(s.name) OVER w) AS keeper, row_number() OVER w AS place
+    FROM s LEFT JOIN b ON b.slug = s.slug
+  WINDOW w AS (PARTITION BY s.slug ORDER BY coalesce(s.name = b.name, false) DESC, s.is_system DESC, s.id))
+SELECT g.id, g.name, g.keeper AS same_group_as,
+       (SELECT count(*) FROM user_cluster_roles u WHERE u.role_id = g.id) AS grants,
+       (SELECT count(*) FROM user_cluster_roles u WHERE u.restore_role_id = g.id) AS restores,
+       (SELECT count(*) FROM access_requests a WHERE a.role_id = g.id AND a.status IN ('pending', 'approved')) AS open_requests,
+       (SELECT count(*) FROM auth_users a WHERE a.role_id = g.id) AS account_levels
+  FROM g
+ WHERE NOT g.is_builtin AND (g.place > 1 OR g.builtin_name IS NOT NULL)
+ ORDER BY g.id;
+```
+
+A pod of the version before keeps serving while the migration runs, and a grant it writes in the moment before the migration commits stays on the renamed role. Right after the upgrade, before anyone grants a renamed role again, this query lists such grants; it lists none in the usual case. Remove one in Cluster access unless the role is wanted.
+
+```sql
+SELECT g.user_id, g.cluster_id, r.name
+  FROM user_cluster_roles g JOIN roles r ON r.id = g.role_id
+ WHERE r.id IN (SELECT target_id::int FROM auth_audit_logs
+                 WHERE actor_user_id = 'system' AND actor_email = 'migration' AND action = 'admin.roles.update');
+```
+
+Upgrading to 0.7.8 also gives a new group to each role whose name has characters outside ASCII: 0.7.7 wrote each such character as `-` (`운영팀` acted as `kubeast:role:---`), 0.7.8 writes `~` and its code point (`kubeast:role:~c6b4~c601~d300`, [Features](features.md) "Role names"). A cluster that allows and binds only the old group refuses those people's requests (403) until the new group is allowed and bound there. On every registered cluster other than the one Kubeast runs in, apply the custom roles template again (`scripts/render-target-rbac.sh`, [Cluster requirements](cluster-requirements.md) §1) and delete the bindings it made for the old group, named `kubeast-role-<old slug>-<ClusterRole>` (`kubeast-role-----view` for `운영팀` bound to `view`): `kubectl apply` does not delete them. On the cluster Kubeast runs in, `helm upgrade` replaces them. On every cluster, change each `kubeast:role:<old slug>` you wrote yourself, in an impersonation rule or a binding, to the new group. Before the upgrade, this query (it reads only) lists those roles with the group each acts as in 0.7.7 and in 0.7.8; it lists none when every role name is ASCII.
+
+```sql
+WITH s AS (
+  SELECT ro.name,
+         string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c ELSE '-' END, '' ORDER BY i) AS slug_0_7_7,
+         string_agg(CASE WHEN p BETWEEN 97 AND 122 OR p BETWEEN 48 AND 57 OR p IN (45, 46, 95) THEN c
+                         WHEN p < 128 THEN '-'
+                         WHEN p < 65536 THEN '~' || lpad(to_hex(p), 4, '0')
+                         ELSE '~~' || lpad(to_hex(p), 6, '0') END, '' ORDER BY i) AS slug_0_7_8
+    FROM roles ro,
+         unnest(string_to_array(translate(btrim(ro.name, E' \t\n\u000b\f\r\u0085                 　'),
+                                          E'ABCDEFGHIJKLMNOPQRSTUVWXYZİK', 'abcdefghijklmnopqrstuvwxyzik'), NULL))
+           WITH ORDINALITY AS t(c, i),
+         LATERAL ascii(c) AS p
+   GROUP BY ro.id, ro.name)
+SELECT name, 'kubeast:role:' || slug_0_7_7 AS group_0_7_7, 'kubeast:role:' || slug_0_7_8 AS group_0_7_8
+  FROM s
+ WHERE slug_0_7_7 <> slug_0_7_8
+ ORDER BY name;
+```
+
+From 0.7.8 k8s-service and tool-server sign in to the chart's Redis as users of their own. With `secrets.existingSecret`, Redis keeps one password until you add `REDIS_K8S_SERVICE_PASSWORD`, `REDIS_PROBE_PASSWORD` and, with the AI on, `REDIS_TOOL_SERVER_PASSWORD` to that Secret and set `redis.acl.existingSecretHasKeys: true` ([Redis users](configuration.md#redis-users)).
+
+From 0.7.8, `pdb.minAvailable` is gone: a service gets a PodDisruptionBudget only when it is set to two or more replicas or autoscales with `minReplicas` 2 or more, and `pdb.maxUnavailable` (1) says how many of them a node drain may evict at once. Values that still set `pdb.minAvailable` stop the upgrade and say so; take it out, and set `pdb.maxUnavailable` if you want another number.
+
+**The default model is `gpt-6-luna` from 0.7.8, in place of `gpt-4o-mini`.** OpenAI shuts down `gpt-4o-mini-2024-07-18` on 2027-01-14 and names `gpt-6-luna` as its replacement ([deprecations](https://developers.openai.com/api/docs/deprecations)).
+
+- An upgrade leaves the model of every saved setting as it is, also the `default-openai` setting ai-service made from `ai.model` at its first start. Change it in **Admin > AI Models** before 2027-01-14.
+- A gateway (LiteLLM and the like) answers only the model names it maps. Add `gpt-6-luna` there before a setting uses it.
+- `gpt-6-luna` takes tools in Chat Completions only at `reasoning_effort: "none"`. Kubeast sends it on every call to the names `gpt-6-sol` and `gpt-6-luna` on the OpenAI and Azure OpenAI providers. A setting that reaches `gpt-6-luna` under another name (a gateway alias, provider `custom`, an Azure deployment) gets a tool call that is refused with OpenAI's 400 "Function tools with reasoning_effort are not supported" again at `none` and sends `none` from then on, in each ai-service pod until it restarts ("AI assistant" in [Features](features.md)). A refusal worded otherwise is not sent again at `none`; whether Azure OpenAI and gateways use OpenAI's words has not been checked. To send it from the first call, put `"reasoning_effort": "none"` in that setting's options.
+- An install with no saved setting and no `ai.model` of its own (a gateway at `ai.baseUrl` with no key) sends `gpt-6-luna` from the upgrade on. Map it on the gateway first, or set `ai.model` to a name the gateway maps.
+- A values file of your own that sets `ai.model: gpt-4o-mini` (one copied from `helm show values` of 0.7.7, for example) keeps it. Change it before 2027-01-14.
+- Docker Compose reads `OPENAI_MODEL` from `.env`, and `install-docker.sh` run again keeps the `OPENAI_MODEL` and `OPENAI_BASE_URL` already there. A `.env` written by 0.7.7 or earlier names `gpt-4o-mini`: change it before 2027-01-14. Like `ai.model`, it names the model only while no setting is saved.
+- With `KUBEAST_TAG` set to v0.7.7 or earlier, keep `OPENAI_MODEL` at a model those images can use: they send no `reasoning_effort`, so every tool call to `gpt-6-luna` is refused.
+- Price per 1M tokens: `gpt-6-luna` $0.10 input and $0.50 output, `gpt-4o-mini` $0.15 and $0.60. A request of more than 272K input tokens to `gpt-6-luna` is billed at twice the input and cached input prices and 1.5 times the output price, for the whole request. Reasoning tokens are billed as output ([pricing](https://developers.openai.com/api/docs/pricing), [model](https://developers.openai.com/api/docs/models/gpt-6-luna), [reasoning](https://developers.openai.com/api/docs/guides/reasoning), read 2026-11-15).
 
 ### Uninstall
 
@@ -99,6 +178,7 @@ helm uninstall kubeast -n kubeast      # K8s
 | PersistentVolumeClaim `kubeast-postgres-data` | The database (`postgresql.persistence.resourcePolicy: keep`) |
 | Secret `kubeast-secrets` | The database and admin passwords, the AI keys set in the values, the webhook and internal tokens |
 | Secret `kubeast-auth-keys` | The keys that sign sign-in tokens |
+| Secret `kubeast-redis-users` | The passwords of the Redis users ([Redis users](configuration.md#redis-users)) |
 | Secrets labelled `app.kubernetes.io/managed-by=kubeast` | What Kubeast wrote for registered clusters: each one's kubeconfig, a store's authorization header |
 | CustomResourceDefinition `modelconfigs.ai.kubeast.io` | The kind of AI models written as resources, and those resources |
 | Namespace `kubeast` | Helm does not delete a namespace |
@@ -165,7 +245,7 @@ docker compose exec auth-service /app/server reset-admin
 
 Log in with the `admin` account first. If no cluster is registered, you are taken to the `/setup` wizard right after login (the wizard and its API require admin permission). **Change the password right after logging in.**
 
-- **In-cluster** — automatically connects the cluster Kubeast runs in, with its ServiceAccount permissions. Connect that cluster this way: Kubeast then knows it is the one it runs on and [limits its own namespace to global admins](cluster-requirements.md#who-reaches-kubeasts-own-namespace). A kubeconfig of the same cluster is recognized by its `kube-system` UID as well. A cluster is registered once: a second entry for it, in-cluster or by a kubeconfig, is refused with the name it has.
+- **In-cluster** — automatically connects the cluster Kubeast runs in, with its ServiceAccount permissions. Connect that cluster this way: Kubeast then knows it is the one it runs on and [limits its own namespace to global admins](cluster-requirements.md#who-reaches-kubeasts-own-namespace). A kubeconfig of the same cluster is recognized by its `kube-system` UID as well. A cluster is registered once: a second entry for it, in-cluster or by a kubeconfig, is refused with the name it has. A kubeconfig's UID is read with that kubeconfig's own credential, so it needs `get` on the `kube-system` Namespace, which the ClusterRole `kubeast-impersonator` gives ([Cluster requirements](cluster-requirements.md) §1). When the UID cannot be read, the checks are skipped: the kubeconfig is registered without a UID, a second entry for its cluster is not refused, and a new kubeconfig for a registered cluster is refused for pointing at another cluster only when both UIDs were read.
 - **External** — registers another cluster's kubeconfig (multi-cluster).
   - If you leave the API server address empty, the address actually used during the connection check is filled in.
   - For a cluster registered without an address, the connection test in **Admin > Clusters** fills it in.
@@ -270,12 +350,20 @@ So these are the same as on the API key path: the tool list, approval cards for 
 - **Rules**:
   - Only claude-code can use `CLAUDE_CODE_OAUTH_TOKEN`, and claude-code does not accept base_url or other providers' key variables.
   - On an install where it is off, saving a new claude-code setting is rejected with 400, and the connection test shows the reason.
-- **Limits**:
-  - Concurrent turns are capped at `maxConcurrent` (default 1; the rest wait).
+- **Limits**: a chat turn needs a slot under two limits, taken in this order.
+  - `maxConcurrent` (default 2) is per ai-service server: how many Claude Code processes one server runs at once, which sets its memory.
+  - `maxConcurrentTotal` (default 0, which means the same number as `maxConcurrent`) is for the whole install: every ai-service replica shares it through the database, so the subscription's use stays within it however many servers run. With 2 per server and 3 servers, 6 turns run at once only when `maxConcurrentTotal` is 6 or more.
+  - A server that stops holding a slot (a crash, a node lost) frees it by itself after 60 seconds.
+  - The slots are rows of the `claude_code_slots` table in the database (lane, slot, owner, heartbeat_at). A row names no person and no conversation: its owner is the ai-service pod's name followed by 12 random hex characters, new for each run.
+  - A run whose server could not refresh its slot for 60 seconds (the database did not answer) loses the slot to the next taker and still finishes. Until it ends the install runs one more than `maxConcurrentTotal`; `maxConcurrent` on each server still holds.
   - One turn is capped at `turnTimeoutSeconds` (default 300 seconds) and `maxTurns` (default 10 model calls).
-  - Each turn starts one Claude Code process (up to about 300 MB). If you raise `maxConcurrent`, also raise `resources.aiService.limits.memory`.
+  - Each turn starts one Claude Code process (up to about 300 MB). While the provider is on, ai-service's memory limit is the larger of `resources.aiService.limits.memory` (default 1Gi) and `ai.providers.claudeCode.memoryLimit` (default 2Gi: the service and 2 chat processes with the investigator's). Raise `memoryLimit` with `maxConcurrent`, about 300 MB for each more; `""` leaves the limit as `resources.aiService.limits.memory` sets it.
+- **Waiting**: a turn whose slot is not free waits up to `queueWaitSeconds` (default 60).
+  - Meanwhile AI Chat and the floating chat show "Waiting for a turn — another question is running".
+  - Past that the answer ends with "Claude Code is busy; ask again in a moment."
+  - Stop leaves the queue at once, and the turn takes no slot.
 - **Alert → AI investigation** also runs on this provider.
-  - Investigations use one slot separate from chat (the investigator runs one at a time), so chat does not wait during an investigation.
-  - With investigation on, up to `maxConcurrent` + 1 Claude Code processes therefore run.
+  - Investigations use one slot per server separate from chat (the investigator runs one at a time) and outside `maxConcurrentTotal`, so chat does not wait during an investigation. With 3 servers, up to 3 investigations run at once.
+  - With investigation on, up to `maxConcurrent` + 1 Claude Code processes therefore run on a server.
   - The step cap is `maxSteps`, the same as with an API key. The last step is a report without tools.
 - **Not supported**: provider model list (built-in list or type the name in).

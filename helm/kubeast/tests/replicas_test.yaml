@@ -1,0 +1,404 @@
+suite: replicas and autoscaling — more than one pod per service, Redis for k8s-service and tool-server
+# deployments.yaml includes configmap.yaml and secret.yaml for its checksum annotation.
+templates:
+  - checks/replicas.yaml
+  - hpa.yaml
+  - deployments.yaml
+  - gateway.yaml
+  - configmap.yaml
+  - secret.yaml
+tests:
+  - it: refuses nothing and renders no HPA on the chart's defaults
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+      - hasDocuments:
+          count: 0
+        template: hpa.yaml
+
+  - it: runs two k8s-service pods with the chart's Redis
+    set:
+      replicas.k8sService: 2
+    documentSelector:
+      path: metadata.name
+      value: k8s-service
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 2
+        template: deployments.yaml
+
+  - it: runs three tool-server pods with the chart's Redis
+    set:
+      replicas.toolServer: 3
+    documentSelector:
+      path: metadata.name
+      value: tool-server
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+        template: deployments.yaml
+
+  - it: refuses two k8s-service pods without Redis, naming what they share there
+    set:
+      redis.enabled: false
+      replicas.k8sService: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: "replicas.k8sService is 2 and redis.enabled is false: k8s-service's pods share their list, YAML and Helm caches"
+        template: checks/replicas.yaml
+
+  - it: refuses two tool-server pods without Redis
+    set:
+      redis.enabled: false
+      replicas.toolServer: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: "replicas.toolServer is 2 and redis.enabled is false: tool-server's pods hear of a cluster's change"
+        template: checks/replicas.yaml
+
+  - it: refuses two k8s-service pods on values-minimal.yaml, which turns Redis off
+    values:
+      - ../values-minimal.yaml
+    set:
+      replicas.k8sService: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: replicas.k8sService is 2 and redis.enabled is false
+        template: checks/replicas.yaml
+
+  - it: lets the services that keep nothing in Redis run two pods without it
+    set:
+      redis.enabled: false
+      replicas.authService: 2
+      replicas.aiService: 2
+      replicas.sessionService: 2
+      replicas.frontend: 2
+      replicas.gateway: 2
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: asks nothing of tool-server's count while the AI is off, as there is no tool-server
+    set:
+      ai.enabled: false
+      redis.enabled: false
+      replicas.toolServer: 2
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: refuses a count for the ModelConfig controller, which runs one pod
+    set:
+      replicas.modelConfigController: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: "replicas.modelConfigController: no such service. .*the ModelConfig controller runs one pod"
+        template: checks/replicas.yaml
+
+  - it: refuses autoscaling for the chart's postgres, which runs one pod
+    set:
+      autoscaling.postgres.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "autoscaling.postgres: no such service. .*the chart's postgres and redis"
+        template: checks/replicas.yaml
+
+  - it: renders an autoscaling/v2 HPA on CPU for k8s-service with the default bounds and target
+    set:
+      autoscaling.k8sService.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+        template: hpa.yaml
+      - isKind:
+          of: HorizontalPodAutoscaler
+        template: hpa.yaml
+      - isAPIVersion:
+          of: autoscaling/v2
+        template: hpa.yaml
+      - equal:
+          path: metadata.name
+          value: k8s-service
+        template: hpa.yaml
+      - equal:
+          path: spec.scaleTargetRef
+          value:
+            apiVersion: apps/v1
+            kind: Deployment
+            name: k8s-service
+        template: hpa.yaml
+      - equal:
+          path: spec.minReplicas
+          value: 2
+        template: hpa.yaml
+      - equal:
+          path: spec.maxReplicas
+          value: 3
+        template: hpa.yaml
+      - equal:
+          path: spec.metrics
+          value:
+            - type: Resource
+              resource:
+                name: cpu
+                target:
+                  type: Utilization
+                  averageUtilization: 80
+        template: hpa.yaml
+      - notExists:
+          path: spec.behavior
+        template: hpa.yaml
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: leaves k8s-service's replicas to its HPA and keeps the others' counts
+    set:
+      autoscaling.k8sService.enabled: true
+      replicas.k8sService: 3
+    asserts:
+      - notExists:
+          path: spec.replicas
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: k8s-service
+      - equal:
+          path: spec.replicas
+          value: 1
+        template: deployments.yaml
+        documentSelector:
+          path: metadata.name
+          value: auth-service
+
+  - it: leaves the gateway's replicas to its HPA
+    set:
+      autoscaling.gateway.enabled: true
+    asserts:
+      - notExists:
+          path: spec.replicas
+        template: gateway.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.scaleTargetRef.name
+          value: gateway
+        template: hpa.yaml
+
+  - it: writes behavior into the HPA as given, with the bounds and target set
+    set:
+      autoscaling.toolServer.enabled: true
+      autoscaling.toolServer.minReplicas: 3
+      autoscaling.toolServer.maxReplicas: 6
+      autoscaling.toolServer.targetCPUUtilizationPercentage: 65
+      autoscaling.toolServer.behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 600
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 300
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 3
+        template: hpa.yaml
+      - equal:
+          path: spec.maxReplicas
+          value: 6
+        template: hpa.yaml
+      - equal:
+          path: spec.metrics[0].resource.target.averageUtilization
+          value: 65
+        template: hpa.yaml
+      - equal:
+          path: spec.behavior
+          value:
+            scaleDown:
+              stabilizationWindowSeconds: 600
+              policies:
+                - type: Pods
+                  value: 1
+                  periodSeconds: 300
+        template: hpa.yaml
+
+  - it: renders one HPA per service turned on
+    set:
+      autoscaling.authService.enabled: true
+      autoscaling.k8sService.enabled: true
+      autoscaling.gateway.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 3
+        template: hpa.yaml
+
+  - it: renders no HPA for ai-service or tool-server while the AI is off
+    set:
+      ai.enabled: false
+      autoscaling.aiService.enabled: true
+      autoscaling.toolServer.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: hpa.yaml
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: refuses autoscaling for k8s-service without Redis
+    set:
+      redis.enabled: false
+      autoscaling.k8sService.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "autoscaling.k8sService can run k8s-service on up to 3 pods and redis.enabled is false"
+        template: checks/replicas.yaml
+
+  - it: refuses autoscaling for tool-server without Redis even from one pod, as it can grow to maxReplicas
+    set:
+      redis.enabled: false
+      autoscaling.toolServer.enabled: true
+      autoscaling.toolServer.minReplicas: 1
+    asserts:
+      - failedTemplate:
+          errorPattern: "autoscaling.toolServer can run tool-server on up to 3 pods and redis.enabled is false"
+        template: checks/replicas.yaml
+
+  - it: lets autoscaling run auth-service without Redis
+    set:
+      redis.enabled: false
+      autoscaling.authService.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+      - hasDocuments:
+          count: 1
+        template: hpa.yaml
+
+  - it: refuses minReplicas 0
+    set:
+      autoscaling.k8sService.enabled: true
+      autoscaling.k8sService.minReplicas: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "autoscaling.k8sService: minReplicas and maxReplicas must be whole numbers with 1 <= minReplicas <= maxReplicas \\(got 0 and 3\\)"
+        template: checks/replicas.yaml
+
+  - it: refuses minReplicas above maxReplicas
+    set:
+      autoscaling.gateway.enabled: true
+      autoscaling.gateway.minReplicas: 4
+    asserts:
+      - failedTemplate:
+          errorPattern: "autoscaling.gateway: minReplicas and maxReplicas must be whole numbers .*\\(got 4 and 3\\)"
+        template: checks/replicas.yaml
+
+  - it: refuses a maxReplicas that is not a whole number
+    set:
+      autoscaling.frontend.enabled: true
+      autoscaling.frontend.maxReplicas: 2.5
+    asserts:
+      - failedTemplate:
+          errorPattern: "autoscaling.frontend: minReplicas and maxReplicas must be whole numbers"
+        template: checks/replicas.yaml
+
+  - it: refuses a CPU target of 0
+    set:
+      autoscaling.sessionService.enabled: true
+      autoscaling.sessionService.targetCPUUtilizationPercentage: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "autoscaling.sessionService.targetCPUUtilizationPercentage must be a whole number of percent, 1 or more \\(got 0\\)"
+        template: checks/replicas.yaml
+
+  - it: refuses autoscaling on CPU for a service with no CPU request
+    set:
+      autoscaling.k8sService.enabled: true
+      resources.k8sService.requests.cpu: null
+    asserts:
+      - failedTemplate:
+          errorPattern: "autoscaling.k8sService scales on CPU as a share of resources.k8sService.requests.cpu, which is not set"
+        template: checks/replicas.yaml
+
+  - it: refuses autoscaling for a service with no resources at all
+    set:
+      autoscaling.aiService.enabled: true
+      resources.aiService: null
+    asserts:
+      - failedTemplate:
+          errorPattern: "resources.aiService.requests.cpu, which is not set"
+        template: checks/replicas.yaml
+
+  - it: refuses the file recording store on two k8s-service pods, which would mount the one volume
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+      sessionRecording.fileVolume: {persistentVolumeClaim: {claimName: kubeast-recordings}}
+      replicas.k8sService: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: "sessionRecording.storage file and replicas.k8sService 2: every k8s-service pod mounts the store, and one file volume is mounted by one pod — use s3 or database"
+        template: checks/replicas.yaml
+
+  - it: refuses the file recording store with autoscaling on k8s-service, as it can grow to maxReplicas
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+      sessionRecording.fileVolume: {persistentVolumeClaim: {claimName: kubeast-recordings}}
+      autoscaling.k8sService.enabled: true
+      autoscaling.k8sService.minReplicas: 1
+    asserts:
+      - failedTemplate:
+          errorPattern: "sessionRecording.storage file and autoscaling.k8sService up to 3 pods: .* use s3 or database"
+        template: checks/replicas.yaml
+
+  - it: lets one k8s-service pod keep the file recording store
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+      sessionRecording.fileVolume: {persistentVolumeClaim: {claimName: kubeast-recordings}}
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: lets an HPA of one k8s-service pod at most keep the file recording store
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: file
+      sessionRecording.fileVolume: {persistentVolumeClaim: {claimName: kubeast-recordings}}
+      autoscaling.k8sService.enabled: true
+      autoscaling.k8sService.minReplicas: 1
+      autoscaling.k8sService.maxReplicas: 1
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: lets two k8s-service pods record to s3
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: s3
+      sessionRecording.s3.bucket: kubeast-sessions
+      replicas.k8sService: 2
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml
+
+  - it: lets autoscaling run k8s-service recording to the database
+    set:
+      sessionRecording.enabled: true
+      sessionRecording.storage: database
+      autoscaling.k8sService.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/replicas.yaml

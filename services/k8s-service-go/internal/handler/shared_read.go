@@ -18,10 +18,9 @@ import (
 
 // sharedAnswer is a response as one run of a handler wrote it, which a client waiting on that run gets byte for byte.
 type sharedAnswer struct {
-	header        http.Header
-	status        int
-	body          bytes.Buffer
-	clusterFailed bool
+	header http.Header
+	status int
+	body   bytes.Buffer
 }
 
 func (a *sharedAnswer) Header() http.Header { return a.header }
@@ -37,17 +36,12 @@ func (a *sharedAnswer) Write(b []byte) (int, error) {
 	return a.body.Write(b)
 }
 
-func (a *sharedAnswer) noteClusterFailure() { a.clusterFailed = true }
-
-func (a *sharedAnswer) writeTo(w http.ResponseWriter) {
+func (a *sharedAnswer) writeTo(w http.ResponseWriter, r *http.Request) {
 	for k, v := range a.header {
 		w.Header()[k] = slices.Clone(v)
 	}
-	if failure, ok := w.(clusterFailureNoter); ok && a.clusterFailed {
-		failure.noteClusterFailure()
-	}
 	w.WriteHeader(a.status)
-	_, _ = w.Write(a.body.Bytes())
+	writeShared(w, r, a.body.Bytes())
 }
 
 // withOwnRoute gives the handler a copy of the route: the router reuses its own once the request that had it has ended,
@@ -103,7 +97,7 @@ func (h *Handler) Shared(next http.HandlerFunc) http.HandlerFunc {
 			if joined {
 				accesstrail.Cached(r.Context(), "the same read of another request")
 			}
-			answer.writeTo(w)
+			answer.writeTo(w, r)
 		}
 	}
 }

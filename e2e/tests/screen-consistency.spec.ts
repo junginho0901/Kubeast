@@ -5,6 +5,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Page } from '@playwright/test'
 
 import { footersThatFit, listProblems, listsOnScreen, readExemptions, skippedTables } from './list-guard'
+import { sidebarScreens } from './sidebar-screens'
 
 // Every screen the sidebar lists (the admin ones too) and the account page, in each colour mode:
 // - a header row (.page-head) whose title and buttons do not fit sends the buttons to the next line instead of pushing
@@ -22,19 +23,7 @@ const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 const LIST_EXEMPTIONS = readExemptions(JSON.parse(readFileSync(join(__dirname, 'list-guard-exempt.json'), 'utf8')))
 
 async function screens(page: Page) {
-  await page.goto('/?cluster=self')
-  const nav = page.getByTestId('sidebar-nav')
-  await expect(nav.locator('a[href^="/"]').first()).toBeAttached()
-  const hrefs = async () => [...new Set(await nav.locator('a[href^="/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? '')))]
-  // some entries come after the features and permissions answers: read the list once it holds still for a second
-  let paths: string[] = []
-  await expect.poll(async () => {
-    const before = (await hrefs()).length
-    await page.waitForTimeout(1_000)
-    paths = await hrefs()
-    return paths.length === before ? paths.length : 0
-  }, { timeout: 30_000, message: 'the sidebar lists every screen' }).toBeGreaterThan(70)
-  return [...paths, '/account']
+  return [...await sidebarScreens(page), '/account']
 }
 
 async function setMode(page: Page, mode: string) {
@@ -238,7 +227,7 @@ test.describe('every screen in every colour mode', () => {
       ].join('\n')
       const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
       expect(created.ok(), `create session: ${created.status()}`).toBeTruthy()
-      const sessionId = (await created.json()).id as string
+      const sessionId = withUndo((await created.json()).id as string, (i) => page.request.delete(`/api/v1/sessions/${i}?cluster=self`, { headers: XRW, failOnStatusCode: false }))
       try {
         const saved = await page.request.post(`/api/v1/sessions/${sessionId}/messages?cluster=self`, {
           headers: XRW,
@@ -263,4 +252,17 @@ test.describe('every screen in every colour mode', () => {
       }
     })
   }
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

@@ -30,7 +30,7 @@ test.describe('custom role in the UI', () => {
     const roleName = `e2e-notice-${Date.now().toString(36)}`
     const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: roleName, description: 'e2e', permissions: ['menu.workloads', 'resource.*.read'] } })
     expect(role.status(), await role.text()).toBe(201)
-    const createdRole = (await role.json()).id
+    const createdRole = withUndo((await role.json()).id, (i) => request.delete(`/api/v1/auth/admin/roles/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
     try {
       await page.goto('/admin/roles')
       // the list pages as many roles as fit the screen; a new role comes last
@@ -53,6 +53,16 @@ test.describe('custom role in the UI', () => {
       await expect(notice, 'the same group').toHaveCount(0)
       await name.fill(`${roleName}-other`)
       await expect(notice).toHaveText(/ends the sessions|세션과 API 키 토큰이 끝나/)
+
+      // a name another role holds apart from letter case is said under the field, and Save waits (auth-service refuses it)
+      const taken = page.getByTestId('role-name-taken')
+      const save = page.getByTestId('role-dialog').getByRole('button', { name: /^(Save|저장)$/ })
+      await name.fill('ADMIN')
+      await expect(taken).toHaveText(/built-in role Admin apart from letter case|기본 역할 Admin의 이름과 같습니다/)
+      await expect(save, 'Save waits').toBeDisabled()
+      await name.fill(roleName.toUpperCase())
+      await expect(taken, 'its own name in capitals is free').toHaveCount(0)
+      await expect(save).toBeEnabled()
     } finally {
       await request.delete(`/api/v1/auth/admin/roles/${createdRole}`, { headers: bearer(admin), failOnStatusCode: false })
     }
@@ -69,10 +79,10 @@ test.describe('custom role in the UI', () => {
     try {
       const role = await request.post('/api/v1/auth/admin/roles', { headers: bearer(admin), data: { name: roleName, description: 'e2e', permissions: ['menu.dashboard', 'menu.workloads', 'resource.*.read'] } })
       expect(role.status(), await role.text()).toBe(201)
-      customRoleId = (await role.json()).id
+      customRoleId = withUndo((await role.json()).id, (i) => request.delete(`/api/v1/auth/admin/roles/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
       const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E menus', email, password: PW, role_id: await roleId(request, admin, 'Member') } })
       expect(created.status(), await created.text()).toBe(201)
-      userId = (await created.json()).id
+      userId = madeUser((await created.json()).id, bearer(admin))
       const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/self`, { headers: bearer(admin), data: { role: roleName } })
       expect(grant.ok(), await grant.text()).toBeTruthy()
 
@@ -112,4 +122,28 @@ test.describe('custom role in the UI', () => {
       if (customRoleId) await request.delete(`/api/v1/auth/admin/roles/${customRoleId}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

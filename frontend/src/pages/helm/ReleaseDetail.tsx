@@ -17,10 +17,20 @@ import ResourcesTab from './tabs/ResourcesTab'
 import UninstallModal from './modals/UninstallModal'
 import TestResultModal from './modals/TestResultModal'
 import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
+import { failureFields } from '@/utils/aiContext/readFailure'
 
 type TabKey = 'overview' | 'values' | 'manifest' | 'notes' | 'history' | 'resources'
 
+// One page per release: the route keeps its element when only the address's namespace or name changes (a drawer's Helm
+// badge, back, forward) or the cluster does, so the page is keyed by all three and the next release opens on its own
+// tab with none of the windows or edits of the one before.
 export default function HelmReleaseDetailPage() {
+  const { namespace = '', name = '' } = useParams<{ namespace: string; name: string }>()
+  const { currentCluster } = useCluster()
+  return <HelmReleaseDetail key={JSON.stringify([currentCluster, namespace, name])} />
+}
+
+function HelmReleaseDetail() {
   const { t } = useTranslation()
   const { has } = usePermission()
   const { namespace = '', name = '' } = useParams<{ namespace: string; name: string }>()
@@ -61,6 +71,12 @@ export default function HelmReleaseDetailPage() {
     },
     [namespace, name, queryClient],
   )
+  // The stream started over and cannot say what changed meanwhile: this release's queries on screen are read again.
+  const handleHelmResync = useCallback(() => {
+    for (const part of ['helm-release', 'helm-section', 'helm-history', 'helm-resources']) {
+      queryClient.invalidateQueries({ queryKey: [part, namespace, name] })
+    }
+  }, [namespace, name, queryClient])
 
   useHelmWatchList({
     cluster: currentCluster || 'default',
@@ -68,6 +84,7 @@ export default function HelmReleaseDetailPage() {
     enabled: !!namespace && !!name,
     queryKey: null,
     onEvent: handleHelmEvent,
+    onResync: handleHelmResync,
   })
 
   // 활성 탭 별로 상세 데이터를 함께 fetch — TanStack Query 가 자식 탭 컴포넌트와
@@ -87,6 +104,8 @@ export default function HelmReleaseDetailPage() {
     queryFn: () => api.helm.getResources(namespace, name),
     enabled: !!namespace && !!name && tab === 'resources',
   })
+  const historyError = historyQuery.isError ? historyQuery.error : null
+  const resourcesError = resourcesQuery.isError ? resourcesQuery.error : null
 
   // 플로팅 AI 위젯용 스냅샷 (현재 활성 탭 기준)
   // active_tab 에 따라 추가 데이터 (manifest/values/notes/history/resources) 를
@@ -108,9 +127,9 @@ export default function HelmReleaseDetailPage() {
       const text = (sectionQuery.data as any)?.content
       const yaml = truncate(text)
       if (yaml) tabContent = { [`${tab}_text`]: yaml }
-    } else if (tab === 'history') {
+    } else if (tab === 'history' && Array.isArray(historyQuery.data)) {
       // the newest first, as the History tab lists them, with the history answer's own fields (chartVersion, appVersion)
-      const items = Array.isArray(historyQuery.data) ? [...historyQuery.data].sort((a, b) => b.revision - a.revision) : []
+      const items = [...historyQuery.data].sort((a, b) => b.revision - a.revision)
       tabContent = {
         history: items.slice(0, 20).map((h) => ({
           revision: h.revision,
@@ -122,8 +141,8 @@ export default function HelmReleaseDetailPage() {
         })),
         history_total: items.length,
       }
-    } else if (tab === 'resources') {
-      const items = Array.isArray(resourcesQuery.data) ? resourcesQuery.data : []
+    } else if (tab === 'resources' && Array.isArray(resourcesQuery.data)) {
+      const items = resourcesQuery.data
       tabContent = {
         resources: items.slice(0, 30).map((r) => ({
           kind: r.kind,
@@ -133,6 +152,10 @@ export default function HelmReleaseDetailPage() {
         })),
         resources_total: items.length,
       }
+    } else if (tab === 'history' || tab === 'resources') {
+      // a tab still reading tells no count, and one whose read failed says why, as the tab does — never 0 of them
+      const err = tab === 'history' ? historyError : resourcesError
+      if (err) tabContent = failureFields(tab, err)
     }
 
     return {
@@ -151,7 +174,7 @@ export default function HelmReleaseDetailPage() {
         ...(tabContent ?? {}),
       },
     }
-  }, [detailQuery.data, tab, sectionQuery.data, historyQuery.data, resourcesQuery.data])
+  }, [detailQuery.data, tab, sectionQuery.data, historyQuery.data, historyError, resourcesQuery.data, resourcesError])
 
   useAIContext(aiSnapshot, [aiSnapshot])
 

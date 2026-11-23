@@ -1,5 +1,5 @@
 import { getCurrentClusterID } from './clusterRef'
-import { liveSessionEnded, SESSION_ENDED_CLOSE_CODE } from './auth'
+import { liveSessionEnded, onSessionChange, SESSION_ENDED_CLOSE_CODE } from './auth'
 import { clearWatchProblem, recordWatchFrame } from './watchProblemStore'
 
 type ClientMessage = {
@@ -40,11 +40,10 @@ const getWsBase = () => {
 
 const makeKey = (clusterId: string, path: string, query: string) => `${clusterId}\n${path}?${query}`
 
-// A watch of changes sends no objects as it opens, so after a socket's gap only a read can say what it missed.
-const watchesChanges = (query: string) => new URLSearchParams(query).get('notify') === '1'
-
 // How long a watch refused a place waits to ask again: doubling up to the cap, each wait somewhere between half and one
 // and a half of that, since the tabs a full server refuses were refused together.
+// How long a socket stays open before the reconnect waits start over (watchMultiplexer.steadyTimer).
+export const STEADY_MS = 10_000
 const REFUSED_WAIT_MS = 30_000
 const REFUSED_WAIT_MAX_MS = 300_000
 const refusedWait = (tries: number) => Math.min(REFUSED_WAIT_MS * 2 ** tries, REFUSED_WAIT_MAX_MS) * (0.5 + Math.random())
@@ -60,6 +59,9 @@ class WebSocketMultiplexer {
   private connecting: Promise<WebSocket> | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
+  // A socket that stays open STEADY_MS starts the waits over; one the server closes sooner (a check that fails on every
+  // connection) keeps them growing, so it is not opened again every second.
+  private steadyTimer: ReturnType<typeof setTimeout> | null = null
   private lastSessionEnd = 0
   // the watches the server refused a place, and how many times
   private refused = new Map<string, number>()
@@ -76,6 +78,11 @@ class WebSocketMultiplexer {
     const max = 30000
     const ceiling = Math.min(base * Math.pow(2, this.reconnectAttempts), max)
     return ceiling / 2 + Math.random() * (ceiling / 2)
+  }
+
+  private stopSteadyTimer() {
+    if (this.steadyTimer) clearTimeout(this.steadyTimer)
+    this.steadyTimer = null
   }
 
   private scheduleReconnect() {
@@ -218,6 +225,7 @@ class WebSocketMultiplexer {
     socket.onclose = (event) => {
       this.socket = null
       this.connecting = null
+      this.stopSteadyTimer()
       this.answered.clear()
       this.closeListeners.forEach((listener) => listener())
       if (event?.code === SESSION_ENDED_CLOSE_CODE) {
@@ -234,14 +242,20 @@ class WebSocketMultiplexer {
 
     this.connecting = (async () => {
       await this.waitForOpen(socket)
-      // 연결 성공 시 backoff counter reset + 기존 구독 전부 재전송.
-      this.reconnectAttempts = 0
+      // 연결 성공: 기존 구독 전부 재전송, and the backoff counter starts over once the socket has stayed open.
+      this.stopSteadyTimer()
+      this.steadyTimer = setTimeout(() => {
+        this.steadyTimer = null
+        if (this.socket === socket) this.reconnectAttempts = 0
+      }, STEADY_MS)
       // A watch that still cannot start says so again.
       for (const key of this.subscriptions.keys()) clearWatchProblem(key)
       this.forgetRefused()
+      // A watch an earlier socket carried says it missed the gap, and the server answers a RESYNC once it is on: a list's
+      // watch opens with the objects there are, not those deleted meanwhile, and a watch of changes opens with nothing.
       for (const [key, msg] of this.subscriptions) {
         try {
-          socket.send(JSON.stringify(this.carried.has(key) && watchesChanges(msg.query) ? { ...msg, resync: true } : msg))
+          socket.send(JSON.stringify(this.carried.has(key) ? { ...msg, resync: true } : msg))
           this.carried.add(key)
         } catch {
           // send 실패는 onclose 가 처리.
@@ -255,6 +269,34 @@ class WebSocketMultiplexer {
     } finally {
       this.connecting = null
     }
+  }
+
+  // Lets go of every watch and of the socket, with no reconnect: the socket stays the identity it opened as, so when the
+  // person signed in changes the next subscription opens a socket of its own with the cookie the browser holds then.
+  close() {
+    for (const key of this.subscriptions.keys()) clearWatchProblem(key)
+    this.listeners.clear()
+    this.subscriptions.clear()
+    this.carried.clear()
+    this.answered.clear()
+    this.forgetRefused()
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    this.reconnectTimer = null
+    this.stopSteadyTimer()
+    this.reconnectAttempts = 0
+    this.lastSessionEnd = 0
+    this.connecting = null
+    const socket = this.socket
+    this.socket = null
+    if (!socket) return
+    // its close event comes later and would reach the socket opened after it
+    socket.onclose = null
+    try {
+      socket.close()
+    } catch {
+      // closing already
+    }
+    this.closeListeners.forEach((listener) => listener())
   }
 
   // Told each time the socket closes: its watches have stopped, and no frame says so.
@@ -278,9 +320,16 @@ class WebSocketMultiplexer {
     // REQUEST 를 전송. 이미 OPEN 인 socket 에 새 subscription 이 추가되는
     // 경우만 여기서 직접 REQUEST 보냄 (dedup: 기존 subscription 은 무시).
     const wasOpenBefore = this.socket?.readyState === WebSocket.OPEN
-    const socket = await this.connect()
-    if (socket.readyState !== WebSocket.OPEN) {
-      await this.waitForOpen(socket)
+    let socket: WebSocket
+    try {
+      socket = await this.connect()
+      if (socket.readyState !== WebSocket.OPEN) {
+        await this.waitForOpen(socket)
+      }
+    } catch (err) {
+      // let go of before its socket opened (unsubscribe, close): nothing waits for that socket
+      if (!this.listeners.get(key)?.has(onMessage)) return () => undefined
+      throw err
     }
     // dropped while connecting (unsubscribe ran first): nothing to ask for
     if (wasOpenBefore && wasNewSubscription && this.listeners.get(key)?.has(onMessage)) {
@@ -313,5 +362,6 @@ class WebSocketMultiplexer {
 }
 
 export const watchMultiplexer = new WebSocketMultiplexer()
+onSessionChange(() => watchMultiplexer.close())
 export { WebSocketMultiplexer }
 export type { ClientMessage, ServerMessage }

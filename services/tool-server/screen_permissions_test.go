@@ -38,7 +38,7 @@ var readToolsOfListsAndDetails = []string{
 	"get_pod_metrics", "k8s_check_service_connectivity", "k8s_find_resource", "prometheus_query", "prometheus_metrics", "prometheus_labels",
 	"prometheus_rules", "prometheus_targets", "traces_search", "traces_get", "traces_tags", "traces_metrics", "traces_compare", "issues",
 	"gitops_status", "optimization", "resource_graph", "k8s_jq_query", "k8s_tabular_query", "k8s_count", "pod_rbac", "storage_summary",
-	"limit_range_violations", "timeline", "gpu",
+	"limit_range_violations", "timeline", "gpu", "anomaly_rank",
 }
 
 // The tools with no object in their answer, as the routes that read none: the kinds a cluster serves, its version, can-i, the picker.
@@ -62,6 +62,7 @@ var readRoleTools = []string{
 	"limit_range_violations",
 	"alerts_inbox",
 	"timeline", "gpu",
+	"anomaly_rank",
 }
 
 // The seeded Write role's list (auth-service repository_schema.go).
@@ -89,6 +90,9 @@ func screenPermissionCases() []screenCase {
 	add("k8s_get_resources", args{"resource_type": "secrets"}, objectsReadKey)
 	add("k8s_get_resources", args{"resource_type": "all"}, objectsReadKey)
 	add("k8s_describe_resource", args{"resource_type": "secret", "resource_name": "x"}, objectsReadKey)
+	// Who calls whom: the graph's route asks what it asks; its Hubble lines need resource.networkflow.read, which
+	// k8s-service checks itself and leaves out without (the source says permission), as it does for a namespace grant.
+	add("resource_graph", args{"namespace": "shop", "include": []interface{}{"calls"}, "since": "1h"}, objectsReadKey)
 
 	// Reads a screen's route asks a permission for.
 	add("k8s_get_pod_logs", args{"pod_name": "web"}, "resource.pod.read")

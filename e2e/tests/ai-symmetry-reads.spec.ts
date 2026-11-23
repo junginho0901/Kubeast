@@ -38,7 +38,7 @@ async function createReadUser(request: APIRequestContext, admin: string, email: 
   const member = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name.toLowerCase() === 'member')
   const res = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E symmetry reads', email, password: PW, role_id: member.id } })
   expect(res.status(), `create ${email}`).toBe(201)
-  const id = (await res.json()).id as string
+  const id = madeUser((await res.json()).id as string, bearer(admin))
   const grant = await request.put(`/api/v1/auth/admin/users/${id}/cluster-roles/self`, { headers: bearer(admin), data: { role: 'Read' } })
   expect(grant.ok(), 'grant Read on self').toBeTruthy()
   return id
@@ -153,7 +153,7 @@ test.describe('AI reads what the screens know', () => {
     const kubectl = kubectlFor('kubeast')
     const admin = await login(request)
     test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
-    const ns = `e2e-symreads-log-${stamp()}`
+    const ns = withUndo(`e2e-symreads-log-${stamp()}`, (n) => kubectl(['delete', 'namespace', n, '--wait=false', '--ignore-not-found']))
     try {
       kubectl(['create', 'namespace', ns])
       // 2000 lines of about 1 KiB: the tool's whole window, past its 1 MiB of output
@@ -180,7 +180,7 @@ test.describe('AI reads what the screens know', () => {
     const kubectl = kubectlFor('kubeast')
     const admin = await login(request)
     test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
-    const ns = `e2e-symreads-${stamp()}`
+    const ns = withUndo(`e2e-symreads-${stamp()}`, (n) => kubectl(['delete', 'namespace', n, '--ignore-not-found', '--wait=false']))
     const email = `e2e-symreads-${stamp()}@kubeast.local`
     let userId = ''
     try {
@@ -303,7 +303,7 @@ test.describe('AI reads what the screens know', () => {
     const kubectl = kubectlFor('kubeast')
     const run = stamp()
     const failed = `e2e-symreads-failed-${run}`
-    const silent = `e2e-symreads-silent-${run}`
+    const silent = withUndo(`e2e-symreads-silent-${run}`, (s) => kubectl(['delete', 'volumeattachment', failed, s, '--ignore-not-found', '--wait=false']))
     const at = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
     await login(request)
     try {
@@ -369,4 +369,28 @@ test.describe('AI reads what the screens know', () => {
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

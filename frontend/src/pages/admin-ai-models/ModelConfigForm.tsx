@@ -14,7 +14,7 @@ import {
   CircleDot,
 } from 'lucide-react'
 import { useProviderAvailability } from '@/hooks/useProviderAvailability'
-import { providerOptions } from './helpers'
+import { listDefault, providerOptions } from './helpers'
 import type { ModelFormState } from './useModelForm'
 import { NAME_MAX } from '@/utils/nameLimits'
 
@@ -58,7 +58,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
   } = form
   const unavailable = useProviderAvailability()
   const unavailableReason = unavailable[formProvider] ?? null
-  const providerChoices = providerOptions.map((o) =>
+  const providerChoices = providerOptions(tr).map((o) =>
     unavailable[o.value] ? { ...o, muted: true, hint: tr('admin.aiModels.providerNotSetUp', 'Not set up') } : o)
 
   return (
@@ -77,7 +77,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
             </>
           )}
         </h2>
-        <button onClick={resetForm} className="text-slate-500 hover:text-slate-300 transition">
+        <button onClick={resetForm} className="text-slate-500 hover:text-slate-300 transition" aria-label={tr('common.close', 'Close')}>
           <X className="h-4 w-4" />
         </button>
       </div>}
@@ -116,7 +116,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
                 onClick={() => {
                   setFormCustomModel(!formCustomModel)
                   if (formCustomModel && currentModelOptions.length > 0) {
-                    setFormModel(currentModelOptions[0].value)
+                    setFormModel(listDefault(formProvider, currentModelOptions.map((o) => o.value)))
                   }
                 }}
                 className="text-[10px] text-slate-500 hover:text-primary-400 transition"
@@ -151,7 +151,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               type="text"
               value={formModel}
               onChange={(e) => setFormModel(e.target.value)}
-              placeholder={currentProviderDef.modelPlaceholder ?? tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-4o-mini')}
+              placeholder={currentProviderDef.modelPlaceholder ?? tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-6-luna')}
               data-testid="model-input"
               className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />

@@ -17,6 +17,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/proxypath"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 	"github.com/junginho0901/kubeast/services/pkg/response"
@@ -240,7 +241,9 @@ func (h *Handler) canReadRelay(ctx context.Context, t netflows.Target) (bool, er
 }
 
 // relayClient is where and how GetFlows goes: the API server as the user
-// (its transport records the request for the call's trail), or the address.
+// (its transport records the request for the call's trail), following a
+// redirect only under the flow source's Service proxy path on that API server,
+// or the address, whose client follows none.
 func (h *Handler) relayClient(ctx context.Context, t netflows.Target) (string, *http.Client, error) {
 	if h.netflowsDial != nil {
 		return h.netflowsDial(ctx, t)
@@ -256,7 +259,10 @@ func (h *Handler) relayClient(ctx context.Context, t netflows.Target) (string, *
 	if err != nil {
 		return "", nil, err
 	}
-	return t.Endpoint(cfg.Host), client, nil
+	// a copy: rest.HTTPClientFor can give http.DefaultClient
+	c := *client
+	c.CheckRedirect = proxypath.Follow
+	return t.Endpoint(cfg.Host), &c, nil
 }
 
 func netflowsStatus(err error) int {

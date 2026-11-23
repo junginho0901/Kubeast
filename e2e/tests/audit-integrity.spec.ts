@@ -72,7 +72,7 @@ test.describe('Audit log integrity', () => {
     expect(rep.to_seq).toBe(seq)
 
     // Change the row behind Kubeast's back: the chain breaks at exactly that position.
-    const originalAgent = psql(`select coalesce(user_agent,'') from auth_audit_logs where id=${id}`)
+    const originalAgent = withUndo(psql(`select coalesce(user_agent,'') from auth_audit_logs where id=${id}`), (agent) => psql(`update auth_audit_logs set user_agent = nullif('${agent.replace(/'/g, "''")}', '') where id=${id}`))
     psql(`update auth_audit_logs set user_agent = 'tampered by e2e' where id=${id}`)
     try {
       rep = await verify(request, admin, range)
@@ -95,7 +95,9 @@ test.describe('Audit log integrity', () => {
     const res = await request.post('/api/v1/auth/admin/audit/integrity/anchor', { headers: bearer(admin) })
     expect(res.ok(), `anchor: ${res.status()} ${await res.text()}`).toBeTruthy()
     const anchor = await res.json()
-    expect(anchor.object_key).toMatch(/^digests\/\d{4}\/\d{2}\/\d{2}\/\d{6}Z-\d+-\d+\.json$/)
+    // the key ends with the first 8 hex characters of the anchor hash, so two anchors in one second over one range keep both digests
+    expect(anchor.object_key).toMatch(/^digests\/\d{4}\/\d{2}\/\d{2}\/\d{6}Z-\d+-\d+-[0-9a-f]{8}\.json$/)
+    expect(anchor.object_key.endsWith(`-${String(anchor.anchor_hash).slice(0, 8)}.json`), `${anchor.object_key} ends with the anchor hash's first 8`).toBe(true)
     expect(anchor.actor).toBe(ADMIN_EMAIL)
 
     // The digest object is in the stand-in under the sink's prefix and says what the anchor row says.
@@ -149,4 +151,17 @@ test.describe('Audit log integrity', () => {
       await expect(page.getByTestId('audit-integrity-anchor-state')).toContainText('#')
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

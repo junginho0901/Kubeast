@@ -220,11 +220,13 @@ describe('AI Chat after an answer failed', () => {
     content: '',
     toolCalls: [],
     streamingPhase: null,
+    queued: false,
     error: 'HTTP 503: audit unavailable',
     errorKey: 'streamHttp',
     errorArgs: { status: 503, detail: 'audit unavailable' },
     savedBefore: 0,
     failedTurns: [],
+    maskValues: null,
     updatedAt: 1,
   } satisfies ChatStreamState
 

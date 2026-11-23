@@ -187,7 +187,7 @@ test.describe('AI model limits', () => {
   })
 
   test('a ModelConfig resource carries the two limits and its CA certificate to the config', async ({ request }) => {
-    const name = `e2e-limits-cr-${id}`
+    const name = withUndo(`e2e-limits-cr-${id}`, (n) => kubectl!('-n', 'kubeast', 'delete', 'modelconfig', n, '--ignore-not-found'))
     const pem = '-----BEGIN CERTIFICATE-----\nMIIBe2e\n-----END CERTIFICATE-----'
     const resource = (spec: Record<string, unknown>) => JSON.stringify({
       apiVersion: 'ai.kubeast.io/v1alpha1', kind: 'ModelConfig', metadata: { name, namespace: 'kubeast' },
@@ -240,4 +240,17 @@ test.describe('AI model limits', () => {
     }
     expect(stub('GET').map((c) => [c.max_tokens, c.max_completion_tokens])).toEqual([[null, 5], [5, null], [null, 5]])
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

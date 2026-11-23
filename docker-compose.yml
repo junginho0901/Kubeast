@@ -1,5 +1,10 @@
 # Only the gateway is published. Every other service is reachable inside msa-network only;
 # use `docker compose exec` (or an override file) to reach one directly.
+# stop_grace_period 35s on each Kubeast service is the chart's grace period for a pod that runs no terminal drain:
+# podShutdown.preStopSeconds 5, the waits after SIGTERM (25 s at most, k8s-service's) and 5 s to spare. Docker's own 10 s
+# would stop a service in the middle of its shutdown. k8s-service runs no terminal drain here: Compose stops a container
+# before it starts the next, so no other server would take its terminals over. postgres and redis get 30 s, the
+# Kubernetes default grace period of a pod with no preStop wait, so a clean PostgreSQL shutdown is not cut.
 services:
   # The services run as UID 65532; Docker creates named volumes owned by root.
   volume-init:
@@ -33,10 +38,13 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    stop_grace_period: 30s
 
   # Redis (캐싱 및 세션 관리)
   redis:
     image: valkey/valkey:9.1-alpine
+    # no snapshot on disk, as the chart: a container started again does not load entries deleted since
+    command: ["valkey-server", "--save", ""]
     networks:
       - msa-network
     healthcheck:
@@ -45,10 +53,12 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    # the Kubernetes default the chart gives Redis, which has no preStop wait, as postgres
+    stop_grace_period: 30s
 
   # Auth Service (Go)
   auth-service:
-    image: ghcr.io/junginho0901/kubeast-auth-service:${KUBEAST_TAG:-v0.7.7}
+    image: ghcr.io/junginho0901/kubeast-auth-service:${KUBEAST_TAG:-v0.7.8}
     env_file:
       - .env
     environment:
@@ -78,15 +88,16 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # AI Service
   ai-service:
-    image: ghcr.io/junginho0901/kubeast-ai-service:${KUBEAST_TAG:-v0.7.7}
+    image: ghcr.io/junginho0901/kubeast-ai-service:${KUBEAST_TAG:-v0.7.8}
     env_file:
       - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-6-luna}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       # model configs may point at private hosts listed here (Ollama on the host)
       - AI_BASE_URL_ALLOWED_HOSTS=${AI_BASE_URL_ALLOWED_HOSTS:-host.docker.internal}
@@ -110,10 +121,11 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # K8s Service (Go)
   k8s-service:
-    image: ghcr.io/junginho0901/kubeast-k8s-service:${KUBEAST_TAG:-v0.7.7}
+    image: ghcr.io/junginho0901/kubeast-k8s-service:${KUBEAST_TAG:-v0.7.8}
     env_file:
       - .env
     environment:
@@ -132,6 +144,9 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-kubeast}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-kubeast}
+      # chart auth.impersonation.sharedReadChecks (off; docs/cluster-requirements.md §1)
+      - SHARED_READ_CHECKS=${SHARED_READ_CHECKS:-false}
+      - SHARED_READ_CHECKS_EXCLUDE_CLUSTERS=${SHARED_READ_CHECKS_EXCLUDE_CLUSTERS:-}
     volumes:
       - kubeconfig_data:/kubeconfig:ro
     networks:
@@ -144,10 +159,11 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Session Service (Go)
   session-service:
-    image: ghcr.io/junginho0901/kubeast-session-service:${KUBEAST_TAG:-v0.7.7}
+    image: ghcr.io/junginho0901/kubeast-session-service:${KUBEAST_TAG:-v0.7.8}
     env_file:
       - .env
     environment:
@@ -164,10 +180,11 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Tool Server (K8s tool executor)
   tool-server:
-    image: ghcr.io/junginho0901/kubeast-tool-server:${KUBEAST_TAG:-v0.7.7}
+    image: ghcr.io/junginho0901/kubeast-tool-server:${KUBEAST_TAG:-v0.7.8}
     env_file:
       - .env
     environment:
@@ -188,6 +205,7 @@ services:
       auth-service:
         condition: service_started
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # API Gateway (NGINX)
   gateway:
@@ -206,13 +224,15 @@ services:
       - session-service
       - frontend
     restart: unless-stopped
+    stop_grace_period: 35s
 
   # Frontend
   frontend:
-    image: ghcr.io/junginho0901/kubeast-frontend:${KUBEAST_TAG:-v0.7.7}
+    image: ghcr.io/junginho0901/kubeast-frontend:${KUBEAST_TAG:-v0.7.8}
     networks:
       - msa-network
     restart: unless-stopped
+    stop_grace_period: 35s
 
 networks:
   msa-network:

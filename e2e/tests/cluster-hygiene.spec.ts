@@ -60,7 +60,7 @@ test.describe('cluster hygiene report', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hygiene-'))
     try {
       await test.step('make a namespace that breaks checks', async () => {
-        kubectl(['create', 'namespace', NS])
+        withUndo(kubectl(['create', 'namespace', NS]), () => { kubectl(['delete', 'validatingwebhookconfiguration', `e2e-hygiene-${stamp}`, '--ignore-not-found']); kubectl(['delete', 'namespace', NS, '--wait=false', '--ignore-not-found']) })
         kubectl(['apply', '-n', NS, '-f', '-'], JSON.stringify({
           apiVersion: 'v1', kind: 'Pod', metadata: { name: 'untidy', namespace: NS },
           spec: {
@@ -205,7 +205,7 @@ test.describe('cluster hygiene report', () => {
       const member = ((Array.isArray(roles) ? roles : roles.items) as Array<{ id: number; name: string }>).find((r) => r.name === 'Member')!
       const created = await request.post('/api/v1/auth/admin/users', { headers: bearer(admin), data: { name: 'E2E hygiene', email, password, role_id: member.id } })
       expect(created.status(), await created.text()).toBe(201)
-      userId = (await created.json()).id
+      userId = madeUser((await created.json()).id, bearer(admin))
       const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Write' } })
       expect(grant.ok()).toBeTruthy()
       const user = await login(request, email, password)
@@ -217,4 +217,28 @@ test.describe('cluster hygiene report', () => {
       if (userId) await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
+})
+
+// Accounts made by the tests above are deleted after each test as well: a test that times out has its request context
+// ended before its own finally runs, so the delete there never reaches the server. A second delete answers 404.
+const madeUsers: { id: string; headers: Record<string, string> }[] = []
+function madeUser<T>(id: T, headers: Record<string, string>): T {
+  madeUsers.push({ id: String(id), headers })
+  return id
+}
+test.afterEach(async ({ request }) => {
+  for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
