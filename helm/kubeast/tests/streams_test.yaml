@@ -318,6 +318,11 @@ tests:
           path: data["nginx.conf"]
           pattern: '(?s)(proxy_pass http://k8s-service-stream;.*){5}'
         documentIndex: 0
+      # the node shell location added here sends Connection from the map too, as gateway_test holds for the file
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'proxy_set_header Connection +(''upgrade''|"[Uu]pgrade"|upgrade|close)'
+        documentIndex: 0
       # the live lists and the Helm stream stay on k8s-service
       - matchRegex:
           path: data["nginx.conf"]
