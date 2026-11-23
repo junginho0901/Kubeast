@@ -199,10 +199,10 @@ ai:
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
   redaction:
-    numbered: false        # with redaction.pii: every personal-data kind as its kind and a number per chat answer or investigation (<PHONE_1>),
+    numbered: false        # (alpha) with redaction.pii: every personal-data kind as its kind and a number per chat answer or investigation (<PHONE_1>),
                            # writes holding those refused, the asker's chat answer shows the values in their place;
                            # off: <EMAIL_n> within one text, <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, no value shown
-  timelineChanges: false   # offer the AI tool timeline's changes view (what changed in a window, no value read) and the chat's instruction to read it first
+  timelineChanges: false   # (alpha) offer the AI tool timeline's changes view (what changed in a window, no value read) and the chat's instruction to read it first
   refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
                              # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
   toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
@@ -218,7 +218,7 @@ ai:
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
     # (0 = maxConcurrent); queueWaitSeconds: how long a turn waits for a slot before it ends as busy;
     # memoryLimit: ai-service's memory limit while the provider is on, if larger than resources.aiService.limits.memory
-  toolResultsJSON: false   # true: the model reads each tool result as one JSON object, cluster text as JSON strings (ai-alerts.md "Planted instructions")
+  toolResultsJSON: false   # (alpha) true: the model reads each tool result as one JSON object, cluster text as JSON strings (ai-alerts.md "Planted instructions")
 
 # Built-in PostgreSQL (false = external DB) and Redis (false = k8s-service caches in memory; tool-server only listens there for cluster changes)
 postgresql:
@@ -240,7 +240,7 @@ redis:
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (Flannel, etc.); kind's kindnet enforces it since kind 0.24
   aiEgress:
-    allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs, stsEndpoints and apiserverCIDR (cluster-requirements.md §15)
+    allowListOnly: false  # (alpha) true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs, stsEndpoints and apiserverCIDR (cluster-requirements.md §15)
     clusterAPIs: []       # the API servers of the registered clusters, this one's too, as VPC or subnet CIDRs (never a /32 on EKS): a CIDR opens 443 and 6443, {cidr, port} another port
     stsEndpoints: []      # when tool-server holds an IRSA role: the subnets of the STS VPC interface endpoint, {cidr, port: 443}
 
@@ -315,7 +315,7 @@ multicluster:
 
 ## Stages of new values
 
-Each value this release adds, or whose meaning it changes, has a stage, written here and in its `values.yaml` comment:
+Each value a release adds from 0.7.8 on, or whose meaning it changes, has a stage, written here and in its `values.yaml` comment:
 
 - **alpha**: new. Its key or behaviour may change or go in a later release, which that release's notes say.
 - **beta**: the feature stays. A key or a detail may change, with a release's notice and how to move.
@@ -339,6 +339,18 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | Tested: the stream-caps e2e on the kind dev install with the defaults (2026-11-19): the 21st terminal and followed log of one account refused, the screen saying why, and a new one opened once one closed |
 | `multicluster.maxStreamsPerServer` | 443 | beta | The cap reached on the kind dev install, with the screen saying why. The default comes from a load run there (2026-11-22) that held 800 terminals and followed logs open on one pod with no cap (about 0.37 MiB each, 79 % of 512 Mi at 800) |
 | `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | Tested: the whole e2e with it on, twice on the kind dev install with no failure, and 100 people opening the screens at once with no error |
+| `ai.refuseRepeatedReads` | false | alpha | The AI evaluation (`scripts/ai-eval.py`) with it off and on, and a run on the kind dev install with it on |
+| `ai.toolResultDetails` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
+| `ai.redaction.numbered` | false | alpha | A chat on the kind dev install with it and `ai.redaction.pii` on, and the AI evaluation with it off and on |
+| `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, false, [], [] | alpha | The AI evaluation with `chat` and `investigations` each off and on, and a run on the kind dev install with them on |
+| `ai.toolResultsJSON` | false | alpha | The planted instruction cases (`evals/ai-planted/`) with it off and on and the AI evaluation with it on, against a model |
+| `ai.timelineChanges` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
+| `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | `allowListOnly` on a cluster whose network plugin enforces egress rules (kind with Calico or Cilium): the chat with the model provider's address listed and without it |
+| `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | false, false, false, 15, 5, 4 | alpha | The alert investigations of the AI evaluation (`scripts/ai-eval.py --alerts`) with each switch off and on, and a run on the kind dev install with them on |
+| `features.alertInvestigation.ledger`, `evidenceCheck` (on, either adds one model call to `maxSteps` when it asks again) | false, false | alpha | The alert investigations of the AI evaluation with each off and on, and a run on the kind dev install with them on |
+| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | false, 12, 5, 20, 4, 60, 10737418240 | alpha | The e2e `ai-anomaly-rank.spec.ts` on the kind dev install, and the AI evaluation with it off and on |
+| `features.logSearch.queryMaxBytes` | 0 | alpha | A `loki_query` on the kind dev install with it set |
+| `features.callGraph.enabled` | false | alpha | The e2e `ai-call-graph.spec.ts` on the kind dev install, and the AI evaluation with it off and on |
 
 ## Redis users
 

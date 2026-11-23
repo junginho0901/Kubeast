@@ -192,9 +192,9 @@ ai:
   model: "gpt-6-luna"
   baseUrlAllowedHosts: []  # 모델 설정의 base_url이 사설 주소(클러스터 안 Ollama, 사내 LLM 게이트웨이)면 여기에 등록하세요
   redaction:
-    numbered: false        # redaction.pii와 함께: 개인 값 네 종류를 채팅 답·조사마다 종류와 번호로(<PHONE_1>), 그 글자를 담은 쓰기는 거절.
+    numbered: false        # (alpha) redaction.pii와 함께: 개인 값 네 종류를 채팅 답·조사마다 종류와 번호로(<PHONE_1>), 그 글자를 담은 쓰기는 거절.
                            # 물은 사람의 채팅 답에는 그 자리에 값이 보임. 끄면 한 글 안의 <EMAIL_n>과 <REDACTED:phone>·<REDACTED:rrn>·<REDACTED:card>, 값 안 보임
-  timelineChanges: false   # AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
+  timelineChanges: false   # (alpha) AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
   refuseRepeatedReads: false # (alpha) true면 채팅 답·조사 하나 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면
                              # 실행하지 않고 그 결과가 어디 있는지 모델에 알려 줍니다. 끄면 전과 같습니다
   toolResultDetails: false # (alpha) true면 도구 결과에 잘린 답의 "M of N", 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭,
@@ -210,7 +210,7 @@ ai:
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),
     # queueWaitSeconds: 칸을 기다리는 최대 시간. 넘으면 "바쁨"으로 끝납니다.
     # memoryLimit: 프로바이더가 켜져 있을 때 ai-service 메모리 한도. resources.aiService.limits.memory보다 클 때 씁니다
-  toolResultsJSON: false   # true면 모델이 도구 결과를 하나의 JSON 객체로, 클러스터 글을 JSON 문자열로 읽습니다(ai-alerts.md "심어 둔 지시")
+  toolResultsJSON: false   # (alpha) true면 모델이 도구 결과를 하나의 JSON 객체로, 클러스터 글을 JSON 문자열로 읽습니다(ai-alerts.md "심어 둔 지시")
 
 # 내장 PostgreSQL(false면 외부 DB)과 Redis(false면 k8s-service가 메모리에 캐시).
 # Redis에 캐시하는 곳은 k8s-service 하나이고, tool-server는 클러스터 바뀜 알림만 듣습니다.
@@ -233,7 +233,7 @@ redis:
 networkPolicy:
   enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(Flannel 등)에서는 영향이 없습니다. kind의 kindnet은 kind 0.24부터 강제합니다
   aiEgress:
-    allowListOnly: false  # true면(networkPolicy.enabled 필요) ai-service는 allowExternalEgressCIDRs로만, tool-server는 clusterAPIs·stsEndpoints·apiserverCIDR로만 나갑니다(cluster-requirements.md §15)
+    allowListOnly: false  # (alpha) true면(networkPolicy.enabled 필요) ai-service는 allowExternalEgressCIDRs로만, tool-server는 clusterAPIs·stsEndpoints·apiserverCIDR로만 나갑니다(cluster-requirements.md §15)
     clusterAPIs: []       # 등록한 클러스터(이 클러스터 포함)의 API 서버를 VPC·서브넷 CIDR로(EKS는 /32 금지) — CIDR은 443·6443, {cidr, port}는 그 포트
     stsEndpoints: []      # tool-server에 IRSA 롤이 있으면 STS VPC 인터페이스 엔드포인트의 서브넷, {cidr, port: 443}
 
@@ -307,7 +307,7 @@ multicluster:
 
 ## 새 값의 단계
 
-이번 릴리스가 더하거나 뜻을 바꾼 값마다 단계가 있고, 이 표와 그 값의 `values.yaml` 주석에 적습니다.
+0.7.8부터 릴리스가 더하거나 뜻을 바꾼 값마다 단계가 있고, 이 표와 그 값의 `values.yaml` 주석에 적습니다.
 
 - **alpha**: 새로 들어온 값입니다. 키나 동작이 뒤 릴리스에서 바뀌거나 없어질 수 있고, 그때는 그 릴리스 노트에 적습니다.
 - **beta**: 기능은 남습니다. 키나 세부는 바뀔 수 있고, 한 릴리스 앞서 알리고 옮기는 법을 적습니다.
@@ -331,6 +331,18 @@ multicluster:
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | 돌려 봄: kind 개발 설치에서 기본값으로 stream-caps e2e(2026-11-19). 한 계정의 21번째 터미널과 실시간 로그가 거절되고 화면이 까닭을 보여 주며, 하나를 닫으면 새로 열림 |
 | `multicluster.maxStreamsPerServer` | 443 | beta | kind 개발 설치에서 상한에 닿아 화면이 까닭을 보여 주는 경우. 기본값은 거기서 한 부하 시험(2026-11-22)에서 왔음: 상한 없이 파드 하나에 터미널과 실시간 로그 800개를 열어 둠(하나에 약 0.37 MiB, 800개에서 512 Mi의 79 %) |
 | `auth` 설정의 `customRoles` 옆 `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters` | false, [] | alpha | 돌려 봄: 켠 상태의 전체 e2e를 kind 개발 설치에서 두 번(실패 없음), 100명이 한꺼번에 화면을 연 부하(오류 없음) |
+| `ai.refuseRepeatedReads` | false | alpha | 끄고 켠 AI 평가(`scripts/ai-eval.py`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.toolResultDetails` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.redaction.numbered` | false | alpha | `ai.redaction.pii`와 함께 켠 상태로 kind 개발 설치에서 한 채팅, 끄고 켠 AI 평가 |
+| `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, false, [], [] | alpha | `chat`과 `investigations`를 하나씩 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.toolResultsJSON` | false | alpha | 끄고 켠 심어 둔 지시 문제(`evals/ai-planted/`)와 켠 상태의 AI 평가를 모델로 돌린 경우 |
+| `ai.timelineChanges` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | 밖으로 나가는 규칙을 지키는 네트워크 플러그인(Calico나 Cilium을 쓴 kind)에서 `allowListOnly`를 켠 경우: 모델 공급자 주소를 목록에 넣은 채팅과 뺀 채팅 |
+| `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | false, false, false, 15, 5, 4 | alpha | 스위치를 하나씩 끄고 켠 AI 평가의 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `features.alertInvestigation.ledger`, `evidenceCheck`(켜면 다시 물을 때 `maxSteps`에 모델 호출 하나가 더해짐) | false, false | alpha | 하나씩 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | false, 12, 5, 20, 4, 60, 10737418240 | alpha | kind 개발 설치에서 e2e `ai-anomaly-rank.spec.ts`, 끄고 켠 AI 평가 |
+| `features.logSearch.queryMaxBytes` | 0 | alpha | 값을 정한 채 kind 개발 설치에서 한 `loki_query` |
+| `features.callGraph.enabled` | false | alpha | kind 개발 설치에서 e2e `ai-call-graph.spec.ts`, 끄고 켠 AI 평가 |
 
 ## Redis 사용자
 
