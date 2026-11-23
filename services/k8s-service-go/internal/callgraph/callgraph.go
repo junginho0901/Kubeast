@@ -10,6 +10,7 @@
 package callgraph
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"regexp"
@@ -415,6 +416,23 @@ type Edge struct {
 	Connections int64             `json:"connections,omitempty"`
 	Dropped     int64             `json:"dropped,omitempty"`
 	DropReasons []netdrops.Reason `json:"drop_reasons,omitempty"`
+	// ErrorsUnknown: a series of the edge is not in the failed answer, which came back full (Traces.full), so its
+	// failed calls were not read. Errors and ErrorRatio then hold the failed calls read, at most what failed, and the
+	// answer gives them as null.
+	ErrorsUnknown bool `json:"-"`
+}
+
+// MarshalJSON gives errors and error_ratio as null when they are not known, never as 0.
+func (e Edge) MarshalJSON() ([]byte, error) {
+	type edge Edge
+	if !e.ErrorsUnknown {
+		return json.Marshal(edge(e))
+	}
+	return json.Marshal(struct {
+		edge
+		Errors     *int64   `json:"errors"`
+		ErrorRatio *float64 `json:"error_ratio"`
+	}{edge: edge(e)})
 }
 
 func (e *Edge) weight() int64 { return e.Requests + e.Connections + e.Dropped }
@@ -481,11 +499,53 @@ type Traces struct {
 	P90      []Sample
 }
 
+// full: the answer of a query capped at MaxSeries (no namespace labels) came back with that many series, each above 0,
+// so it may have left out series that count (topk keeps the largest: what it left out is at most its smallest).
+func (tr *Traces) full(answer []Sample) bool {
+	if tr.Shape.Namespace != "" || len(answer) < MaxSeries {
+		return false
+	}
+	for _, s := range answer {
+		if s.Value <= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// Cut: a capped query came back full, so an edge of the namespace below the busiest MaxSeries may be missing
+// (requests), an edge's failed calls may not have been read (failed: its errors are not known) or its 90th percentile (p90).
+func (tr *Traces) Cut() bool { return tr.full(tr.Requests) || tr.full(tr.Failed) || tr.full(tr.P90) }
+
+// seriesKey names a series by its labels: the three queries sum by the same labels, so an edge's series has one key in each.
+func seriesKey(labels map[string]string) string {
+	names := make([]string, 0, len(labels))
+	for k := range labels {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	var b strings.Builder
+	for _, k := range names {
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(labels[k])
+		b.WriteByte(0)
+	}
+	return b.String()
+}
+
 // Build folds the trace answers and the traffic lines into call edges with an end in the namespace, the busiest first,
-// at most MaxEdges (truncated when more).
+// at most MaxEdges (truncated when more, or when the requests answer came back full: an edge below it is not there).
 func Build(ix *Index, tr *Traces, traffic []nettraffic.Line) (edges []Edge, total int, truncated bool) {
 	b := &builder{edges: map[string]*Edge{}}
 	if tr != nil {
+		var failedRead map[string]bool
+		if tr.full(tr.Failed) {
+			failedRead = make(map[string]bool, len(tr.Failed))
+			for _, s := range tr.Failed {
+				failedRead[seriesKey(s.Labels)] = true
+			}
+		}
 		place := func(l map[string]string) (End, End) {
 			ends := [2]End{}
 			for i, side := range []string{"client", "server"} {
@@ -512,6 +572,9 @@ func Build(ix *Index, tr *Traces, traffic []nettraffic.Line) (edges []Edge, tota
 			}
 			e := b.get(from, to)
 			e.Requests += n
+			if failedRead != nil && !failedRead[seriesKey(s.Labels)] {
+				e.ErrorsUnknown = true
+			}
 			addSource(e, SourceTraces)
 		}
 		for _, s := range tr.Failed {
@@ -557,6 +620,9 @@ func Build(ix *Index, tr *Traces, traffic []nettraffic.Line) (edges []Edge, tota
 	total = len(all)
 	if truncated = total > MaxEdges; truncated {
 		all = all[:MaxEdges]
+	}
+	if tr != nil && tr.full(tr.Requests) {
+		truncated = true
 	}
 	edges = make([]Edge, 0, len(all))
 	for _, e := range all {
@@ -729,6 +795,9 @@ type SourceState struct {
 	Detail string `json:"detail,omitempty"`
 	// Series: the trace queries' series, or the traffic lines, read.
 	Series int `json:"series,omitempty"`
+	// Truncated: a trace query capped at MaxSeries came back full (Traces.Cut): an edge of the namespace may be
+	// missing (the answer's truncated too), an edge's errors not known (null) or its p90_ms not read.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // Result is the calls part of a graph answer. Suspects and Paths come before the edges, so a cut answer keeps them.
