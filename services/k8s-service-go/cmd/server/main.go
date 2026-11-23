@@ -409,6 +409,7 @@ func main() {
 		Name: "kubeast_shared_writes_without_place_total", Help: "Node list, node box and shared read answers past 256 KiB whose waits for a write place reached a second in all, so the rest was written without one, since start-up.",
 		ConstLabels: prometheus.Labels{"service": "k8s"},
 	}, func() float64 { return float64(handler.BigWritesWithoutPlace()) }))
+	m.Registry.MustRegister(handler.BigWriteWaitCollectors()...)
 	if role.ServesStreams() {
 		m.Gauge("kubeast_terminals_open", "Open terminals (pod exec, node shell).",
 			func() float64 { terminals, _ := streams.Open(); return float64(terminals) })

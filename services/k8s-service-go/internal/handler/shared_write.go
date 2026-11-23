@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 )
 
@@ -34,8 +36,34 @@ var (
 // gone out.
 var errLeftPartWay = errors.New("caller left part way through a shared body")
 
+// writePlaceWaitBuckets are internal/k8s clientWaitBuckets, so the two wait histograms share their le.
+var writePlaceWaitBuckets = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30, 60}
+
+// bigWriteWaited times each take of a write place in writeInTurns, a take that stopped waiting too, under
+// places="big_write". A take waits at most until its body's deadline (placeWait), so no observation passes bigWriteWait.
+var bigWriteWaited = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Name:        "kubeast_shared_write_place_wait_seconds",
+	Help:        "Seconds a node list, node box or shared read answer past 256 KiB waited for one of the write places, each time it took one (a few microseconds when one was free), a take that stopped waiting too.",
+	ConstLabels: prometheus.Labels{"service": "k8s", "places": "big_write"},
+	Buckets:     writePlaceWaitBuckets,
+})
+
+// placeWait is the seconds a take of a place begun at start waited, up to deadline and no further: a take that reached
+// the deadline stopped there, and its timer firing late is no wait for a place (1 s would read as 1.000x s, past the
+// le="1" bucket). A take begun after the deadline waited 0.
+func placeWait(start, deadline time.Time) float64 {
+	waited := time.Since(start)
+	if most := max(deadline.Sub(start), 0); waited > most {
+		waited = most
+	}
+	return waited.Seconds()
+}
+
 // BigWritesWithoutPlace is how many big bodies waited bigWriteWait in all for places and wrote the rest without one.
 func BigWritesWithoutPlace() int64 { return bigWritesWithoutPlace.Load() }
+
+// BigWriteWaitCollectors are the write place wait histogram, for the service's registry.
+func BigWriteWaitCollectors() []prometheus.Collector { return []prometheus.Collector{bigWriteWaited} }
 
 // writeShared writes body taking turns with the other big ones; the bytes are the same.
 func writeShared(w http.ResponseWriter, r *http.Request, body []byte) {
@@ -54,7 +82,8 @@ func abortIfCut(err error) {
 // slower than the others, gives the place back so the next writer goes first: a slow reader holds a place for one part,
 // not its whole body. The waits for places share one deadline, wait from the start: past it the rest is written at
 // once without a place, as before the places, so no body stops behind places held by readers that stopped reading. A
-// caller that leaves while it waits writes nothing more, and errLeftPartWay says part of the body had gone out.
+// caller that leaves while it waits writes nothing more, and errLeftPartWay says part of the body had gone out. Each
+// take of a place is observed in bigWriteWaited, whether it got one or not, up to the deadline (placeWait).
 func writeInTurns(ctx context.Context, w io.Writer, body []byte, places *limits.Slots, turn, wait time.Duration) error {
 	if len(body) <= bigSharedBody {
 		_, err := w.Write(body)
@@ -71,8 +100,10 @@ func writeInTurns(ctx context.Context, w io.Writer, body []byte, places *limits.
 	for len(body) > 0 {
 		if give == nil {
 			waitCtx, cancel := context.WithDeadline(ctx, deadline)
+			start := time.Now()
 			var err error
 			give, err = places.Take(waitCtx)
+			bigWriteWaited.Observe(placeWait(start, deadline))
 			cancel()
 			if err != nil {
 				if ctx.Err() != nil {
