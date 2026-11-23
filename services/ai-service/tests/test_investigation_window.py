@@ -1,10 +1,14 @@
 """An investigation's time windows, step 0 (timeline's changes view before the first model call) and the rules."""
 
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
+from app.services.ai import repeats
+from app.services.investigation import numbers
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import runner
 from app.services.investigation import settings as inv_settings
@@ -72,7 +76,18 @@ def test_the_windows_count_from_the_alerts_start_and_end_now_at_the_latest():
     older = NOW - timedelta(hours=2)
     w = inv_windows.of(older, NOW, cfg())
     assert (w.metrics.start, w.metrics.end) == (older - timedelta(minutes=15), older + timedelta(minutes=15))
+    assert (w.logs.start, w.logs.end) == (older - timedelta(minutes=5), older + timedelta(hours=1))  # an hour after at most
     assert inv_windows.stamp(w.changes.start) == "2026-10-13T06:00:00Z"
+
+
+def test_the_logs_window_of_an_alert_that_started_days_ago_stays_within_the_log_searchs_range():
+    days_ago = NOW - timedelta(days=3)
+    w = inv_windows.of(days_ago, NOW, cfg())
+    assert (w.logs.start, w.logs.end) == (days_ago - timedelta(minutes=5), days_ago + timedelta(hours=1))
+    assert w.logs.end - w.logs.start <= inv_windows.LOGS_MAX_RANGE
+    longest = inv_windows.of(days_ago, NOW, cfg(logs_window_minutes=1440))  # the setting's top: a day before the start
+    assert (longest.logs.start, longest.logs.end) == (days_ago - timedelta(days=1), days_ago)
+    assert longest.logs.end - longest.logs.start == inv_windows.LOGS_MAX_RANGE
 
 
 def test_the_windows_follow_the_settings():
@@ -100,7 +115,8 @@ def test_the_description_names_each_window_with_its_times():
     text = inv_windows.describe(inv_windows.of(STARTED, NOW, cfg()), cfg())
     assert "the alert's start, 2026-10-13T11:50:00Z; now is 2026-10-13T12:00:00Z" in text
     assert "- metrics: 2026-10-13T11:35:00Z to 2026-10-13T12:00:00Z (15 minutes either side of the start)" in text
-    assert "- logs: 2026-10-13T11:45:00Z to 2026-10-13T12:00:00Z (from 5 minutes before the start)" in text
+    assert ("- logs: 2026-10-13T11:45:00Z to 2026-10-13T12:00:00Z (from 5 minutes before the start, to an hour after it "
+            "at the latest)") in text
     assert "- changes: 2026-10-13T07:50:00Z to 2026-10-13T12:00:00Z (from 4 hours before the start)" in text
 
 
@@ -121,6 +137,21 @@ def test_the_switches_are_off_and_the_windows_held_to_their_ranges(monkeypatch):
         s = inv_settings.load()
         assert (s.rules, s.changes_first) == (True, True)
         assert (s.metrics_window_minutes, s.logs_window_minutes, s.changes_window_hours) == held
+
+
+SWITCHES = {"ALERT_INVESTIGATION_RULES": "rules", "ALERT_INVESTIGATION_CHANGES_FIRST": "changes_first",
+            "ALERT_INVESTIGATION_NARROW_FIRST": "narrow_first",
+            "ALERT_INVESTIGATION_LEDGER": "ledger", "ALERT_INVESTIGATION_EVIDENCE_CHECK": "evidence_check"}
+
+
+@pytest.mark.parametrize("value, on", [("1", True), ("ON", True), (" yes ", True), ("True", True), ("0", False),
+                                       ("off", False), ("", False)])
+def test_the_v079_switches_read_the_one_switch_rule(monkeypatch, value, on):
+    for name in (*SWITCHES, "AI_REFUSE_REPEATED_READS"):
+        monkeypatch.setenv(name, value)
+    s = inv_settings.load()
+    assert {field: getattr(s, field) for field in SWITCHES.values()} == dict.fromkeys(SWITCHES.values(), on)
+    assert repeats.enabled() is on
 
 
 def test_step_zero_leaves_a_window_end_of_now_to_the_tool_and_names_an_earlier_one():
@@ -368,3 +399,87 @@ def test_the_report_note_is_in_the_reports_language():
     assert inv_prompt.step_zero_note("x", "ja") == inv_prompt.step_zero_note("x", "en")
     assert inv_prompt.step_zero_note("x", "en").startswith("\n\n---\n\n")
 
+
+
+# --- the call numbers ---------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_rules_number_each_result_the_model_reads(monkeypatch):
+    service = ChangesService([completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"}),
+                                                tool_call("c2", "k8s_get_pod_logs", {"name": "web-1", "namespace": "apps"})]),
+                              completion(content="## Summary\nok")])
+    install_loop(monkeypatch, service, [])
+    at_now(monkeypatch)
+    out = await runner.investigate(cfg(max_steps=5, rules=True), row(starts_at=STARTED))
+    messages = service.completions.calls[1]["messages"]
+    assert [m["content"].split("\n")[0] for m in messages if m["role"] == "tool"] == ["[call 1]", "[call 2]"]
+    assert messages[0]["content"].endswith(numbers.NOTE) and messages[0]["content"].count("[call 3]") == 1
+    assert [c["tool"] for c in out["tool_calls"]] == ["k8s_get_resources", "k8s_get_pod_logs"]  # the stored calls carry no tag
+
+
+@pytest.mark.asyncio
+async def test_step_zero_is_call_one_and_the_models_first_call_is_call_two(monkeypatch):
+    service = ChangesService([completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})]),
+                              completion(content="## Summary\nok")])
+    install_loop(monkeypatch, service, [])
+    at_now(monkeypatch)
+    await runner.investigate(cfg(max_steps=5, changes_first=True), row(starts_at=STARTED))
+    assert "<<<CHANGES\n[call 1]\n" in first_message(service)
+    (result,) = [m["content"] for m in service.completions.calls[1]["messages"] if m["role"] == "tool"]
+    assert result.startswith("[call 2]\n")
+    assert service.completions.calls[0]["messages"][0]["content"].endswith(numbers.NOTE)
+
+
+@pytest.mark.asyncio
+async def test_with_every_switch_off_no_result_is_numbered(monkeypatch):
+    service = ChangesService([completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})]),
+                              completion(content="## Summary\nok")])
+    install_loop(monkeypatch, service, [])
+    await runner.investigate(cfg(max_steps=5), row(starts_at=STARTED))
+    messages = service.completions.calls[1]["messages"]
+    assert messages[0]["content"] == inv_prompt.system_prompt(cluster="self", namespace="apps", language="en")
+    assert not any(m["content"].startswith("[call") for m in messages if m["role"] == "tool")
+    assert not numbers.on(cfg()) and all(numbers.on(cfg(**{k: True})) for k in ("rules", "changes_first", "evidence_check", "ledger"))
+    # features.callGraph and narrowFirst number the calls too; settings without them read as off
+    off = dict(rules=False, changes_first=False, evidence_check=False, ledger=False)
+    assert not numbers.on(SimpleNamespace(**off))
+    assert not numbers.on(SimpleNamespace(**off, call_paths=False, narrow_first=False))
+    assert numbers.on(SimpleNamespace(**off, call_paths=True)) and numbers.on(SimpleNamespace(**off, narrow_first=True))
+
+
+# What v0.7.8 sent the model with every switch off, as sha256 of its system prompt and first message for row() (the
+# prompt of merge base 142b50b5): the switches' functions above compare with themselves, these with the release.
+V078_SYSTEM = {
+    ("apps", "en"): "0a39f3d9ffc2990bd020f0f25ef3e5e54cc50055e5eaf7c7947abfe74c08ae55",
+    ("", "ko"): "6b47cbc52d168d28e151b8f4673de0ecb440747bad08df7ff20bd4037e5e842a",
+    ("apps", "fr"): "516e8030991829d2bf2afbee09f029a52ca19daf874eb4ea6fbff80fa5723eb4",
+}
+V078_FIRST_MESSAGE = "9894a30d258e3de5dac0ea9e592c0d843122cb66f98fc6680f9f81d21742663a"
+V078_FINAL = "Tool calls are over for this investigation. Write the report now from what you found, under the four headings."
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_with_every_switch_off_the_model_reads_what_v078_sent(monkeypatch):
+    for (namespace, language), system in V078_SYSTEM.items():
+        service = FakeService([completion(calls=[tool_call("c1", "k8s_get_resources", {"resource_type": "pods", "namespace": "apps"})]),
+                               completion(content="## Summary\nok")])
+        install_loop(monkeypatch, service, [])
+
+        async def token(c, cluster, ns):
+            return "investigator-token"
+
+        monkeypatch.setattr(runner, "fetch_token", token)
+        out = await runner.investigate(cfg(max_steps=2, language=language), row(namespace=namespace))
+        messages = service.completions.calls[1]["messages"]
+        assert _sha(messages[0]["content"]) == system, (namespace, language)
+        if namespace == "apps":
+            assert _sha(messages[1]["content"]) == V078_FIRST_MESSAGE
+        (result,) = [m["content"] for m in messages if m["role"] == "tool"]
+        assert not result.startswith("[call")  # no call number
+        assert messages[-1]["content"] == V078_FINAL
+        assert {c["max_tokens"] for c in service.completions.calls} == {2048} and "result" not in out

@@ -21,6 +21,7 @@ from app.services.ai import charts
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import limits
+from app.services.ai import repeats as repeats_mod
 from app.services.ai import tool_replay
 from app.services.ai import tool_results
 from app.services.ai import usage as usage_acct
@@ -449,11 +450,12 @@ def tool_outcome(response) -> tuple[str, Optional[str], Optional[str]]:
 
 
 async def _call_tool(service, db, session, session_id, tools, tool_context, function_name, function_args, *,
-                     iteration, audit_actor, audit_http, call_id=None) -> tuple[list[str], dict, str]:
+                     iteration, audit_actor, audit_http, call_id=None, repeats=None) -> tuple[list[str], dict, str]:
     """Answer one tool call of the model: park a write for approval or run the tool, audit it, and return the
     SSE events for the chat, the tool_calls entry the saved message keeps, and the result text for the model.
     Both the API-key loop and Claude Code (provider claude-code) call tools through here. call_id is the call's
-    number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name."""
+    number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name.
+    repeats (ai.refuseRepeatedReads, app/services/ai/repeats.py) is the turn's RepeatGuard, or None."""
     from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
     from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
     from app.services.ai import permissions as _perm
@@ -466,6 +468,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     # (SSE) and the model (tool result), and move on.
     pending_approval_id = None
     ran = False
+    repeat_of = None
     refusal = _perm.tool_refusal(service, function_name, function_args)
     if refusal:
         # Needs what a screen asks and this role does not hold: no approval card, and the model can say why.
@@ -509,6 +512,10 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
             "approval_id": approval.id,
             "message": "This action changes the cluster and is waiting for the user's approval in the chat. Do not call the tool again; tell the user it awaits their approval.",
         }, ensure_ascii=False)
+    elif repeats is not None and (repeat_of := repeats.earlier(function_name, function_args)) is not None:
+        # The same read answered earlier in this turn: not run again, the model is told where its answer is.
+        access_mod.reset(service)
+        function_response = repeats_mod.refusal(repeat_of, repeats.age(repeat_of), scope="answer")
     elif audit_actor and not (await audit_ready())[0]:
         # Like the screens and MCP: what the chat reads from a cluster runs only when its row can be stored.
         function_response = AUDIT_UNAVAILABLE_RESULT
@@ -548,6 +555,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
                 # the cluster requests it made, each with the Audit-ID to find it in the cluster's audit log
                 'requests': call_requests,
                 **({'objects': target.objects} if target.objects else {}),
+                # the iteration of the call this one repeated (ai.refuseRepeatedReads): not run, nothing read
+                **({'repeat_of': repeat_of.step} if repeat_of is not None else {}),
                 **tool_input,
                 # replay: true when the answer came from recorded tool answers, not the cluster (tool_replay)
                 **tool_replay.call_fields(service, ran),
@@ -575,6 +584,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         if stored is False and ran and function_name not in WRITE_TOOL_NAMES and fail_closed_enabled():
             # As on the screens, a read nobody could find later gives no answer. A write has happened, so it keeps its own.
             function_response = AUDIT_UNAVAILABLE_RESULT
+    if repeats is not None and ran and tool_outcome(function_response)[0] == "success":
+        repeats.note(function_name, function_args, step=iteration, call=call_id)
 
     log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
 
@@ -905,6 +916,8 @@ async def session_chat_stream(
                 usage_acct.add_usage(turn_usage, _usage, prompt_chars=_chars)
         turn_tool_calls = 0
         turn_finish_reason = None
+        # One guard for the turn, which both loops below reach through _call_tool.
+        repeats = repeats_mod.RepeatGuard() if repeats_mod.enabled() else None
 
         delegated = getattr(service, "provider", None) == "claude-code"
         if delegated:
@@ -917,6 +930,7 @@ async def session_chat_stream(
                 events, entry, llm_text = await _call_tool(
                     service, db, session, session_id, tools, tool_context, name, args,
                     iteration=turn_no, audit_actor=audit_actor, audit_http=audit_http, call_id=call_id,
+                    repeats=repeats,
                 )
                 tool_calls_log.append(entry)
                 return events, tool_results.for_model(name, llm_text, limits.tool_result_chars(service))
@@ -1091,6 +1105,7 @@ async def session_chat_stream(
                     events, log_entry, tool_message_content = await _call_tool(
                         service, db, session, session_id, tools, tool_context, function_name, function_args,
                         iteration=iteration, audit_actor=audit_actor, audit_http=audit_http, call_id=call_id,
+                        repeats=repeats,
                     )
                     for event in events:
                         yield event

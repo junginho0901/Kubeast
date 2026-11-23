@@ -42,6 +42,8 @@ class InvestigationSettings:
     changes_first: bool = False
     # Step 0: then anomaly_rank (features.anomalyRank) over the metrics window of the alert's namespace.
     narrow_first: bool = False
+    # The rca block at the report's end (the result the row keeps) and the hypothesis ledger in it (investigation/ledger.py).
+    ledger: bool = False
     # Counted from the alert's start: metrics either side of it, logs from before it, changes from before it.
     metrics_window_minutes: int = 15
     logs_window_minutes: int = 5
@@ -49,6 +51,8 @@ class InvestigationSettings:
     model: str = ""
     language: str = "en"
     console_url: str = ""
+    # The report's causes held to the run's tool calls before it is kept (investigation/evidence.py).
+    evidence_check: bool = False
     token_url: str = "http://auth-service:8004/api/v1/auth/internal/investigator-token"
     internal_token: str = field(default="", repr=False)
     # A firing inbox alert with no notification for this long shows "status unknown" (Alertmanager resends a
@@ -81,8 +85,9 @@ def load() -> InvestigationSettings:
         provider_pause_minutes=max(0, _int("ALERT_INVESTIGATION_PROVIDER_PAUSE_MINUTES", 30)),
         max_steps=min(20, max(1, _int("ALERT_INVESTIGATION_MAX_STEPS", 8))),
         timeout_seconds=min(1800, max(30, _int("ALERT_INVESTIGATION_TIMEOUT_SECONDS", 300))),
-        rules=os.getenv("ALERT_INVESTIGATION_RULES", "false").strip().lower() == "true",
-        changes_first=os.getenv("ALERT_INVESTIGATION_CHANGES_FIRST", "false").strip().lower() == "true",
+        rules=switch.env_on("ALERT_INVESTIGATION_RULES"),
+        changes_first=switch.env_on("ALERT_INVESTIGATION_CHANGES_FIRST"),
+        ledger=switch.env_on("ALERT_INVESTIGATION_LEDGER"),
         narrow_first=switch.env_on("ALERT_INVESTIGATION_NARROW_FIRST"),
         # Prometheus reads at most 168 h, Loki 24 h by default, timeline 90 days back.
         metrics_window_minutes=min(360, max(1, _int("ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES", 15))),
@@ -91,6 +96,7 @@ def load() -> InvestigationSettings:
         model=os.getenv("ALERT_INVESTIGATION_MODEL", "").strip(),
         language=(os.getenv("ALERT_INVESTIGATION_LANGUAGE", "en").strip().lower() or "en"),
         console_url=os.getenv("ALERT_INVESTIGATION_CONSOLE_URL", "").strip().rstrip("/"),
+        evidence_check=switch.env_on("ALERT_INVESTIGATION_EVIDENCE_CHECK"),
         token_url=os.getenv(
             "AUTH_INVESTIGATOR_TOKEN_URL", "http://auth-service:8004/api/v1/auth/internal/investigator-token"
         ).strip(),
