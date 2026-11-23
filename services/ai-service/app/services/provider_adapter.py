@@ -21,6 +21,7 @@ from typing import Optional, Dict, Any
 
 from app.services.ai.debug_dump import log as logger
 from app.services.ai.limits import KUBEAST_KEYS
+from app.services.ai.model_requests import CountedChat
 from app.services.model_config_policy import AZURE_PROVIDERS, AZURE_V1_URL_HINT
 from app.services.model_http import model_client
 from app.services.tls import build_verify
@@ -256,14 +257,14 @@ class ProviderAdapter:
             from app.services.anthropic_messages import AnthropicMessagesClient
 
             self._openai_client = None
-            self.chat = AnthropicMessagesClient(
+            self.chat = CountedChat(AnthropicMessagesClient(
                 model=model,
                 api_key=api_key,
                 base_url=resolved_base_url,
                 http_client=http_client,
                 default_headers=default_headers,
                 options=options,
-            ).chat
+            ).chat)
             print(
                 f"[Provider Adapter] provider=anthropic (Messages API), model={model}, "
                 f"base_url={resolved_base_url}, ca_cert={'yes' if ca_cert else 'no'}",
@@ -286,7 +287,7 @@ class ProviderAdapter:
         )
 
         # 생성 옵션(num_ctx 등)을 매 요청에 주입하는 프록시로 chat 인터페이스 노출
-        self.chat = _ChatProxy(self._openai_client.chat, self.provider, self._default_options, resolved_base_url)
+        self.chat = CountedChat(_ChatProxy(self._openai_client.chat, self.provider, self._default_options, resolved_base_url))
 
         print(
             f"[Provider Adapter] provider={self.provider}, "

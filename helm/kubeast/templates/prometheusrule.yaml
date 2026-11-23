@@ -1,8 +1,10 @@
 {{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
 # Alerts on the console's own metrics: the audit store refusing rows
 # (audited actions are then refused), a 5xx ratio, p95 latency, an audit sink
-# that has stopped copying rows out, session recordings not uploading and,
-# with an anchor sink, no audit anchor written for two anchor periods.
+# that has stopped copying rows out, session recordings not uploading,
+# with an anchor sink, no audit anchor written for two anchor periods, and,
+# with the AI on, a model provider not answering and, with alert
+# investigations on, most of them failing.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -68,6 +70,31 @@ spec:
           annotations:
             summary: "Kubeast audit anchor not written for {{ mul 2 (int .anchor.hours) }} hours"
             description: "No digest of the audit chain has reached the anchor sink for two periods of audit.integrity.anchor.hours. A failed anchor is in auth-service's log and an audit.chain.anchor row; Admin → Audit Logs shows the last anchor."
+        {{- end }}
+        {{- end }}
+        {{- if .Values.ai.enabled }}
+        - alert: KubeastAIModelUnreachable
+          expr: |
+            sum(increase(kubeast_ai_model_requests_total{outcome!="ok"}[10m])) >= 3
+              and sum(increase(kubeast_ai_model_requests_total{outcome="ok"}[10m])) == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kubeast AI has not reached its model provider for 10 minutes"
+            description: "At least three requests to a model provider failed and none was answered. The outcome label of kubeast_ai_model_requests_total says why (auth, credit, unavailable, address, rate, other); chats end with the model's error and alert investigations fail."
+        {{- if .Values.features.alertInvestigation.enabled }}
+        - alert: KubeastAIInvestigationsFailing
+          expr: |
+            sum(increase(kubeast_ai_investigations_total{outcome="failed"}[1h])) >= 3
+              and sum(increase(kubeast_ai_investigations_total{outcome="failed"}[1h]))
+                / sum(increase(kubeast_ai_investigations_total{outcome=~"done|failed"}[1h])) > 0.5
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Kubeast alert investigations are failing"
+            description: "More than half of the last hour's alert investigations failed (three or more). Admin → Investigations shows each one's error; skipped ones (a cap, the daily budget, a provider pause) are not counted."
         {{- end }}
         {{- end }}
 {{- end }}

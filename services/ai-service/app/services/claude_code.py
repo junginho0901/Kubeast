@@ -386,6 +386,20 @@ def _result_error(result, seen: Optional[dict] = None) -> Optional[ClaudeCodeErr
 
 async def _run(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque, lane: str = "chat",
                on_wait: Optional[Callable[[bool], None]] = None):
+    """_run_once, counted in kubeast_ai_model_requests_total: ok, or the refusal kind (a busy run is not counted)."""
+    from app.services.ai import model_requests
+
+    try:
+        result = await _run_once(sdk, prompt, options, on_message, stderr, lane, on_wait)
+    except Exception as e:
+        model_requests.failed(e)
+        raise
+    model_requests.answered()
+    return result
+
+
+async def _run_once(sdk, prompt: str, options, on_message: Callable[[Any], None], stderr: deque, lane: str = "chat",
+                    on_wait: Optional[Callable[[bool], None]] = None):
     """One Claude Code run within its lane's concurrency limits and the turn timeout; returns its result message.
     on_wait hears when the run waits for a slot and when it starts (_slot)."""
     result = None

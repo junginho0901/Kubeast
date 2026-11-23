@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 from sqlalchemy import and_, case, func, or_, select, text, update
 
 from app.database import AlertInboxItem, AlertInvestigation, utcnow
-from app.services.investigation import skip_reasons
+from app.services.investigation import outcomes, skip_reasons
 
 # Rows a repeat of the same alert folds into (a skipped one may be tried again).
 _DEDUPE_STATUSES = ("queued", "running", "done", "failed")
@@ -168,6 +168,7 @@ async def skip(db, inv_id: str, reason: str) -> None:
     async with db.async_session() as s:
         await s.execute(update(AlertInvestigation).where(AlertInvestigation.id == inv_id).values(status="skipped", skip_reason=reason))
         await s.commit()
+    outcomes.ended(outcomes.SKIPPED)
 
 
 async def insert(db, *, held=None, **fields: Any) -> str:
@@ -335,6 +336,8 @@ async def requeue_or_fail(db, inv_id: str) -> str:
             .values(status="failed", error=STOPPED_TWICE, finished_at=utcnow())
         )
         await s.commit()
+        if res.rowcount:
+            outcomes.ended(outcomes.FAILED)
         return "failed" if res.rowcount else ""
 
 
@@ -355,6 +358,7 @@ async def finish(db, inv_id: str, **fields: Any) -> None:
     async with db.async_session() as s:
         await s.execute(update(AlertInvestigation).where(AlertInvestigation.id == inv_id).values(**fields))
         await s.commit()
+    outcomes.ended(fields.get("status", ""))  # a run's end: done or failed
 
 
 async def fail_stale_running(db, started_before: datetime) -> int:
@@ -367,6 +371,7 @@ async def fail_stale_running(db, started_before: datetime) -> int:
             .values(status="failed", error="interrupted: the investigation outlived its time limit (ai-service stopped?)", finished_at=utcnow())
         )
         await s.commit()
+        outcomes.ended(outcomes.FAILED, int(res.rowcount or 0))
         return int(res.rowcount or 0)
 
 

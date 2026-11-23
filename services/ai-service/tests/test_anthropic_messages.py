@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 from app.services import anthropic_messages as am
+from app.services.ai.model_requests import CountedCompletions
 from app.services.ai.streaming import suggest_optimization_stream
 from app.services.investigation import runner
 from app.services.provider_adapter import ProviderAdapter
@@ -176,7 +177,9 @@ def test_tool_choice_and_options():
 
 def test_provider_adapter_sends_anthropic_to_the_messages_client():
     adapter = ProviderAdapter(provider="anthropic", model="claude-opus-5-5", api_key="k", base_url="https://api.anthropic.com/v1/")
-    assert isinstance(adapter.chat.completions, am._Completions)
+    # counted as every model call (kubeast_ai_model_requests_total), then the Messages client's own completions
+    assert isinstance(adapter.chat.completions, CountedCompletions)
+    assert isinstance(adapter.chat.completions._inner, am._Completions)
     assert adapter.chat.completions._client.url == "https://api.anthropic.com/v1/messages"
 
 

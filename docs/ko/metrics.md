@@ -16,6 +16,8 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 | `kubeast_http_requests_total` | counter | `service`, `method`, `route`, `code` | 처리한 HTTP 요청 수. `route`에는 실제 경로가 아니라 라우터의 **패턴**(`/api/v1/namespaces/{namespace}/pods/{name}`)이 들어가므로 카디널리티가 고정됩니다. `/metrics`와 확인(probe) 경로는 세지 않습니다: `/health`·`/`·`/livez`·`/readyz`와 ai-service의 `/api/v1/ai/health`입니다. kubelet이 몇 초마다 묻는 경로라, 세면 `KubeastHighErrorRate`·`KubeastSlowRequests`의 분모를 채웁니다 |
 | `kubeast_http_request_duration_seconds` | histogram | 같음 | 요청 처리 시간(기본 버킷). ai-service의 스트리밍 응답은 헤더를 보낼 때까지의 시간입니다 |
 | `kubeast_http_requests_in_flight` | gauge | `service` | 처리 중인 요청 수 |
+| `kubeast_ai_model_requests_total` | counter | `service`, `outcome` | 기동 뒤 ai-service가 모델 제공자에 보낸 요청 수(채팅, 떠 있는 도우미, 알림 조사, 대화 요약, 연결 시험). `outcome`은 제공자가 답했으면 `ok`(나중에 끊긴 스트림도 `ok`), 아니면 받은 거절의 종류 `credit`, `rate`, `auth`, `unavailable`, `address`(Kubeast가 모델 주소를 거절해 보내지 않음), `other`입니다. 자리를 받지 못한 Claude Code 실행은 아무것도 보내지 않았으므로 세지 않습니다(`kubeast_claude_code_busy_total`). 제공자 · 모델 라벨은 없습니다 |
+| `kubeast_ai_investigations_total` | counter | `service`, `outcome` | 기동 뒤 이 ai-service가 끝낸 알림 조사 수: `done`, `failed`(실패한 실행, 그리고 멈추는 서버에 두 번 끊겼거나 시간 한도를 넘긴 것), `skipped`(웹훅이 건너뜀으로 저장했거나 작업자가 꺼낼 때 건너뜀 — 상한, 하루 예산, 제공자 멈춤) |
 | `kubeast_audit_store_up` | gauge 0/1 | `service` | 감사 저장소가 행을 받을 수 있는지 나타냅니다(k8s-service: `audit.Guarded.Ready`, 2 s 캐시). 0이면 쓰기, Secret 열람, exec, AI 쓰기 툴이 503으로 거부됩니다 |
 | `kubeast_audit_write_failures_total` | counter | `service` | 기동 뒤 저장하지 못한 감사 행 수 |
 | `kubeast_ws_subscriptions` | gauge | `service` | k8s-service에 살아 있는 watch 수(`multicluster.wsMaxSubscriptions`에 세는 것): 실시간 목록의 WebSocket 구독과 Helm 릴리스 스트림의 Secret watch. 터미널·실시간 로그는 watch 기다림 줄 다음 두 줄 |
@@ -70,7 +72,7 @@ metrics:
     from:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
-    enabled: true           # 알람 5개, 감사 앵커 싱크가 있으면 6개
+    enabled: true           # 알람 5개, AI를 켜면(기본) · 감사 앵커 싱크가 있으면 · 알림 조사를 켜면 하나씩 더
 ```
 
 ServiceMonitor 하나가 라벨 `kubeast.io/metrics: "true"`가 붙은 백엔드 Service 다섯 개를 포트 이름 `http`, 경로 `/metrics`로 고릅니다.
@@ -81,11 +83,13 @@ Operator 없이 Prometheus를 쓴다면 `kubernetes_sd_configs`(role `endpoints`
 | 이름 | 식 | 뜻 |
 |---|---|---|
 | `KubeastAuditStoreDown` | `min by (service) (kubeast_audit_store_up) == 0` 2분 | 감사 DB에 쓸 수 없어 감사 대상 동작을 거부하는 중 |
-| `KubeastHighErrorRate` | 5xx 비율 > `errorRatio`(0.05) 10분 | 콘솔 오류율. 데이터베이스 장애가 그보다 길면 로그인한 사람의 읽기만으로도 울립니다. 세션을 읽을 수 없는 요청은 503으로 답하기 때문입니다(0.7.7은 이 알림이 세지 않는 4xx인 401로 답했습니다) |
+| `KubeastHighErrorRate` | 5xx 비율 > `errorRatio`(0.05) 10분 | 콘솔 오류율. 데이터베이스 장애가 그보다 길면 로그인한 사람의 읽기만으로도 울립니다. 세션을 읽을 수 없는 요청은 503으로 답하기 때문입니다(0.7.7은 이 알림이 세지 않는 4xx인 401로 답했습니다). API 서버가 20초 안에 답을 시작하지 않는 클러스터 읽기도 k8s-service의 503이므로, 끊긴 클러스터 하나의 화면을 사람들이 계속 열어 두면 그것만으로 울 수 있습니다 |
 | `KubeastSlowRequests` | p95 > `p95Seconds`(2 s) 10분 | 콘솔 지연 |
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0`이고 마지막 전송 성공 뒤 10분이 넘게 지남, 5분 | 감사 싱크 전송이 멈춤(auth-service 로그에 오류가 남고, 보내지 못한 행은 보존 작업이 지우지 않고 남겨 둠) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0`이고 마지막 업로드 뒤 10분이 넘게 지남, 5분 | 세션 녹화 업로드가 멈춤(출력은 k8s-service 스풀에 쌓이고, 세션은 막지 않음) |
 | `KubeastAuditAnchorStalled` | `time() - max by (service) (kubeast_audit_anchor_last_timestamp_seconds)`가 `audit.integrity.anchor.hours`의 두 배를 넘음, 30분. `audit.integrity.anchor.sink`가 있을 때만 | 두 주기 동안 감사 앵커가 쓰이지 않음: 쓰기가 실패하거나 앵커 작업이 돌지 않음. 실패한 앵커는 auth-service 로그와 `audit.chain.anchor` 행에 남음([security-audit.md](security-audit.md)) |
+| `KubeastAIModelUnreachable` | 10분 동안 `kubeast_ai_model_requests_total`이 `ok` 아닌 것 3개 이상이고 `ok`는 0, 10분. `ai.enabled`일 때만 | 모델 제공자에 보낸 요청이 하나도 답을 받지 못함: 만료된 키나 토큰, 크레딧 없음, 제공자 장애, 또는 허용 목록에서 빠진 주소(`networkPolicy.aiEgress`). 어느 것인지는 `outcome` 라벨이 말하고, 채팅은 모델 오류로 끝나며 알림 조사는 실패합니다 |
+| `KubeastAIInvestigationsFailing` | 1시간 동안 `kubeast_ai_investigations_total`이 `failed` 3개 이상이고 `done`과 `failed`의 절반을 넘음, 15분. `features.alertInvestigation.enabled`일 때만 | 알림 조사 대부분이 실패함. 각 조사의 오류는 Admin → Investigations에 있고, `skipped`는 세지 않습니다 |
 
 자주 쓰는 식:
 
