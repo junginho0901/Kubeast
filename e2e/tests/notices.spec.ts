@@ -234,7 +234,7 @@ test.describe('notices instead of "nothing here"', () => {
     const admin = await adminHeaders(request)
     const binding = `e2e-notices-view-${Date.now()}`
     // view lists ServiceAccounts in default but not RoleBindings; the group is kubeast:role:read (the chart allows it)
-    kubectl(`-n default create rolebinding ${binding} --clusterrole=view --group=kubeast:role:read`)
+    withUndo(kubectl(`-n default create rolebinding ${binding} --clusterrole=view --group=kubeast:role:read`), () => kubectl(`-n default delete rolebinding ${binding} --ignore-not-found`))
     const reader = await tempUser(browser, request, admin, 'nsread', 'Read', ['default'])
     try {
       expect(await (await reader.page.request.get('/api/v1/cluster/namespaces/default/rolebindings?cluster=self')).status()).toBe(403)
@@ -319,7 +319,7 @@ test.describe('notices instead of "nothing here"', () => {
         versions: [{ name: 'v1', served: true, storage: true, schema: { openAPIV3Schema: { type: 'object', 'x-kubernetes-preserve-unknown-fields': true } } }],
       },
     })
-    const viewRole = `e2e-notices-cr-${run}`
+    const viewRole = withUndo(`e2e-notices-cr-${run}`, (role) => { kubectl(`delete crd ${resource(seen)} ${resource(hidden)} --ignore-not-found --wait=false`); kubectl(`delete clusterrole ${role} --ignore-not-found`); kubectl(`delete namespace ${ns} --ignore-not-found --wait=false`) })
     const email = `e2e-notices-crread-${run}@kubeast.local`
     const password = 'e2e-notices-throwaway'
     const row = (p: Page, name: string) => p.locator('main table tbody tr').filter({ hasText: name })
@@ -444,4 +444,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

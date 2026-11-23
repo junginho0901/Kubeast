@@ -227,7 +227,7 @@ test.describe('a line taken out of a YAML window', () => {
   })
 
   test('a Namespace loses a label and an annotation line, and keeps a protected one', async ({ request }) => {
-    const name = `${NS}-ns`
+    const name = withUndo(`${NS}-ns`, (n) => kubectl(`delete namespace ${n} --wait=false --ignore-not-found`))
     kubectl('create -f -', JSON.stringify({ apiVersion: 'v1', kind: 'Namespace', metadata: { name, labels: { keep: 'a', 'gone-label': 'b' }, annotations: { 'gone-note': 'c' } } }))
     try {
       const res0 = await request.get(`/api/v1/cluster/namespaces/${name}/yaml?cluster=${CLUSTER}&force_refresh=true`, { headers })
@@ -346,4 +346,17 @@ test.describe('a line taken out of a YAML window', () => {
     expect(objectOf(`-n ${NS} get ${TWIN_CRD} twin`).spec).toEqual({ from: 'second' })
     expect(objectOf(`-n ${NS} get ${CRD} twin`).spec, 'the Widget of the same name is as it was').toEqual({ from: 'first', 'first-key': 1 })
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

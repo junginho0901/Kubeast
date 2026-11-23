@@ -44,14 +44,14 @@ test.describe('AI model tier', () => {
       data: { name, provider: 'ollama', model: economyModel, base_url: STUB, tier: 'economy', enabled: true, is_default: false },
     })
     expect(created.ok(), `create: ${await created.text()}`).toBeTruthy()
-    const config = await created.json()
+    const config = withUndo(await created.json(), (c) => request.delete(`/api/v1/ai/model-configs/${c.id}`, { headers: admin, failOnStatusCode: false }))
     expect(config.tier).toBe('economy')
     const sessions: string[] = []
     try {
       const newSession = async () => {
         const s = await request.post('/api/v1/sessions', { headers: admin, data: { title: `e2e-tier-${Date.now().toString(36)}` } })
         expect(s.ok()).toBeTruthy()
-        const id = (await s.json()).id as string
+        const id = withUndo((await s.json()).id as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers: admin, failOnStatusCode: false }))
         sessions.push(id)
         return id
       }
@@ -74,7 +74,7 @@ test.describe('AI model tier', () => {
     }
 
     // Without it, the floating assistant is back on the default config.
-    const id = (await (await request.post('/api/v1/sessions', { headers: admin, data: { title: 'e2e-tier-after' } })).json()).id as string
+    const id = withUndo((await (await request.post('/api/v1/sessions', { headers: admin, data: { title: 'e2e-tier-after' } })).json()).id as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers: admin, failOnStatusCode: false }))
     try {
       const after = await modelInfo(request, admin, `/api/v1/ai/sessions/${id}/floating-chat`, 'ok라고만 답해.')
       expect(after.tier).toBe('default')
@@ -94,4 +94,17 @@ test.describe('AI model tier', () => {
     expect(res.status()).toBe(400)
     expect(String((await res.json()).detail)).toContain("'economy'")
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

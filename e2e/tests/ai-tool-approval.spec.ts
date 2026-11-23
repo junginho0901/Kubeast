@@ -57,7 +57,7 @@ test.describe('AI write tools need approval (H2)', () => {
     const manifest =
       'apiVersion: v1\nkind: Namespace\nmetadata:\n  name: f3approve\n---\n' +
       'apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: pause\n  namespace: f3approve\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: pause\n  template:\n    metadata:\n      labels:\n        app: pause\n    spec:\n      containers:\n        - name: pause\n          image: registry.k8s.io/pause:3.10\n'
-    execSync(`kubectl --kubeconfig ${kcPath} apply -f -`, { input: manifest, stdio: ['pipe', 'ignore', 'inherit'] })
+    execSync(`kubectl --kubeconfig ${kcPath} apply -f -`, { input: withUndo(manifest, () => execSync(`kubectl --kubeconfig ${kcPath} delete namespace f3approve --wait=false`, { stdio: 'ignore' })), stdio: ['pipe', 'ignore', 'inherit'] })
     await expect.poll(() => replicas(request, admin), { timeout: 60_000 }).toBe(1)
 
     const ctx = await browser.newContext({ baseURL: process.env.E2E_BASE_URL || 'http://localhost:30080' })
@@ -115,4 +115,17 @@ test.describe('AI write tools need approval (H2)', () => {
       }
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

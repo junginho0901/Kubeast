@@ -129,7 +129,7 @@ test.describe('the AI reads what the Admin screens read', () => {
     const keyName = `e2e-adminreads-${s}`
     const made = await request.post('/api/v1/auth/api-keys', { headers: bearer(admin), data: { name: keyName, expires_in_days: 1, cluster_ids: [CLUSTER], role_ceiling: 'Read' } })
     expect(made.status(), await made.text()).toBe(201)
-    const key = await made.json()
+    const key = withUndo(await made.json(), (k) => request.delete(`/api/v1/auth/api-keys/${k.id}`, { headers: bearer(admin), failOnStatusCode: false }))
     try {
       // One window for both: without it a report with no sign-off yet counts from the moment it is read.
       const since = rfc3339(Date.now() - 60 * 60 * 1000)
@@ -384,7 +384,7 @@ test.describe('the AI reads what the Admin screens read', () => {
 
     const s = stamp()
     const users: string[] = []
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: bearer(admin), failOnStatusCode: false }) })
     try {
       // A Read grant holds ai.mcp.use and the read tools, none of these.
       const readerEmail = `e2e-adminreads-r-${s}@kubeast.local`
@@ -441,4 +441,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

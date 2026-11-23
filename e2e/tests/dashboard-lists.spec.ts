@@ -105,7 +105,7 @@ test.describe('Dashboard lists', () => {
     try { kubectl = kubectlFor('test2') } catch { test.skip(true, 'kind cluster test2 not found') }
     const k = kubectl!
     const kubectlNodes = () => k('get nodes --no-headers').split('\n').filter(Boolean).map((l) => { const [name, status] = l.split(/\s+/); return { name, status } })
-    const node = kubectlNodes()[0].name
+    const node = withUndo(kubectlNodes()[0].name, (n) => k(`uncordon ${n}`))
     try {
       k(`cordon ${node}`)
       const want = kubectlNodes()
@@ -382,4 +382,17 @@ test.describe('Dashboard lists', () => {
     await page.getByPlaceholder(/Search issues|이슈 검색/).fill('e2e-failing-job')
     await expect(total).toHaveText(new RegExp(`^(${failing} of ${all.length}|${all.length}개 중 ${failing}개)$`))
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

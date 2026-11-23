@@ -89,7 +89,7 @@ test.describe('Dates and pages', () => {
 
   test('a CronJob shows its next run in the zone it is read in, none while suspended', async ({ page }) => {
     // 0 3 * * * in Asia/Seoul (UTC+9) is 18:00 UTC, whatever zone the browser runs in
-    const name = `e2e-next-run-${Date.now().toString(36)}`
+    const name = withUndo(`e2e-next-run-${Date.now().toString(36)}`, (n) => kubectl(`-n default delete cronjob ${n} --ignore-not-found`))
     kubectl(`-n default create cronjob ${name} --image=busybox:1.36 --schedule="0 3 * * *" -- /bin/true`)
     try {
       kubectl(`-n default patch cronjob ${name} --type=merge -p '{"spec":{"timeZone":"Asia/Seoul"}}'`)
@@ -118,4 +118,17 @@ test.describe('Dates and pages', () => {
     await expect(fixtureNext).toHaveText('-')
     await expect(fixtureNext).toHaveAttribute('title', /Suspended|중지됨/)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
