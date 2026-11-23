@@ -9,6 +9,7 @@ import pytest
 from app.services.investigation import evidence, numbers
 from app.services.investigation import rca as rca_block
 from app.services.investigation import prompt as inv_prompt
+from app.services.investigation import result as inv_result
 from app.services.investigation import runner
 from app.services.investigation.settings import InvestigationSettings, load
 from tests.test_alert_investigation import (FakeClaudeCode, FakeService, FakeSubscriptionService, cfg, completion,
@@ -183,6 +184,27 @@ def test_only_kind_none_leaves_an_entry_out_of_the_causes():
     assert rca_block.not_in_ledger(block, []) == ["StatefulSet/apps/db", "StatefulSet/apps/db", "Pod/apps/y"]
 
 
+def test_a_number_that_names_no_call_fails_a_cause_beside_one_that_shows_it():
+    # [1, 999]: call 1 answered and names the cause, 999 names no call of the run
+    reads = [evidence.Read("k8s_get_resources", {}, text="Deployment/shop/cart")]
+    log = [{"tool": "k8s_get_resources"}]
+    block = {"no_fault": False, "causes": [{"resource": "Deployment/shop/cart", "kind": "rollout", "evidence": [1, 999]}]}
+    checked = rca_block.check("# Report\nObserved rollout\n```rca\n" + json.dumps(block) + "\n```", tool_log=log, reads=reads,
+                              alert_start=None, evidence=True, ledger=False)
+    assert checked.failures == [{"kind": "cause_bad_calls", "resource": "Deployment/shop/cart"}]
+    assert evidence.reason_text(checked.cause_problems[0]) == "calls 999 are not calls of this investigation that answered"
+    stored = inv_result.shape(checked.block, checked.status, log, [], cause_problems=checked.cause_problems,
+                              failures=checked.failures)["causes"][0]
+    assert (stored["verified"], stored["reason"]) == (False, "bad_calls")
+    assert stored["evidence"] == [{"call": 1, "tool": "k8s_get_resources"}] and stored["raw_evidence"] == [1, 999]
+    # a failed call beside one that answered is no evidence either; a reason found before it stays the cause's reason
+    reads.append(evidence.Read("k8s_get_pod_logs", {}, failed=True))
+    assert [(p.reason, p.values) for p in evidence.check({"causes": [cause("Deployment/shop/cart", [1, 2])]}, reads, NOW)[1]] == [
+        ("bad_calls", {"calls": [2]})]
+    assert [p.reason for p in evidence.check({"causes": [cause("Deployment/shop/db", [1, 999])]}, reads, NOW)[1]] == ["name_missing"]
+    assert evidence.check({"causes": [cause("Deployment/shop/cart", [1, "1"])]}, reads, NOW) == (1, [])
+
+
 def test_no_fault_and_an_alert_without_a_start_check_nothing_of_time():
     reads = [evidence.Read("k8s_get_resources", PODS, text=POD_TABLE)]
     assert evidence.check({"no_fault": True, "causes": []}, reads, NOW) == (0, [])
@@ -252,6 +274,23 @@ async def test_a_cause_no_call_shows_is_asked_about_once_without_tools(monkeypat
     assert out["iterations"] == 3 and out["total_tokens"] == 33  # the second ask counts in the run's tokens
     assert progress["evidence"] == {"block": "ok", "causes": 1, "unsupported": 1, "asked_again": True,
                                     "ask_failed": False, "block_after": "ok", "causes_after": 1, "unverified": 0}
+
+
+@pytest.mark.asyncio
+async def test_a_cause_that_also_names_no_call_is_asked_about_and_stays_not_verified(monkeypatch):
+    mixed = f"{WEB_REPORT}\n\n{rca(cause('Deployment/apps/web', [1, 999]))}"
+    service = _service(_reads_pods(), completion(content=mixed), completion(content=f"{WEB_REPORT}\n\n{rca(cause('Deployment/apps/web', [1]))}"))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(max_steps=5, evidence_check=True), row())
+    line = "- Deployment/apps/web: calls 999 are not calls of this investigation that answered"
+    assert line in service.completions.calls[2]["messages"][-1]["content"]
+    assert out["report"] == WEB_REPORT and out["result"]["asked_again"] is True and out["result"]["causes"][0]["verified"] is True
+
+    service = _service(_reads_pods(), completion(content=mixed), completion(content=mixed))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(max_steps=5, evidence_check=True), row())
+    assert out["report"].endswith(line)
+    assert (out["result"]["causes"][0]["verified"], out["result"]["causes"][0]["reason"]) == (False, "bad_calls")
 
 
 @pytest.mark.parametrize("language, head", [

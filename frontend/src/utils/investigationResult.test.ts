@@ -75,6 +75,10 @@ describe('an investigation result', () => {
     expect(notVerifiedText({ ...RESULT.causes[0], verified: false, reason: 'name_missing' }, tr))
       .toBe('Not verified: its name does not appear in what the calls returned')
     expect(notVerifiedText({ ...RESULT.causes[0], verified: false }, tr)).toBe('Not verified')
+    // [1, 999]: call 1 is drawn beside the mark, so the reason says one call given is not a call that answered
+    expect(notVerifiedText({ ...RESULT.causes[0], raw_evidence: [1, 999], verified: false, reason: 'bad_calls' }, tr))
+      .toBe('Not verified: a call given is not a call of this investigation that answered')
+    expect(en.investigations.result.unverified.bad_calls).toBe('a call given is not a call of this investigation that answered')
     for (const reason of ['no_evidence', 'bad_calls', 'name_missing', 'after_alert']) {
       expect((en.investigations.result.unverified as Record<string, string>)[reason]).toBeTruthy()
       expect((ko.investigations.result.unverified as Record<string, string>)[reason]).toBeTruthy()

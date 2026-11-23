@@ -67,7 +67,7 @@ export function ledgerOn(result: InvestigationResult): boolean {
 
 const UNVERIFIED_TEXT: Record<string, string> = {
   no_evidence: 'no call is given for it',
-  bad_calls: 'the calls given are not calls of this investigation that answered',
+  bad_calls: 'a call given is not a call of this investigation that answered',
   name_missing: 'its name does not appear in what the calls returned',
   after_alert: 'it starts after the alert did',
 }
