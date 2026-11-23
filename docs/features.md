@@ -31,6 +31,7 @@
   - A missing name, kind or capability (metrics-server, etc.) comes back as a result instead of a kubectl error: **`not_found` (with a list of similar names), `unknown_kind` or `unavailable`**.
   - The AI therefore looks once instead of asking back while switching namespaces, then says where it looked and asks.
   - Similar names are searched only within that person's namespace scope.
+  - **Rule cards** (`ai.ruleCards`, off by default): with `chat` on, a question that names a failure a card knows (a reason such as `OOMKilled` or `ImagePullBackOff`, or an alert name) gets at most two cards for that turn — the checks that often find that failure's cause, in order, each with the tools that answer it, only those the turn offers. The defaults are one card per kind of failure (`app/services/rule_cards.json`); `cards` adds or replaces cards and `remove` leaves default kinds out. `investigations` does the same for alert investigations ([AI alerts](ai-alerts.md)).
   - Each tool block starts with a **🔐 line: who the cluster saw the call as**.
     - The user and groups are the impersonation values sent to the cluster, as the service that sent them reports them (tool-server, or k8s-service in its `X-Kubeast-Access` header).
     - The line also shows the Kubeast role, the namespace scope and whether the tool reads or writes.
@@ -80,6 +81,9 @@
     - the install has not turned it on: `anomaly_rank` with `features.anomalyRank.enabled` off
     - the person lacks the permission k8s-service checks: `resource.hygiene.scan` (or `admin.hygiene.read`), `resource.helm.read`, `resource.policyreport.read`, `resource.cost.read` or `resource.networkflow.read`
   - Results are cut at 100 series, 120 points, 200 log lines, 200 rows, 200 graph nodes/400 edges and 64 KB of text.
+  - `ai.toolResultDetails` (off by default) adds to the results, from what they already hold (nothing more is read):
+    - the metric, log, trace and timeline tools: `cut`, how much of a cut result is shown ("100 of 340 series", or "200 lines shown; the total is not known" where the store stops at its limit and does not say how many more), `default_window`, the window read when the call named none (1 hour; the timeline's 24 hours), and `empty_reason` where an empty result did not say why (an instant `prometheus_query` reads only the last 5 minutes of samples, no scrape target)
+    - every read tool, in the chat and in alert investigations: `console_links` in front of the result, the console paths of the objects the call and its result name — the drawer on the kind's list page (`?detail=<Kind>/<namespace>/<name>`; a Pod's holds its logs and metrics), an alert in Alerts, a namespace's Resource Graph — which the model can link in its answer. They are relative, built only from the console's own pages and names that follow Kubernetes' naming rules, so a link opens the console it was read in. There is no trace screen, so a trace gets no link.
   - A range result (`prometheus_query` and `loki_query` metric queries) can be longer than what the model reads at once (the model's tool result length, 6,000 characters unless set). Then it is not cut.
   - Instead, it is reduced to the 10 series with the largest values, each with its min, max, average and last value and a 12-point overview. Results drawn as graphs get the same summary.
   - `gitops_status` reads Argo CD Application CRs with that person's permissions. It summarizes sync, health, the last operation, error conditions and OutOfSync resources per app.

@@ -152,12 +152,12 @@ test.describe('AI admin tools: gitops_status, audit_search, nodes_stats_summary,
     const s = stamp()
     // Name order would list the healthy app first; the tool lists problems first.
     const ok = `e2e-app-a-ok-${s}`
-    const bad = `e2e-app-bad-${s}`
+    const bad = withUndo(`e2e-app-bad-${s}`, (b) => kubectl.ok(`-n default delete applications.argoproj.io ${ok} ${b} --ignore-not-found`))
     const email = `e2e-tools5-r-${s}@kubeast.local`
     let userId = ''
     try {
       if (!hadCRD) {
-        kubectl.run('apply -f -', APP_CRD)
+        withUndo(kubectl.run('apply -f -', APP_CRD), () => kubectl.ok('delete crd applications.argoproj.io --ignore-not-found'))
         kubectl.run('wait --for=condition=Established crd/applications.argoproj.io --timeout=60s')
         await waitUntilListed(kubectl.run, ['applications.argoproj.io'])
       }
@@ -369,4 +369,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

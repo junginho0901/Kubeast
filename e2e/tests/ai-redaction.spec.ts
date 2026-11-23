@@ -146,7 +146,7 @@ test.describe('AI tool results are redacted', () => {
     const titlePw = `title-pw-${STAMP}`
     const created = await request.post('/api/v1/sessions', { headers, data: {} })
     expect(created.ok(), await created.text()).toBeTruthy()
-    const id = ((await created.json()).id ?? (await created.json()).session_id) as string
+    const id = withUndo(((await created.json()).id ?? (await created.json()).session_id) as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers, failOnStatusCode: false }))
     try {
       const chat = await request.post(`/api/v1/ai/sessions/${id}/chat?cluster=${CLUSTER}`, {
         headers: { ...headers, 'X-Cluster-Name': CLUSTER },
@@ -182,4 +182,17 @@ test.describe('AI tool results are redacted', () => {
     // no base64 secret value: every data value is the placeholder
     expect(body).not.toMatch(/DEFAULT_ADMIN_PASSWORD: [A-Za-z0-9+/=]{8,}/)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

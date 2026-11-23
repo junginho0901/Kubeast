@@ -8,7 +8,7 @@ const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 
 test.describe('Chat list and model field', () => {
   test('conversation cards fit their text with even padding and a 4 px gap', async ({ page }) => {
-    const ids: string[] = []
+    const ids = withUndo<string[]>([], async (list) => { for (const id of list) await page.request.delete(`/api/v1/sessions/${id}?cluster=self`, { headers: XRW, failOnStatusCode: false }) })
     const titles: string[] = []
     try {
       for (const n of [1, 2]) {
@@ -51,4 +51,17 @@ test.describe('Chat list and model field', () => {
     const height = (testId: string) => page.getByTestId(testId).evaluate((el) => Math.round(el.getBoundingClientRect().height))
     expect(await height('model-option-claude-sonnet-5-5')).toBe(await height('model-option-claude-opus-5-5'))
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

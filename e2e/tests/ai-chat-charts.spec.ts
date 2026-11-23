@@ -38,7 +38,7 @@ const ANSWER = [
 async function seed(page: Page, title: string): Promise<string> {
   const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
   expect(created.ok(), `create session: ${created.status()}`).toBeTruthy()
-  const id = (await created.json()).id as string
+  const id = withUndo((await created.json()).id as string, (i) => page.request.delete(`/api/v1/sessions/${i}?cluster=self`, { headers: XRW, failOnStatusCode: false }))
   const toolCalls = [
     { function: 'prometheus_query', args: { promql: MEMORY.promql, chart: true }, result: '{}', call_id: 0, chart: MEMORY },
     { function: 'prometheus_metrics', args: { pattern: 'cpu' }, result: '{}', call_id: 1 },
@@ -142,4 +142,17 @@ test.describe('AI answer graphs', () => {
       await page.request.delete(`/api/v1/sessions/${id}?cluster=self`, { headers: XRW })
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

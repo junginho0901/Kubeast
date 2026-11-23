@@ -34,7 +34,7 @@ async function withStubModel<T>(request: APIRequestContext, headers: Record<stri
   })
   expect(created.ok(), `create ${name}: ${await created.text()}`).toBeTruthy()
   const madeAt = Date.now()
-  const id = (await created.json()).id
+  const id = withUndo((await created.json()).id, (i) => request.delete(`/api/v1/ai/model-configs/${i}`, { headers, failOnStatusCode: false }))
   try {
     return await fn(name, madeAt)
   } finally {
@@ -45,7 +45,7 @@ async function withStubModel<T>(request: APIRequestContext, headers: Record<stri
 // The events of one floating chat question on a new session
 async function floatingEvents(request: APIRequestContext, headers: Record<string, string>): Promise<Record<string, unknown>[]> {
   const session = await request.post('/api/v1/sessions?cluster=self', { headers, data: { title: `e2e-refusal-${Date.now().toString(36)}` } })
-  const sid = (await session.json()).id as string
+  const sid = withUndo((await session.json()).id as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers, failOnStatusCode: false }))
   try {
     const res = await request.post(`/api/v1/ai/sessions/${sid}/floating-chat?cluster=self`, { headers, data: { message: 'hi' }, timeout: 120_000 })
     return (await res.text()).split('\n').filter((l) => l.startsWith('data: {')).map((l) => JSON.parse(l.slice(6)))
@@ -136,4 +136,17 @@ test.describe('AI provider refusals', () => {
       await page.evaluate(() => localStorage.setItem('i18nextLng', 'en'))
     }, STAND_IN)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

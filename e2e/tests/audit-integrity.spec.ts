@@ -72,7 +72,7 @@ test.describe('Audit log integrity', () => {
     expect(rep.to_seq).toBe(seq)
 
     // Change the row behind Kubeast's back: the chain breaks at exactly that position.
-    const originalAgent = psql(`select coalesce(user_agent,'') from auth_audit_logs where id=${id}`)
+    const originalAgent = withUndo(psql(`select coalesce(user_agent,'') from auth_audit_logs where id=${id}`), (agent) => psql(`update auth_audit_logs set user_agent = nullif('${agent.replace(/'/g, "''")}', '') where id=${id}`))
     psql(`update auth_audit_logs set user_agent = 'tampered by e2e' where id=${id}`)
     try {
       rep = await verify(request, admin, range)
@@ -151,4 +151,17 @@ test.describe('Audit log integrity', () => {
       await expect(page.getByTestId('audit-integrity-anchor-state')).toContainText('#')
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

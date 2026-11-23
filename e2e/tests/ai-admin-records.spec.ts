@@ -105,7 +105,7 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
     test.skip(!(await mcpOn(request, admin)), 'the MCP server is off (mcp.enabled)')
 
     const run = stamp()
-    const ids = [`e2e-p5-rec-${run}-1`, `e2e-p5-rec-${run}-2`]
+    const ids = withUndo([`e2e-p5-rec-${run}-1`, `e2e-p5-rec-${run}-2`], (i) => psql(`DELETE FROM session_recordings WHERE id IN ('${i[0]}', '${i[1]}')`))
     const place = `e2e-p5-place-${run}`
     const since = rfc3339(Date.now() - 2_000)
     try {
@@ -167,7 +167,7 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
 
     const run = stamp()
     const cluster = `e2e-p5-c-${run}`
-    const ids = [`inv-e2e-p5-${run}-1`, `inv-e2e-p5-${run}-2`]
+    const ids = withUndo([`inv-e2e-p5-${run}-1`, `inv-e2e-p5-${run}-2`], (i) => psql(`DELETE FROM alert_investigations WHERE id IN ('${i[0]}', '${i[1]}')`))
     const since = rfc3339(Date.now() - 2_000)
     try {
       // Two hours old and without tokens, in a cluster of the run: outside the investigator's caps and the other reports' pages.
@@ -230,7 +230,7 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
 
     const run = stamp()
     const fingerprint = `p5-report-${run}`
-    const invId = `inv-e2e-p5-report-${run}`
+    const invId = withUndo(`inv-e2e-p5-report-${run}`, async (i) => { await post('resolved'); psql(`DELETE FROM alert_investigations WHERE id = '${i}'`) })
     const email = `e2e-adminrecords-inbox-${run}@kubeast.local`
     const labels = { alertname: `E2EP5Report${run}`, severity: 'info', namespace: `E2E_P5_${run}` }
     const token = Buffer.from(kubectl(['-n', 'kubeast', 'get', 'secret', 'kubeast-secrets', '-o', 'jsonpath={.data.ALERT_WEBHOOK_TOKEN}']), 'base64').toString()
@@ -299,7 +299,7 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
       },
     })
     test.skip(!made.ok(), `the dev install does not take this model (${made.status()}): deploy/kind/devtools.yaml and ai.baseUrlAllowedHosts`)
-    const id = (await made.json()).id as number
+    const id = withUndo((await made.json()).id as number, (i) => request.delete(`/api/v1/ai/model-configs/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
     try {
       const res = await call(request, admin, 'ai_models')
       expect(res.isError, res.text).toBe(false)
@@ -335,7 +335,7 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
 
     const s = stamp()
     const users: string[] = []
-    const roles: number[] = []
+    const roles = withUndo<number[]>([], async (ids) => { for (const id of ids) await request.delete(`/api/v1/auth/admin/roles/${id}`, { headers: bearer(admin), failOnStatusCode: false }) })
     try {
       // A Read grant holds ai.mcp.use and the read tools, none of these.
       const readerEmail = `e2e-adminrecords-r-${s}@kubeast.local`
@@ -403,4 +403,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

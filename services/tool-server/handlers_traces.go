@@ -103,6 +103,7 @@ func handleTracesSearch(ctx context.Context, args map[string]interface{}, header
 	case len(reply.Traces) == limit:
 		result["hint"] = fmt.Sprintf("The %d newest matches; there may be more. Narrow the filter or the window, or count them with traces_metrics.", limit)
 	}
+	addDetails(result, "", windowDefault(args, time.Hour, "since", "since_time", "until_time"), "")
 	return marshalJSON(result)
 }
 
@@ -146,6 +147,7 @@ func handleTracesGet(ctx context.Context, args map[string]interface{}, headers h
 	if truncated {
 		result["truncated"] = true
 		result["hint"] = "Errors come first, then by start time; the rest of the spans is cut."
+		addDetails(result, cutOf(len(spans), reply.Total-reply.Hidden, "spans in your scope"), "", "")
 	}
 	return marshalJSON(result)
 }
@@ -176,6 +178,7 @@ func handleTracesTags(ctx context.Context, args map[string]interface{}, headers 
 	if values, ok := reply["values"].([]interface{}); ok && len(values) == 0 {
 		reply["hint"] = "No value in the window: widen since, or check the name with traces_tags without tag."
 	}
+	addDetails(reply, "", windowDefault(args, time.Hour, "since"), "")
 	return marshalJSON(reply)
 }
 
@@ -202,6 +205,7 @@ func handleTracesMetrics(ctx context.Context, args map[string]interface{}, heade
 	var reply struct {
 		Series         []map[string]interface{} `json:"series"`
 		Truncated      bool                     `json:"truncated"`
+		SeriesTotal    int                      `json:"seriesTotal"`
 		EffectiveQuery string                   `json:"effectiveQuery"`
 	}
 	if out, done, err := tracesGet(ctx, headers, namespace, "/traces/metrics", q, &reply); done {
@@ -212,6 +216,7 @@ func handleTracesMetrics(ctx context.Context, args map[string]interface{}, heade
 	if len(results) > promSeriesCap {
 		results, truncated = results[:promSeriesCap], true
 	}
+	cut := seriesCut(len(reply.Series), len(results), reply.Truncated, reply.SeriesTotal, maxPoints(results))
 	for _, r := range results {
 		if pts, ok := r["points"].([]interface{}); ok && len(pts) > promPointsCap {
 			r["points"], truncated = thin(pts, promPointsCap), true
@@ -233,6 +238,7 @@ func handleTracesMetrics(ctx context.Context, args map[string]interface{}, heade
 		result["truncated"] = true
 		result["hint"] = "The result is cut: do not answer from it. Group by fewer attributes or add filters, then query again."
 	}
+	addDetails(result, cut, windowDefault(args, time.Hour, "since", "since_time", "until_time"), "")
 	return marshalJSON(result)
 }
 
@@ -288,5 +294,6 @@ func handleTracesCompare(ctx context.Context, args map[string]interface{}, heade
 	if n, _ := reply["traces"].(float64); n == 0 {
 		reply["hint"] = "No trace matched: loosen the filter or widen the window."
 	}
+	addDetails(reply, "", windowDefault(args, time.Hour, "since", "since_time", "until_time"), "")
 	return marshalJSON(reply)
 }

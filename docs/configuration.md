@@ -205,6 +205,14 @@ ai:
   timelineChanges: false   # offer the AI tool timeline's changes view (what changed in a window, no value read) and the chat's instruction to read it first
   refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
                              # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
+  toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
+                           # one may be empty and the console paths of the objects they name, from what they hold (features.md); off: as before
+  ruleCards:               # per kind of failure, the checks that often find its cause and their tools (features.md "Rule cards")
+    chat: false            # (alpha) true: a chat question naming a failure a card knows gets at most two cards for that turn
+    investigations: false  # (alpha) true: an alert investigation's first message holds at most two, picked by the alert's name and labels
+                           # off, both: the cards file is not read and the chat and investigations are as before
+    cards: []              # more cards of the same shape (a kind already there is replaced); the defaults are app/services/rule_cards.json
+    remove: []             # default kinds left out, e.g. [network_policy]
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
@@ -231,6 +239,10 @@ redis:
     existingSecret: ""            # a Secret of the users' keys alone; each service then reads only its own key
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (Flannel, etc.); kind's kindnet enforces it since kind 0.24
+  aiEgress:
+    allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs, stsEndpoints and apiserverCIDR (cluster-requirements.md §15)
+    clusterAPIs: []       # the API servers of the registered clusters, this one's too, as VPC or subnet CIDRs (never a /32 on EKS): a CIDR opens 443 and 6443, {cidr, port} another port
+    stsEndpoints: []      # when tool-server holds an IRSA role: the subnets of the STS VPC interface endpoint, {cidr, port: 443}
 
 # Gateway exposure
 gateway:

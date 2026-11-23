@@ -375,6 +375,13 @@ ai:
   # investigation with call numbers names the call instead ([call N]) and the
   # row adds repeat_of_call.
   refuseRepeatedReads: false
+  # The metrics, log, trace and timeline tools say why an empty answer may be
+  # empty where they did not, "M of N" for a cut answer (or that the total is
+  # not known), and the window read when the call named none; a read tool's
+  # result in the chat and in an alert investigation starts with the console
+  # paths of the objects it names (a drawer's ?detail=, an alert, a namespace's
+  # Resource Graph). Nothing more is read for them.
+  toolResultDetails: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
   # JWTs, credentials in URLs, Authorization values, API keys with a known
@@ -417,6 +424,30 @@ ai:
     budget:
       sessionTokens: 0
       userDailyTokens: 0
+  # Rule cards: for a kind of failure (crash, oom, image, config_change,
+  # rollout, network_policy, dns, resource_limit, quota, node, dependency_down,
+  # dependency_slow, storage), the checks that often find its cause, in order,
+  # with the tools that answer them. The server picks at most two — from an
+  # alert's name and labels for an investigation, from the failure a question
+  # names for the chat — and gives them beside the first message, with only the
+  # tools that model is offered. The defaults are in ai-service
+  # (app/services/rule_cards.json). cards adds cards of the same shape (a kind
+  # already there is replaced); remove leaves default kinds out:
+  #   cards:
+  #     - kind: payments-db
+  #       title: Payments database slow
+  #       alerts: [PaymentsDBLatencyHigh]
+  #       terms: [pq canceling statement]
+  #       checks:
+  #         - check: The database's slow queries over the window
+  #           tools: [prometheus_query]
+  #   remove: [network_policy]
+  # At most 6 checks a card, 3 tools a check, 200 characters a check.
+  ruleCards:
+    chat: false
+    investigations: false
+    cards: []
+    remove: []
   # Write model responses, tool arguments and tool results to the ai-service
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
@@ -871,6 +902,10 @@ networkPolicy:
   # egress. Ports 443 and 6443 are already open to every address, private and
   # public; set this only for an API server on another port.
   apiserverCIDR: ""
+  aiEgress:
+    allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to the lists below and apiserverCIDR (docs/cluster-requirements.md §15)
+    clusterAPIs: []       # API servers of the registered clusters, for tool-server, as VPC or subnet CIDRs (EKS endpoint addresses change, never a /32): a CIDR opens 443 and 6443, {cidr, port} another port
+    stsEndpoints: []      # when tool-server holds an IRSA role (aws.irsaRoleArn or its own annotation): the subnets of the STS VPC interface endpoint com.amazonaws.<region>.sts, for tool-server's aws-iam-authenticator: {cidr, port: 443}
 
 # --- Feature flags ---
 # Optional integrations the operator can opt in/out of without changing

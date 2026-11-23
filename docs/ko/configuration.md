@@ -197,6 +197,14 @@ ai:
   timelineChanges: false   # AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
   refuseRepeatedReads: false # (alpha) true면 채팅 답·조사 하나 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면
                              # 실행하지 않고 그 결과가 어디 있는지 모델에 알려 줍니다. 끄면 전과 같습니다
+  toolResultDetails: false # (alpha) true면 도구 결과에 잘린 답의 "M of N", 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭,
+                           # 가리키는 오브젝트의 콘솔 경로를 이미 가진 것만으로 붙입니다(features.md). 끄면 전과 같습니다
+  ruleCards:               # 고장 종류마다 원인을 자주 찾아 주는 확인과 그 도구(features.md "규칙 카드")
+    chat: false            # (alpha) true면 카드가 아는 고장을 적은 채팅 질문이 그 턴에 카드를 최대 두 장 받습니다
+    investigations: false  # (alpha) true면 알림 조사의 첫 입력에 알림 이름과 라벨로 고른 카드가 최대 두 장 들어갑니다
+                           # 둘 다 끄면 카드 파일을 읽지 않고 채팅과 조사는 전과 같습니다
+    cards: []              # 같은 꼴의 카드를 더합니다(이미 있는 종류는 바꿉니다). 기본 카드는 app/services/rule_cards.json
+    remove: []             # 빼 둘 기본 종류. 예: [network_policy]
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),
@@ -224,6 +232,10 @@ redis:
     existingSecret: ""            # 사용자 키만 든 Secret. 서비스마다 자기 키만 읽습니다
 networkPolicy:
   enabled: true         # 기본 거부 + 서비스가 쓰는 흐름만 허용합니다. NetworkPolicy를 강제하지 않는 CNI(Flannel 등)에서는 영향이 없습니다. kind의 kindnet은 kind 0.24부터 강제합니다
+  aiEgress:
+    allowListOnly: false  # true면(networkPolicy.enabled 필요) ai-service는 allowExternalEgressCIDRs로만, tool-server는 clusterAPIs·stsEndpoints·apiserverCIDR로만 나갑니다(cluster-requirements.md §15)
+    clusterAPIs: []       # 등록한 클러스터(이 클러스터 포함)의 API 서버를 VPC·서브넷 CIDR로(EKS는 /32 금지) — CIDR은 443·6443, {cidr, port}는 그 포트
+    stsEndpoints: []      # tool-server에 IRSA 롤이 있으면 STS VPC 인터페이스 엔드포인트의 서브넷, {cidr, port: 443}
 
 # Gateway 노출 방식
 gateway:

@@ -51,6 +51,8 @@ type Result struct {
 	StepSeconds int64    `json:"stepSeconds,omitempty"`
 	// EstimatedBytes is what the store's index put the query's streams at before it ran (Config.QueryMaxBytes set).
 	EstimatedBytes *int64 `json:"estimatedBytes,omitempty"`
+	// SeriesTotal is how many series the store answered a metric query with, Series' length or more when Truncated.
+	SeriesTotal int `json:"seriesTotal,omitempty"`
 }
 
 // Series is one series of a metric query, in the shape of a Prometheus range
