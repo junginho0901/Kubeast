@@ -76,13 +76,13 @@ def refusal(seen: Seen, age: int, *, scope: str, numbered: bool = False) -> str:
     if numbered and seen.call is not None:
         n = seen.call
         if seen.step == 0:
-            where = f"by the server before the investigation started (call {n}); its answer is in the first message"
+            where = f"by the server before the investigation started (call {n}); its answer is the one under [call {n}] above"
         else:
             where = f"as call {n} of this {scope}, {age} seconds ago; its result is the one under [call {n}] above"
         told["repeat_of_call"] = n
     else:
         if seen.step == 0:
-            where = "by the server before the investigation started (step 0); its answer is in the first message"
+            where = "by the server before the investigation started (step 0); its answer is above, before your first call"
         else:
             where = f"at step {seen.step} of this {scope}, {age} seconds ago; its result is above"
         told["repeat_of"] = seen.step

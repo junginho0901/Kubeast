@@ -1026,12 +1026,13 @@ features:
     # hypotheses and the report's six headings, in the prompt.
     rules: false
     # Step 0: before the first model call, the timeline tool's changes view
-    # over the change window goes into the first message (an audited tool call,
-    # no model step). Writes the windows too.
+    # over the change window, given to the model as that call's tool result
+    # (an audited tool call, no model step; on a Claude subscription in the
+    # first message between markers). Writes the windows too.
     changesFirst: false
     # Step 0, after the changes: anomaly_rank (features.anomalyRank) over the
-    # metrics window of the alert's namespace goes into the first message (an
-    # audited tool call, no model step; its store queries and seconds are
+    # metrics window of the alert's namespace, given the same way (an audited
+    # tool call, no model step; its store queries and seconds are
     # features.anomalyRank's). Writes the windows too.
     narrowFirst: false
     # The report ends with a block the server takes out and keeps: the causes,

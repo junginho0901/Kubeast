@@ -40,6 +40,22 @@ def tool_results_text(results: Sequence[str]) -> str:
     return "Tool results so far:\n\n" + "\n\n".join(results)
 
 
+def server_calls(service, calls: Sequence[tuple[str, dict, str]]) -> list[dict[str, Any]]:
+    """Reads the caller made before the first model call (the investigator's step 0), for the API-key path: one assistant
+    message with the calls, then each answer as its tool message, the form run_tool_turn appends for the model's own calls,
+    so what a cluster wrote reaches the model as a tool result. `calls`: (tool name, arguments, the text the model reads).
+    Claude Code fills tool results only for the calls it makes: on a subscription the caller puts the answers in its request."""
+    ids = [f"kubeast_step0_{n}" for n in range(1, len(calls) + 1)]
+    return [
+        {"role": "assistant", "content": "", "tool_calls": [
+            {"id": cid, "type": "function", "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False, sort_keys=True)}}
+            for cid, (name, args, _text) in zip(ids, calls)
+        ]},
+        *({"role": "tool", "tool_call_id": cid, "content": tool_results.for_model(name, text, limits.tool_result_chars(service))}
+          for cid, (name, _args, text) in zip(ids, calls)),
+    ] if calls else []
+
+
 def _finish(resp) -> str:
     return str(getattr(resp.choices[0], "finish_reason", None) or "")
 

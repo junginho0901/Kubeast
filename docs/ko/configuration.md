@@ -259,10 +259,10 @@ ingress:
 features:
   alertInvestigation:
     rules: false             # (alpha) true면 아래 시간창, 범위 묶음, 가설과 나눈 사실, 보고서의 여섯 절을 프롬프트에 넣습니다(ai-alerts.md)
-    changesFirst: false      # (alpha) true면 0번째 걸음으로 변경 시간창의 timeline 변경 보기를 첫 입력에 넣습니다(감사되는 도구 호출,
-                             # 모델 호출 아님). 시간창도 적습니다
-    narrowFirst: false       # (alpha) true면 0번째 걸음에서 변경 다음에 지표 시간창의 anomaly_rank(features.anomalyRank)를 첫 입력에
-                             # 넣습니다. 시간창도 적습니다
+    changesFirst: false      # (alpha) true면 0번째 걸음으로 첫 모델 호출 전에 변경 시간창의 timeline 변경 보기를 읽어(감사되는 도구
+                             # 호출, 모델 호출 아님) 그 호출의 도구 결과로 줍니다. 시간창도 적습니다
+    narrowFirst: false       # (alpha) true면 0번째 걸음에서 변경 다음에 지표 시간창의 anomaly_rank(features.anomalyRank)를 읽어
+                             # 같은 꼴로 줍니다. 시간창도 적습니다
     ledger: false            # (alpha) true면 보고서 끝에 원인·경로·배제·가설 묶음을 두고, 가설마다 뒷받침·반박한 호출로 닫아 보고서
                              # 아래에 따로 보여 줍니다(열린 가설이 있으면 한 번 더 묻습니다)
     evidenceCheck: false     # (alpha) true면 원인마다 댄 호출이 답했고 원인 이름을 담는지 서버가 확인하고, 아니면 도구 없이 한 번 더

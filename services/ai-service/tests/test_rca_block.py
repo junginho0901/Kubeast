@@ -14,7 +14,7 @@ from app.services.investigation import result as inv_result
 from tests.test_alert_investigation import cfg, completion, install_loop, row, tool_call
 from tests.test_evidence_check import PODS, POD_TABLE, _reads_pods, _service, cause
 from tests.test_investigation_ledger import hypothesis
-from tests.test_investigation_window import STARTED, ChangesService, at_now, first_message
+from tests.test_investigation_window import STARTED, ChangesService, at_now, step_zero_reads
 
 BOTH = dict(max_steps=5, evidence_check=True, ledger=True)
 WEB = "Deployment/apps/web"
@@ -161,7 +161,7 @@ async def test_step_zero_is_call_one_for_both_checks(monkeypatch):
     install_loop(monkeypatch, service, [])
     at_now(monkeypatch)
     out = await runner.investigate(cfg(**BOTH, changes_first=True), row(starts_at=STARTED))
-    assert "<<<CHANGES\n[call 1]\n" in first_message(service)
+    assert step_zero_reads(service)[1][0].startswith("[call 1]\n")
     assert len(service.completions.calls) == 1  # the cause names web, which step 0's answer holds: nothing asked
     assert out["result"]["causes"][0]["evidence"] == [{"call": 1, "tool": "timeline"}] and out["result"]["failures"] == []
 
