@@ -198,6 +198,42 @@ jobs:
         with:
           version: v4.3.0
       - run: helm lint helm/kubeast
+      # The gateway's config as the chart renders it, read by the nginx of the chart's image: with the defaults, then with
+      # every file the chart adds to conf.d/kubeast (trustedProxies, accessLog.upstreamTimes, streams). nginx resolves each
+      # upstream's name when it loads the file, so the names point at the loopback here.
+      - name: nginx -t (gateway)
+        timeout-minutes: 5
+        run: |
+          shopt -s nullglob
+          image=$(grep -o 'nginxinc/nginx-unprivileged:[^ ]*' helm/kubeast/values.yaml | head -1)
+          for _ in 1 2 3; do docker pull -q "$image" && break; sleep 10; done
+          for shape in defaults switches; do
+            case $shape in
+              defaults) values=() want=0 ;;
+              switches) values=(--set 'gateway.trustedProxies={10.0.0.0/8}' --set gateway.accessLog.upstreamTimes=true
+                --set streams.enabled=true) want=3 ;;
+            esac
+            dir="$RUNNER_TEMP/gateway-$shape"
+            mkdir -p "$dir/conf.d"
+            helm template kubeast helm/kubeast --namespace kubeast "${values[@]}" --show-only templates/gateway.yaml \
+              | awk -v dir="$dir" '
+                  /^---/ { doc++; next }
+                  doc != 1 { next }
+                  /^  [a-z][a-z.]*: [|]$/ { key = substr($1, 1, length($1) - 1); f = dir "/" (key == "nginx.conf" ? "" : "conf.d/") key; next }
+                  f != "" && /^(    |$)/ { print substr($0, 5) > f; next }
+                  { f = "" }'
+            conf=("$dir"/conf.d/*.conf)
+            if [ "${#conf[@]}" -ne "$want" ]; then
+              echo "::error::$shape: ${#conf[@]} file(s) of conf.d/kubeast in the gateway ConfigMap, $want expected" >&2
+              exit 1
+            fi
+            hosts=()
+            while read -r h; do
+              hosts+=(--add-host "$h:127.0.0.1")
+            done < <(sed -n 's/^ *server \([a-z0-9-]*\):[0-9]*;$/\1/p' "$dir/nginx.conf" "${conf[@]}")
+            docker run --rm "${hosts[@]}" -v "$dir/nginx.conf:/etc/nginx/nginx.conf:ro" \
+              -v "$dir/conf.d:/etc/nginx/conf.d/kubeast:ro" --entrypoint nginx "$image" -t
+          done
       # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
       # defaults, migrations hook Job, PVC retention, replica guards, secrets.
       - name: helm unittest
