@@ -327,6 +327,12 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		cfg.Burst = clientRates.burst
 	}
 	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return answerNotice{base: rt, id: info.ID} })
+	// A read waits clusterReadWait for the API server to start its answer, kubeast:cache's too (cluster_read_wait.go).
+	var serverPath string
+	if u, _, err := rest.DefaultServerUrlFor(cfg); err == nil {
+		serverPath = u.Path
+	}
+	cfg.Wrap(func(rt http.RoundTripper) http.RoundTripper { return newReadWait(rt, info.ID, serverPath) })
 	// The overview informers run outside any user request: with impersonation
 	// on they act as a fixed viewer identity instead of the per-request user
 	// the wrapped transport adds.

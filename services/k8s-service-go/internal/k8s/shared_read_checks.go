@@ -148,7 +148,7 @@ func (s *Service) askAsGroups(ctx context.Context, b *clientBundle, key string, 
 	if s.answered.askedAgain(key, time.Now()) {
 		ctx = askingAgain(ctx)
 	}
-	return s.askOnce(ctx, key, func(ctx context.Context) (bool, error) {
+	return s.askOnce(ctx, b, key, func(ctx context.Context) (bool, error) {
 		if known, ok := s.accessAnswers.get(key, time.Now()); ok {
 			return known, nil
 		}
