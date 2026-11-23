@@ -15,11 +15,13 @@ Each is set below to a made-up value holding OWN; no model call holds OWN or any
 an IPv4 address, an in-cluster service name, a bearer token, a JWT, a PEM block, a model or cloud key).
 
 Named on purpose, so not in the list: the cluster and namespace the request is about (the person picked them, or the
-alert did), and what the cluster or the alert wrote, which reaches the model fenced as data and masked
-(test_planted_values.py)."""
+alert did), what the cluster or the alert wrote, which reaches the model fenced as data and masked
+(test_planted_values.py), and the rule's expression in the alert's link, whose address (PROMETHEUS_URL) stays out
+(test_alert_rule_expression.py)."""
 import json
 import re
 from types import SimpleNamespace
+from urllib.parse import quote_plus
 
 import pytest
 
@@ -93,6 +95,10 @@ PER_REQUEST = {
     "person ID": "ownvalue-person-0104",
     "person email": "ownvalue.person@example.com",
 }
+
+# The alert's link as Prometheus writes it: the install's metrics address, then the rule's expression.
+RULE = 'increase(kube_pod_container_status_restarts_total{namespace="apps"}[10m]) > 3'
+ALERT_LINK = f"{INSTALL_ENV['PROMETHEUS_URL']}/graph?g0.expr={quote_plus(RULE)}&g0.tab=1"
 
 SHAPES = {
     "web address": r"https?://",
@@ -195,7 +201,8 @@ async def test_an_investigation_with_every_step_on_sends_no_value_of_the_install
     monkeypatch.setattr(runner, "fetch_token", token)
     at_now(monkeypatch)
     labels = {"alertname": "KubePodCrashLooping", "namespace": "apps", "pod": "web-1", "severity": "critical"}
-    await runner.investigate(settings, row(starts_at=STARTED, labels=labels, annotations={"summary": "web-1 restarts"}))
+    await runner.investigate(settings, row(starts_at=STARTED, labels=labels, annotations={"summary": "web-1 restarts"},
+                                           generator_url=ALERT_LINK))
 
     calls = service.completions.calls
     system, first = calls[0]["messages"][0]["content"], calls[0]["messages"][1]["content"]
@@ -209,6 +216,7 @@ async def test_an_investigation_with_every_step_on_sends_no_value_of_the_install
     assert any(isinstance(m, dict) and m.get("role") == "tool" for m in calls[1]["messages"])
     # named on purpose: the alert's cluster and namespace
     assert 'the namespace "apps" of cluster "self"' in system and first.startswith("Cluster: self\n")
+    assert f'"expr": {json.dumps(RULE)}' in first  # and the rule's expression, without the link's address
     assert found(sent_text(calls)) == []
 
 
