@@ -538,7 +538,7 @@ class DatabaseService:
         from sqlalchemy import select, update
 
         from app.services import audit_writer
-        from app.services.audit_target import ToolTarget, kept_tool_args, tool_target
+        from app.services.audit_target import ToolTarget, kept_tool_args, tool_target, write_tool_input
 
         strict = audit_writer.fail_closed_enabled()
         ended = 0
@@ -559,12 +559,16 @@ class DatabaseService:
                     target = tool_target(row.tool, args)
                 except Exception:
                     target = ToolTarget("tool", row.tool, None, None)
+                try:
+                    tool_input = write_tool_input(row.tool, args)  # what the run was asked, as ai.tool.execute says it
+                except Exception:
+                    tool_input = {}
                 record = dict(
                     action="ai.tool.interrupt", actor_user_id="system", actor_email="system", cluster=row.cluster,
                     target_type=target.type, target_id=target.id, namespace=target.namespace,
                     after={"approval_id": row.id, "session_id": row.session_id, "cluster": row.cluster, "tool": row.tool,
                            "approved_by": row.user_id, "approved_by_email": row.user_email,
-                           "approved_at": row.decided_at.isoformat() + "Z", "end_reason": "interrupted"},
+                           "approved_at": row.decided_at.isoformat() + "Z", "end_reason": "interrupted", **tool_input},
                 )
                 async with self.engine.connect() as conn:
                     await conn.begin()
@@ -576,15 +580,49 @@ class DatabaseService:
                     if moved.rowcount != 1:
                         await conn.rollback()
                         continue  # its run ended meanwhile, or another server ended it
-                    if strict and not await audit_writer.write_audit(**record, conn=conn):
+                    if not strict:
+                        await conn.commit()
+                    elif await audit_writer.write_audit(**record, conn=conn):
+                        await audit_writer.commit_row(conn, **record)  # mirrored to stdout once it has landed
+                    else:
                         await conn.rollback()
                         continue  # stays approved until a sweep can write the row
-                    await conn.commit()
                 if not strict:
                     await audit_writer.write_audit(**record)
                 ended += 1
         except Exception as e:
             logger.warning("tool approvals: could not end interrupted runs: %s", e.__class__.__name__)
+        return ended
+
+    async def end_tool_run(self, approval_id: str, from_status: str, record: Dict[str, Any], **fields: Any) -> Optional[ToolApproval]:
+        """An approved call's end: transition_tool_approval and its outcome row (record: write_audit's arguments) in one
+        transaction, so a process stopped between the two leaves the approval approved, for the interrupted sweep, never
+        ended with no outcome row. The call has run, so a row the audit table refuses does not hold the approval: it
+        moves on its own and the row is written after it, as a failed write when it fails again. None when the row no
+        longer has from_status; nothing is written then. The ended row is read after the end's connection has gone back
+        to the pool, so an end never waits for a second connection while it holds one."""
+        from sqlalchemy import update
+
+        from app.services import audit_writer
+
+        async with self.engine.connect() as conn:
+            await conn.begin()
+            moved = await conn.execute(
+                update(ToolApproval).where(ToolApproval.id == approval_id, ToolApproval.status == from_status).values(**fields)
+            )
+            if moved.rowcount != 1:
+                await conn.rollback()
+                return None
+            stored = await audit_writer.write_audit(**record, conn=conn)
+            if stored:
+                await audit_writer.commit_row(conn, **record)  # mirrored to stdout once it has landed
+            else:
+                await conn.rollback()
+        if stored:
+            return await self.get_tool_approval(approval_id)
+        ended = await self.transition_tool_approval(approval_id, from_status, **fields)
+        if ended is not None:
+            await audit_writer.write_audit(**record)
         return ended
 
     async def get_tool_approval(self, approval_id: str) -> Optional[ToolApproval]:

@@ -20,6 +20,7 @@ from app.services.ai import permissions, screen_permissions
 from app.services.ai import tools as tools_catalog
 from app.services.ai.tools import K8S_WRITE_TOOLS
 from app.services.tool_whitelists import READONLY_TOOL_NAMES, WRITE_TOOL_NAMES
+from tests.test_audit_rows import fake_end_tool_run
 
 CASES = json.loads((Path(__file__).parent / "fixtures" / "tool_app_permission_cases.json").read_text())
 CLUSTER = "alpha"
@@ -393,6 +394,8 @@ async def _approve(monkeypatch, rows, token, approval):
     messages, ran = [], []
 
     class DB:
+        end_tool_run = fake_end_tool_run
+
         async def transition_tool_approval(self, *a, **k):
             for key, value in k.items():
                 setattr(approval, key, value)
