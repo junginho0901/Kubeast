@@ -402,6 +402,9 @@ async def test_a_run_keeps_its_rows_when_its_conversation_was_deleted_during_it(
                 setattr(approval, key, value)
             return approval
 
+        async def get_tool_approval(self, approval_id):
+            return None  # deleted with its conversation
+
         async def add_message(self, session_id, *a, **k):
             raise ConversationGone(session_id)
 

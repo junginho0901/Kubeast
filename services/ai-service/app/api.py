@@ -390,7 +390,7 @@ async def approve_tool_approval(
     request: Request,
     authorization: str = Depends(bearer_or_cookie),
 ):
-    from app.database import utcnow
+    from app.database import APPROVED_RUN_LIMIT_SECONDS, INTERRUPTED_RESULT, utcnow
     from app.services.audit_target import EXEC_TOOL, kept_tool_args, pod_exec_row, tool_target, write_tool_input
     from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
     from app.services.ai import access as tool_access, formatters
@@ -460,9 +460,21 @@ async def approve_tool_approval(
     call_requests = ai_service.tool_server.last_requests
     # The run is over, so nothing needs the arguments as they were: the row and the saved message keep a masked copy.
     kept_args = kept_tool_args(args)
-    approval = await db.transition_tool_approval(
+    ended = await db.transition_tool_approval(
         approval.id, "approved", status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(), args=kept_args,
-    ) or approval
+    )
+    late = False
+    if ended is None:
+        # The run outlived APPROVED_RUN_LIMIT_SECONDS and a sweep ended its approval as interrupted meanwhile (or the
+        # conversation was deleted, and the row with it). The outcome is known after all: the row stays ended and says it.
+        current = await db.get_tool_approval(approval.id)
+        if current is not None and current.status == "failed" and current.result == INTERRUPTED_RESULT:
+            late = True
+            note = f"{status} after this approval was ended as interrupted: the run took longer than {APPROVED_RUN_LIMIT_SECONDS // 60} minutes."
+            ended = await db.transition_tool_approval(
+                approval.id, "failed", result=f"{note}\n\n{formatted}"[:APPROVAL_RESULT_MAX_CHARS],
+            ) or current
+    approval = ended or approval
     # The rows before the chat message: the conversation may have been deleted during the call, and the message with it.
     target = tool_target(approval.tool, args)
     tool_input = write_tool_input(approval.tool, args)
@@ -470,7 +482,8 @@ async def approve_tool_approval(
         action="ai.tool.execute", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
         target_type=target.type, target_id=target.id, namespace=target.namespace,
         after={"approval_id": approval.id, "session_id": approval.session_id, "cluster": approval.cluster, "tool": approval.tool, "approved": True,
-               "access": call_access, "requests": call_requests, **({"objects": target.objects} if target.objects else {}), **tool_input},
+               "access": call_access, "requests": call_requests, **({"objects": target.objects} if target.objects else {}),
+               **({"late_after_interrupt": True} if late else {}), **tool_input},
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
         result="success" if status == "executed" else "failure", error=error[:500] if error else error,
     )
@@ -480,14 +493,19 @@ async def approve_tool_approval(
             request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
             result="success" if status == "executed" else "failure", error=error[:500] if error else error,
         )
-    icon = "✅" if status == "executed" else "⚠️"
+    icon = "✅" if status == "executed" and not late else "⚠️"
+    said = f"was approved and {status}"
+    if late:
+        said = (f"{'was executed' if status == 'executed' else 'failed'} after its approval was ended as interrupted: "
+                f"the run took longer than {APPROVED_RUN_LIMIT_SECONDS // 60} minutes")
     access_line = tool_access.section(call_access, call_requests)
     fence = formatters.code_fence(approval.result or "")
     await db.add_message(
         approval.session_id, "assistant",
-        f"{icon} `{approval.tool}` on `{approval.cluster}` was approved and {'executed' if status == 'executed' else 'failed'}.\n\n"
+        f"{icon} `{approval.tool}` on `{approval.cluster}` {said}.\n\n"
         + (f"{access_line}\n\n" if access_line else "") + f"{fence}\n{approval.result}\n{fence}",
-        tool_calls=[{"function": approval.tool, "args": kept_args, "result": approval.result, "approval_id": approval.id, "approval_status": status,
+        tool_calls=[{"function": approval.tool, "args": kept_args, "result": approval.result, "approval_id": approval.id,
+                     "approval_status": approval.status if late else status,
                      **({"access": call_access} if call_access else {}), **({"requests": call_requests} if call_requests else {})}],
     )
     _invalidate_caches()
