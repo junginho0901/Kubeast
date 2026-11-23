@@ -49,11 +49,23 @@ func (r *PostgresRegistry) VerifySchema(ctx context.Context) error {
 	return nil
 }
 
-// List returns all registered clusters (metadata only — kubeconfig blobs are
-// loaded lazily by Get). Empty when nothing is registered.
+// listColumns are the columns Get reads into an Info, but those naming Secrets
+// (TestListReadsTheColumnsGetReads).
+const listColumns = `id, display_name, mode, is_self_cluster,
+	COALESCE(prometheus_url, ''), COALESCE(prometheus_cluster_label, ''), COALESCE(prometheus_service, ''),
+	COALESCE(log_search_url, ''), COALESCE(log_search_tenant, ''), COALESCE(log_search_cluster_label, ''), config_version`
+
+// getColumns are the columns Get reads.
+const getColumns = `id, display_name, mode, kubeconfig_secret_name, api_server_url, is_self_cluster,
+	prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label, prometheus_service,
+	log_search_url, log_search_auth_secret_name, log_search_tenant, log_search_cluster_label, config_version`
+
+// List returns all registered clusters with what their rows hold, as Get
+// reads it; what Secrets hold (kubeconfig blobs, auth headers) only Get
+// loads. Empty when nothing is registered.
 func (r *PostgresRegistry) List(ctx context.Context) ([]Info, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, display_name, mode, is_self_cluster
+		SELECT `+listColumns+`
 		FROM clusters
 		ORDER BY is_self_cluster DESC, display_name ASC`)
 	if err != nil {
@@ -67,7 +79,9 @@ func (r *PostgresRegistry) List(ctx context.Context) ([]Info, error) {
 			info Info
 			mode string
 		)
-		if err := rows.Scan(&info.ID, &info.DisplayName, &mode, &info.IsSelfCluster); err != nil {
+		if err := rows.Scan(&info.ID, &info.DisplayName, &mode, &info.IsSelfCluster,
+			&info.PrometheusURL, &info.PrometheusClusterLabel, &info.PrometheusService,
+			&info.LogSearchURL, &info.LogSearchTenant, &info.LogSearchClusterLabel, &info.ConfigVersion); err != nil {
 			return nil, err
 		}
 		info.Mode = Mode(mode)
@@ -98,9 +112,7 @@ func (r *PostgresRegistry) Get(ctx context.Context, id ID) (*Info, error) {
 		lsLabel    *string
 	)
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, display_name, mode, kubeconfig_secret_name, api_server_url, is_self_cluster,
-		       prometheus_url, prometheus_auth_secret_name, prometheus_cluster_label, prometheus_service,
-		       log_search_url, log_search_auth_secret_name, log_search_tenant, log_search_cluster_label, config_version
+		SELECT `+getColumns+`
 		FROM clusters WHERE id = $1`, id,
 	).Scan(&info.ID, &info.DisplayName, &mode, &secretName, &apiURL, &info.IsSelfCluster, &promURL, &promSecret, &promLabel, &promSvc,
 		&lsURL, &lsSecret, &lsTenant, &lsLabel, &info.ConfigVersion)
