@@ -92,7 +92,7 @@ test.describe('a URL field says what the server would refuse', () => {
     test.skip(!config.enabled, 'API keys are off on this install')
     const name = '자동화'.repeat(7) + '키' // 22 letters, 66 bytes
     const created = await page.request.post('/api/v1/auth/api-keys', { headers: XRW, data: { name, expires_in_days: 1 } })
-    const body = await created.json()
+    const body = withUndo(await created.json(), (b) => b.id && page.request.delete(`/api/v1/auth/api-keys/${b.id}`, { headers: XRW }))
     try {
       expect([created.status(), body.name]).toEqual([201, name])
       const tooLong = await page.request.post('/api/v1/auth/api-keys', { headers: XRW, data: { name: '키'.repeat(65), expires_in_days: 1 } })
@@ -173,4 +173,17 @@ test.describe('a URL field says what the server would refuse', () => {
       for (const url of made) expect((await page.request.delete(url, { headers: XRW })).ok(), url).toBe(true)
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

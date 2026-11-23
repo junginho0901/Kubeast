@@ -1,0 +1,28 @@
+{
+ "id": "17_periodic_full_scan",
+ "control": false,
+ "symptom": "storefront's and invoices' calls to orders-db go from tens of milliseconds to one or two seconds, some invoices calls time out; orders-db's CPU stays near zero",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "CronJob/shop-17/reminder-sender",
+   "kind": "config_change",
+   "accept_resources": ["(cronjob|job|pod)/(shop-17/)?reminder-sender", "^reminder-sender", "reminder-sender-v2"],
+   "accept_kinds": ["storage", "rollout"]
+  }
+ ],
+ "path": [
+  {"resource": "CronJob/shop-17/reminder-sender", "role": "cause", "required": true, "accept": ["reminder-sender"], "note": "its new ConfigMap has no LAST_SENT_ID, so every minute it reads the reminders table from id 0 (330 s a read)"},
+  {"resource": "Deployment/shop-17/orders-db", "role": "via", "required": true, "accept": ["orders-db"], "note": "each running range read keeps 8 reads in the disk queue; every other query waits behind them"},
+  {"resource": "Deployment/shop-17/storefront", "role": "symptom", "required": true, "accept": ["storefront", "invoices"]}
+ ],
+ "also_ok": ["Deployment/shop-17/orders-db"],
+ "decoys": [
+  {"resource": "Deployment/shop-17/storefront", "why": "a caller; it only measures the slow answers"},
+  {"resource": "Deployment/shop-17/invoices", "why": "a caller; its timeouts come from the same wait"},
+  {"resource": "Deployment/shop-17/feed-builder", "why": "the namespace's top CPU user the whole time, before and after; it never calls orders-db"},
+  {"resource": "Node/*", "why": "the node has idle CPU and memory"}
+ ]
+}

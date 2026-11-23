@@ -219,7 +219,7 @@ test.describe('Pods being deleted', () => {
       userId = madeUser((await created.json()).id, bearer(admin))
       const grant = await request.put(`/api/v1/auth/admin/users/${userId}/cluster-roles/${CLUSTER}`, { headers: bearer(admin), data: { role: 'Read', namespaces: [NS] } })
       expect(grant.status(), await grant.text()).toBe(200)
-      k(`create clusterrole ${RBAC}-imp --verb=impersonate --resource=groups --resource-name=kubeast:role:read`)
+      withUndo(k(`create clusterrole ${RBAC}-imp --verb=impersonate --resource=groups --resource-name=kubeast:role:read`), () => { tryK(`delete clusterrolebinding ${RBAC}-imp --ignore-not-found`); tryK(`delete clusterrole ${RBAC}-imp --ignore-not-found`) })
       k(`create clusterrolebinding ${RBAC}-imp --clusterrole=${RBAC}-imp --serviceaccount=kubeast:k8s-service`)
       k(`-n ${NS} create rolebinding ${RBAC}-view --clusterrole=view --group=kubeast:role:read`)
       const user = await login(request, email, PW)
@@ -290,4 +290,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

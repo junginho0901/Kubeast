@@ -180,7 +180,7 @@ test.describe('Number check — Cluster hygiene', () => {
   test('past sign-offs page on the server: every sign-off the cluster keeps, past the hundred one answer holds, newest first', async ({ page }) => {
     test.setTimeout(180_000)
     const run = Date.now().toString(36)
-    const prefix = 'e2e-hyg-hist-'
+    const prefix = withUndo('e2e-hyg-hist-', (p) => psql(`DELETE FROM hygiene_reviews WHERE id LIKE '${p}%'`))
     const note = (i: number) => `e2e history ${run} ${String(i).padStart(3, '0')}`
     psql(`DELETE FROM hygiene_reviews WHERE id LIKE '${prefix}%'`)
     try {
@@ -233,4 +233,17 @@ test.describe('Number check — Cluster hygiene', () => {
     await expect.soft(page.getByText(/findings are (shown|listed)|건만 (표시|목록)/), 'the note').toContainText(new RegExp(`5000 most severe of the ${all} findings|발견 ${all}건 중 심각한 순으로 5000건`))
     await expect.soft(page.getByTestId('hygiene-pager'), 'the rows listed').toContainText(pagerTotal(5000))
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

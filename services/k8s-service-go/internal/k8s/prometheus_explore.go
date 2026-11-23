@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/proxypath"
 	"github.com/prometheus/prometheus/promql/parser"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -72,11 +73,15 @@ func (s *Service) prometheusFlavor(ctx context.Context, src *promSource) string 
 		}
 		body = b
 	} else {
-		b, err := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().AbsPath(src.proxy.proxyBase()).Suffix("-", "healthy").Do(ctx).Raw()
+		rc, err := s.proxyClientCtx(ctx)
 		if err != nil {
 			return ""
 		}
-		body = b
+		a := proxyGet(ctx, rc.Get().AbsPath(src.proxy.proxyBase()).Suffix("-", "healthy"))
+		if a.err != nil {
+			return ""
+		}
+		body = a.body
 	}
 	switch text := string(body); {
 	case strings.Contains(text, "VictoriaMetrics"):
@@ -108,24 +113,31 @@ func (s *Service) promGetData(ctx context.Context, src *promSource, promPath str
 		body = b
 	} else {
 		sub, query, _ := strings.Cut(promPath, "?")
-		req := s.clientsetCtx(ctx).CoreV1().RESTClient().Get().AbsPath(src.proxy.proxyBase()).Suffix(sub)
+		rc, err := s.proxyClientCtx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		req := rc.Get().AbsPath(src.proxy.proxyBase()).Suffix(sub)
 		params, _ := url.ParseQuery(query)
 		for k, vals := range params {
 			for _, v := range vals {
 				req = req.Param(k, v)
 			}
 		}
-		b, err := req.Do(ctx).Raw()
-		if err != nil {
+		a := proxyGet(ctx, req)
+		if a.err != nil {
 			switch {
-			case apierrors.IsForbidden(err), apierrors.IsUnauthorized(err):
-				return nil, err
-			case apierrors.IsNotFound(err), unsupportedPathError(err):
+			case a.clusterRefusal():
+				return nil, a.err
+			case a.cluster, a.storeOwnAuth(), proxypath.NotFollowed(a.err) != nil:
+				// the API server's 404 is the Service missing, not an API the store has not
+				return nil, promProxyError(src.proxy, a)
+			case a.code == http.StatusNotFound || unsupportedPathError(a.err):
 				return nil, fmt.Errorf("%w: %s", ErrPrometheusNotServed, sub)
 			}
-			return nil, fmt.Errorf("%w: %v", ErrPrometheusUpstream, err)
+			return nil, fmt.Errorf("%w: %v", ErrPrometheusUpstream, a.err)
 		}
-		body = b
+		body = a.body
 	}
 	var env struct {
 		Status string          `json:"status"`
@@ -179,8 +191,12 @@ func windowParams(match string, since time.Duration, limit int) url.Values {
 		since = exploreWindow
 	}
 	end := time.Now()
+	return windowParamsBetween(match, end.Add(-since), end, limit)
+}
+
+func windowParamsBetween(match string, start, end time.Time, limit int) url.Values {
 	q := url.Values{}
-	q.Set("start", strconv.FormatInt(end.Add(-since).Unix(), 10))
+	q.Set("start", strconv.FormatInt(start.Unix(), 10))
 	q.Set("end", strconv.FormatInt(end.Unix(), 10))
 	if match != "" {
 		q.Set("match[]", match)
@@ -251,6 +267,15 @@ func (s *Service) PrometheusMetricNames(ctx context.Context, pattern string, lim
 // on the series selector matches within since, at most limit+1 (so the caller
 // can tell it was cut).
 func (s *Service) PrometheusLabels(ctx context.Context, label, selector string, since time.Duration, limit int) ([]string, error) {
+	return s.prometheusLabels(ctx, label, selector, func(match string) url.Values { return windowParams(match, since, limit+1) })
+}
+
+// PrometheusLabelsBetween is PrometheusLabels over start–end instead of since back from now.
+func (s *Service) PrometheusLabelsBetween(ctx context.Context, label, selector string, start, end time.Time, limit int) ([]string, error) {
+	return s.prometheusLabels(ctx, label, selector, func(match string) url.Values { return windowParamsBetween(match, start, end, limit+1) })
+}
+
+func (s *Service) prometheusLabels(ctx context.Context, label, selector string, params func(match string) url.Values) ([]string, error) {
 	src := s.getPromSource(ctx)
 	if src == nil {
 		return nil, nil
@@ -263,7 +288,7 @@ func (s *Service) PrometheusLabels(ctx context.Context, label, selector string, 
 	if label != "" {
 		path = "/api/v1/label/" + url.PathEscape(label) + "/values"
 	}
-	data, err := s.promGetData(ctx, src, path+"?"+windowParams(match, since, limit+1).Encode())
+	data, err := s.promGetData(ctx, src, path+"?"+params(match).Encode())
 	if err != nil {
 		return nil, err
 	}

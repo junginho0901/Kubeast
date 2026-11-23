@@ -1,0 +1,27 @@
+{
+ "id": "08_quota_exhausted",
+ "control": false,
+ "symptom": "ledger logs \"settlement data is stale\" with a growing age; no export has arrived since shortly after the injection",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "ResourceQuota/shop-08/compute",
+   "kind": "quota",
+   "accept_resources": ["resourcequota/(shop-08/)?compute", "^compute$"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/shop-08/search-indexer", "role": "via", "required": false, "accept": ["search-indexer", "indexer"], "note": "the scale-up to 4 that used the quota"},
+  {"resource": "ResourceQuota/shop-08/compute", "role": "cause", "required": true, "accept": ["resourcequota/(shop-08/)?compute", "^compute$"]},
+  {"resource": "CronJob/shop-08/settlement-export", "role": "via", "required": true, "accept": ["settlement-export", "export"], "note": "its Job gets FailedCreate: exceeded quota"},
+  {"resource": "Deployment/shop-08/ledger", "role": "symptom", "required": true, "accept": ["ledger"]}
+ ],
+ "also_ok": ["Deployment/shop-08/search-indexer", "CronJob/shop-08/settlement-export"],
+ "decoys": [
+  {"resource": "Deployment/shop-08/ledger", "why": "where the symptom shows; Running, Ready, no errors"},
+  {"resource": "ReplicaSet/shop-08/search-indexer-<hash>", "why": "may log a short FailedCreate of its own if an export pod held quota at the moment of the scale-up; it recovers"}
+ ]
+}

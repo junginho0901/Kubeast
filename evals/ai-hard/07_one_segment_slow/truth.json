@@ -1,0 +1,35 @@
+{
+ "id": "07_one_segment_slow",
+ "control": false,
+ "symptom": "frontend's calls to product-catalog take 700 ms more, so product pages are slow; product-catalog's own server spans stay at a few milliseconds and its other callers (checkout, recommendation) see no change; nothing fails",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "Deployment/otel-demo/frontend",
+   "kind": "dependency_slow",
+   "accept_resources": ["(^|/)frontend$", "frontend\\b(?!-proxy).*product-catalog", "product-catalog.*\\bfrontend\\b(?!-proxy)"],
+   "accept_kinds": []
+  },
+  {
+   "resource": "Deployment/otel-demo/product-catalog",
+   "kind": "dependency_slow",
+   "accept_resources": ["(deployment|replicaset|pod|service)/(otel-demo/)?product-catalog", "^product-catalog", "frontend\\b(?!-proxy).*product-catalog", "product-catalog.*\\bfrontend\\b(?!-proxy)"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/otel-demo/product-catalog", "role": "cause", "required": true, "accept": ["product-catalog"], "note": "its packets to frontend's pods are held 700 ms on the way; its server spans and its database calls stay fast"},
+  {"resource": "Deployment/otel-demo/frontend", "role": "symptom", "required": true, "accept": ["(^|/)frontend$", "frontend-proxy"], "note": "its client spans to product-catalog grow by the delay; its calls to cart, currency and recommendation do not"}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/otel-demo/recommendation", "why": "also calls product-catalog; those calls stay fast"},
+  {"resource": "Deployment/otel-demo/checkout", "why": "also calls product-catalog; those calls stay fast"},
+  {"resource": "Deployment/otel-demo/astronomy-db", "why": "product-catalog's database; its query spans stay at a few milliseconds"},
+  {"resource": "Deployment/otel-demo/currency", "why": "frontend calls it for the same page; fast throughout"},
+  {"resource": "Node/kubeast-b-control-plane", "why": "the only node; nothing else on it slowed"}
+ ],
+ "variants_note": "The segment is scored as its two ends: an answer names both, in one cause (\"frontend → product-catalog\") or as two. product-catalog alone reads the server as slow, which its own spans and its other callers contradict; frontend alone stops where the time shows."
+}

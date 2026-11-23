@@ -9,7 +9,9 @@
 //   - ChatDays: AI chat sessions by last activity (sessions.updated_at) with
 //     their messages and session_contexts (FK ON DELETE CASCADE), and tool
 //     approval requests by created_at (their decisions are already in the
-//     audit log as ai.tool.approve / ai.tool.reject).
+//     audit log as ai.tool.approve / ai.tool.reject; one deleted while still
+//     approved had no outcome of its call written, and the run's record names
+//     it in open_approvals).
 //
 // Deletes run in batches so a first purge on an old database does not hold a
 // long lock; PostgreSQL's autovacuum reclaims the space for reuse. Every run is
@@ -99,6 +101,17 @@ type Result struct {
 	HygieneReviews    int64 `json:"hygiene_reviews"`
 	Investigations    int64 `json:"alert_investigations"`
 	InboxAlerts       int64 `json:"alert_inbox"`
+	// the tool approvals deleted while still approved: no outcome of their calls had been written
+	OpenApprovals []OpenApproval `json:"open_approvals,omitempty"`
+}
+
+// OpenApproval names a tool approval by ids and names only, never the call's arguments.
+type OpenApproval struct {
+	ID         string     `json:"id"`
+	SessionID  string     `json:"session_id"`
+	Tool       string     `json:"tool"`
+	Cluster    string     `json:"cluster"`
+	ApprovedAt *time.Time `json:"approved_at"`
 }
 
 // Purger executes the policy against a database.
@@ -197,14 +210,14 @@ func (p Purger) Purge(ctx context.Context, now time.Time) (Result, error) {
 		// tool_approvals reference sessions without ON DELETE CASCADE: drop the
 		// old ones and the ones whose session is about to go, then the sessions
 		// (messages and session_contexts cascade).
-		n, err := deleteBatched(ctx, p.Pool,
-			`DELETE FROM tool_approvals WHERE id IN (SELECT id FROM tool_approvals WHERE created_at < $1 ORDER BY id LIMIT $2)`, chatCutoff)
+		n, err := deleteApprovalsBatched(ctx, p.Pool, &res,
+			`DELETE FROM tool_approvals WHERE id IN (SELECT id FROM tool_approvals WHERE created_at < $1 ORDER BY id LIMIT $2)`+approvalReturning, chatCutoff)
 		if err != nil {
 			return res, fmt.Errorf("tool approvals: %w", err)
 		}
 		res.ToolApprovals += n
-		n, err = deleteBatched(ctx, p.Pool,
-			`DELETE FROM tool_approvals WHERE id IN (SELECT t.id FROM tool_approvals t JOIN sessions s ON s.id = t.session_id WHERE s.updated_at < $1 ORDER BY t.id LIMIT $2)`, chatCutoff)
+		n, err = deleteApprovalsBatched(ctx, p.Pool, &res,
+			`DELETE FROM tool_approvals WHERE id IN (SELECT t.id FROM tool_approvals t JOIN sessions s ON s.id = t.session_id WHERE s.updated_at < $1 ORDER BY t.id LIMIT $2)`+approvalReturning, chatCutoff)
 		if err != nil {
 			return res, fmt.Errorf("tool approvals of expired sessions: %w", err)
 		}
@@ -258,12 +271,49 @@ func deleteBatched(ctx context.Context, pool *pgxpool.Pool, sql string, cutoff t
 	}
 }
 
+// approvalReturning returns each tool approval as it was deleted, after any write to it that committed first.
+const approvalReturning = ` RETURNING id, session_id, tool, cluster, status, decided_at`
+
+// deleteApprovalsBatched is deleteBatched for tool approvals: it adds those deleted while approved to res.OpenApprovals.
+func deleteApprovalsBatched(ctx context.Context, pool *pgxpool.Pool, res *Result, sql string, cutoff time.Time) (int64, error) {
+	var total int64
+	for {
+		rows, err := pool.Query(ctx, sql, cutoff, BatchSize)
+		if err != nil {
+			return total, err
+		}
+		var n int64
+		var open []OpenApproval
+		for rows.Next() {
+			var a OpenApproval
+			var status string
+			if err := rows.Scan(&a.ID, &a.SessionID, &a.Tool, &a.Cluster, &status, &a.ApprovedAt); err != nil {
+				rows.Close()
+				return total, err
+			}
+			n++
+			if status == "approved" {
+				open = append(open, a)
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return total, err
+		}
+		total += n
+		res.OpenApprovals = append(res.OpenApprovals, open...)
+		if n < BatchSize {
+			return total, nil
+		}
+	}
+}
+
 func (p Purger) record(ctx context.Context, now time.Time, res Result, runErr error) {
 	if p.Audit == nil {
 		return
 	}
 	auditCutoff, chatCutoff := p.Cfg.Cutoffs(now)
-	after, _ := json.Marshal(map[string]any{
+	fields := map[string]any{
 		"audit_days":           p.Cfg.AuditDays,
 		"chat_days":            p.Cfg.ChatDays,
 		"audit_cutoff":         nullableTime(auditCutoff),
@@ -279,14 +329,18 @@ func (p Purger) record(ctx context.Context, now time.Time, res Result, runErr er
 		"investigation_days":   p.Cfg.InvestigationDays,
 		"alert_investigations": res.Investigations,
 		"alert_inbox":          res.InboxAlerts,
-	})
+	}
+	if len(res.OpenApprovals) > 0 {
+		fields["open_approvals"] = res.OpenApprovals
+	}
+	after, _ := json.Marshal(fields)
 	rec := audit.Record{
 		Service:    audit.ServiceAdmin,
 		Action:     Action,
 		ActorEmail: "system",
 		TargetType: "retention",
 		TargetID:   "database",
-		After:      after,
+		After:      audit.MaskSensitive(after),
 		Result:     audit.ResultSuccess,
 	}
 	if runErr != nil {

@@ -92,7 +92,7 @@ test.describe('Pods list paged by the server', () => {
   })
 
   test('a pod made and deleted with kubectl appears and goes within a poll', async ({ page }) => {
-    const name = `e2e-podpage-live-${Date.now().toString(36)}`
+    const name = withUndo(`e2e-podpage-live-${Date.now().toString(36)}`, (n) => tryKubectl(`-n default delete pod ${n} --ignore-not-found --grace-period=0 --force --wait=false`))
     try {
       await page.goto(`/workloads/pods?cluster=${CLUSTER}`)
       await search(page).fill(name)
@@ -113,7 +113,7 @@ test.describe('Pods list paged by the server', () => {
     const s = Date.now().toString(36)
     const [nsA, nsB, nsC] = ['a', 'b', 'c'].map((x) => `e2e-podpage-${x}-${s}`)
     const email = `e2e-podpage-${s}@kubeast.local`
-    const rbac = `e2e-podpage-${s}`
+    const rbac = withUndo(`e2e-podpage-${s}`, (r) => { tryKubectl(`delete clusterrolebinding ${r}-imp --ignore-not-found`); tryKubectl(`delete clusterrole ${r}-imp --ignore-not-found`); tryKubectl(`delete namespace ${nsA} ${nsB} ${nsC} --ignore-not-found --wait=false`) })
     let userId = ''
     const page = (token: string, q: string) => request.get(`/api/v1/cluster/pods/page?cluster=${CLUSTER}&limit=50${q}`, { headers: bearer(token), failOnStatusCode: false })
     try {
@@ -171,4 +171,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

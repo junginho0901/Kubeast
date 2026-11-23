@@ -1,0 +1,46 @@
+{
+ "id": "01_cache_down_chain",
+ "title": "The cart's store stops: cart calls fail, checkouts fail two calls up",
+ "group": "chain",
+ "cluster": "default",
+ "namespace": "shop-01",
+ "question": "default 클러스터 otel-demo 네임스페이스 쇼핑몰에서 결제가 안 된대. 원인이 뭐야?",
+ "question_vague": "default 클러스터 otel-demo 네임스페이스 쇼핑몰이 이상하다는데 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "valkey"
+  ],
+  [
+   "scale",
+   "스케일",
+   "replica",
+   "레플리카",
+   "복제본",
+   "0개",
+   "엔드포인트",
+   "endpoint"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n otel-demo wait --for=condition=Available deploy/frontend-proxy deploy/frontend deploy/checkout deploy/cart deploy/valkey-cart deploy/payment deploy/load-generator --timeout=10s && kubectl -n $NS wait --for=condition=Available deploy/uptime-check --timeout=10s",
+ "wait_seconds": 300,
+ "baseline_seconds": 300,
+ "inject_cmds": [
+  "kubectl -n otel-demo scale deploy/valkey-cart --replicas=0"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/uptime-check --since=40s | grep 'check failed' | grep -q 'path=/api/cart'",
+ "inject_wait_seconds": 180,
+ "ask_after_seconds": [300],
+ "undo_cmds": [
+  "kubectl -n otel-demo scale deploy/valkey-cart --replicas=1",
+  "kubectl -n otel-demo wait --for=condition=Available deploy/valkey-cart --timeout=120s"
+ ],
+ "cooldown_seconds": 120,
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "namespace": "otel-demo", "job": "uptime-check"},
+  "match": {"namespace": "otel-demo"},
+  "annotations": {"summary": "Placing an order fails in the otel-demo shop", "description": "uptime-check, which watches the shop in otel-demo through frontend-proxy, has seen requests fail for the last few minutes, and the shop's checkouts fail."}
+ }
+}

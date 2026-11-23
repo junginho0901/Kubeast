@@ -100,7 +100,7 @@ test.describe('number check — policy results that pick by label', () => {
   test('a drawer of more results than a page lists every one, page by page, as the report has them', async ({ page }) => {
     test.setTimeout(120_000)
     // a namespace of its own: the first test holds every result of NS
-    const ns = `${NS}-many`
+    const ns = withUndo(`${NS}-many`, (n) => kubectl(`delete namespace ${n} --wait=false --ignore-not-found`))
     const results = Array.from({ length: 23 }, (_, i) => ({
       policy: `many-${String(i).padStart(2, '0')}`, rule: 'r', result: 'fail', source: 'e2e', message: `failure ${i}`,
       resources: [{ apiVersion: 'v1', kind: 'ConfigMap', name: 'cm-many', namespace: ns }],
@@ -132,7 +132,7 @@ test.describe('number check — policy results that pick by label', () => {
       served = false
     }
     test.skip(!served, 'needs the ClusterPolicyReport CRD on the second cluster')
-    const name = `e2e-polsel-cluster-${run}`
+    const name = withUndo(`e2e-polsel-cluster-${run}`, (n) => kubectl(`delete clusterpolicyreport ${n} --ignore-not-found`))
     const resource = `/api/v1/cluster/namespaces/${NS}/policyreports/resource?cluster=${CLUSTER}&kind=ConfigMap&name=cm-plain`
     // the cluster reports are read once a minute per identity: past that read, as a refresh is
     const readNow = async () => {
@@ -200,4 +200,17 @@ test.describe('number check — policy results that pick by label', () => {
       await readNow()
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

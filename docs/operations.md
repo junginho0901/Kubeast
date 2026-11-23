@@ -308,6 +308,10 @@ Loki and the collector are set up separately ([docs/cluster-requirements.md §14
   - API: `GET /api/v1/[cluster/namespaces/{ns}/]logsearch/logql?q=&step=`, `…/logsearch/labels[?label=]` and `…/logsearch/patterns?q=<selector>`.
     - The same gate: Pod read + `get pods/log` + per-minute limit.
     - Audit `k8s.pod.logs.logql` (`kind`). Label lists are not audited.
+  - **Volume limit** (`features.logSearch.queryMaxBytes`, default 0 = off): with a number of bytes set, `loki_query` first asks Loki's `index/stats` how much the streams of each selector of the query hold over the range, as mcp-grafana's lokiguard does.
+    - Past the limit it answers 400 with the size and how to narrow it (a shorter range, more label matchers), and reads nothing. The audit row is a failure with `estimated_bytes`.
+    - Under it the answer carries `estimatedBytes`. A store without `index/stats` answers 404 while the limit is set.
+    - Off, the index is not asked and the answer and the row are as before.
   - Patterns need Loki's `pattern_ingester.enabled: true`. Without it, the AI gets "no patterns" and counts with `loki_query`.
   - Loki returns only patterns that appear in 30 or more lines within the window (a fixed value in 3.7).
 
@@ -375,7 +379,7 @@ resources:
 - **Refused with it**: `sessionRecording.storage: file` (one volume, two pods) and `streams.replicas` above 1. `file` is refused on more than one k8s-service pod too, with streams on or off (`replicas.k8sService` above 1, or `autoscaling.k8sService` with `maxReplicas` above 1).
 - **The file store on one k8s-service pod**: a rollout starts the new pod, which mounts `sessionRecording.fileVolume`, before the old one stops (`maxSurge: 1`, `maxUnavailable: 0`), so two pods hold the volume for that while. A ReadWriteOnce volume is mounted on one node at a time: on more than one node, give it a ReadWriteMany volume, or use `s3` or `database`.
 - **NetworkPolicy**: `k8s-service-stream` takes connections from the gateway only, and reaches the database, Redis, auth-service, the clusters' API servers and `sessionRecording.egress`.
-- **In front of the gateway**: the gateway pod's preStop wait (`podShutdown.preStopSeconds`) should last until a load balancer that sends to pod IPs stops sending it new requests (behind an AWS ALB with its default deregistration delay of 300 s, the default 5 s was enough), and an Envoy Gateway route to the console should not cut a stream at its request timeout (15 s by default).
+- **In front of the gateway**: the gateway pod's preStop wait (`podShutdown.preStopSeconds`) should last until a load balancer that sends to pod IPs stops sending it new requests (behind an AWS ALB, 25 s with the target group's deregistration delay at 20 s: with the default 5 s and the default delay of 300 s requests failed in 3 of 18 gateway pod replacements, and in none of 12 more with the pod readiness gate on; see docs/high-availability.md), and an Envoy Gateway route to the console should not cut a stream at its request timeout (15 s by default).
 - **Metrics**: `kubeast_terminals_open` and `kubeast_followed_logs_open` on each stream server (k8s-service-stream; k8s-service with `streams.enabled` off).
 
 ## Where a slow request waited (gateway access log)

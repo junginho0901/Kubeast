@@ -90,6 +90,7 @@ func handleLokiQuery(ctx context.Context, args map[string]interface{}, headers h
 		Lines          []interface{}            `json:"lines"`
 		Series         []map[string]interface{} `json:"series"`
 		Truncated      bool                     `json:"truncated"`
+		SeriesTotal    int                      `json:"seriesTotal"`
 		Oldest         string                   `json:"oldest"`
 		Newest         string                   `json:"newest"`
 	}
@@ -104,11 +105,13 @@ func handleLokiQuery(ctx context.Context, args map[string]interface{}, headers h
 		"end":             end.UTC().Format(time.RFC3339),
 	}
 	truncated := reply.Truncated
+	cut := ""
 	if reply.ResultType == "matrix" {
 		results := reply.Series
 		if len(results) > promSeriesCap {
 			results, truncated = results[:promSeriesCap], true
 		}
+		cut = seriesCut(len(reply.Series), len(results), reply.Truncated, reply.SeriesTotal, maxPoints(results))
 		for _, r := range results {
 			if pts, ok := r["points"].([]interface{}); ok && len(pts) > promPointsCap {
 				r["points"], truncated = thin(pts, promPointsCap), true
@@ -126,6 +129,9 @@ func handleLokiQuery(ctx context.Context, args map[string]interface{}, headers h
 		if len(lines) > limit {
 			lines, truncated = lines[:limit], true
 		}
+		if truncated {
+			cut = cutUnknown(len(lines), "lines, the newest", "the store stops at the limit")
+		}
 		result["kind"], result["returned"], result["lines"] = "log", len(lines), lines
 		if reply.Oldest != "" {
 			result["oldest"], result["newest"] = reply.Oldest, reply.Newest
@@ -138,6 +144,7 @@ func handleLokiQuery(ctx context.Context, args map[string]interface{}, headers h
 		result["truncated"] = true
 		result["hint"] = "The result is cut: do not answer from it. Aggregate (sum by (…), topk(10, …)), add matchers or narrow the window, then query again."
 	}
+	addDetails(result, cut, windowDefault(args, time.Hour, "since", "since_time", "until_time"), "")
 	return marshalJSON(result)
 }
 
@@ -171,6 +178,11 @@ func handleLokiLabels(ctx context.Context, args map[string]interface{}, headers 
 	case len(reply.Values) == 0:
 		result["hint"] = "Nothing in the window: widen since, or check the namespace."
 	}
+	cut := ""
+	if reply.Truncated {
+		cut = cutUnknown(len(reply.Values), "values", "the store stops at the limit")
+	}
+	addDetails(result, cut, windowDefault(args, time.Hour, "since"), "")
 	return marshalJSON(result)
 }
 
@@ -215,5 +227,6 @@ func handleLokiPatterns(ctx context.Context, args map[string]interface{}, header
 	case reply.Total == 0:
 		result["hint"] = "No patterns in the window: Loki lists a pattern only once 30 lines have it, keeps recent lines only (3h by default), or no line matched. Widen since, or count lines with loki_query."
 	}
+	addDetails(result, "", windowDefault(args, time.Hour, "since", "since_time", "until_time"), "")
 	return marshalJSON(result)
 }

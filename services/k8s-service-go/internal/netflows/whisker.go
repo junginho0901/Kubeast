@@ -108,7 +108,7 @@ func whiskerList(ctx context.Context, client *http.Client, base string, q url.Va
 		if ctx.Err() != nil {
 			return nil, ErrTimeout
 		}
-		return nil, fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return nil, sendError(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

@@ -128,7 +128,7 @@ test.describe('modal windows', () => {
 
   test('admin confirmations are in-app windows, not window.confirm (#68)', async ({ page, request }) => {
     const headers = await adminHeaders(request)
-    const name = `E2EModalRole${Date.now()}`
+    const name = withUndo(`E2EModalRole${Date.now()}`, async (n) => { const role = ((await (await request.get('/api/v1/auth/roles', { headers })).json()) as Array<{ id: number; name: string }>).find((r) => r.name === n); if (role) await request.delete(`/api/v1/auth/admin/roles/${role.id}`, { headers }) })
     const created = await request.post('/api/v1/auth/admin/roles', { headers, data: { name, description: 'modals.spec', permissions: ['menu.dashboard'] } })
     expect(created.ok(), await created.text()).toBeTruthy()
     const roleExists = async () => ((await (await request.get('/api/v1/auth/roles', { headers })).json()) as Array<{ name: string }>).some((r) => r.name === name)
@@ -157,4 +157,17 @@ test.describe('modal windows', () => {
       }
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

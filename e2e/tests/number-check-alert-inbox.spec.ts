@@ -236,7 +236,7 @@ test.describe('number check: the Alerts screen', () => {
     const fingerprint = `n4a-skip-${run}`
     const invId = `inv-e2e-n4a-${run}`
     const labels = { alertname: name, severity: 'info', namespace: 'default' }
-    const startsAt = new Date(Date.now() - 3 * 60_000).toISOString()
+    const startsAt = withUndo(new Date(Date.now() - 3 * 60_000).toISOString(), async (s) => { psql(`DELETE FROM alert_investigations WHERE id = '${invId}'`); await post(request, INBOX.cluster, `{}:{alertname="${name}"}`, [{ status: 'resolved', labels, annotations: {}, startsAt: s, fingerprint, endsAt: new Date().toISOString() }]) })
     const want = {
       label: EN.investigations.skip.investigation_cap,
       text: `${EN.investigations.skip.investigation_cap} — ${EN.investigations.skipWhy.investigation_cap.replace('{{limit}}', '100')}`,
@@ -285,7 +285,7 @@ test.describe('number check: the Alerts screen', () => {
     const name = `E2EN4aNone${run}`
     const labels = { alertname: name, severity: 'none', namespace: 'default' }
     const startsAt = new Date(Date.now() - 60_000).toISOString()
-    const fingerprint = `n4a-none-${run}`
+    const fingerprint = withUndo(`n4a-none-${run}`, (f) => post(request, INBOX.cluster, `{}:{alertname="${name}"}`, [{ status: 'resolved', labels, annotations: {}, startsAt, fingerprint: f, endsAt: new Date().toISOString() }]))
     await post(request, INBOX.cluster, `{}:{alertname="${name}"}`, [{ status: 'firing', labels, annotations: { summary: `n4a none ${run}` }, startsAt, fingerprint }])
     try {
       const carried = psql(`SELECT DISTINCT severity FROM alert_inbox WHERE cluster = '${INBOX.cluster}' AND severity <> '' ORDER BY severity`).split('\n').filter(Boolean)
@@ -372,4 +372,17 @@ test.describe('number check: the Alerts screen', () => {
       }
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
