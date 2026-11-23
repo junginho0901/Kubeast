@@ -73,7 +73,7 @@ _CALLS_PATH = (
     "- Find what changed at a path's first workload just before (a rollout, config, a restart, traffic) with timeline, and name that "
     "change as the root cause.\n"
     "- Under \"Likely cause\", write the path from the cause to the alert's symptom as cause → … → symptom, each link followed by "
-    "the number of the tool call that showed it, counting your calls from 1 (for example: api (call 4) → web (call 2) → the "
+    "the [call N] number shown before the result that showed it (for example: api (call 4) → web (call 2) → the "
     "alert). A link no call showed is marked as a guess; a path the calls do not support is not written.\n"
 )
 
@@ -110,7 +110,7 @@ _RULES_REPORT = (
 
 
 def alert_message(*, cluster: str, alert: dict[str, Any], context: str = "", numbers: Optional[Numbers] = None) -> str:
-    """`context`: what the server worked out or read before the first model call (the windows, step 0's changes and narrowing)."""
+    """`context`: what the server worked out or read before the first model call (the windows, step 0's changes and narrowing, the rule cards)."""
     # Labels and annotations are free text: masked here like other model input; the alert screens read the stored row.
     # numbers is the investigation's table, so a value keeps the number its tool results give it.
     data, _ = redact_text(json.dumps(alert, ensure_ascii=False, indent=2, default=str), numbers=numbers)

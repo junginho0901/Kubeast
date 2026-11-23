@@ -23,7 +23,7 @@ def test_on_asks_for_the_calls_and_the_path():
     rule = on.index("include [\"calls\"]")
     assert on.index("When alerts_list is offered") < rule < on.index("When prometheus_rules is offered")
     assert "calls.suspects" in on and "calls.paths" in on and "more often its victim than its cause" in on
-    assert "cause → … → symptom" in on and "counting your calls from 1" in on and "marked as a guess" in on
+    assert "cause → … → symptom" in on and "the [call N] number shown before the result that showed it" in on and "marked as a guess" in on
     # a failing call outside the graph may hold the cause
     assert "failing_outside" in on and "cause may be outside the graph" in on
     # what changed at the first workload is the root cause, read with timeline

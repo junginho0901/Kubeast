@@ -145,6 +145,10 @@ data:
   AI_CHAT_SUMMARY_MAX_CHARS: {{ .Values.ai.chat.summary.maxChars | quote }}
   AI_CHAT_BUDGET_SESSION_TOKENS: {{ .Values.ai.chat.budget.sessionTokens | quote }}
   AI_CHAT_BUDGET_USER_DAILY_TOKENS: {{ .Values.ai.chat.budget.userDailyTokens | quote }}
+  AI_RULE_CARDS_CHAT: {{ .Values.ai.ruleCards.chat | quote }}
+  AI_RULE_CARDS_INVESTIGATIONS: {{ .Values.ai.ruleCards.investigations | quote }}
+  AI_RULE_CARDS: {{ .Values.ai.ruleCards.cards | default (list) | toJson | quote }}
+  AI_RULE_CARDS_REMOVE: {{ .Values.ai.ruleCards.remove | default (list) | join "," | quote }}
   AI_CLAUDE_CODE_ENABLED: {{ .Values.ai.providers.claudeCode.enabled | quote }}
   AI_CLAUDE_CODE_MAX_CONCURRENT: {{ .Values.ai.providers.claudeCode.maxConcurrent | quote }}
   AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL: {{ dig "maxConcurrentTotal" 0 .Values.ai.providers.claudeCode | int64 | quote }}

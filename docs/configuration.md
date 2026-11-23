@@ -207,6 +207,12 @@ ai:
                              # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
   toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
                            # one may be empty and the console paths of the objects they name, from what they hold (features.md); off: as before
+  ruleCards:               # per kind of failure, the checks that often find its cause and their tools (features.md "Rule cards")
+    chat: false            # (alpha) true: a chat question naming a failure a card knows gets at most two cards for that turn
+    investigations: false  # (alpha) true: an alert investigation's first message holds at most two, picked by the alert's name and labels
+                           # off, both: the cards file is not read and the chat and investigations are as before
+    cards: []              # more cards of the same shape (a kind already there is replaced); the defaults are app/services/rule_cards.json
+    remove: []             # default kinds left out, e.g. [network_policy]
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica

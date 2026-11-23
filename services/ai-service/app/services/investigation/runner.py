@@ -11,9 +11,11 @@ The whole run is bounded by timeout_seconds. With rules, changes_first or
 narrow_first on, the first message also holds the time windows counted from the
 alert's start, with changes_first what changed in the change window and with
 narrow_first anomaly_rank over the metrics window, read as step 0 before the
-first model call in that order (investigation/windows.py). With any of rules, changes_first,
-evidence_check or ledger on, each tool result the model reads starts with its call
-number, step 0 being call 1 (investigation/numbers.py). With ai.refuseRepeatedReads a read
+first model call in that order (investigation/windows.py). With ai.ruleCards.investigations on,
+the first message also holds, after those, at most two rule cards the alert's name and labels
+pick (app/services/rule_cards.py). With any of rules, changes_first,
+narrow_first, evidence_check, ledger or call_paths on, each tool result
+the model reads starts with its call number, step 0 being call 1 (investigation/numbers.py). With ai.refuseRepeatedReads a read
 repeated within the run is not run again (app/services/ai/repeats.py). With
 evidence_check or ledger on, the report ends with the rca block (investigation/rca.py):
 the runner takes it out once, holds its causes to the run's calls (evidence_check,
@@ -38,6 +40,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.database import get_db_service, utcnow
+from app.services import rule_cards
 from app.services.ai import access as access_mod
 from app.services.ai import limits
 from app.services.ai import tool_replay
@@ -245,6 +248,11 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     from app.services.ai import features as feature_gate
     tools = await feature_gate.gate_tools(readonly_tool_filter(service._get_tools_definition()), service)
     context = ToolContext(session_id=f"investigation:{row.id}")
+    # ai.ruleCards.investigations: at most two cards the alert's name and labels pick, after step 0 in the first message.
+    card_settings = rule_cards.load()
+    cards, kinds = rule_cards.investigation_cards(card_settings, alertname=row.alertname, labels=row.labels, tools=tools)
+    if card_settings.investigations:
+        progress["rule_cards"] = kinds
     tool_log: list[dict[str, Any]] = []
     repeats = repeats_mod.RepeatGuard() if repeats_mod.enabled() else None
     # What each call returned to the model, by its place in tool_log, for the evidence check; kept only while the run lasts.
@@ -396,6 +404,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             first.append(await changes_first(windows))
         if cfg.narrow_first:
             first.append(await narrow_first(windows))
+    if cards:
+        first.append(cards)
     system = inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language, rules=cfg.rules,
                                       call_paths=cfg.call_paths)
     if rca.on(cfg):
@@ -499,6 +509,8 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
             **({"evidence": progress["evidence"]} if progress.get("evidence") else {}),
             # features.alertInvestigation.ledger: the hypotheses by state and why it asked again (counts, kind names)
             **({"ledger": progress["ledger"]} if progress.get("ledger") else {}),
+            # ai.ruleCards.investigations: the kinds of the cards in the first message (not their text); absent when off
+            **({"rule_cards": progress["rule_cards"]} if "rule_cards" in progress else {}),
         },
     )
     log.info("investigation %s %s in %dms", row.id, status, duration_ms)
