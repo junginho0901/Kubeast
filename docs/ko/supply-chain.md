@@ -73,6 +73,10 @@ cosign verify \
 
 전체 statement를 보려면 `gh attestation verify`에 `--format json`을 붙이세요. 두 명령 모두 values에 고정한 digest를 대상으로 오프라인으로 동작합니다. 차트가 지원하게 되면 `global.imageTag`에 digest로 고정한 태그를 쓸 수 있습니다.
 
+`scripts/verify-release.sh vX.Y.Z`는 한 릴리스의 모든 이미지와 차트에 이 명령들을 돌립니다.
+각 확인을 그 릴리스의 태그·커밋·워크플로로 좁혀서도 돌리고 레지스트리에 붙은 attestation 사본으로도 확인하며, SBOM을 열어 보고, 틀린 ref·저장소·신원·발급자가 거부되는지 봅니다.
+읽기만 합니다(`gh`, `cosign`, `crane`, `helm`, `jq`).
+
 ## 클러스터에서 강제하기 (Enforcing it in a cluster)
 
 워크플로는 증거를 만들 뿐입니다. 서명 없는 이미지를 admission 단계에서 거부하려면 대상 클러스터에 이미지 검증 정책을 두세요. 예를 들어 위의 keyless issuer/subject를 쓰는 Kyverno `verifyImages`나 Sigstore의 policy-controller를 쓸 수 있습니다. 이 정책은 클러스터 쪽 설정이며 차트에는 들어 있지 않습니다.
