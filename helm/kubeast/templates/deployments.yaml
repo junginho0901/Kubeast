@@ -192,12 +192,7 @@ spec:
             {{- include "kubeast.dbCAVolumeMount" . | nindent 12 }}
             {{- include "kubeast.customCAVolumeMount" . | nindent 12 }}
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /api/v1/ai/health
-              port: 8001
-            initialDelaySeconds: 5
-            periodSeconds: 10
+          {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/api/v1/ai/health" "port" 8001 "delay" 5) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /api/v1/ai/health
@@ -536,12 +531,7 @@ spec:
             - name: tmp
               mountPath: /tmp
           {{- include "kubeast.preStop" . | nindent 10 }}
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 5173
-            initialDelaySeconds: 2
-            periodSeconds: 10
+          {{- include "kubeast.quickReadiness" (dict "root" $ "path" "/" "port" 5173 "delay" 2) | nindent 10 }}
           livenessProbe:
             httpGet:
               path: /
