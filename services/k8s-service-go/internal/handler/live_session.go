@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
@@ -135,6 +136,18 @@ func (h *Handler) auditSessionEnd(ctx context.Context, r *http.Request, targetTy
 		return
 	}
 	slog.InfoContext(r.Context(), why, "stream", stream, "target", target, "reason", code)
-	_ = h.recordAuditAfterClose(r, auditSessionEndAction, targetType, target, namespace, nil, nil,
-		audit.MustJSON(map[string]interface{}{"stream": stream, "reason": code}))
+	after := map[string]interface{}{"stream": stream, "reason": code}
+	if code == nodeshells.ReasonHeartbeatLost {
+		// The database is usually out with the heartbeat: the tracker writes the row now or once the store takes rows
+		// again, and ended_at keeps when the shell closed.
+		after["ended_at"] = time.Now().UTC().Format(time.RFC3339Nano)
+		if h.nodeShells != nil && h.auditStore != nil {
+			rec := auditBase(r, audit.ServiceK8s, auditSessionEndAction, targetType, target, namespace)
+			rec.After, rec.Result = audit.MustJSON(after), audit.ResultSuccess
+			if h.nodeShells.WriteEnd(r.Context(), rec) {
+				return
+			}
+		}
+	}
+	_ = h.recordAuditAfterClose(r, auditSessionEndAction, targetType, target, namespace, nil, nil, audit.MustJSON(after))
 }

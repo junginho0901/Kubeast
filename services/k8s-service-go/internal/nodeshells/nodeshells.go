@@ -154,6 +154,9 @@ type Tracker struct {
 	// The run of answered database calls this process is in: since when, and
 	// the last one (zero since: broken).
 	contactSince, contactLast time.Time
+	// owed are the heartbeat_lost end rows the audit store did not take, oldest first (WriteEnd, payOwed).
+	owed    []owedEnd
+	owedSeq uint64
 }
 
 // NewTracker builds the tracker for this process; shellTimeout is the shells' deadline (NODE_SHELL_TIMEOUT_SEC).
@@ -316,6 +319,7 @@ func (t *Tracker) Run(ctx context.Context) {
 	}()
 	defer func() {
 		<-beats
+		t.payOwedAtStop()
 		if i, ok := t.store.(idler); ok {
 			i.Idle()
 		}
@@ -342,6 +346,7 @@ func (t *Tracker) beatLoop(ctx context.Context) {
 			return
 		case <-beat.C:
 			t.beat(ctx)
+			t.payOwed(ctx)
 		}
 	}
 }
