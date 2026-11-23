@@ -186,7 +186,7 @@ func pod(name string, terminations ...map[string]interface{}) map[string]interfa
 	for i, t := range terminations {
 		containers = append(containers, map[string]interface{}{"name": "c" + string(rune('0'+i)), "last_state": map[string]interface{}{"terminated": t}})
 	}
-	return map[string]interface{}{"name": name, "node_name": "n1", "containers": containers, "owner_references": owners("ReplicaSet", "web-1")}
+	return map[string]interface{}{"name": name, "node_name": "n1", "containers": containers, "owner_references": owners("ReplicaSet", "web-5d4f8c7b9")}
 }
 
 func ended(reason string, at time.Time) map[string]interface{} {
