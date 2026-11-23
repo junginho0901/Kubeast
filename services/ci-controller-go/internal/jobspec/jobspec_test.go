@@ -361,7 +361,9 @@ func TestBuildMatchesBuildKitExample(t *testing.T) {
 	if !strings.Contains(string(b), `"BUILDKITD_FLAGS","value":"--oci-worker-no-process-sandbox"`) {
 		t.Errorf("rootless env %s", b)
 	}
-	if !strings.HasSuffix(rootless.Image, "-rootless") || strings.HasSuffix(privileged.Image, "-rootless") {
+	rootlessTag, _, _ := strings.Cut(rootless.Image, "@")
+	rootTag, _, _ := strings.Cut(privileged.Image, "@")
+	if !strings.HasSuffix(rootlessTag, "-rootless") || strings.HasSuffix(rootTag, "-rootless") {
 		t.Errorf("images %s, %s", rootless.Image, privileged.Image)
 	}
 	if privileged.SecurityContext.Privileged == nil || !*privileged.SecurityContext.Privileged {

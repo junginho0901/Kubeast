@@ -4,7 +4,7 @@
 // checkout container before them and a report container after them, which
 // writes the digests of the images built as the pod's termination message.
 // The shape follows BuildKit's own Kubernetes Job examples
-// (examples/kubernetes/job.rootless.yaml and job.privileged.yaml, v0.34.1).
+// (examples/kubernetes/job.rootless.yaml and job.privileged.yaml, v0.35.0).
 package jobspec
 
 import (

@@ -38,7 +38,7 @@ spec:
           done > /tmp/result
           cat /tmp/result
           cat /tmp/result 2>/dev/null >/dev/termination-log || echo "kubeast: the termination log is not writable; the result is in the log above" >&2
-        image: docker.io/alpine/git:v2.54.0
+        image: docker.io/alpine/git:v2.54.1@sha256:2306e2b05ee0ef99f5d25b0779f645b24ae9f91ba187107503592fcdfe78da3a
         name: report
         resources:
           limits:
@@ -91,7 +91,7 @@ spec:
           value: 0123456789abcdef0123456789abcdef01234567
         - name: KUBEAST_REPO_URL
           value: https://github.com/example/web.git
-        image: docker.io/alpine/git:v2.54.0
+        image: docker.io/alpine/git:v2.54.1@sha256:2306e2b05ee0ef99f5d25b0779f645b24ae9f91ba187107503592fcdfe78da3a
         name: checkout
         resources:
           limits:
@@ -190,7 +190,7 @@ spec:
           value: --oci-worker-no-process-sandbox
         - name: DOCKER_CONFIG
           value: /run/kubeast/registry/registry
-        image: docker.io/moby/buildkit:v0.34.1-rootless
+        image: docker.io/moby/buildkit:v0.35.0-rootless@sha256:5987568f92dafbfb679879de59c1cd8d26597f5f6635c314e166164e2615870c
         name: image
         resources:
           limits:
@@ -231,7 +231,7 @@ spec:
         env:
         - name: DOCKER_CONFIG
           value: /run/kubeast/registry/registry
-        image: docker.io/aquasec/trivy:0.76.1
+        image: docker.io/aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
         name: scan
         resources:
           limits:
