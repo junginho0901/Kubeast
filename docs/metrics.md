@@ -56,6 +56,10 @@ With `METRICS_ENABLED=false` (chart `metrics.enabled`), it returns 404.
 | `kubeast_session_recording_pending_bytes` | gauge | `service` | Terminal output bytes recorded but not yet uploaded to the store (`sessionRecording`) |
 | `kubeast_session_recording_upload_failures_total` | counter | `service` | Failed recording part uploads since start |
 | `kubeast_session_recording_last_upload_timestamp_seconds` | gauge | `service` | When a recording part was last uploaded (starting from the start time) |
+| `kubeast_claude_code_runs` | gauge | `service`, `lane` | Claude Code runs (provider `claude-code`) holding their place in this ai-service now: `lane` `chat` (this server's slots, `AI_CLAUDE_CODE_MAX_CONCURRENT`, and one of the install's, `AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL`) or `investigation` (the investigator's one place per server). The series appear with the first run |
+| `kubeast_claude_code_waiting` | gauge | `service` | Chat runs waiting for their slots now (their chat stream sent `{"queued": true}`) |
+| `kubeast_claude_code_slot_wait_seconds` | histogram | `service` | How long a chat run waited for its slots, this server's and the install's, 0 when both were free; a run that ended busy or was stopped while it waited counts the time it waited |
+| `kubeast_claude_code_busy_total` | counter | `service` | Chat runs that ended as busy since start: no slot came free within `AI_CLAUDE_CODE_QUEUE_WAIT` (the chat's "Claude Code is busy") |
 | `go_*`, `process_*` / `python_*` | default collectors | | Runtime and process |
 
 `service` is one of `auth`, `ai`, `k8s`, `session` and `tool-server`.
