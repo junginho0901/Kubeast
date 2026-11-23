@@ -56,7 +56,7 @@ release workflow itself (`https://github.com/junginho0901/Kubeast/.github/workfl
 ## Verifying an image
 
 ```bash
-IMG=ghcr.io/junginho0901/kubeast-auth-service:v0.7.8
+IMG=ghcr.io/junginho0901/kubeast-auth-service:v0.7.9
 
 # provenance and SBOM attestations (GitHub CLI 2.49+)
 gh attestation verify oci://$IMG -R junginho0901/Kubeast
@@ -76,7 +76,7 @@ gh attestation verify oci://$IMG -R junginho0901/Kubeast --predicate-type https:
 ## Verifying the chart
 
 ```bash
-CHART=ghcr.io/junginho0901/charts/kubeast:0.7.8
+CHART=ghcr.io/junginho0901/charts/kubeast:0.7.9
 
 gh attestation verify oci://$CHART -R junginho0901/Kubeast
 cosign verify \
