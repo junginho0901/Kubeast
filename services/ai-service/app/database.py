@@ -618,7 +618,8 @@ class DatabaseService:
         transaction, so a process stopped between the two leaves the approval approved, for the interrupted sweep, never
         ended with no outcome row. The call has run, so a row the audit table refuses does not hold the approval: it
         moves on its own and the row is written after it, as a failed write when it fails again. None when the row no
-        longer has from_status; nothing is written then."""
+        longer has from_status; nothing is written then. The ended row is read after the end's connection has gone back
+        to the pool, so an end never waits for a second connection while it holds one."""
         from sqlalchemy import update
 
         from app.services import audit_writer
@@ -631,10 +632,13 @@ class DatabaseService:
             if moved.rowcount != 1:
                 await conn.rollback()
                 return None
-            if await audit_writer.write_audit(**record, conn=conn):
+            stored = await audit_writer.write_audit(**record, conn=conn)
+            if stored:
                 await audit_writer.commit_row(conn, **record)  # mirrored to stdout once it has landed
-                return await self.get_tool_approval(approval_id)
-            await conn.rollback()
+            else:
+                await conn.rollback()
+        if stored:
+            return await self.get_tool_approval(approval_id)
         ended = await self.transition_tool_approval(approval_id, from_status, **fields)
         if ended is not None:
             await audit_writer.write_audit(**record)

@@ -2,14 +2,18 @@
 (DatabaseService.end_tool_run): a process stopped between the two leaves the approval approved, which the first look
 past APPROVED_RUN_LIMIT_SECONDS ends with an ai.tool.interrupt row, never ended with no outcome row. An outcome row the
 audit table refuses does not hold the approval, since the run has run: it ends on its own and the row is written after."""
+import asyncio
 import copy
 from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 import app.database
 from app.database import APPROVED_RUN_LIMIT_SECONDS, DatabaseService, utcnow
+from app.db_session import POOL_MAX_ENV, pool_args
 from app.services import audit_writer
 
 FAKE = "fake-secret-value"
@@ -58,6 +62,17 @@ async def db(tmp_path, rows, monkeypatch):
     monkeypatch.setattr(app.database, "get_db_service", get)
     yield service
     await service.engine.dispose()
+
+
+@pytest.fixture
+async def one_place(db):
+    """The same database behind the pool DB_POOL_MAX_AI=1 gives (one connection, no overflow), which gives up on a
+    checkout after a second: a step that waits for a second connection while it holds the first fails instead of hanging."""
+    await db.engine.dispose()
+    db.engine = create_async_engine(db.database_url, poolclass=AsyncAdaptedQueuePool, pool_timeout=1,
+                                    **pool_args({POOL_MAX_ENV: "1"}))
+    db.async_session = async_sessionmaker(db.engine, class_=AsyncSession, expire_on_commit=False)
+    return db
 
 
 def _api(monkeypatch, call):
@@ -121,6 +136,15 @@ async def test_the_end_and_its_outcome_row_are_written_together(db, rows, monkey
     row = await _card(db)
     card = await _press(api, row)
     assert card["status"] == "executed" and (await db.get_tool_approval(row.id)).status == "executed"
+    assert _actions(rows) == ["ai.tool.approve", "ai.tool.execute"]
+    assert rows[-1]["conn"] is not None, "in the end's transaction"
+
+
+async def test_with_one_connection_in_the_pool_a_press_ends_the_run_and_returns_its_card(one_place, rows, monkeypatch):
+    api = _api(monkeypatch, _answered)
+    row = await _card(one_place)
+    card = await asyncio.wait_for(_press(api, row), 10)
+    assert card["status"] == "executed" and (await one_place.get_tool_approval(row.id)).status == "executed"
     assert _actions(rows) == ["ai.tool.approve", "ai.tool.execute"]
     assert rows[-1]["conn"] is not None, "in the end's transaction"
 
