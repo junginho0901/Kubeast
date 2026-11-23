@@ -76,7 +76,7 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
   })
 
   test('a pod made, deleted and replaced shows in its node\'s own view at once, and the map follows', async ({ page }) => {
-    const name = `e2e-cvlive-${Date.now().toString(36)}`
+    const name = withUndo(`e2e-cvlive-${Date.now().toString(36)}`, (n) => tryKubectl(`-n default delete deployment ${n} --ignore-not-found --wait=false`))
     const node = kubectl('get nodes -o jsonpath={.items[0].metadata.name}')
     const leaving = () => kubectl(`get namespaces,pods -A -o 'jsonpath={.items[?(@.metadata.deletionTimestamp)].metadata.name}'`)
     // the namespace default, whose pods on the node fit one page of the node's own view
@@ -354,4 +354,17 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await page.goBack()
     await expect(page.getByTestId('cluster-view-node-view-name')).toHaveText(target)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

@@ -45,7 +45,7 @@ test.describe('a refused write says why where it was pressed', () => {
     test.skip(!config.enabled, 'API keys are off on this install')
     const made = await request.post('/api/v1/auth/api-keys', { headers: bearer(admin), data: { name: `e2e-af-${RUN}`, expires_in_days: 1 } })
     expect(made.status(), await made.text()).toBe(201)
-    const id = (await made.json()).id as string
+    const id = withUndo((await made.json()).id as string, (i) => request.delete(`/api/v1/auth/api-keys/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
     try {
       const seen = await refuse(page, (p) => p === `/api/v1/auth/api-keys/${id}`)
       await page.goto('/account')
@@ -65,7 +65,7 @@ test.describe('a refused write says why where it was pressed', () => {
     const name = `e2e-af-del-${RUN}`
     const made = await request.post('/api/v1/auth/admin/organizations', { headers: bearer(admin), data: { type: 'team', name } })
     expect(made.status(), await made.text()).toBe(201)
-    const id = (await made.json()).id as number
+    const id = withUndo((await made.json()).id as number, (i) => request.delete(`/api/v1/auth/admin/organizations/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
     try {
       await refuse(page, (p) => p.startsWith('/api/v1/auth/admin/organizations'))
       await page.goto('/admin/organizations')
@@ -154,7 +154,7 @@ test.describe('a refused write says why where it was pressed', () => {
     // the list is the conversations of the cluster on screen, so the conversation is made on that cluster
     const made = await request.post('/api/v1/sessions?cluster=self', { headers: bearer(admin), data: { title: `e2e-af-${RUN}` }, failOnStatusCode: false })
     test.skip(!made.ok(), `no conversation could be made: ${made.status()}`)
-    const id = (await made.json()).id as string
+    const id = withUndo((await made.json()).id as string, (i) => request.delete(`/api/v1/sessions/${i}`, { headers: bearer(admin), failOnStatusCode: false }))
     try {
       await refuse(page, (p) => p === `/api/v1/sessions/${id}`, ['PATCH', 'DELETE'])
       await page.goto('/ai-chat?cluster=self')
@@ -173,4 +173,17 @@ test.describe('a refused write says why where it was pressed', () => {
       await request.delete(`/api/v1/sessions/${id}`, { headers: bearer(admin), failOnStatusCode: false })
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

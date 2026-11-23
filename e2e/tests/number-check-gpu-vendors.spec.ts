@@ -403,7 +403,7 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
       await expect(page.getByTestId('gpu-plugin-note')).toHaveText(/^NVIDIA, AMD, Intel device plugin: not under the names Kubeast looks for\./)
 
       kubectl('apply -f -', ds)
-      made = true
+      made = withUndo(true, () => kubectl(`-n ${AMD_PLUGIN.namespace} delete ds ${AMD_PLUGIN.name} --ignore-not-found --wait=true`))
       // only test2's own node takes it: the fake nodes' taint is not tolerated
       await waitFor('the AMD plugin pod scheduled, not ready', () => { const s = dsStatus(); return s.desiredNumberScheduled === 1 && s.numberReady === 0 }, 60_000)
       await expect(async () => {
@@ -642,4 +642,17 @@ test.describe('number check — AMD and Intel GPUs on the GPU screens', () => {
     }).filter((v) => v.pods > 0)
     await expect.poll(async () => (await ask())?.stats?.by_vendor, { timeout: 30_000, message: 'GPU Pods' }).toEqual(byPodVendor)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

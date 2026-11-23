@@ -208,7 +208,7 @@ test.describe('AI trace tools', () => {
     expect(elsewhere.text).toContain('outside your grant')
     // its own namespace: the cluster asks the grant's group, which the dev cluster does not bind — bound for the call
     const binding = `e2e-traces-read-${id}`
-    self(`-n ${NS} create rolebinding ${binding} --clusterrole=view --group=kubeast:role:read`)
+    withUndo(self(`-n ${NS} create rolebinding ${binding} --clusterrole=view --group=kubeast:role:read`), () => self(`-n ${NS} delete rolebinding ${binding} --ignore-not-found`))
     try {
       const own = await tool(request, scoped, 'traces_search', { cluster: CLUSTER, namespace: NS, traceql: `{ resource.service.name = "${svc}" && status = error }`, since: '15m' })
       expect(own.returned).toBe(4)
@@ -249,4 +249,17 @@ test.describe('AI trace tools', () => {
     const series = viaGrafana('/api/metrics/query_range', { q: m.effective_query, ...window, step: `${m.step_seconds}s` }).series as { samples: { value?: number }[] }[]
     expect(series.flatMap((s) => s.samples).reduce((n, p) => n + (p.value ?? 0), 0)).toBe(8)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

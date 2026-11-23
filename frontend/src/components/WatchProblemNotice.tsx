@@ -29,7 +29,7 @@ export default function WatchProblemNotice() {
       role="status"
       data-testid="watch-problem-notice"
       data-problem={problem}
-      className="mb-4 flex items-start gap-3 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-100"
+      className="mb-4 flex items-start gap-3 rounded-lg border border-amber-700/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-200"
     >
       <Radio className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
       <div>{text}</div>

@@ -70,7 +70,9 @@ def rows(monkeypatch):
 
 @pytest.mark.parametrize("case", [c for c in CASES if c["refused"]], ids=lambda c: c["name"])
 @pytest.mark.parametrize("extra", [(), ("resource.secret.reveal",)], ids=["without reveal", "with reveal"])
-async def test_a_write_holding_what_stands_for_a_value_gets_no_card_and_says_why(rows, case, extra):
+async def test_a_write_holding_what_stands_for_a_value_gets_no_card_and_says_why(rows, case, extra, monkeypatch):
+    if case.get("numbered"):
+        monkeypatch.setenv("REDACTION_NUMBERED", "true")
     got = await _chat_call(_service(*extra), case["tool"], case["args"])
     assert got.db.approvals == [] and not any('"approval_required"' in e for e in got.events)
     answer = json.loads(got.llm_text)
@@ -80,8 +82,10 @@ async def test_a_write_holding_what_stands_for_a_value_gets_no_card_and_says_why
     assert rows[-1]["action"] == "ai.tool.call" and rows[-1]["result"] == "failure"
 
 
-@pytest.mark.parametrize("case", [c for c in CASES if not c["refused"]], ids=lambda c: c["name"])
-async def test_a_write_with_values_of_its_own_gets_its_card(rows, case):
+@pytest.mark.parametrize("case", [c for c in CASES if not c["refused"] or c.get("numbered")], ids=lambda c: c["name"])
+async def test_a_write_with_values_of_its_own_gets_its_card(rows, case, monkeypatch):
+    # the numbered cases hold numbered kinds only: with REDACTION_NUMBERED off they are values like any other
+    monkeypatch.delenv("REDACTION_NUMBERED", raising=False)
     got = await _chat_call(_service(), case["tool"], case["args"])
     assert len(got.db.approvals) == 1
     assert permissions.tool_refusal(_service(), case["tool"], case["args"]) is None

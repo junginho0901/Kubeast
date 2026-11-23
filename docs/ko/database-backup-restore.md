@@ -141,7 +141,7 @@ docker-compose에서는 다음 순서로 옮깁니다.
 | 값 | env | 지우는 것 |
 |---|---|---|
 | `retention.auditDays` | `RETENTION_AUDIT_DAYS` | N일보다 오래된 `auth_audit_logs` 행. 각 레코드의 stdout 사본(`audit.stdout` 참고)이 로그 파이프라인에 그쪽 보존 기간만큼 남으므로, 데이터베이스가 유일한 사본은 아닙니다. `audit.sinks`가 있으면 싱크가 아직 보내지 않은 행은 보낼 때까지 지우지 않습니다. N일보다 오래된, 이미 끝난 세션 기록(`session_recordings`, `database` 저장소면 그 조각까지)도 지워져 콘솔 목록에서 빠집니다. S3나 파일에 있는 기록은 그 저장소의 수명주기가 지울 때까지 남습니다. |
-| `retention.chatDays` | `RETENTION_CHAT_DAYS` | 마지막 활동(`sessions.updated_at`)이 N일보다 오래된 AI 채팅 세션과 그 메시지·컨텍스트, 그리고 N일보다 오래된 도구 승인 요청. 승인 결정은 이미 감사 레코드로 남아 있습니다. |
+| `retention.chatDays` | `RETENTION_CHAT_DAYS` | 마지막 활동(`sessions.updated_at`)이 N일보다 오래된 AI 채팅 세션과 그 메시지·컨텍스트, 그리고 N일보다 오래된 도구 승인 요청. 승인 결정은 이미 감사 레코드로 남아 있고, 아직 `approved`라 그 호출의 결과 행이 없는 승인은 삭제 작업의 `admin.retention.purge` 행에 `open_approvals`로 남습니다. |
 
 예시 — 접속 기록은 1년, 채팅은 6개월 보존:
 

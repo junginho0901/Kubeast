@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -53,7 +54,7 @@ func TestCutoffs(t *testing.T) {
 
 func TestPurgeWithoutPolicyTouchesNothing(t *testing.T) {
 	res, err := Purger{Cfg: Config{}}.Purge(context.Background(), time.Now())
-	if err != nil || res != (Result{}) {
+	if err != nil || !reflect.DeepEqual(res, Result{}) {
 		t.Fatalf("disabled purge = %+v, %v", res, err)
 	}
 	if _, err := (Purger{Cfg: Config{AuditDays: 1}}).Purge(context.Background(), time.Now()); err == nil {
@@ -93,6 +94,31 @@ func TestRunOnceRecordsTheRunEvenWhenItFails(t *testing.T) {
 	}
 	if after["audit_cutoff"] != now.AddDate(0, 0, -365).Format(time.RFC3339) || after["chat_cutoff"] != now.AddDate(0, 0, -180).Format(time.RFC3339) {
 		t.Fatalf("cutoffs in payload: %v", after)
+	}
+}
+
+// The run's record names the tool approvals it deleted while approved, by ids and names, and has no such key when
+// it deleted none.
+func TestRecordNamesTheApprovalsDeletedWhileApproved(t *testing.T) {
+	now := time.Date(2026, 11, 20, 3, 0, 0, 0, time.UTC)
+	approvedAt := now.AddDate(0, 0, -200)
+	for _, c := range []struct {
+		res  Result
+		want string
+	}{
+		{Result{ToolApprovals: 3, OpenApprovals: []OpenApproval{{ID: "t1", SessionID: "s1", Tool: "k8s_patch_resource", Cluster: "self", ApprovedAt: &approvedAt}}},
+			`[{"approved_at":"2026-05-04T03:00:00Z","cluster":"self","id":"t1","session_id":"s1","tool":"k8s_patch_resource"}]`},
+		{Result{ToolApprovals: 3}, ""},
+	} {
+		w := &captureWriter{}
+		Purger{Cfg: Config{ChatDays: 180}, Audit: w}.record(context.Background(), now, c.res, nil, nil)
+		var after map[string]json.RawMessage
+		if err := json.Unmarshal(w.recs[0].After, &after); err != nil {
+			t.Fatal(err)
+		}
+		if got := string(after["open_approvals"]); got != c.want {
+			t.Errorf("open_approvals = %s, want %q", got, c.want)
+		}
 	}
 }
 
@@ -198,12 +224,20 @@ func TestExpiredSessionsGoAfterEveryTableThatNamesThem(t *testing.T) {
 }
 
 // fakeDB answers every statement, keeping them in the order they came: a statement holding "DELETE FROM <table> "
-// of a table in fail returns that error, one of a table in deleted says it deleted that many rows (none otherwise),
-// and a batch of conversations finds one.
+// of a table in fail returns that error, one of a table in deleted says it deleted that many rows, one holding a key
+// of returns deletes those rows (and returns them with approvalReturning; none otherwise), and a batch of
+// conversations finds one.
 type fakeDB struct {
 	fail    map[string]error
 	deleted map[string]int64
+	returns map[string][]returnedApproval
 	ran     []string
+}
+
+// returnedApproval is a row of a tool approvals' delete with approvalReturning.
+type returnedApproval struct {
+	OpenApproval
+	status string
 }
 
 func (f *fakeDB) answer(sql string) (int64, error) {
@@ -218,6 +252,11 @@ func (f *fakeDB) answer(sql string) (int64, error) {
 			return n, nil
 		}
 	}
+	for key, rows := range f.returns {
+		if strings.Contains(sql, key) {
+			return int64(len(rows)), nil
+		}
+	}
 	return 0, nil
 }
 
@@ -227,6 +266,22 @@ func (f *fakeDB) Exec(_ context.Context, sql string, _ ...any) (pgconn.CommandTa
 		return pgconn.CommandTag{}, err
 	}
 	return pgconn.NewCommandTag(fmt.Sprintf("DELETE %d", n)), nil
+}
+
+func (f *fakeDB) Query(_ context.Context, sql string, _ ...any) (pgx.Rows, error) {
+	if _, err := f.answer(sql); err != nil {
+		return nil, err
+	}
+	return f.returned(sql), nil
+}
+
+func (f *fakeDB) returned(sql string) pgx.Rows {
+	for key, rows := range f.returns {
+		if strings.Contains(sql, key) {
+			return &fakeRows{approvals: rows}
+		}
+	}
+	return &fakeRows{}
 }
 
 func (f *fakeDB) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
@@ -255,6 +310,9 @@ func (t fakeTx) Query(_ context.Context, sql string, _ ...any) (pgx.Rows, error)
 	if _, err := t.db.answer(sql); err != nil {
 		return nil, err
 	}
+	if strings.HasPrefix(sql, "DELETE ") {
+		return t.db.returned(sql), nil
+	}
 	return &fakeRows{ids: []string{"s-old"}}, nil
 }
 
@@ -267,12 +325,19 @@ func (fakeTx) Rollback(context.Context) error { return nil }
 
 type fakeRows struct {
 	pgx.Rows
-	ids  []string
-	next int
+	ids       []string
+	approvals []returnedApproval
+	next      int
 }
 
-func (r *fakeRows) Next() bool { r.next++; return r.next <= len(r.ids) }
+func (r *fakeRows) Next() bool { r.next++; return r.next <= len(r.ids)+len(r.approvals) }
 func (r *fakeRows) Scan(dest ...any) error {
+	if r.approvals != nil {
+		a := r.approvals[r.next-1]
+		*dest[0].(*string), *dest[1].(*string), *dest[2].(*string), *dest[3].(*string) = a.ID, a.SessionID, a.Tool, a.Cluster
+		*dest[4].(*string), *dest[5].(**time.Time) = a.status, a.ApprovedAt
+		return nil
+	}
 	*dest[0].(*string) = r.ids[r.next-1]
 	return nil
 }
@@ -376,6 +441,65 @@ func TestRunOnceNamesTheFailedWindowsInItsRecord(t *testing.T) {
 				if !strings.Contains(rec.Error, err.Error()) {
 					t.Errorf("error %q does not say %q", rec.Error, err)
 				}
+			}
+		})
+	}
+}
+
+// The run's record names the tool approvals the chat window deleted while approved, by their age and with their
+// expired conversation; a batch of conversations that did not commit names none of its approvals, which are still there.
+func TestTheChatWindowNamesTheApprovalsItDeletedWhileApproved(t *testing.T) {
+	now := time.Date(2026, 11, 20, 3, 0, 0, 0, time.UTC)
+	old, recent := now.AddDate(0, 0, -200), now.AddDate(0, 0, -1)
+	byAge := []returnedApproval{
+		{OpenApproval{ID: "a-old-approved", SessionID: "s-live", Tool: "k8s_patch_resource", Cluster: "self", ApprovedAt: &old}, "approved"},
+		{OpenApproval{ID: "a-old-executed", SessionID: "s-live", Tool: "k8s_scale", Cluster: "self", ApprovedAt: &old}, "executed"},
+	}
+	withSession := []returnedApproval{
+		{OpenApproval{ID: "a-idle-approved", SessionID: "s-idle", Tool: "k8s_scale", Cluster: "prod", ApprovedAt: &recent}, "approved"},
+		{OpenApproval{ID: "a-idle-rejected", SessionID: "s-idle", Tool: "k8s_scale", Cluster: "prod", ApprovedAt: &recent}, "rejected"},
+	}
+	want := map[string]OpenApproval{byAge[0].ID: byAge[0].OpenApproval, withSession[0].ID: withSession[0].OpenApproval}
+	for _, tc := range []struct {
+		name      string
+		fail      map[string]error
+		approvals int64
+		named     []string
+		failed    []string
+	}{
+		{"committed", nil, 4, []string{"a-old-approved", "a-idle-approved"}, []string{}},
+		{"conversations refused", map[string]error{"sessions": sessionsStillNamed}, 2, []string{"a-old-approved"}, []string{"chat"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := &fakeDB{fail: tc.fail, returns: map[string][]returnedApproval{"tool_approvals WHERE created_at < $1": byAge, "tool_approvals WHERE session_id = ANY($1)": withSession}}
+			w := &captureWriter{}
+			res := Purger{Pool: db, Cfg: Config{ChatDays: 180}, Audit: w, Now: func() time.Time { return now }}.RunOnce(context.Background())
+			if res.ToolApprovals != tc.approvals {
+				t.Fatalf("tool_approvals = %d, want %d", res.ToolApprovals, tc.approvals)
+			}
+			if len(w.recs) != 1 {
+				t.Fatalf("want one audit record, got %d", len(w.recs))
+			}
+			var after struct {
+				OpenApprovals []OpenApproval `json:"open_approvals"`
+				Failed        []string       `json:"failed_windows"`
+			}
+			if err := json.Unmarshal(w.recs[0].After, &after); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(after.Failed, tc.failed) {
+				t.Fatalf("failed_windows = %v, want %v", after.Failed, tc.failed)
+			}
+			var named []string
+			for _, a := range after.OpenApprovals {
+				named = append(named, a.ID)
+				e := want[a.ID]
+				if a.SessionID != e.SessionID || a.Tool != e.Tool || a.Cluster != e.Cluster || a.ApprovedAt == nil || !a.ApprovedAt.Equal(*e.ApprovedAt) {
+					t.Errorf("open_approvals has %+v, want %+v", a, e)
+				}
+			}
+			if !slices.Equal(named, tc.named) {
+				t.Fatalf("open_approvals names %v, want %v", named, tc.named)
 			}
 		})
 	}

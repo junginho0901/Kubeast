@@ -287,7 +287,7 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
     expect(await auditRows(request, admin, 'k8s.secret.reveal', readerEmail)).toHaveLength(0)
 
     // another kind's annotation is its own
-    const cmName = `${secretName}-cm`
+    const cmName = withUndo(`${secretName}-cm`, (c) => request.delete(`/api/v1/cluster/namespaces/${NS}/configmaps/${c}?cluster=${CLUSTER}`, { headers: admin }))
     await createYAML(request, admin, [
       'apiVersion: v1',
       'kind: ConfigMap',
@@ -401,4 +401,17 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
     }
     expect(await reveals(), 'helm_read writes no reveal row').toBe(before)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

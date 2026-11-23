@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: payments}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: payments}}
+  template:
+    metadata: {labels: {app: payments}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"authorized":true,"provider":"card"}' > /www/api/v1/authorize
+              echo "level=info msg=\"payments started\""
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: payments}
+spec:
+  selector: {app: payments}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: catalog}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: catalog}}
+  template:
+    metadata: {labels: {app: catalog}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"items":[101,102,103]}' > /www/api/v1/items
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: catalog}
+spec:
+  selector: {app: catalog}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: storefront}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: storefront}}
+  template:
+    metadata: {labels: {app: storefront}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: CATALOG_URL, value: "http://catalog:8080/api/v1/items"}
+            - {name: PAYMENTS_URL, value: "http://payments:8080/api/v1/authorize"}
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              call() {
+                t0=$(now_cs)
+                if out=$(wget -q -T 3 -O /dev/null "$2" 2>&1); then
+                  echo "level=info msg=\"upstream ok\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"upstream request failed\" upstream=$1 duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+              }
+              echo "level=info msg=\"storefront started\""
+              while true; do
+                call catalog "$CATALOG_URL"
+                call payments "$PAYMENTS_URL"
+                sleep 2
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}

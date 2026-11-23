@@ -80,7 +80,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   로그 전용 폴백은 없다.
 - 민감 필드(password, secret, token, apikey 등)는 **`audit.MaskSensitive(...)` 적용 후** 저장. 문자열 안은 읽지 못하므로 YAML·JSON 글은 행에 넣지 말고 길이나 요약만 남긴다(`yaml_len`, `helmValuesAudit`).
 - 값을 못 읽는 사람이 저장한 Secret·Helm values의 행에는 값 대신 자리 이름만 남긴다: 값이 그대로인 자리는 `kept_masked`, Helm에서 새로 쓰거나 지운 자리는 `changed_masked`.
-- AI 쓰기 도구의 인자는 실행에 필요한 동안만 원문이다. 저장되는 답과 스트림(멈춘 답은 화면이 스트림에서 받은 글로 저장한다)은 처음부터, 승인 행은 실행·거절·만료 뒤에 필드가 같은 가린 사본을 갖는다(`audit_target.shown_tool_args`, `kept_tool_args`).
+- AI 쓰기 도구의 인자는 실행에 필요한 동안만 원문이다. 저장되는 답과 스트림(멈춘 답은 화면이 스트림에서 받은 글로 저장한다)은 처음부터, 승인 행은 실행·거절·만료·중단(실행 도중 ai-service가 멈춘 호출은 승인 10분이 지난 뒤 처음 들여다본 ai-service가 `ai.tool.interrupt`로 끝냄. 들여다보는 때는 새 승인 카드, 카드 열기, 프로세스의 첫 데이터베이스 사용이고 타이머는 없음) 뒤에 필드가 같은 가린 사본을 갖는다(`audit_target.shown_tool_args`, `kept_tool_args`).
 
 ### PR 리뷰 기준
 
@@ -107,6 +107,10 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 
 ---
 
+## 클러스터 글과 모델
+
+- 클러스터에서 읽은 글은 도구 결과 자리로만 모델에 간다(채팅·알림 조사, 두 루프 모두). `ai.toolResultsJSON`이면 결과마다 JSON 객체 하나(`app/services/ai/tool_results.py`). 도구 결과가 아닌 자리 — 울타리 안의 조사 알림·떠 있는 채팅 화면, 기록이 읽는 assistant 메시지인 승인된 쓰기의 결과 — 는 docs/ai-alerts.md "Planted instructions"에 적고 `tests/test_tool_results_json.py`가 지킨다. MCP 서버는 바깥 에이전트에 답을 그대로 준다. 프롬프트·도구·루프를 바꾸면 심어 둔 지시 사례(`evals/ai-planted/`, `scripts/ai_eval_planted.py`)를 모델마다 돌린다.
+
 ## 여러 레플리카
 
 - 서비스는 레플리카 여러 개로 돌 수 있다([docs/ko/high-availability.md](docs/ko/high-availability.md)). 한 파드만 해야 하는 일(주기 작업 · 큐)은 프로세스 메모리가 아니라 DB로 차례를 정한다:
@@ -116,6 +120,12 @@ _, _ = h.auditStore.Write(r.Context(), rec)
   풀 연결에 쥐는 lock(auth-service 감사 싱크 `internal/auditsink`)은 쥐는 동안 풀 연결 하나를 차지해, 풀 1(다른 그런 lock 옆이면 2)에서는 작업 자신의 문 · 요청에 남는 연결이 없다.
 - 프로세스 안의 한도 · 캐시 · 카운터는 파드마다다(설치 전체로는 레플리카 수만큼 곱해진다). 설치 전체에서 지켜야 하는 값은 DB나 Redis에 둔다.
   그런 일이나 상태를 더하는 변경은 docs/high-availability.md(en · ko)에 파드가 무엇을 쥐는지 적는다.
+
+## 메모리
+
+- Go 서비스는 `services/pkg/memlimit`로 cgroup 메모리 한도의 90 %를 GC 한도로 주고(`Set`), k8s-service는 85 %다(`SetShare(k8sMemoryLimitShare, 0)`). 나머지는 cgroup은 세고 Go는 모르는 커널 몫(소켓 버퍼 · slab)이다. 실시간 목록의 메모리 문(`watchMemoryShare` 0.8)은 이 GC 한도에 대한 몫이다. `GOMEMLIMIT` 환경 값이 있으면 그 값이 한도다.
+- k8s-service가 받은 연결은 보내기 버퍼가 128 KiB다(리눅스는 두 배로 잡고 더 늘리지 않는다, `cmd/server/conn_buffers.go`의 `capSendBuffer`). Go 안에서 한 벌을 같이 쓰는 답(노드 목록)도 커널은 소켓마다 따로 쥐고, 그 몫은 cgroup에는 세지만 Go 메모리 한도는 모른다. k8s-service에 리스너를 더하면 같은 상한을 걸고, k8s-service가 여는 연결(API 서버 · auth-service · DB)은 커널 기본값 그대로 둔다.
+- 여러 사람에게 같은 바이트를 보내는 답(노드 목록 · 노드 칸 답은 묶였든 아니든, `handler.Shared`가 기다린 사람에게 주는 답)은 `writeShared`로 쓴다(`internal/handler/shared_write.go`). 256 KiB를 넘는 본문은 64 KiB씩, 자리 16개 중 하나를 쥐고 쓰고, 한 덩어리가 100 ms를 넘게 걸린 느린 읽는 이는 그 덩어리 뒤에 자리를 내놓고, 자리를 기다린 시간이 본문마다 합쳐 1초에 닿으면 남은 것을 자리 없이 쓴다(읽지 않는 이가 자리를 쥐어도 멈추지 않게, `kubeast_shared_writes_without_place_total`이 센다). 첫 덩어리를 쓴 뒤 다음 차례를 기다리다 요청이 떠나면 연결을 끊는다(`http.ErrAbortHandler`) — 잘린 본문이 다 받은 것처럼 끝나지 않게. 초마다 다시 만드는 노드 목록을 기다리던 사람들이 한꺼번에 쓰면 소켓마다 커널이 한 벌씩 쥐기 때문이다. 같은 바이트를 여럿에게 보내는 새 답도 이 함수로 쓴다.
 
 ## 빌드 / 배포
 
@@ -138,6 +148,7 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 ## 클러스터 요청의 신원
 
 - `auth.impersonation.enabled`가 켜지면 k8s-service의 클러스터 transport(`auth.ImpersonationRoundTripper`)는 문맥의 사람으로 보내고, 사람이 없는 요청은 `auth.AsKubeast` 표시(서버 버전 · 클러스터마다 모두에게 쓰는 디스커버리 · 상태 확인)가 없으면 보내지 않는다(`auth.ErrNoPerson`). 표시가 있어도 클러스터 서버 URL 경로 아래 `/version` · `/api` · `/apis` · `/api/v1` · `/apis/<group>/<version>`의 GET만 보내고 나머지는 같게 거절한다(`kubeastOwnRead`, `ImpersonationRoundTripperAt`). client-go 호출은 호출자 문맥을 넘긴다(`…WithContext(ctx)` — 문맥 없는 디스커버리 메서드는 안에서 `context.Background()`). 호출자가 자기 문맥으로 요청하는 config(Helm SDK · exec · 로그 파일)는 사람을 고정한다(`UserRESTConfigFor`, `auth.WithPinnedPerson`). informer · 공유 이벤트 · 노드 파드 읽기는 이 transport를 거치지 않는 `cacheClient`(고정 신원 `kubeast:cache`)로 읽는다. tool-server는 사람이 없으면 kubectl을 준비하지 않는다(`errNoPerson`). `TestEveryUserCallCarriesThePerson`이 개요 · 디스커버리 · cluster config · hygiene · watch · 고정 config · 상태 확인 읽기를 서버 URL 경로가 있을 때와 없을 때 보고, `TestKubeastOwnRequestsAreVersionAndDiscoveryReadsOnly`가 경로 · 메서드를 본다.
+- API 서버 프록시로 Service를 읽는 곳(Prometheus · OpenCost · Hubble Relay · Whisker)은 리다이렉트를 같은 API 서버의 그 Service 프록시 경로 안에서만 따라간다(`internal/proxypath` `Follow`, `internal/k8s`는 `proxyClient` · `proxyGet`) — client-go는 따라가는 요청마다 클러스터 자격 증명과 사람 머리를 다시 붙이고, API 서버는 다른 호스트를 가리키는 `Location`을 그대로 넘긴다. 주소로 읽는 흐름 저장소는 리다이렉트를 따라가지 않는다(`FollowNone`). 실패한 답의 몸통이 Kubernetes `Status`면 API 서버 자신의 답이고(`proxypath.APIServerAnswer`), 저장소 자신의 401 · 403은 로그아웃 · 거절이 아니라 502다. 새 Service 프록시 읽기도 이 둘을 쓴다.
 
 ## 컨테이너 exec
 

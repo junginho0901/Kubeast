@@ -5,9 +5,11 @@ import { ExternalLink, Siren } from 'lucide-react'
 import type { Investigation } from '@/services/api/investigations'
 import { useAIContext } from '@/hooks/useAIContext'
 import { AIMarkdown } from '@/components/AIMarkdown'
+import { InvestigationResultView } from '@/components/InvestigationResultView'
 import { ModalFrame } from '@/components/ModalFrame'
 import { formatWhen } from '@/pages/admin/accessRequestFormat'
 import { duration, severityClass, skipReason, statusClass } from '@/utils/investigationFormat'
+import { reportLayer } from '@/utils/investigationResult'
 
 // One alert investigation report (Admin → Investigations, and the Alerts inbox for whoever reads that cluster).
 // Every fetch writes ai.investigation.view server-side, so it is not retried. The report text came from a model
@@ -28,17 +30,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
     retry: false,
     staleTime: Infinity,
   })
-  useAIContext(data ? {
-    source: 'InvestigationModal',
-    summary: `알림 조사 보고서 — ${data.alertname} (${data.cluster}${data.namespace ? ` / ${data.namespace}` : ''}, ${data.status})`,
-    data: {
-      alertname: data.alertname, cluster: data.cluster, namespace: data.namespace, severity: data.severity, status: data.status,
-      labels: data.labels, received_at: data.received_at, model: data.model, iterations: data.iterations,
-      tool_calls: data.tool_calls.map((c) => ({ tool: c.tool, args: c.args, error: c.error })),
-      error: data.error || undefined, skip_reason: data.status === 'skipped' ? data.skip_reason || undefined : undefined,
-      report: data.report.slice(0, 4096),
-    },
-  } : null, [data])
+  useAIContext(data ? reportLayer(data) : null, [data])
   // The investigator has one identity; the first call that reached the cluster shows it.
   const ranAs = data?.tool_calls.find((c) => c.access?.impersonation)?.access
 
@@ -93,6 +85,8 @@ export default function InvestigationReportModal({ id, load, onClose }: {
             </section>
           )}
 
+          {data.result && <InvestigationResultView result={data.result} toolCalls={data.tool_calls} />}
+
           <section>
             <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('investigations.section.alert', 'Alert')}</h3>
             <div className="grid gap-3 md:grid-cols-2">
@@ -137,6 +131,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
               <table className="w-full text-xs" data-testid="investigation-tools">
                 <thead className="text-slate-500">
                   <tr>
+                    <th className="px-2 py-1 text-left">{tr('investigations.tool.call', 'Call')}</th>
                     <th className="px-2 py-1 text-left">#</th>
                     <th className="px-2 py-1 text-left">{tr('investigations.tool.name', 'Tool')}</th>
                     <th className="px-2 py-1 text-left">{tr('investigations.tool.args', 'Arguments')}</th>
@@ -146,6 +141,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
                 <tbody>
                   {data.tool_calls.map((c, i) => (
                     <tr key={i} className="border-t border-slate-800">
+                      <td className="px-2 py-1 font-mono text-slate-400" data-testid="investigation-call-number">#{i + 1}</td>
                       <td className="px-2 py-1 text-slate-500">{c.step}</td>
                       <td className="px-2 py-1 font-mono text-slate-200">{c.tool}</td>
                       <td className="px-2 py-1 font-mono text-slate-400"><span className="block max-w-[420px] truncate" title={JSON.stringify(c.args)}>{JSON.stringify(c.args)}</span></td>

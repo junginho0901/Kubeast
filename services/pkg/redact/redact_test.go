@@ -277,9 +277,20 @@ func TestFromEnv(t *testing.T) {
 	t.Setenv("REDACTION_ENABLED", "")
 	t.Setenv("REDACTION_PII", "")
 	t.Setenv("REDACTION_DISABLE", "")
+	t.Setenv("REDACTION_NUMBERED", "")
 	o = FromEnv()
-	if !o.Enabled || o.PII || len(o.Disabled) != 0 {
+	if !o.Enabled || o.PII || len(o.Disabled) != 0 || o.Numbered {
 		t.Errorf("defaults: %+v", o)
+	}
+}
+
+// REDACTION_NUMBERED (v0.7.9) is off unset and otherwise read by the one switch rule (config.SwitchOn).
+func TestFromEnvNumbered(t *testing.T) {
+	for v, want := range map[string]bool{"": false, "false": false, "0": false, "t": false, "true": true, " Yes ": true, "1": true, "ON": true} {
+		t.Setenv("REDACTION_NUMBERED", v)
+		if got := FromEnv().Numbered; got != want {
+			t.Errorf("REDACTION_NUMBERED=%q: %v, want %v", v, got, want)
+		}
 	}
 }
 

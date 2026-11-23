@@ -267,7 +267,7 @@ func TestTheInstallNamespaceKeepsItsOtherReads(t *testing.T) {
 		if w.Code == http.StatusForbidden {
 			t.Errorf("%s: 403: %.200s", target, w.Body.String())
 		}
-		if len(rig.api.callerCalls()) == 0 {
+		if len(rig.api.callerReads()) == 0 {
 			t.Errorf("%s: status %d, the cluster was not asked", target, w.Code)
 		}
 	}
@@ -506,7 +506,7 @@ func TestTheNodeShellNamespaceKeepsItsReads(t *testing.T) {
 		"/api/v1/namespaces/" + nodeShellNS + "/events",
 	} {
 		rig.api.reset()
-		if w := rig.do("GET", target, ""); w.Code == http.StatusForbidden || len(rig.api.callerCalls()) == 0 {
+		if w := rig.do("GET", target, ""); w.Code == http.StatusForbidden || len(rig.api.callerReads()) == 0 {
 			t.Errorf("%s: status %d: %.200s", target, w.Code, w.Body.String())
 		}
 	}

@@ -7,6 +7,7 @@
   "alert_investigate",
   "alerts_inbox",
   "alerts_list",
+  "anomaly_rank",
   "audit_integrity",
   "audit_search",
   "can_i",
@@ -350,7 +351,8 @@
   "ai.tool.limit_range_violations",
   "ai.tool.alerts_inbox",
   "ai.tool.timeline",
-  "ai.tool.gpu"
+  "ai.tool.gpu",
+  "ai.tool.anomaly_rank"
  ],
  "cases": [
   {
@@ -633,6 +635,15 @@
    "read": true
   },
   {
+   "tool": "anomaly_rank",
+   "args": {},
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
    "tool": "k8s_get_available_api_resources",
    "args": {},
    "want": null,
@@ -694,6 +705,21 @@
    "args": {
     "resource_name": "x",
     "resource_type": "secret"
+   },
+   "want": [
+    "resource.objects.read"
+   ],
+   "write": true,
+   "read": true
+  },
+  {
+   "tool": "resource_graph",
+   "args": {
+    "include": [
+     "calls"
+    ],
+    "namespace": "shop",
+    "since": "1h"
    },
    "want": [
     "resource.objects.read"
