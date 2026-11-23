@@ -40,7 +40,8 @@ if grep -q "needs a PostgreSQL server" "$log"; then
 fi
 # A package whose tests reach the server through a helper outside its _test.go files names no marker and is not run:
 # every TestPostgres* under services/ must have passed here.
-{ git grep -hoE '^func TestPostgres[A-Za-z0-9_]*' -- 'services/*_test.go' || [ $? -eq 1 ]; } | sed 's/^func //' | sort > "$work/declared"
+# one grep thread: with more, git 2.39.5's -o now and then printed a name too short or too long
+{ git -c grep.threads=1 grep -hoE '^func TestPostgres[A-Za-z0-9_]*' -- 'services/*_test.go' || [ $? -eq 1 ]; } | sed 's/^func //' | sort > "$work/declared"
 sed -n 's/^--- PASS: \(TestPostgres[A-Za-z0-9_]*\) .*/\1/p' "$log" | sort > "$work/passed"
 missing=$(comm -23 "$work/declared" "$work/passed")
 if [ -n "$missing" ]; then
