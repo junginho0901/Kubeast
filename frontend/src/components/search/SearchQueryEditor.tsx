@@ -8,7 +8,9 @@ import { useColorMode } from '@/utils/colorMode'
 
 // monaco-editor 0.55 moved the TypeScript defaults to the top-level `typescript`; `languages.typescript` is no longer
 // set, and without these options the box offers the browser's globals (TextTrackCue) and none of the objects' fields.
-const typescriptOf = (m: Monaco) => (m as unknown as typeof MonacoApi).typescript
+// A monaco without it (moved again, or built without the TypeScript part) opens the box without suggestions.
+const typescriptOf = (m: Monaco): typeof MonacoApi.typescript | undefined =>
+  (m as unknown as typeof MonacoApi).typescript
 
 interface Props {
   value: string
@@ -47,7 +49,9 @@ export default function SearchQueryEditor({
   // setting them again restarts the language worker.
   useEffect(() => {
     if (!monaco) return
-    typescriptOf(monaco).javascriptDefaults.setExtraLibs(
+    const ts = typescriptOf(monaco)
+    if (!ts) return
+    ts.javascriptDefaults.setExtraLibs(
       typeDefinition ? [{ content: typeDefinition, filePath: 'globalTypes.d.ts' }] : [],
     )
   }, [monaco, typeDefinition])
@@ -65,6 +69,7 @@ export default function SearchQueryEditor({
     }
     // The ECMAScript library alone, for the methods after a field (`.startsWith`): no browser global is a word of an expression
     const ts = typescriptOf(m)
+    if (!ts) return
     ts.javascriptDefaults.setCompilerOptions({
       target: ts.ScriptTarget.ESNext,
       noLib: false,
