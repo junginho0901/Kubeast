@@ -102,7 +102,8 @@ async def require_audit_ready() -> None:
 def _emit_stdout(record: dict[str, Any]) -> None:
     # Same line shape as services/pkg/audit StdoutTee: one JSON object per line,
     # top-level event "audit" for the cluster log pipeline to route on. Written
-    # before the DB insert so a record survives a Postgres outage.
+    # before the DB insert so a record survives a Postgres outage; a row in the
+    # caller's transaction only once that commits (commit_row).
     if not stdout_enabled():
         return
     try:
@@ -120,6 +121,65 @@ def _emit_stdout(record: dict[str, Any]) -> None:
 
 
 SERVICE_AI = "ai"
+
+
+def _record(
+    *,
+    action: str,
+    actor_user_id: Optional[str] = None,
+    actor_email: Optional[str] = None,
+    target_type: Optional[str] = None,
+    target_id: Optional[str] = None,
+    namespace: Optional[str] = None,
+    after: Optional[dict[str, Any]] = None,
+    request_ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    request_id: Optional[str] = None,
+    path: Optional[str] = None,
+    cluster: Optional[str] = None,
+    result: str = "success",
+    error: Optional[str] = None,
+) -> dict[str, Any]:
+    """The stdout mirror's record of a write_audit call."""
+    return {
+        "service": SERVICE_AI,
+        "action": action,
+        "result": result,
+        "error": error or None,
+        "actor_user_id": actor_user_id or None,
+        "actor_email": actor_email or None,
+        "target_type": target_type or None,
+        "target_id": target_id or None,
+        "cluster": cluster or None,
+        "namespace": namespace or None,
+        "path": path or None,
+        "request_ip": request_ip or None,
+        "user_agent": user_agent or None,
+        "request_id": request_id or None,
+        "after": after or None,
+    }
+
+
+def _write_failed(action: str, exc: BaseException) -> None:
+    global write_failures, _write_broken
+    write_failures += 1
+    _write_broken = True
+    _ready_cache["at"] = 0.0  # re-probe (a write this time) on the next readiness check
+    logger.error("audit write failed (action=%s, failures=%d): %s", action, write_failures, exc)
+
+
+async def commit_row(conn: Any, **fields: Any) -> None:
+    """Commit the caller's transaction holding the row write_audit(**fields, conn=conn) added. Only then is that row
+    mirrored to stdout and counted as landed, so an attempt the table refused, rolled back and tried again later prints
+    nothing. A commit that fails counts as a failed write (readiness probes a write next) and raises."""
+    global _write_broken
+    try:
+        await conn.commit()
+    except Exception as exc:
+        _write_failed(fields.get("action", ""), exc)
+        raise
+    _emit_stdout(_record(**fields))
+    _write_broken = False
 
 
 _INSERT_SQL = text(
@@ -166,32 +226,20 @@ async def write_audit(
     there is no Postgres to store it in); a failure is logged, counted and
     returned as False — the caller decides whether the action may go on.
     conn: the caller's connection in a transaction, which the row joins and
-    which the caller commits, or rolls back on False.
+    which the caller commits with commit_row (the row is mirrored to stdout
+    and counted as landed only then), or rolls back on False.
 
     Postgres-only — when DATABASE_URL points to sqlite (local dev) the table
     doesn't exist and we skip silently. `cluster` is the cluster the request
     acted on; callers that do not know it leave it unset (stored empty).
     """
-    global write_failures, _write_broken
-    _emit_stdout(
-        {
-            "service": SERVICE_AI,
-            "action": action,
-            "result": result,
-            "error": error or None,
-            "actor_user_id": actor_user_id or None,
-            "actor_email": actor_email or None,
-            "target_type": target_type or None,
-            "target_id": target_id or None,
-            "cluster": cluster or None,
-            "namespace": namespace or None,
-            "path": path or None,
-            "request_ip": request_ip or None,
-            "user_agent": user_agent or None,
-            "request_id": request_id or None,
-            "after": after or None,
-        }
-    )
+    global _write_broken
+    if conn is None:
+        _emit_stdout(_record(
+            action=action, actor_user_id=actor_user_id, actor_email=actor_email, target_type=target_type, target_id=target_id,
+            namespace=namespace, after=after, request_ip=request_ip, user_agent=user_agent, request_id=request_id, path=path,
+            cluster=cluster, result=result, error=error,
+        ))
     try:
         from app.database import get_db_service
 
@@ -219,15 +267,12 @@ async def write_audit(
             "error": error or None,
         }
         if conn is not None:
-            await conn.execute(_INSERT_SQL, params)
-        else:
-            async with db.engine.begin() as own:
-                await own.execute(_INSERT_SQL, params)
+            await conn.execute(_INSERT_SQL, params)  # lands, or not, with the caller's commit_row
+            return True
+        async with db.engine.begin() as own:
+            await own.execute(_INSERT_SQL, params)
         _write_broken = False
         return True
     except Exception as exc:
-        write_failures += 1
-        _write_broken = True
-        _ready_cache["at"] = 0.0  # re-probe (a write this time) on the next readiness check
-        logger.error("audit write failed (action=%s, failures=%d): %s", action, write_failures, exc)
+        _write_failed(action, exc)
         return False

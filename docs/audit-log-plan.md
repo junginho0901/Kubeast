@@ -43,6 +43,7 @@ Viewing is through the admin screen (`admin.audit.read`) and CSV (`admin.audit.e
   - The top-level `event: "audit"` is the routing key for the log pipeline.
   - Turn it off with `AUDIT_STDOUT=false` (chart `audit.stdout`).
   - If the DB write fails, the line is still written, with `store_error` added.
+  - A row that must land with another change in one transaction (ai-service's `ai.tool.interrupt` with `AUDIT_FAIL_CLOSED` on) is written after that transaction commits (`audit_writer.commit_row`): an attempt the table refuses or whose commit fails changes nothing and writes no line, and a commit that fails counts as a failed write (2026-11-20).
 - **When the DB cannot be written (D4)**: changes and sensitive reads get 503 `{"detail":"audit unavailable"}`.
   - The reason is in the service log (`audit: refusing unrecorded action`).
   - An AI read tool (chat, MCP, alert investigation) checks before it runs, and when its row then fails it gives no answer: `audit_unavailable`, as a screen's log read does. A write tool has already happened and keeps its answer. A model connection test and a provider model list, which send the server's key, get the 503 before they start.

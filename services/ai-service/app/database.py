@@ -595,10 +595,13 @@ class DatabaseService:
                     if moved.rowcount != 1:
                         await conn.rollback()
                         continue  # its run ended meanwhile, or another server ended it
-                    if strict and not await audit_writer.write_audit(**record, conn=conn):
+                    if not strict:
+                        await conn.commit()
+                    elif await audit_writer.write_audit(**record, conn=conn):
+                        await audit_writer.commit_row(conn, **record)  # mirrored to stdout once it has landed
+                    else:
                         await conn.rollback()
                         continue  # stays approved until a sweep can write the row
-                    await conn.commit()
                 if not strict:
                     await audit_writer.write_audit(**record)
                 ended += 1

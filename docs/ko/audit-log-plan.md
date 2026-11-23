@@ -44,6 +44,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서입니다.
   - 최상위 `event: "audit"`이 로그 파이프라인의 라우팅 키입니다.
   - `AUDIT_STDOUT=false`(차트 `audit.stdout`)로 끌 수 있습니다.
   - DB 쓰기가 실패해도 줄은 남고, `store_error`가 붙습니다.
+  - 다른 변경과 한 트랜잭션으로 남아야 하는 행(`AUDIT_FAIL_CLOSED`가 켜진 ai-service의 `ai.tool.interrupt`)은 그 트랜잭션이 커밋된 뒤에 줄을 씁니다(`audit_writer.commit_row`). 테이블이 거부했거나 커밋이 실패한 시도는 아무것도 바꾸지 않았으므로 줄도 남기지 않고, 실패한 커밋은 실패한 쓰기로 셉니다(2026-11-20).
 - **DB에 쓸 수 없을 때(D4)**:
   - 변경과 민감 읽기는 503 `{"detail":"audit unavailable"}`을 돌려줍니다(사유는 서비스 로그의 `audit: refusing unrecorded action`).
   - AI 읽기 도구(채팅, MCP, 알림 조사)는 실행 전에 확인하고, 그 뒤 행 쓰기가 실패하면 답을 주지 않습니다(`audit_unavailable`). 화면의 로그 읽기와 같습니다. 쓰기 도구는 이미 실행됐으므로 답을 그대로 줍니다. 서버 키를 보내는 모델 연결 시험과 공급자 모델 목록은 시작 전에 503을 돌려줍니다.
