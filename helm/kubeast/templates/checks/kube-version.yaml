@@ -1,0 +1,26 @@
+{{- /*
+A preStop sleep needs Kubernetes 1.30 (PodLifecycleSleepAction, on by default from 1.30), and a sleep of 0 seconds 1.33
+(PodLifecycleSleepActionAllowZero, on by default from 1.33). An older API server refuses each Deployment holding one
+after the objects before it were applied, so the render stops here when a pod would get one it refuses:
+podShutdown.preStopSeconds above 0 (kubeast.preStop), or streams.enabled, whose k8s-service-stream sleeps
+streams.preStopSeconds whatever podShutdown.preStopSeconds is. helm install and helm upgrade read the cluster's version;
+helm template reads --kube-version, or the version Helm assumes without it.
+*/}}
+{{- $kube := .Capabilities.KubeVersion.Version }}
+{{- $streams := .Values.streams | default dict }}
+{{- $hint := "helm template checks the version given with --kube-version, else Helm's own default: pass your cluster's version there." }}
+{{- if semverCompare "<1.30.0-0" $kube }}
+{{- $sleeps := list }}
+{{- $seconds := int (include "kubeast.preStopSeconds" .) }}
+{{- if gt $seconds 0 }}
+{{- $sleeps = append $sleeps (printf "podShutdown.preStopSeconds is %d, a sleep in each Deployment behind a Service" $seconds) }}
+{{- end }}
+{{- if $streams.enabled }}
+{{- $sleeps = append $sleeps "streams.enabled gives k8s-service-stream a sleep of streams.preStopSeconds whatever podShutdown.preStopSeconds is" }}
+{{- end }}
+{{- if $sleeps }}
+{{- fail (printf "Kubernetes %s refuses a preStop sleep (Kubernetes 1.30 turns it on): %s. Set podShutdown.preStopSeconds: 0 and leave streams.enabled off on this cluster, or upgrade it to 1.30 or later. %s" $kube (join "; " $sleeps) $hint) }}
+{{- end }}
+{{- else if and $streams.enabled (semverCompare "<1.33.0-0" $kube) (eq (int $streams.preStopSeconds) 0) }}
+{{- fail (printf "Kubernetes %s refuses a preStop sleep of 0 seconds (Kubernetes 1.33 takes it), and streams.preStopSeconds: 0 gives k8s-service-stream one. Set streams.preStopSeconds to 1 or more, or upgrade the cluster to 1.33 or later. %s" $kube $hint) }}
+{{- end }}

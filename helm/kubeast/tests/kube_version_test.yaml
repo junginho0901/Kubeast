@@ -1,0 +1,112 @@
+suite: Kubernetes version — the render stops a preStop sleep the API server would refuse
+# helm-unittest renders on Kubernetes v1.20.0 unless a test sets capabilities, so every test here sets them.
+# deployments.yaml includes configmap.yaml and secret.yaml for its checksum annotation.
+templates:
+  - checks/kube-version.yaml
+  - deployments.yaml
+  - gateway.yaml
+  - configmap.yaml
+  - secret.yaml
+tests:
+  - it: stops Kubernetes 1.29 on the chart's defaults (podShutdown.preStopSeconds 5)
+    capabilities: { majorVersion: 1, minorVersion: 29 }
+    asserts:
+      - failedTemplate:
+          errorPattern: "Kubernetes v1\\.29\\.0 refuses a preStop sleep \\(Kubernetes 1\\.30 turns it on\\): podShutdown\\.preStopSeconds is 5, a sleep in each Deployment behind a Service\\. Set podShutdown\\.preStopSeconds: 0 and leave streams\\.enabled off on this cluster, or upgrade it to 1\\.30 or later\\. helm template checks the version given with --kube-version"
+        template: checks/kube-version.yaml
+
+  - it: lets Kubernetes 1.29 render with podShutdown.preStopSeconds 0 and streams off, no pod holding a preStop
+    capabilities: { majorVersion: 1, minorVersion: 29 }
+    set:
+      podShutdown.preStopSeconds: 0
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/kube-version.yaml
+      - hasDocuments:
+          count: 7
+        template: deployments.yaml
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+        template: deployments.yaml
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  - it: stops Kubernetes 1.29 with streams on, also with podShutdown.preStopSeconds 0
+    capabilities: { majorVersion: 1, minorVersion: 29 }
+    set:
+      podShutdown.preStopSeconds: 0
+      streams.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "Kubernetes v1\\.29\\.0 refuses a preStop sleep \\(Kubernetes 1\\.30 turns it on\\): streams\\.enabled gives k8s-service-stream a sleep of streams\\.preStopSeconds whatever podShutdown\\.preStopSeconds is\\. Set"
+        template: checks/kube-version.yaml
+
+  - it: names both sleeps on Kubernetes 1.29 with the defaults and streams on
+    capabilities: { majorVersion: 1, minorVersion: 29 }
+    set:
+      streams.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "podShutdown\\.preStopSeconds is 5, a sleep in each Deployment behind a Service; streams\\.enabled gives k8s-service-stream"
+        template: checks/kube-version.yaml
+
+  - it: renders nothing on Kubernetes 1.30, on the defaults and with streams on
+    capabilities: { majorVersion: 1, minorVersion: 30 }
+    set:
+      streams.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/kube-version.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 10 } }
+        template: deployments.yaml
+        documentSelector: { path: metadata.name, value: k8s-service-stream }
+
+  - it: stops streams.preStopSeconds 0 on Kubernetes 1.31
+    capabilities: { majorVersion: 1, minorVersion: 31 }
+    set:
+      streams.enabled: true
+      streams.preStopSeconds: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "Kubernetes v1\\.31\\.0 refuses a preStop sleep of 0 seconds \\(Kubernetes 1\\.33 takes it\\), and streams\\.preStopSeconds: 0 gives k8s-service-stream one\\. Set streams\\.preStopSeconds to 1 or more, or upgrade the cluster to 1\\.33 or later\\."
+        template: checks/kube-version.yaml
+
+  - it: stops streams.preStopSeconds 0 on Kubernetes 1.32, the last version before 1.33
+    capabilities: { majorVersion: 1, minorVersion: 32 }
+    set:
+      streams.enabled: true
+      streams.preStopSeconds: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: "Kubernetes v1\\.32\\.0 refuses a preStop sleep of 0 seconds"
+        template: checks/kube-version.yaml
+
+  - it: takes streams.preStopSeconds 0 on Kubernetes 1.33
+    capabilities: { majorVersion: 1, minorVersion: 33 }
+    set:
+      streams.enabled: true
+      streams.preStopSeconds: 0
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/kube-version.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 0 } }
+        template: deployments.yaml
+        documentSelector: { path: metadata.name, value: k8s-service-stream }
+
+  - it: leaves streams.preStopSeconds 0 alone with streams off, where no k8s-service-stream renders
+    capabilities: { majorVersion: 1, minorVersion: 31 }
+    set:
+      streams.preStopSeconds: 0
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: checks/kube-version.yaml

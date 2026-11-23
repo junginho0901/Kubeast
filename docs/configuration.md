@@ -157,7 +157,7 @@ podSecurity:
 # Availability: a Deployment you raise to 2 or more replicas, or whose autoscaling keeps minReplicas 2 or more, gets a PodDisruptionBudget (pdb.maxUnavailable, 1; pdb.enabled: false leaves them out), and every rollout starts the new pod and stops an old one only once the new one is ready (the old postgres and redis pods start stopping first)
 # So sessionRecording.fileVolume (storage: file) is mounted by two k8s-service pods while one is replaced: a ReadWriteOnce volume is mounted on one node at a time, so on more than one node give it a ReadWriteMany volume, or use storage s3 or database (docs/operations.md)
 # Probes: liveness asks /livez, which reads nothing else; readiness asks /readyz, which answers 503 from SIGTERM on and never asks the database (a shared database down would take every pod out at once); the database's state is in auth-service's and session-service's /health and k8s-service's kubeast_audit_store_up
-# podShutdown.preStopSeconds: a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, longer than the load balancer takes to stop sending new requests to a leaving pod (behind an AWS Application Load Balancer, 25 with the target group's deregistration delay at 20 s: with these no request failed in 18 gateway pod replacements, and with the default 5 s and the default delay of 300 s requests failed in 3 of 18, and in none of 12 more with the pod readiness gate on; see docs/high-availability.md)
+# podShutdown.preStopSeconds: a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later; below 1.30 the render stops while it is above 0), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, longer than the load balancer takes to stop sending new requests to a leaving pod (behind an AWS Application Load Balancer, 25 with the target group's deregistration delay at 20 s: with these no request failed in 18 gateway pod replacements, and with the default 5 s and the default delay of 300 s requests failed in 3 of 18, and in none of 12 more with the pod readiness gate on; see docs/high-availability.md)
 replicas:
   gateway: 1
 # One HPA per service, off by default; k8sService and toolServer above 1 pod need redis.enabled (docs/high-availability.md)
@@ -172,7 +172,7 @@ streams:
   enabled: false
   replicas: 1            # stays 1: more than one stream server is not supported yet
   drainSeconds: 60       # how long open terminals get to end when their server is replaced (k8s-service when off)
-  preStopSeconds: 10     # k8s-service-stream leaves the Service's endpoints this long before the drain starts
+  preStopSeconds: 10     # k8s-service-stream leaves the Service's endpoints this long before the drain starts (a preStop sleep: the render stops streams on Kubernetes below 1.30, and 0 below 1.33)
 topologySpread:
   enabled: true
 podShutdown:
