@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext, type BrowserContext } from '@playwright/test'
 
 import {
-  CLUSTER, NS, Probe, STAMP, aroundKill, atExit, bearer, whenGone, deploymentExists, dockerFreezeTarget, envOf, forwardTo, freeze, freezeTargetOf,
+  CLUSTER, NS, Probe, STAMP, aroundKill, atExit, bearer, whenGone, deploymentExists, dockerFreezeTarget, envOf, expectProbeKeptSending, forwardTo, freeze, freezeTargetOf,
   killNoSignal, killPod, kindKubectl, kubectl, kubectlOk, lastEnd, listSocketBack, listSockets, login, onPod, psql, readyPods, restartCounts,
   restartsSince, rolledOut, show, sleep, stopFor, stopPod, undoPending, watchListSockets, wsSubscriptions, type Answer, type Forward, type FreezeTarget,
 } from './shared'
@@ -428,6 +428,7 @@ test.describe('drain progress in the database (PR #858)', () => {
     let probe: Probe | null = null
     let left: string[] = []
     let outage: { offAt: number; onAt: number } | null = null
+    let answers: Answer[] = []
     const maps = Array.from({ length: 10 }, (_, i) => `w6-pgoff-${STAMP}-${i}`)
     for (const name of maps) remote!(['-n', ns, 'create', 'configmap', name, '--from-literal=k=v'])
     try {
@@ -454,7 +455,7 @@ test.describe('drain progress in the database (PR #858)', () => {
         return codes.every((c) => c === 200)
       }, { message: 'every read answers 200 after PostgreSQL is back', timeout: 120_000, intervals: [2_000] }).toBe(true)
     } finally {
-      const answers: Answer[] = probe ? await probe.stop() : []
+      answers = probe ? await probe.stop() : []
       test.info().attach('reads-during-outage.json', { body: JSON.stringify(answers), contentType: 'application/json' })
       // what a signed-in reader still saw, per route (written down, not a pass line: step 4 F-9)
       const byPath = Object.fromEntries(reads.map((p) => [p, answers.filter((a) => a.path === p).reduce<Record<string, number>>((m, a) => ({ ...m, [a.status]: (m[a.status] ?? 0) + 1 }), {})]))
@@ -464,6 +465,8 @@ test.describe('drain progress in the database (PR #858)', () => {
       release(ns, node)
     }
 
+    // stopFor's kubectl leaves the probe sending while PostgreSQL goes and comes back
+    expectProbeKeptSending(answers)
     expect(restartsSince(before), 'restarts of the pods that stayed (PostgreSQL itself is replaced)').toEqual({})
     expect(drainDuring, 'a drain start while PostgreSQL was off is refused with 503 (its progress cannot be saved)').toBe(503)
     const accepted = writes.filter((w) => w.status >= 200 && w.status < 300).map((w) => w.name)

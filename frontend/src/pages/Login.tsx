@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/services/api'
 import { clearRedirectAfterLogin, clearSessionEndedNotice, getRedirectAfterLogin, sessionEndedNotice } from '@/services/auth'
-import { clearStoredCluster } from '@/contexts/ClusterContext'
+import { useCluster } from '@/contexts/ClusterContext'
 import { KeyRound, Lock, UserPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import CustomDropdown from '@/components/CustomDropdown'
@@ -30,6 +30,7 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
+  const { forgetCluster } = useCluster()
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
@@ -103,10 +104,11 @@ export default function Login() {
       setFailCount(0)
       clearRedirectAfterLogin()
       // Start the new user with a clean slate: drop the previous session's
-      // cluster selection and every cached query so a different user never sees
+      // cluster selection (this tab's and the stored one; other tabs keep theirs)
+      // and every cached query so a different user never sees
       // the prior user's selected cluster, its (now unauthorized) data, or
       // permission-derived UI. Re-seed identity from this login's response.
-      clearStoredCluster()
+      forgetCluster()
       queryClient.clear()
       queryClient.setQueryData(['me'], me)
       const needsSetup = setupStatus && !setupStatus.configured && !isFetchingSetup

@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: shop-api-settings}
+data:
+  WEB_WORKERS: "3"
+  WORKER_THREADS: "4"
+  REQUEST_TIMEOUT_SECONDS: "15"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: shop-api}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: shop-api}}
+  template:
+    metadata: {labels: {app: shop-api}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: {name: shop-api-settings}
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/api/v1
+              echo '{"products":[101,102,103,104]}' > /www/api/v1/products
+              httpd -f -p 8080 -h /www &
+              worker() {
+                k=0
+                echo "level=info msg=\"worker booted\" worker=$1 threads=$WORKER_THREADS"
+                while true; do
+                  if [ $k -lt 12 ]; then
+                    k=$((k + 1))
+                    eval "page_$k=\$(head -c 1048576 /dev/zero | tr '\\000' x)"
+                    [ $k = 12 ] && echo "level=info msg=\"page cache warm\" worker=$1 cache_mb=$k"
+                  fi
+                  sleep 8
+                done
+              }
+              echo "level=info msg=\"booting\" workers=$WEB_WORKERS threads=$WORKER_THREADS"
+              pids=""
+              i=1
+              while [ $i -le "$WEB_WORKERS" ]; do worker $i & pids="$pids $!"; i=$((i + 1)); done
+              while true; do
+                sleep 2
+                for p in $pids; do
+                  if ! kill -0 "$p" 2>/dev/null; then
+                    echo "level=error msg=\"worker exited, stopping all workers\" worker_pid=$p"
+                    exit 1
+                  fi
+                done
+              done
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 20m, memory: 64Mi}, limits: {cpu: 200m, memory: 64Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: shop-api}
+spec:
+  selector: {app: shop-api}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: session-cache}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: session-cache}}
+  template:
+    metadata: {labels: {app: session-cache}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              echo "level=info msg=\"session-cache started\" max_mb=38"
+              k=0
+              while [ $k -lt 38 ]; do k=$((k + 1)); eval "s_$k=\$(head -c 1048576 /dev/zero | tr '\\000' x)"; done
+              while true; do
+                echo "level=info msg=\"cache stats\" used_mb=$k max_mb=38 hit_ratio=0.97"
+                sleep 30
+              done
+          resources: {requests: {cpu: 10m, memory: 48Mi}, limits: {cpu: 100m, memory: 48Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: visitor}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: visitor}}
+  template:
+    metadata: {labels: {app: visitor}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: API_URL, value: "http://shop-api:8080/api/v1/products"}
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              echo "level=info msg=\"visitor started\""
+              while true; do
+                t0=$(now_cs)
+                if out=$(wget -q -T 3 -O /dev/null "$API_URL" 2>&1); then
+                  echo "level=info msg=\"upstream ok\" upstream=shop-api duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"upstream request failed\" upstream=shop-api duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+                sleep 2
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}

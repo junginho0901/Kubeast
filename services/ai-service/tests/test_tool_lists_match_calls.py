@@ -45,6 +45,12 @@ async def test_a_read_tool_the_role_does_not_hold_is_not_listed(monkeypatch):
 async def test_a_role_with_every_read_tool_keeps_the_list_it_had(monkeypatch):
     held = tuple(f"ai.tool.{name}" for name in READONLY_TOOL_NAMES)
     role = _token({CLUSTER: ("ai.mcp.use", "resource.*.read", "resource.helm.read", "resource.pod.logfile", *held)})
+    # anomaly_rank is listed only with ANOMALY_RANK_ENABLED (features.anomalyRank.enabled)
+    monkeypatch.delenv("ANOMALY_RANK_ENABLED", raising=False)
+    monkeypatch.setattr(mcp_server, "READ_TOOLS", mcp_server._read_tools())
+    assert await _listed(monkeypatch, role) == ALWAYS_THERE | (set(READONLY_TOOL_NAMES) - {"anomaly_rank"})
+    monkeypatch.setenv("ANOMALY_RANK_ENABLED", "true")
+    monkeypatch.setattr(mcp_server, "READ_TOOLS", mcp_server._read_tools())
     assert await _listed(monkeypatch, role) == ALWAYS_THERE | set(READONLY_TOOL_NAMES)
 
 

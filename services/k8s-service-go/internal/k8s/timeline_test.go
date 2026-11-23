@@ -11,6 +11,34 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// rolloutHistoryFromLists is the Timeline's Deployment rollouts of whole lists, by the rules its reads use: each
+// ReplicaSet created at or after cutoff paired with its Deployment.
+func rolloutHistoryFromLists(deploys *appsv1.DeploymentList, rsList *appsv1.ReplicaSetList, cutoff time.Time) []map[string]interface{} {
+	keys := map[string]bool{}
+	for _, d := range deploys.Items {
+		keys[d.Namespace+"/"+d.Name] = true
+	}
+	var sets []rolloutRS
+	for i := range rsList.Items {
+		if rs, ok := keptReplicaSet(&rsList.Items[i]); ok && !rs.created.Time.Before(cutoff) {
+			sets = append(sets, rs)
+		}
+	}
+	return deploymentRolloutRows(keys, sets)
+}
+
+// controllerRevisionRollouts is the Timeline's StatefulSet and DaemonSet rollouts of a whole list, by the rules its
+// reads use.
+func controllerRevisionRollouts(crList *appsv1.ControllerRevisionList, cutoff time.Time) []map[string]interface{} {
+	var revisions []rolloutCR
+	for i := range crList.Items {
+		if cr, ok := keptRevision(&crList.Items[i]); ok && !cr.created.Time.Before(cutoff) {
+			revisions = append(revisions, cr)
+		}
+	}
+	return revisionRolloutRows(revisions)
+}
+
 func rsOwnedBy(ns, name, owner, revision string, created time.Time) appsv1.ReplicaSet {
 	return appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{

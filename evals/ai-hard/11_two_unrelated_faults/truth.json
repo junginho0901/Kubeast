@@ -1,0 +1,35 @@
+{
+ "id": "11_two_unrelated_faults",
+ "control": false,
+ "symptom": "storefront's thumbnail calls fail (no images pod: the new one cannot pull its image) and its order calls get 502 (orders' stock check reaches no inventory pod); both started at the same moment",
+ "fault_start": "{{INJECT_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 120,
+ "causes": [
+  {
+   "resource": "Deployment/shop-11/images",
+   "kind": "image",
+   "accept_resources": ["(deployment|replicaset|pod)/(shop-11/)?images", "^images"],
+   "accept_kinds": ["rollout"]
+  },
+  {
+   "resource": "Service/shop-11/inventory",
+   "kind": "config_change",
+   "accept_resources": ["(service|endpoints|endpointslice)/(shop-11/)?inventory", "^inventory$"],
+   "accept_kinds": ["dependency_down"]
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/shop-11/images", "role": "cause", "required": false, "accept": ["images"], "note": "a new image tag that does not exist, rolled out with Recreate: the old pod is gone, the new one stays in ImagePullBackOff"},
+  {"resource": "Service/shop-11/inventory", "role": "cause", "required": false, "accept": ["inventory"], "note": "selector switched to version v2; only v1 pods exist, so no endpoints"},
+  {"resource": "Deployment/shop-11/orders", "role": "via", "required": false, "accept": ["(^|/)orders$"], "note": "answers 502 when its stock check fails"},
+  {"resource": "Deployment/shop-11/storefront", "role": "symptom", "required": true, "accept": ["storefront"]}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Deployment/shop-11/storefront", "why": "shows both failures; nothing in it changed"},
+  {"resource": "Deployment/shop-11/orders", "why": "answers 502 because its stock check reaches no pod; its code and settings did not change"},
+  {"resource": "Deployment/shop-11/inventory", "why": "its pods are Ready and answer on their own addresses; only the Service points at a version that is not there"}
+ ],
+ "variants_note": "Two causes with one path field: the path keeps only storefront as a required hop. An answer naming one of the two causes fails, whatever else it gets right."
+}

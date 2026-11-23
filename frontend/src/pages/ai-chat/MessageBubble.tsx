@@ -9,6 +9,7 @@ import { truncateToolResultsInContent } from './messageContent'
 import { ApprovalCard } from './ApprovalCard'
 import { ChatCharts } from '@/components/ChatChart'
 import { ChatAnswerMarkdown } from '@/components/ChatAnswerMarkdown'
+import { maskValuesOf } from '@/services/maskValues'
 import type { CopyResult } from './hooks/useMessageActions'
 
 // 단일 메시지 말풍선 — user / assistant(Kubeast 아이콘) 아바타 + 콘텐츠 + 답변 대기 중인 로딩 점 +
@@ -68,7 +69,8 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copyRes
                     {message.content}
                   </p>
                 ) : (
-                  <ChatAnswerMarkdown content={truncateToolResultsInContent(message.content)} />
+                  // the values behind its placeholders for the person who asked: the stream's, then by the saved message
+                  <ChatAnswerMarkdown content={truncateToolResultsInContent(message.content)} values={message.maskValues ?? maskValuesOf(message.id)} />
                 )}
                 {message.role === 'assistant' && <ChatCharts toolCalls={message.toolCalls} />}
                 {message.role === 'assistant' &&

@@ -1,8 +1,9 @@
 import { test, expect, type Page } from '@playwright/test'
 
 import {
-  CLUSTER, NS, Probe, STAMP, aroundKill, atExit, bearer, forwardTo, killPod, kubectl, kubectlOk, listSocketBack, listSockets, login, readyPods,
-  restartCounts, restartsSince, rolledOut, show, sleep, undoPending, watchListSockets, wsSubscriptions, type Answer, type Forward,
+  CLUSTER, NS, Probe, STAMP, aroundKill, atExit, bearer, expectProbeKeptSending, forwardTo, killPodAsync, kubectl, kubectlAsync, kubectlOk,
+  listSocketBack, listSockets, login, readyPods, readyPodsAsync, restartCounts, restartsSince, rolledOut, rolledOutAsync, show, sleep, undoPending,
+  watchListSockets, wsSubscriptions, type Answer, type Forward,
 } from './shared'
 
 // Step 4 F-5 and F-14, rows of W5 that none of the pull requests of the other files changes: a server force-killed
@@ -14,7 +15,8 @@ import {
 //   after the new gateway is ready within 30 s.
 // - F-14 with two gateways: one killed, every answer 200.
 // Each case holds the restarts of the pods that stayed to 0 and the gateway to no 502 (#883), waits for the Deployment
-// to roll out again and attaches the answers, the times and the gateway's 502 and worker_connections lines.
+// to roll out again and attaches the answers, the times and the gateway's 502 and worker_connections lines. While the
+// probe sends, kubectl goes through kubectlAsync and the probe is held to a request at least every SEND_GAP_MS.
 
 const K8S = 'k8s-service'
 const GATEWAY = 'gateway'
@@ -74,9 +76,9 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       const restartsBefore = restartCounts()
       probe = new Probe(request, READS, bearer(token), 100, 10_000)
       await sleep(5_000)
-      const killedAt = killPod(victim)
+      const killedAt = await killPodAsync(victim)
       const list = await listSocketBack(page, killedAt, RECONNECT_MS)
-      rolledOut(K8S)
+      await rolledOutAsync(K8S)
       await sleep(5_000)
       const answers = await probe.stop()
       probe = null
@@ -92,6 +94,7 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       // judged first from these when a line is missed (README "First runs"); the lines are not loosened
       test.info().attach('errors-around-kill.json', { body: JSON.stringify(around, null, 2), contentType: 'application/json' })
 
+      expectProbeKeptSending(answers)
       expect(around.before.map((a) => `${a.path} ${a.status}`), 'reads that failed before the kill').toEqual([])
       expect(around.after.length, `reads not 200 from ${STALE_WITHIN_MS} ms after the kill:\n${show(around.after)}`).toBe(0)
       expect(list.cut, 'the page\'s live list socket on the killed server closed').toBe(true)
@@ -121,12 +124,12 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       probe = new Probe(request, GATEWAY_READS, bearer(token), 100, 5_000)
       await sleep(3_000)
       const killed = gateways[0].name
-      const killedAt = killPod(killed)
+      const killedAt = await killPodAsync(killed)
       // ready = a gateway pod other than the killed one is Ready (rollout status may still read the old state at first)
-      await expect.poll(() => readyPods(GATEWAY).some((p) => p.name !== killed), { message: 'a new gateway pod is ready', timeout: 180_000, intervals: [250] }).toBe(true)
+      await expect.poll(async () => (await readyPodsAsync(GATEWAY)).some((p) => p.name !== killed), { message: 'a new gateway pod is ready', timeout: 180_000, intervals: [250] }).toBe(true)
       const readyAt = Date.now()
-      rolledOut(GATEWAY)
-      kubectl(['-n', 'default', 'run', added, '--image=busybox:1.37', '--image-pull-policy=IfNotPresent', '--restart=Never', '--command', '--', 'sleep', '600'])
+      await rolledOutAsync(GATEWAY)
+      await kubectlAsync(['-n', 'default', 'run', added, '--image=busybox:1.37', '--image-pull-policy=IfNotPresent', '--restart=Never', '--command', '--', 'sleep', '600'])
       await expect(page.locator('table').first(), 'the list, never reloaded, follows again').toContainText(added, { timeout: RECOVER_MS })
       const shownAt = Date.now()
       await sleep(3_000)
@@ -143,6 +146,7 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       })
       test.info().attach('gateway-502-and-worker-lines.txt', { body: gatewayLines(since), contentType: 'text/plain' })
 
+      expectProbeKeptSending(answers)
       expect(around.before.map((a) => `${a.path} ${a.status}`), 'reads that failed before the kill').toEqual([])
       expect(shownAt - readyAt, 'ms from the new gateway ready to the page showing the new pod').toBeLessThanOrEqual(RECOVER_MS)
       expect(answers.filter(is502).length, `502 answers:\n${show(answers.filter(is502))}`).toBe(0)
@@ -166,8 +170,8 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       const restartsBefore = restartCounts()
       probe = new Probe(request, GATEWAY_READS, bearer(token), 100, 10_000)
       await sleep(5_000)
-      const killedAt = killPod(gateways[0].name)
-      rolledOut(GATEWAY)
+      const killedAt = await killPodAsync(gateways[0].name)
+      await rolledOutAsync(GATEWAY)
       await sleep(10_000)
       const answers = await probe.stop()
       probe = null
@@ -177,6 +181,7 @@ test.describe('servers force-killed under reads and live lists (F-5, F-14)', () 
       test.info().attach('gateway-502-and-worker-lines.txt', { body: gatewayLines(since), contentType: 'text/plain' })
 
       expect(answers.length, 'the probe kept sending').toBeGreaterThan(100)
+      expectProbeKeptSending(answers)
       expect(bad.length, `answers other than 200 with one of two gateways killed:\n${show(bad)}`).toBe(0)
       expect(answers.filter(is502).length, '502 answers').toBe(0)
       expect(restartsSince(restartsBefore), 'restarts of the pods that stayed').toEqual({})

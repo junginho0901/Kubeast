@@ -43,6 +43,8 @@ services:
   # Redis (캐싱 및 세션 관리)
   redis:
     image: valkey/valkey:9.1-alpine
+    # no snapshot on disk, as the chart: a container started again does not load entries deleted since
+    command: ["valkey-server", "--save", ""]
     networks:
       - msa-network
     healthcheck:

@@ -24,7 +24,9 @@ import (
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/logsearch"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/netflows"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nfm"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/nodeshells"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/recording"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/streamcap"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/traces"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/tracing"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/ws"
@@ -44,6 +46,9 @@ type Handler struct {
 	recorder   *recording.Manager // nil or disabled: terminals are not recorded
 	// drains keeps node drain progress in the shared database (nil: drains answer 503).
 	drains *nodedrains.Tracker
+	// nodeShells keeps a row per open node shell, so another server deletes the pod of one whose server was killed
+	// (nil: no rows, the pod ends at its deadline).
+	nodeShells *nodeshells.Tracker
 	// liveSessions ends long-lived answers with their session (nil: not checked).
 	liveSessions *auth.LiveSessions
 	// drain ends the terminals and followed logs when the server is replaced (nil: they are cut when it exits).
@@ -81,6 +86,14 @@ type Handler struct {
 	netdropsSrc netdropsSource
 	// backendUsageSrc replaces the Prometheus and EndpointSlice reads of ServiceBackendUsage in tests (nil: svc).
 	backendUsageSrc backendUsageSource
+	// anomalySrc replaces the cluster and Prometheus reads of the narrowing in tests (nil: svc), anomalyNow its clock;
+	// anomalyAnswers keeps its answers for features.anomalyRank.cacheSeconds.
+	anomalySrc     anomalySource
+	anomalyNow     func() time.Time
+	anomalyAnswers anomalyAnswers
+	// anomalyGraph replaces the narrowing's read of the namespace's Resource Graph in tests (nil: svc), read for the
+	// call graph's order when features.callGraph is on.
+	anomalyGraph func(ctx context.Context, namespace string) (map[string]interface{}, error)
 	// alertStore reads the alert store (nil: alert reads off).
 	alertStore *alerts.Store
 	// logSearchCanI replaces the pods/log access review in tests.
@@ -90,6 +103,8 @@ type Handler struct {
 	// watchLimits are the sockets' limits of live watches and watch starts, which the Helm releases' stream keeps to
 	// too (nil in tests: none).
 	watchLimits *ws.Multiplexer
+	// streamCaps count each account's open terminals and followed logs on this server (nil in tests: no cap).
+	streamCaps *streamcap.Caps
 }
 
 // SetRecorder turns on terminal session recording (internal/recording).
@@ -97,6 +112,9 @@ func (h *Handler) SetRecorder(m *recording.Manager) { h.recorder = m }
 
 // SetDrains sets where node drains keep their progress.
 func (h *Handler) SetDrains(t *nodedrains.Tracker) { h.drains = t }
+
+// SetNodeShells sets where node shells keep their rows.
+func (h *Handler) SetNodeShells(t *nodeshells.Tracker) { h.nodeShells = t }
 
 // SetWatchLimits holds the Helm releases' stream to the multiplexer's live watches and its places for starting one.
 func (h *Handler) SetWatchLimits(m *ws.Multiplexer) { h.watchLimits = m }
@@ -119,6 +137,7 @@ func New(svc *k8s.Service, cfg config.Config, auditStore audit.Writer) *Handler 
 		cfg:        cfg,
 		auditStore: auditStore,
 		helmSvc:    helm.NewService(svc, svc.Cache()),
+		streamCaps: streamcap.New(cfg.MaxTerminalsPerAccount, cfg.MaxFollowedLogsPerAccount),
 	}
 }
 
@@ -251,8 +270,8 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, k8s.ErrBadSelector), errors.Is(err, k8s.ErrBadQuery):
 		return http.StatusBadRequest
-	case errors.Is(err, k8s.ErrPrometheusUpstream):
-		// The metrics store answered with an error (or not at all): not this service's fault.
+	case errors.Is(err, k8s.ErrPrometheusUpstream), errors.Is(err, k8s.ErrCostUpstream):
+		// The metrics or cost store answered with an error (or not at all): not this service's fault.
 		return http.StatusBadGateway
 	}
 	msg := err.Error()

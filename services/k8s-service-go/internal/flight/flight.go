@@ -76,6 +76,16 @@ func (g *Group[T]) DoOr(ctx context.Context, key string, alone func() (T, error)
 	}
 }
 
+// Waiting is how many callers of key wait for the read after the one under way.
+func (g *Group[T]) Waiting(key string) int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if st := g.keys[key]; st != nil && st.next != nil {
+		return st.next.waiters
+	}
+	return 0
+}
+
 func newCall[T any](ctx context.Context, read func(context.Context) (T, error)) *call[T] {
 	readCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	return &call[T]{ctx: readCtx, cancel: cancel, read: read, waiters: 1, done: make(chan struct{})}

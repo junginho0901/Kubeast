@@ -338,7 +338,19 @@ async def requeue_or_fail(db, inv_id: str) -> str:
         return "failed" if res.rowcount else ""
 
 
+def without_nul(value: Any) -> Any:
+    """`value` with NUL taken out of every string at any depth: the database refuses it in text and in JSON."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, (list, tuple)):
+        return [without_nul(v) for v in value]
+    if isinstance(value, dict):
+        return {without_nul(k): without_nul(v) for k, v in value.items()}
+    return value
+
+
 async def finish(db, inv_id: str, **fields: Any) -> None:
+    fields = without_nul(fields)
     fields.setdefault("finished_at", utcnow())
     async with db.async_session() as s:
         await s.execute(update(AlertInvestigation).where(AlertInvestigation.id == inv_id).values(**fields))

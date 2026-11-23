@@ -1,0 +1,244 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: edge-legacy-routes}
+data:
+  routes.conf: |
+    # hostname           backend
+    www.shop.example     http://storefront:8080
+    help.shop.example    http://helpdesk:8080
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: edge-routes}
+data:
+  routes.conf: |
+    # hostname           backend
+    preview.shop.example http://storefront:8080
+    help.shop.example    http://helpdesk:8080
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: edge-server}
+data:
+  index.cgi: |
+    #!/bin/sh
+    now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+    t0=$(now_cs)
+    host=${HTTP_HOST%%:*}
+    path=${REQUEST_URI:-/}
+    backend=$(awk -v h="$host" '$1 == h {print $2; exit}' /etc/edge/routes.conf)
+    if [ -z "$backend" ]; then
+      echo "level=info msg=access host=$host path=$path status=404 flags=NR upstream=- duration_ms=0" >&2
+      printf 'Status: 404 Not Found\r\nContent-Type: text/plain\r\n\r\n'
+      exit 0
+    fi
+    if body=$(wget -q -T 3 -O- "$backend$path" 2>/dev/null); then
+      echo "level=info msg=access host=$host path=$path status=200 flags=- upstream=$backend duration_ms=$(( ($(now_cs) - t0) * 10 ))" >&2
+      printf 'Content-Type: text/html\r\n\r\n%s\n' "$body"
+    else
+      echo "level=info msg=access host=$host path=$path status=503 flags=UF upstream=$backend duration_ms=$(( ($(now_cs) - t0) * 10 ))" >&2
+      printf 'Status: 503 Service Unavailable\r\nContent-Type: text/plain\r\n\r\n'
+    fi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: edge-legacy}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: edge-legacy}}
+  template:
+    metadata: {labels: {app: edge-legacy}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cp /etc/edge-server/index.cgi /www/cgi-bin/index.cgi && chmod 755 /www/cgi-bin/index.cgi
+              echo "level=info msg=\"edge started\" routes=$(grep -vc '^#' /etc/edge/routes.conf)"
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          volumeMounts:
+            - {name: routes, mountPath: /etc/edge, readOnly: true}
+            - {name: server, mountPath: /etc/edge-server, readOnly: true}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+      volumes:
+        - name: routes
+          configMap: {name: edge-legacy-routes}
+        - name: server
+          configMap: {name: edge-server}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: edge}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: edge}}
+  template:
+    metadata: {labels: {app: edge}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www/cgi-bin
+              cp /etc/edge-server/index.cgi /www/cgi-bin/index.cgi && chmod 755 /www/cgi-bin/index.cgi
+              echo "level=info msg=\"edge started\" routes=$(grep -vc '^#' /etc/edge/routes.conf)"
+              exec httpd -f -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          volumeMounts:
+            - {name: routes, mountPath: /etc/edge, readOnly: true}
+            - {name: server, mountPath: /etc/edge-server, readOnly: true}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+      volumes:
+        - name: routes
+          configMap: {name: edge-routes}
+        - name: server
+          configMap: {name: edge-server}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: frontdoor}
+spec:
+  selector: {app: edge-legacy}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: edge}
+spec:
+  selector: {app: edge}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: storefront}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: storefront}}
+  template:
+    metadata: {labels: {app: storefront}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www
+              echo '<h1>Shop</h1><ul><li>101</li><li>102</li></ul>' > /www/index.html
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /, port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: storefront}
+spec:
+  selector: {app: storefront}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: helpdesk}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: helpdesk}}
+  template:
+    metadata: {labels: {app: helpdesk}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www
+              echo '<h1>Help</h1>' > /www/index.html
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /, port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: helpdesk}
+spec:
+  selector: {app: helpdesk}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: visitor}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: visitor}}
+  template:
+    metadata: {labels: {app: visitor}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              visit() {
+                t0=$(now_cs)
+                if out=$(wget -q -T 5 -O /dev/null --header "Host: $1" http://frontdoor/ 2>&1); then
+                  echo "level=info msg=\"page loaded\" site=$1 duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"page failed\" site=$1 duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+              }
+              echo "level=info msg=\"visitor started\""
+              while true; do
+                visit www.shop.example
+                visit help.shop.example
+                sleep 2
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: uptime-probe}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: uptime-probe}}
+  template:
+    metadata: {labels: {app: uptime-probe}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              echo "level=info msg=\"uptime-probe started\" target=edge"
+              ok=0; n=0
+              while true; do
+                n=$((n + 1))
+                if wget -q -T 5 -O /dev/null --header "Host: preview.shop.example" http://edge/ 2>/dev/null; then ok=$((ok + 1)); fi
+                if [ $((n % 6)) = 0 ]; then echo "level=info msg=\"probe summary\" host=preview.shop.example passed=$ok of=$n"; fi
+                sleep 10
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
