@@ -863,6 +863,9 @@ gateway:
   # [+ port], no path. Empty = same host and the Ingress host only.
   allowedOrigins: []
   #  - https://console.example.com
+  # true: every answer carries X-Kubeast-Gateway: <pod name>, for rollout tests (off: it shows clients the pod names).
+  # Stage: alpha, not run yet with it on (docs/configuration.md "Stages of new values").
+  servedByHeader: false
   # true: each access log line, after nginx's default "combined" fields, also
   # gives the request's time and the service's connect, header and response
   # times in seconds ($request_time $upstream_connect_time

@@ -257,6 +257,7 @@ gateway:
     nodePort: 30333
   trustedProxies: []      # CIDRs of front proxies (Ingress controller, LB) — the client address in the audit log is read from behind them
   allowedOrigins: []      # browser origins to open the API and WebSocket to besides the gateway's own host and the Ingress host (none = same host only)
+  servedByHeader: false   # true: every answer carries X-Kubeast-Gateway with the gateway pod's name, for rollout tests (off: clients would see the pod names)
   accessLog:
     upstreamTimes: false  # true: each access log line also gives the request's time, the service's connect, header and response times (s), its address and the client's port
   preStopSeconds: null    # the gateway pods' preStop wait (grace period = this + 30; 0 = none); null = podShutdown.preStopSeconds, raised to 25 while above 0 behind an AWS ALB that sends to pod IPs (ingress below with alb.ingress.kubernetes.io/target-type: ip)
@@ -365,6 +366,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | false, 12, 5, 20, 4, 60, 10737418240 | alpha | The e2e `ai-anomaly-rank.spec.ts` on the kind dev install, and the AI evaluation with it off and on |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | A `loki_query` on the kind dev install with it set |
 | `features.callGraph.enabled` | false | alpha | The e2e `ai-call-graph.spec.ts` on the kind dev install, and the AI evaluation with it off and on |
+| `gateway.servedByHeader` | false | alpha | Any run with it on |
 
 ## Redis users
 

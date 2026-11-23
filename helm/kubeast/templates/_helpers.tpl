@@ -616,7 +616,8 @@ The gateway's nginx.conf: files/nginx.conf as written, or with streams.enabled t
 locations (the ones holding exec/ws, logs/stream, logfiles/stream and debug-shell/ws, each with its 3600 s timeouts)
 sent to k8s-service-stream, plus a location for a node shell as API clients open it. The upstream is in
 conf.d/kubeast/streams.conf. tests/streams_test.yaml counts the locations that changed, so an edit of the file that
-this no longer matches fails there.
+this no longer matches fails there. gateway.servedByHeader adds X-Kubeast-Gateway: $hostname (the pod's name) after
+the server's Content-Security-Policy line; tests/gateway_test.yaml fails on a location with an add_header of its own.
 */}}
 {{- define "kubeast.gatewayNginxConf" -}}
 {{- $conf := .Files.Get "files/nginx.conf" -}}
@@ -639,6 +640,12 @@ this no longer matches fails there.
 
 ` -}}
 {{- $conf = replace "        location /api/v1/nodes {\n" (print $nodeShell "        location /api/v1/nodes {\n") $conf -}}
+{{- end -}}
+{{- if eq (toString (dig "servedByHeader" false .Values.gateway)) "true" -}}
+{{- $conf = regexReplaceAll `(?m)^([ \t]*)(add_header Content-Security-Policy "[^"\n]*"[^\n]*\n)` $conf "${1}${2}${1}add_header X-Kubeast-Gateway $$hostname always;\n" -}}
+{{- if not (contains "add_header X-Kubeast-Gateway" $conf) -}}
+{{- fail "gateway.servedByHeader: files/nginx.conf has no one-line add_header Content-Security-Policy to put X-Kubeast-Gateway after" -}}
+{{- end -}}
 {{- end -}}
 {{- $conf -}}
 {{- end -}}

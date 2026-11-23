@@ -250,6 +250,7 @@ gateway:
     nodePort: 30333
   trustedProxies: []      # 앞단 프록시(Ingress 컨트롤러, LB) CIDR — 감사 로그의 클라이언트 주소를 그 뒤에서 읽습니다
   allowedOrigins: []      # 게이트웨이 자기 호스트와 Ingress 호스트 외에 API·WebSocket을 열어 줄 브라우저 origin(없으면 같은 호스트만)
+  servedByHeader: false   # true면 모든 응답의 X-Kubeast-Gateway에 게이트웨이 파드 이름을 실음, 교체 시험용(끄는 까닭: 클라이언트에게 파드 이름이 보임)
   accessLog:
     upstreamTimes: false  # true면 접근 로그 줄마다 요청 시간, 서비스 연결·헤더·응답 시간(초), 서비스 주소, 클라이언트 포트를 덧붙입니다
   preStopSeconds: null    # 게이트웨이 파드의 preStop 기다림(종료 유예 = 이 값 + 30, 0 = 없음). null = podShutdown.preStopSeconds, 파드 IP로 보내는 AWS ALB 뒤(아래 ingress에 alb.ingress.kubernetes.io/target-type: ip)에서는 그 값이 0보다 클 때 25로 올림
@@ -357,6 +358,7 @@ multicluster:
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | false, 12, 5, 20, 4, 60, 10737418240 | alpha | kind 개발 설치에서 e2e `ai-anomaly-rank.spec.ts`, 끄고 켠 AI 평가 |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | 값을 정한 채 kind 개발 설치에서 한 `loki_query` |
 | `features.callGraph.enabled` | false | alpha | kind 개발 설치에서 e2e `ai-call-graph.spec.ts`, 끄고 켠 AI 평가 |
+| `gateway.servedByHeader` | false | alpha | 켠 상태로 한 번도 안 돌림 |
 
 ## Redis 사용자
 
