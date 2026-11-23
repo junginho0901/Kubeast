@@ -46,6 +46,14 @@ export function useCanCreate(permission: string, target?: AccessTarget): boolean
   return useCanI(permission, 'create', target)
 }
 
+// Whether a pod's terminal shows: resource.pod.exec, which the server asks before the socket opens (PodExecWS), and the
+// cluster's answer for that pod's exec, which is no in the namespaces the server guards. The Pods drawer and Cluster
+// View's pod window and box menu ask this one question; no pod is no terminal.
+export function useCanExecPod(namespace?: string, name?: string): boolean {
+  const target = namespace && name ? { group: '', resource: 'pods', subresource: 'exec', namespace, name } : undefined
+  return useCanI('resource.pod.exec', 'create', target) && !!target
+}
+
 // Whether the server refuses this user's writes in a namespace whatever the permissions say. It reads the features
 // answer the layout already holds, so a list or a row asks nothing of its own; an answer that says nothing keeps the button.
 export function useWritesRefusedIn(): (namespace?: string) => boolean {

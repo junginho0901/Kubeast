@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { usePermission } from '@/hooks/usePermission'
+import { useCanExecPod } from '@/hooks/useCanCreate'
 import { useClusterView } from './ClusterViewContext'
 import { useClusterPodsQuery } from './hooks/useClusterPodsQuery'
 import { usePodDetailQueries } from './hooks/usePodDetailQueries'
@@ -34,7 +35,9 @@ export function ClusterViewBody() {
   } = useClusterView()
 
   const { has } = usePermission()
-  const isAdmin = has('resource.pod.create')
+  // the Exec tab and the box menu's Exec ask what the Pods drawer asks, each for its own pod
+  const canExec = useCanExecPod(selectedPod?.namespace, selectedPod?.name)
+  const canExecMenuPod = useCanExecPod(podContextMenu?.pod.namespace, podContextMenu?.pod.name)
   const canDeletePod = has('resource.pod.delete')
 
   // The search goes to the server after a pause (it counts every pod; the page holds only those on screen).
@@ -84,13 +87,13 @@ export function ClusterViewBody() {
 
       <PodContextMenu
         menu={podContextMenu}
-        isAdmin={isAdmin}
+        canExec={canExecMenuPod}
         onClose={closeContextMenu}
         onExec={(pod) => openPodWindow(pod, 'exec', { setSelectedPod, setSelectedContainer, setContainerSearchQuery, setExecContainer, selectTab })}
         onDelete={openDeleteModal}
       />
 
-      <PodDetailModal isAdmin={isAdmin} manifest={manifest} describeData={describeData} describeError={describeError} podRead={podReadState(selectedPod, podRead)} />
+      <PodDetailModal canExec={canExec} manifest={manifest} describeData={describeData} describeError={describeError} podRead={podReadState(selectedPod, podRead)} />
 
       <PodDeleteModal
         pod={deleteTargetPod}
