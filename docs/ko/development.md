@@ -201,7 +201,7 @@ curl http://localhost:8000/health   # Gateway
 ## 기술 스택
 
 **Backend**
-- Go 1.26 (auth · k8s · session · tool-server · controller · pkg)
+- Go 1.27 (auth · k8s · session · tool-server · controller · pkg): 이미지는 `golang:1.27-alpine`으로 빌드하고 CI도 같은 Go로 시험합니다. 각 `go.mod`는 제 최소 판을 그대로 둡니다
 - Python 3.14 + FastAPI (ai-service)
 - PostgreSQL 18, Valkey 9(Redis 호환 캐시, BSD)
 - controller-runtime (CRD operator)

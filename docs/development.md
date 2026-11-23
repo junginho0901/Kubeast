@@ -199,7 +199,7 @@ curl http://localhost:8000/health   # Gateway
 
 **Backend**
 
-- Go 1.26 (auth, k8s, session, tool-server, controller, pkg)
+- Go 1.27 (auth, k8s, session, tool-server, controller, pkg): the images build with `golang:1.27-alpine` and CI tests with the same Go; each `go.mod` keeps its own minimum
 - Python 3.14 + FastAPI (ai-service)
 - PostgreSQL 18, Valkey 9 (Redis-compatible cache, BSD)
 - controller-runtime (CRD operator)
