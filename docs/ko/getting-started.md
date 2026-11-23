@@ -328,8 +328,7 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - **키**: `KUBEAST_AI_KEY_*` 변수에 두면 `Authorization: Bearer` 헤더와 `api-key` 헤더에 모두 실어 보냅니다.
 - **안 되는 것**: 예전 배포별 주소(`…/openai/deployments/<배포>`)와 날짜 형식의 `api-version`은 저장이나 연결 테스트 때 v1 주소를 안내하며 거절합니다. Entra ID 토큰 인증도 아직 지원하지 않습니다.
 - Private Link로 사설 주소가 나오는 리소스는 그 호스트를 `ai.baseUrlAllowedHosts`에 넣으세요.
-- CRD로 만들 때는 `spec.baseURL`(또는 `azureOpenAI.azureEndpoint`)에 v1 주소를, `spec.model`에 배포 이름을 넣습니다.
-  - `apiVersion`·`azureDeployment`·`azureAdToken`은 kagent 호환을 위해 남아 있지만 쓰지 않습니다.
+- CRD로 만들 때는 `spec.baseURL`에 v1 주소를, `spec.model`에 배포 이름을 넣습니다. CRD에는 `azureOpenAI` 블록이 없어 API 서버가 그 값을 받지 않습니다.
 
 **Claude 구독으로 쓰기 (provider `claude-code`, 개인용)** — API 키 대신 Claude Pro/Max 구독의 `claude setup-token` 값으로 채팅합니다.
 구독 토큰은 Claude Code에서만 쓸 수 있으므로, ai-service는 모델을 호출할 때마다 Claude Agent SDK(`app/services/claude_code.py`)로 Claude Code를 띄웁니다.
