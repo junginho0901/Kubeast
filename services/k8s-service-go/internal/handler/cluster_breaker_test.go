@@ -19,7 +19,8 @@ import (
 )
 
 // breakerHandler is a Handler on the cluster c1, whose API server answers /version, 503 for downAPIPath, 504 for
-// timeoutAPIPath, nothing until the client goes for slowAPIPath, and ends the connection of dropPath with no response.
+// timeoutAPIPath, nothing until the client goes for slowAPIPath, and ends the connection of dropPath with no response;
+// a proxy in front of it answers frontDownPath and frontRefusedPath itself. The API server's answers carry an Audit-ID.
 func breakerHandler(t *testing.T, opts k8s.ServiceOptions) *Handler {
 	t.Helper()
 	h, _ := countedBreakerHandler(t, opts)
@@ -35,6 +36,12 @@ const (
 	slowAPIPath = "/api/v1/events"
 	// dropPath is an access check (a POST) whose connection ends with no response, as one to an API server going away.
 	dropPath = "/apis/authorization.k8s.io/v1/selfsubjectaccessreviews"
+	// frontDownPath is answered 502 by a proxy in front of the API server, with no Audit-ID: the API server is down.
+	frontDownPath = "/apis/batch/v1/jobs"
+	// frontRefusedPath is answered 404 by that proxy, with no Audit-ID.
+	frontRefusedPath = "/apis/batch/v1/cronjobs"
+	// goneAPIPath is an object the API server answers 404 for.
+	goneAPIPath = "/api/v1/namespaces/a/pods/gone"
 )
 
 // countedBreakerHandler is breakerHandler with the number of requests its API server got.
@@ -43,6 +50,15 @@ func countedBreakerHandler(t *testing.T, opts k8s.ServiceOptions) (*Handler, *at
 	var hits atomic.Int32
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
+		switch r.URL.Path {
+		case frontDownPath:
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		case frontRefusedPath:
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set(accesstrail.HeaderAuditID, "stand-in") // as kube-apiserver's WithAuditInit
 		switch r.URL.Path {
 		case downAPIPath:
 			w.Header().Set("Content-Type", "application/json")
@@ -310,22 +326,30 @@ func TestOnlyTheTrialClosesAnOpenBreaker(t *testing.T) {
 	}
 }
 
-// Closed, an answer of the API server clears the failures counted; an answer that is not one (a socket that ends
-// without a status written, as a hijacked connection's) does not.
+// Closed, an answer of the API server clears the failures counted, a 503 or 404 of its own too; an answer that is not
+// one does not: a socket that ends without a status written (as a hijacked connection's), or an error status a proxy in
+// front of the API server answered itself.
 func TestAnAnswerOfTheAPIServerClearsTheCountOfAClosedBreaker(t *testing.T) {
-	silent := func(http.ResponseWriter, *http.Request) {}
+	silent := func(*testing.T, *breakerAnswers) http.HandlerFunc { return func(http.ResponseWriter, *http.Request) {} }
+	reading := func(path string, status int) func(*testing.T, *breakerAnswers) http.HandlerFunc {
+		return func(t *testing.T, a *breakerAnswers) http.HandlerFunc { return a.readThenOK(t, path, status) }
+	}
 	for name, c := range map[string]struct {
-		between  http.HandlerFunc
+		between  func(*testing.T, *breakerAnswers) http.HandlerFunc
 		wantOpen bool
 	}{
-		"the API server answered": {nil, false},
-		"nothing was asked":       {silent, true},
+		"the API server answered":       {nil, false},
+		"the API server answered 503":   {reading(downAPIPath, http.StatusServiceUnavailable), false},
+		"the API server answered 404":   {reading(goneAPIPath, http.StatusNotFound), false},
+		"nothing was asked":             {silent, true},
+		"a proxy in front answered 502": {reading(frontDownPath, http.StatusBadGateway), true},
+		"a proxy in front answered 404": {reading(frontRefusedPath, http.StatusNotFound), true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 2, BreakerOpen: time.Minute})}
-			between := c.between
-			if between == nil {
-				between = a.askTheCluster
+			between := a.askTheCluster
+			if c.between != nil {
+				between = c.between(t, a)
 			}
 			askC1(a.h, a.failAsTheCluster)
 			if code := askC1(a.h, between).Code; code != http.StatusOK {
@@ -436,40 +460,71 @@ func TestATrialThatDidNotRunGivesItsTryBack(t *testing.T) {
 	})
 }
 
-// A 5xx of the API server (an aggregated API whose server is down) is no answer: a trial it answered closes nothing, and
-// for another request it clears no failures, even when the handler goes on to write 200.
-func TestA5xxOfTheAPIServerIsNoAnswer(t *testing.T) {
-	askTheDownAPI := func(a *breakerAnswers) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			a.reached++
-			if _, code, err := a.h.svc.RawRequest(r.Context(), http.MethodGet, downAPIPath); err == nil || code != http.StatusServiceUnavailable {
-				t.Errorf("the down API: %d %v, want its 503", code, err)
-			}
-			w.WriteHeader(http.StatusOK)
+// readThenOK is a screen that GETs path from the cluster, holds the status it got to want, and answers 200 whatever the
+// cluster said.
+func (a *breakerAnswers) readThenOK(t *testing.T, path string, want int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a.reached++
+		if _, code, err := a.h.svc.RawRequest(r.Context(), http.MethodGet, path); err == nil || code != want {
+			t.Errorf("%s: %d %v, want %d", path, code, err, want)
 		}
+		w.WriteHeader(http.StatusOK)
 	}
-	t.Run("a trial", func(t *testing.T) {
-		const period = 500 * time.Millisecond
-		a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
-		openC1(t, a)
-		time.Sleep(period + 50*time.Millisecond)
-		a.reached = 0
-		if code := askC1(a.h, askTheDownAPI(a)).Code; code != http.StatusOK || a.reached != 1 {
-			t.Fatalf("the trial: %d with the handler run %d times", code, a.reached)
-		}
-		if !a.h.svc.ClusterDown("c1") {
-			t.Error("a 503 of the API server closed the breaker")
-		}
-	})
-	t.Run("another request", func(t *testing.T) {
-		a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 2, BreakerOpen: time.Minute})}
-		askC1(a.h, a.failAsTheCluster)
-		askC1(a.h, askTheDownAPI(a))
-		askC1(a.h, a.failAsTheCluster)
-		if !a.h.svc.ClusterDown("c1") {
-			t.Error("a 503 of the API server between two failures cleared the count")
-		}
-	})
+}
+
+// An error status the API server answered itself, with its Audit-ID (an aggregated API whose server is down, its own
+// timeout, an object it does not have), says it is up: a trial it answered closes the breaker, and the next request
+// is let through.
+func TestAnErrorStatusOfTheAPIServerClosesATrial(t *testing.T) {
+	for name, c := range map[string]struct {
+		path   string
+		status int
+	}{
+		"an aggregated API's 503": {downAPIPath, http.StatusServiceUnavailable},
+		"the API server's 504":    {timeoutAPIPath, http.StatusGatewayTimeout},
+		"the API server's 404":    {goneAPIPath, http.StatusNotFound},
+	} {
+		t.Run(name, func(t *testing.T) {
+			const period = 500 * time.Millisecond
+			a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 1, BreakerOpen: period})}
+			openC1(t, a)
+			time.Sleep(period + 50*time.Millisecond)
+			a.reached = 0
+			if code := askC1(a.h, a.readThenOK(t, c.path, c.status)).Code; code != http.StatusOK || a.reached != 1 {
+				t.Fatalf("the trial: %d with the handler run %d times", code, a.reached)
+			}
+			if a.h.svc.ClusterDown("c1") {
+				t.Errorf("the API server's own %d left the breaker open", c.status)
+			}
+			a.reached = 0
+			if code := askC1(a.h, a.askTheCluster).Code; code != http.StatusOK || a.reached != 1 {
+				t.Errorf("the next request: %d with the handler run %d times, want it let through", code, a.reached)
+			}
+		})
+	}
+}
+
+// An error status a proxy in front of the API server answered itself counts no failure, however many come: requests
+// leave it to the sweep, whose /version read so answered opens the breaker.
+func TestAnErrorStatusFromInFrontOfTheAPIServerCountsNoFailure(t *testing.T) {
+	for name, c := range map[string]struct {
+		path   string
+		status int
+	}{
+		"a proxy's 502": {frontDownPath, http.StatusBadGateway},
+		"a proxy's 404": {frontRefusedPath, http.StatusNotFound},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a := &breakerAnswers{h: breakerHandler(t, k8s.ServiceOptions{BreakerFails: 2, BreakerOpen: time.Minute})}
+			for range 3 {
+				askC1(a.h, a.readThenOK(t, c.path, c.status))
+			}
+			if a.reached != 3 || a.h.svc.ClusterDown("c1") {
+				t.Errorf("three reads a proxy answered %d: the handler run %d times, open %v; want 3 and closed",
+					c.status, a.reached, a.h.svc.ClusterDown("c1"))
+			}
+		})
+	}
 }
 
 // A cluster whose API server answers is not cut off by one group or one slow screen: an aggregated API whose server is
@@ -517,14 +572,16 @@ func (a *breakerAnswers) read(path string, deadline time.Duration) http.HandlerF
 	}
 }
 
-// A trial the cluster took and answered none below 500 holds the breaker another period, as a proxy in front of an API
-// server that is down answers: the next request still fails fast. A trial that made no call gives its try back.
+// A trial the cluster took and the API server answered none of holds the breaker another period, as when a proxy in
+// front of an API server that is down answers an error status itself, 4xx or 5xx: the next request still fails fast.
+// A trial that made no call gives its try back.
 func TestATrialTheClusterTookAndDidNotAnswerHoldsThePeriod(t *testing.T) {
 	for name, c := range map[string]struct {
 		path     string
 		deadline time.Duration
 	}{
-		"a 503":                            {downAPIPath, 0},
+		"a proxy's 502":                    {frontDownPath, 0},
+		"a proxy's 404":                    {frontRefusedPath, 0},
 		"a deadline once its request went": {slowAPIPath, 200 * time.Millisecond},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -533,7 +590,7 @@ func TestATrialTheClusterTookAndDidNotAnswerHoldsThePeriod(t *testing.T) {
 			openC1(t, a)
 			time.Sleep(period + 50*time.Millisecond)
 			a.reached = 0
-			if code := askC1(a.h, a.read(c.path, c.deadline)).Code; code != http.StatusServiceUnavailable || a.reached != 1 {
+			if code := askC1(a.h, a.read(c.path, c.deadline)).Code; code < http.StatusBadRequest || a.reached != 1 {
 				t.Fatalf("the trial: %d with the handler run %d times", code, a.reached)
 			}
 			a.reached = 0

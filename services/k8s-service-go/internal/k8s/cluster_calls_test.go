@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/junginho0901/kubeast/services/pkg/accesstrail"
 	"github.com/junginho0901/kubeast/services/pkg/cluster"
 )
 
@@ -45,11 +46,32 @@ func silentListener(t *testing.T) string {
 	return "https://" + ln.Addr().String()
 }
 
-// apiStandIn answers status, or with wait holds the request until the client goes, or with drop ends the connection
-// without a response.
+// asAPIServer puts on each answer of h the Audit-ID kube-apiserver's outermost filter puts on its answers: the
+// request's own, or one of its making (k8s.io/apiserver v0.37.2 pkg/endpoints/filters/audit_init.go).
+func asAPIServer(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get(accesstrail.HeaderAuditID)
+		if id == "" {
+			id = "stand-in"
+		}
+		w.Header().Set(accesstrail.HeaderAuditID, id)
+		h.ServeHTTP(w, r)
+	})
+}
+
+// frontStandIn is a proxy in front of an API server that answers status itself, with no Audit-ID.
+func frontStandIn(t *testing.T, status int) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(status) }))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// apiStandIn answers status as the API server, or with wait holds the request until the client goes, or with drop
+// ends the connection without a response.
 func apiStandIn(t *testing.T, status int, wait, drop bool) string {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(asAPIServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case drop:
 			conn, _, err := w.(http.Hijacker).Hijack()
@@ -64,7 +86,7 @@ func apiStandIn(t *testing.T, status int, wait, drop bool) string {
 		default:
 			w.WriteHeader(status)
 		}
-	}))
+	})))
 	t.Cleanup(srv.Close)
 	return srv.URL
 }
@@ -100,7 +122,8 @@ func callThroughCluster(t *testing.T, ctx context.Context, id cluster.ID, url st
 // A call that could not reach the cluster is a failure: refused, a connection dropped without a response, a deadline
 // that passed while it was still connecting. A response of any status is none, nor is Kubeast giving up on a call the API
 // server had: a deadline once the request was sent (a slow list), the caller leaving, a context over before the call.
-// A 5xx and a deadline once the request was sent are calls the cluster took and did not answer.
+// The API server's answer of any status, its 503 and 504 too, is an answer; an error status a proxy in front of it
+// answered and a deadline once the request was sent are calls the cluster took and the API server did not answer.
 func TestOnlyACallThatCouldNotReachTheClusterIsUnreached(t *testing.T) {
 	deadline := func(d time.Duration) func(t *testing.T) context.Context {
 		return func(t *testing.T) context.Context {
@@ -130,9 +153,11 @@ func TestOnlyACallThatCouldNotReachTheClusterIsUnreached(t *testing.T) {
 		"refused":                                   {url: closedAddress, unreached: true},
 		"dropped without a response":                {url: func(t *testing.T) string { return apiStandIn(t, 0, false, true) }, unreached: true},
 		"a deadline while connecting":               {url: silentListener, ctx: deadline(200 * time.Millisecond), unreached: true},
-		"an aggregated API answering 503":           {url: answering(http.StatusServiceUnavailable), unanswered: true},
-		"the API server's 504":                      {url: answering(http.StatusGatewayTimeout), unanswered: true},
-		"a 404":                                     {url: answering(http.StatusNotFound), answered: true},
+		"an aggregated API answering 503":           {url: answering(http.StatusServiceUnavailable), answered: true},
+		"the API server's 504":                      {url: answering(http.StatusGatewayTimeout), answered: true},
+		"the API server's 404":                      {url: answering(http.StatusNotFound), answered: true},
+		"a proxy's 404":                             {url: func(t *testing.T) string { return frontStandIn(t, http.StatusNotFound) }, unanswered: true},
+		"a proxy's 502":                             {url: func(t *testing.T) string { return frontStandIn(t, http.StatusBadGateway) }, unanswered: true},
 		"a deadline once the request was sent":      {url: func(t *testing.T) string { return apiStandIn(t, 0, true, false) }, ctx: deadline(200 * time.Millisecond), unanswered: true},
 		"the caller left while connecting":          {url: silentListener, ctx: cancelledAfter(200 * time.Millisecond)},
 		"the caller left once the request was sent": {url: func(t *testing.T) string { return apiStandIn(t, 0, true, false) }, ctx: cancelledAfter(200 * time.Millisecond), unanswered: true},
@@ -154,17 +179,21 @@ func TestOnlyACallThatCouldNotReachTheClusterIsUnreached(t *testing.T) {
 	}
 }
 
-// A request is a failure only when none of its calls got a response: one that did, an API server's 503 too, says the
-// cluster was reached, whatever another call met.
+// A request is a failure only when none of its calls got a response: one that did, an API server's 503 or a proxy's
+// 502 too, says the cluster's address was reached, whatever another call met; a proxy's 5xx is left to the sweep.
 func TestARequestWithAResponseToOneCallIsNotUnreached(t *testing.T) {
-	for name, status := range map[string]int{"a 404": http.StatusNotFound, "an aggregated API's 503": http.StatusServiceUnavailable} {
+	for name, url := range map[string]func(t *testing.T) string{
+		"a 404":                   func(t *testing.T) string { return apiStandIn(t, http.StatusNotFound, false, false) },
+		"an aggregated API's 503": func(t *testing.T) string { return apiStandIn(t, http.StatusServiceUnavailable, false, false) },
+		"a proxy's 502":           func(t *testing.T) string { return frontStandIn(t, http.StatusBadGateway) },
+	} {
 		t.Run(name, func(t *testing.T) {
 			ctx, calls := WithClusterCalls(context.Background(), "c1", func() {})
 			callThrough(t, ctx, closedAddress(t))
 			if !calls.Unreached() {
 				t.Fatal("a refused call alone is not unreached")
 			}
-			callThrough(t, ctx, apiStandIn(t, status, false, false))
+			callThrough(t, ctx, url(t))
 			if calls.Unreached() {
 				t.Error("a request one of whose calls got a response is unreached")
 			}
@@ -172,16 +201,65 @@ func TestARequestWithAResponseToOneCallIsNotUnreached(t *testing.T) {
 	}
 }
 
-// A request one of whose calls the API server answered below 500 is not unanswered, whatever another call got.
+// A request one of whose calls the API server answered, a 503 of its own too, is not unanswered, whatever another call
+// got.
 func TestARequestWithAnAnswerIsNotUnanswered(t *testing.T) {
-	ctx, calls := WithClusterCalls(context.Background(), "c1", func() {})
-	callThrough(t, ctx, apiStandIn(t, http.StatusServiceUnavailable, false, false))
-	if !calls.Unanswered() {
-		t.Fatal("a 503 alone is not unanswered")
+	for name, status := range map[string]int{"a 404": http.StatusNotFound, "a 503": http.StatusServiceUnavailable} {
+		t.Run(name, func(t *testing.T) {
+			ctx, calls := WithClusterCalls(context.Background(), "c1", func() {})
+			callThrough(t, ctx, frontStandIn(t, http.StatusBadGateway))
+			if !calls.Unanswered() {
+				t.Fatal("a proxy's 502 alone is not unanswered")
+			}
+			callThrough(t, ctx, apiStandIn(t, status, false, false))
+			if calls.Unanswered() {
+				t.Errorf("a request with the API server's %d beside a proxy's 502 is unanswered", status)
+			}
+		})
 	}
-	callThrough(t, ctx, apiStandIn(t, http.StatusNotFound, false, false))
-	if calls.Unanswered() {
-		t.Error("a request with a 404 beside its 503 is unanswered")
+}
+
+// answerWith is a transport that answers status, with an Audit-ID or with none.
+type answerWith struct {
+	status  int
+	auditID bool
+}
+
+func (a answerWith) RoundTrip(*http.Request) (*http.Response, error) {
+	resp := &http.Response{StatusCode: a.status, Header: http.Header{}, Body: http.NoBody}
+	if a.auditID {
+		resp.Header.Set(accesstrail.HeaderAuditID, "stand-in")
+	}
+	return resp, nil
+}
+
+// Who wrote an error status decides: with the Audit-ID kube-apiserver puts on every answer it writes, its 401, 404,
+// 429, 500, 503 and 504 are answers of the API server; with none, the same status came from in front of it (a proxy,
+// a load balancer, the kubelet refusing an upgrade) and is a call the cluster took and the API server did not answer.
+// A status below 400 is an answer either way: the kubelet's 101 to an upgrade carries the kubelet's headers. None of
+// them is a call that could not reach the cluster.
+func TestAnErrorStatusIsTheAPIServersOnlyWithItsAuditID(t *testing.T) {
+	for _, status := range []int{
+		http.StatusSwitchingProtocols, http.StatusOK, http.StatusFound,
+		http.StatusUnauthorized, http.StatusNotFound, http.StatusTooManyRequests,
+		http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout,
+	} {
+		for _, auditID := range []bool{true, false} {
+			answered := false
+			ctx, calls := WithClusterCalls(context.Background(), "c1", func() { answered = true })
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://127.0.0.1:1/api/v1/pods", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := (answerNotice{base: answerWith{status, auditID}, id: "c1"}).RoundTrip(req); err != nil {
+				t.Fatal(err)
+			}
+			want := auditID || status < http.StatusBadRequest
+			if answered != want || calls.Unanswered() == want || calls.Unreached() {
+				t.Errorf("%d, Audit-ID %v: answered %v, unanswered %v, unreached %v; want answered %v", status, auditID,
+					answered, calls.Unanswered(), calls.Unreached(), want)
+			}
+		}
 	}
 }
 

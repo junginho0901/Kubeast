@@ -225,11 +225,11 @@ func TestACredentialPluginThatFailsFailsTheProbe(t *testing.T) {
 	}
 }
 
-// What the probe's call got decides: the API server's version is healthy and closes the breaker; another answer below
-// 500 (a 404 of a proxy, a refused credential) closes it too, as a trial's answer does, and writes disconnected; a
-// cluster that refuses the connection, does not end the TLS handshake within the probe's time, answers /version 5xx,
-// or takes the call and answers nothing within the probe's time opens it and writes disconnected. Each from a breaker
-// closed and from one open.
+// What the probe's call got decides: the API server's version is healthy and closes the breaker; another answer of the
+// API server (a 404, a refused credential, a 503 or 500 of its own, each with its Audit-ID) closes it too, as a trial's
+// answer does, and writes disconnected; a cluster that refuses the connection, does not end the TLS handshake within
+// the probe's time, has a proxy in front answer /version with an error status, or takes the call and answers nothing
+// within the probe's time opens it and writes disconnected. Each from a breaker closed and from one open.
 func TestTheProbeReadsWhatItsCallGotFromTheCluster(t *testing.T) {
 	shortProbe(t, 300*time.Millisecond)
 	refused := httptest.NewServer(http.NotFoundHandler())
@@ -237,23 +237,26 @@ func TestTheProbeReadsWhatItsCallGotFromTheCluster(t *testing.T) {
 	refused.Close()
 	silent := silentListener(t)
 	for name, c := range map[string]struct {
-		status int           // /version's answer, 0 = the version
-		delay  time.Duration // before the answer
-		url    string        // the cluster's address, "" = the stand-in API server
-		down   bool
-		wrote  string
+		status  int           // /version's answer, 0 = the version
+		inFront bool          // a proxy in front of the API server answers /version, with no Audit-ID
+		delay   time.Duration // before the answer
+		url     string        // the cluster's address, "" = the stand-in API server
+		down    bool
+		wrote   string
 	}{
 		"the version":                       {wrote: "healthy"},
 		"404":                               {status: http.StatusNotFound, wrote: "disconnected"},
 		"401":                               {status: http.StatusUnauthorized, wrote: "disconnected"},
-		"503":                               {status: http.StatusServiceUnavailable, down: true, wrote: "disconnected"},
-		"500":                               {status: http.StatusInternalServerError, down: true, wrote: "disconnected"},
+		"503":                               {status: http.StatusServiceUnavailable, wrote: "disconnected"},
+		"500":                               {status: http.StatusInternalServerError, wrote: "disconnected"},
+		"a proxy's 404":                     {status: http.StatusNotFound, inFront: true, down: true, wrote: "disconnected"},
+		"a proxy's 502":                     {status: http.StatusBadGateway, inFront: true, down: true, wrote: "disconnected"},
 		"no answer within the probe's time": {delay: 2 * time.Second, down: true, wrote: "disconnected"},
 		"refused":                           {url: refusedURL, down: true, wrote: "disconnected"},
 		"a TLS handshake that does not end": {url: silent, down: true, wrote: "disconnected"},
 	} {
 		for _, open := range []bool{false, true} {
-			api := &identityAPI{}
+			api := &identityAPI{versionInFront: c.inFront}
 			api.answerVersion("", c.status)
 			api.slowVersion(c.delay)
 			srv := httptest.NewServer(api)
