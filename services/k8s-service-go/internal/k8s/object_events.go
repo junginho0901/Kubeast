@@ -20,7 +20,7 @@ import (
 const defaultEventLists = 4
 
 // eventListPlaces bound the lists of one object's events on each cluster at once (EVENT_LIST_CONCURRENCY); the others wait their turn.
-var eventListPlaces = newClusterPlaces("event list", eventListConcurrency())
+var eventListPlaces = newClusterPlaces("event list", eventListConcurrency(), clientWait.forPlaces(placesEventList))
 
 func eventListConcurrency() int {
 	if n, err := strconv.Atoi(os.Getenv("EVENT_LIST_CONCURRENCY")); err == nil && n > 0 {

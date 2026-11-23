@@ -342,6 +342,8 @@ func buildClientBundle(info cluster.Info) (*clientBundle, error) {
 		wrapPerson(cfg, id)
 		cacheCfg.Impersonate = rest.ImpersonationConfig{UserName: overviewCacheUser, Groups: []string{auth.GroupAuthenticated, auth.GroupViewer}}
 	}
+	// the token bucket kubernetes.NewForConfig would make, its waits counted under limiter="cache"
+	cacheCfg.RateLimiter = newCachedRate(cacheCfg.QPS, cacheCfg.Burst, clientWait.forCache())
 	cacheClient, err := kubernetes.NewForConfig(cacheCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create cache clientset: %w", err)
