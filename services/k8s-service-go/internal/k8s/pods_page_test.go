@@ -640,8 +640,11 @@ func TestGetPodPage_Revision(t *testing.T) {
 		t.Fatal("a shown change did not move the revision")
 	}
 
-	// a new informer set (the old one stopped when idle) never matches the old revision
-	_ = b.Close()
+	// a new informer set (the old one stopped when idle, as its ticker does) never matches the old revision
+	ci.stopNow()
+	b.infMu.Lock()
+	b.inf = nil
+	b.infMu.Unlock()
 	p, err := s.GetPodPage(ctx, PodPageQuery{Limit: 50, Revision: first.Revision})
 	if err != nil || p.Unchanged {
 		t.Fatalf("after a restart: %+v %v", p, err)

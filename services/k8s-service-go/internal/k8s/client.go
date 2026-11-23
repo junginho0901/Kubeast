@@ -102,16 +102,19 @@ type clientBundle struct {
 	infMu       sync.Mutex
 	inf         *clusterInformers
 	infFailedAt time.Time
+	// closed: Close ran (LRU eviction, kubeconfig rotation); a request still holding this bundle starts no informers on it.
+	closed bool
 	// noInformers: the overview informers never start here (ServiceOptions.NoInformers); readers list instead.
 	noInformers bool
 	// sharesChecks: this cluster's screens share an allowed read check by group (shared_read_checks.go).
 	sharesChecks bool
 }
 
-// Close stops the bundle's informers (LRU eviction, kubeconfig rotation).
+// Close stops the bundle's informers (LRU eviction, kubeconfig rotation) and keeps any from starting on it again.
 func (b *clientBundle) Close() error {
 	b.infMu.Lock()
 	defer b.infMu.Unlock()
+	b.closed = true
 	if b.inf != nil {
 		b.inf.stopNow()
 		b.inf = nil

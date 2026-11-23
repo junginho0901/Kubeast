@@ -225,6 +225,48 @@ func TestClientBundle_CloseStopsInformers(t *testing.T) {
 	if b.syncedInformers() != nil {
 		t.Error("syncedInformers after Close")
 	}
+	// a request that still holds the closed bundle starts no set on it
+	if got := b.overviewInformers(); got != nil {
+		got.stopNow()
+		t.Fatal("overviewInformers started a set on a closed bundle")
+	}
+	if b.syncedOrStart() != nil {
+		t.Error("syncedOrStart returned a set on a closed bundle")
+	}
+	b.infMu.Lock()
+	inf := b.inf
+	b.infMu.Unlock()
+	if inf != nil {
+		inf.stopNow()
+		t.Error("a set was left on the closed bundle")
+	}
+}
+
+// A bundle closed before any screen read it (evicted at once, its kubeconfig replaced) never lists or watches as
+// kubeast:cache, however many requests that captured it come after, side by side.
+func TestClientBundle_ClosedBundleStartsNoInformers(t *testing.T) {
+	cs := fake.NewSimpleClientset(overviewObjects()...)
+	b := &clientBundle{cacheClient: cs}
+	_ = b.Close()
+	done := make(chan *clusterInformers, 60)
+	for i := 0; i < 60; i++ {
+		go func() {
+			if i%2 == 0 {
+				done <- b.overviewInformers()
+			} else {
+				done <- b.syncedOrStart()
+			}
+		}()
+	}
+	for i := 0; i < 60; i++ {
+		if ci := <-done; ci != nil {
+			ci.stopNow()
+			t.Fatal("a request holding the closed bundle got an informer set")
+		}
+	}
+	if n := len(cs.Actions()); n != 0 {
+		t.Errorf("the closed bundle sent %d requests as kubeast:cache, want 0: %v", n, cs.Actions())
+	}
 }
 
 // GetClusterOverview answers from the informers: the bundle has no clientset,
