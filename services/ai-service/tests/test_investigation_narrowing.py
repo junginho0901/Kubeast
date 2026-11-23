@@ -249,12 +249,12 @@ def test_one_path_instruction_with_the_rules_and_the_call_graph():
     both = inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True, call_paths=True)
     assert both.count("cause → … → symptom") == 1  # the rules' Likely cause chain
     assert both.count('include ["calls"]') == 1 and "since_time a little before the alert started" in both
-    assert "counting your calls from 1" not in both and "Find what changed at a path's first workload" not in both
+    assert "the [call N] number shown before the result that showed it" not in both and "Find what changed at a path's first workload" not in both
     rules = inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", rules=True)
     assert both.replace(inv_prompt.call_path_rules(True), "") == rules
     # the call graph alone keeps its own path instruction
     calls = inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", call_paths=True)
-    assert calls.count("cause → … → symptom") == 1 and "counting your calls from 1" in calls
+    assert calls.count("cause → … → symptom") == 1 and "the [call N] number shown before the result that showed it" in calls
 
 
 @pytest.mark.asyncio
