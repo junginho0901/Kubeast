@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { Investigation, InvestigationResult } from '@/services/api/investigations'
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
-import { CHAT_NOTES, CHAT_REPORT_WITH_RESULT, callLabel, ledgerOn, notClosedText, notVerifiedText, orderedHypotheses, reportForChat, reportLayer, resultForChat, resultNotes, stateBadge, stateText } from './investigationResult'
+import { CHAT_NOTES, CHAT_REPORT_WITH_RESULT, callLabel, cutText, ledgerOn, notClosedText, notVerifiedText, orderedHypotheses, reportForChat, reportLayer, resultForChat, resultNotes, stateBadge, stateText } from './investigationResult'
 
 const tr = (_key: string, fallback: string, opts?: Record<string, unknown>) =>
   fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(opts?.[name] ?? ''))
@@ -86,6 +86,13 @@ describe('an investigation result', () => {
     expect(ledgerOn(RESULT)).toBe(true)
     expect(ledgerOn({ ...RESULT, checks: { evidence: true, ledger: false } })).toBe(false)
   })
+
+  it('says how many of how many a list the server cut shows, and nothing for one that fits', () => {
+    expect(cutText({ given: 11, kept: 10 }, tr)).toBe('Showing the first 10 of 11: the server did not keep the rest.')
+    expect(cutText(undefined, tr)).toBe('')
+    expect(en.investigations.result.partial).toBe('Showing the first {{shown}} of {{total}}: the server did not keep the rest.')
+    expect(ko.investigations.result.partial).toBe('{{total}}개 중 앞의 {{shown}}개를 보여 줍니다. 나머지는 서버가 저장하지 않았습니다.')
+  })
 })
 
 describe("the report window's layer for the floating chat", () => {
@@ -127,6 +134,15 @@ describe("the report window's layer for the floating chat", () => {
     ])
     expect('hypotheses' in told).toBe(false)
     expect('hypotheses' in resultForChat(RESULT)).toBe(true)
+  })
+
+  it('tells the floating chat which lists the server cut and how many were given', () => {
+    const cut = { causes: { given: 11, kept: 10 }, path: { given: 14, kept: 12 } }
+    const told = resultForChat({ ...RESULT, causes: [{ ...RESULT.causes[0], cut: { evidence: { given: 25, kept: 20 } } }], cut })
+    expect(told.cut).toEqual(cut)
+    expect((told.causes as Record<string, unknown>[])[0].cut).toEqual({ evidence: { given: 25, kept: 20 } })
+    expect('cut' in resultForChat(RESULT)).toBe(false)
+    expect('cut' in (resultForChat(RESULT).causes as Record<string, unknown>[])[0]).toBe(false)
   })
 
   it("keeps the server's notes under a report it cuts", () => {

@@ -5020,6 +5020,7 @@
       "started": "from {{at}}",
       "path": "Path (cause → symptom)",
       "ruledOut": "Ruled out",
+      "partial": "Showing the first {{shown}} of {{total}}: the server did not keep the rest.",
       "hypotheses": "Hypotheses ({{count}})",
       "col": {
         "hypothesis": "Hypothesis",

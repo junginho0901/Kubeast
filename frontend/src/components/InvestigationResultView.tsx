@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { InvestigationCallRef, InvestigationResult, InvestigationToolCall } from '@/services/api/investigations'
 import { formatTime } from '@/utils/time'
-import { callLabel, ledgerOn, notClosedText, notVerifiedText, orderedHypotheses, resultNotes, stateBadge, stateText } from '@/utils/investigationResult'
+import { callLabel, cutText, ledgerOn, notClosedText, notVerifiedText, orderedHypotheses, resultNotes, stateBadge, stateText } from '@/utils/investigationResult'
 
 // The report's result (evidenceCheck or ledger) under the report: model text drawn as plain text, calls by their number.
 
@@ -23,6 +23,11 @@ function Calls({ refs, toolCalls }: { refs: InvestigationCallRef[]; toolCalls: I
       ))}
     </span>
   )
+}
+
+// Under a list the server cut at what it keeps of it: the first how many of how many it shows (cutText).
+function CutNote({ text }: { text: string }) {
+  return text ? <div className="mt-1 text-amber-300" data-testid="investigation-result-cut">{text}</div> : null
 }
 
 export function InvestigationResultView({ result, toolCalls }: { result: InvestigationResult; toolCalls: InvestigationToolCall[] }) {
@@ -56,24 +61,30 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
                       {c.kind && <span className="text-slate-400">{c.kind}</span>}
                       {c.started_at && <span className="text-slate-400">{tr('investigations.result.started', 'from {{at}}', { at: formatTime(c.started_at) })}</span>}
                       <Calls refs={c.evidence} toolCalls={toolCalls} />
+                      {c.cut?.evidence && (
+                        <span className="text-amber-300" data-testid="investigation-cause-calls-cut">{cutText(c.cut.evidence, tr)}</span>
+                      )}
                       {c.verified === false && (
                         <span className="badge badge-warning" data-testid="investigation-cause-unverified">{notVerifiedText(c, tr)}</span>
                       )}
                     </li>
                   ))}
                 </ul>
+                <CutNote text={cutText(result.cut?.causes, tr)} />
               </div>
             )}
             {result.path.length > 0 && (
               <div>
                 <div className="mb-1 font-semibold text-slate-400">{tr('investigations.result.path', 'Path (cause → symptom)')}</div>
                 <div className="font-mono text-ink break-all" data-testid="investigation-result-path">{result.path.join(' → ')}</div>
+                <CutNote text={cutText(result.cut?.path, tr)} />
               </div>
             )}
             {result.ruled_out.length > 0 && (
               <div>
                 <div className="mb-1 font-semibold text-slate-400">{tr('investigations.result.ruledOut', 'Ruled out')}</div>
                 <div className="font-mono text-ink break-all" data-testid="investigation-result-ruled-out">{result.ruled_out.join(', ')}</div>
+                <CutNote text={cutText(result.cut?.ruled_out, tr)} />
               </div>
             )}
             {withLedger && <div>

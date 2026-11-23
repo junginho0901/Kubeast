@@ -313,6 +313,32 @@ async def test_each_cause_says_whether_the_calls_show_it_and_the_result_which_ch
     assert out["result"]["checks"] == {"evidence": False, "ledger": True}
 
 
+def test_a_list_past_its_cap_is_kept_cut_and_says_how_many_were_given():
+    # eleven causes, each named in what call 1 returned and each giving call 1
+    log = [{"tool": "k8s_get_resources"}]
+    reads = [evidence.Read("k8s_get_resources", {}, text=" ".join(f"Deployment/shop/cart{i}" for i in range(11)))]
+
+    def stored(causes, **extra):
+        answer = "# Report\nSeveral causes found.\n```rca\n" + json.dumps({"no_fault": False, "causes": causes, **extra}) + "\n```"
+        checked = rca.check(answer, tool_log=log, reads=reads, alert_start=None, evidence=True, ledger=False)
+        assert checked.failures == []
+        return inv_result.shape(checked.block, checked.status, log, [], cause_problems=checked.cause_problems,
+                                failures=checked.failures)
+
+    causes = [{"resource": f"Deployment/shop/cart{i}", "kind": "rollout", "evidence": [1]} for i in range(11)]
+    eleven = stored(causes)
+    assert len(eleven["causes"]) == inv_result.MAX_CAUSES == 10
+    assert eleven["cut"] == {"causes": {"given": 11, "kept": 10}}
+    assert "cut" not in stored(causes[:10])  # ten fit: nothing is said
+    names = [f"Deployment/shop/cart{i}" for i in range(25)]
+    long = stored(causes[:1], path=names[:13], ruled_out=names[:21])
+    assert long["cut"] == {"path": {"given": 13, "kept": 12}, "ruled_out": {"given": 21, "kept": 20}}
+    assert "cut" not in stored(causes[:1], path=names[:12], ruled_out=names[:20])
+    many_calls = stored([{**causes[0], "evidence": [1] * 21}])
+    assert many_calls["causes"][0]["cut"] == {"evidence": {"given": 21, "kept": 20}} and "cut" not in many_calls
+    assert "cut" not in stored([{**causes[0], "evidence": [1] * 20}])["causes"][0]
+
+
 class CapturedDB:
     """store.finish's session: what each UPDATE wrote, as its bound values."""
 

@@ -5633,6 +5633,7 @@
       "started": "{{at}}부터",
       "path": "경로(원인 → 증상)",
       "ruledOut": "배제한 것",
+      "partial": "{{total}}개 중 앞의 {{shown}}개를 보여 줍니다. 나머지는 서버가 저장하지 않았습니다.",
       "hypotheses": "가설 ({{count}})",
       "col": {
         "hypothesis": "가설",

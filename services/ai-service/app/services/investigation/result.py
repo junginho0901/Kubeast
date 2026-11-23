@@ -9,8 +9,9 @@ call of the run too, beside `evidence`, each call number given with its tool. Th
 report and keeps what it read in the row's `result` (dbmigrate 00031), so the report window, the floating chat, the
 MCP `investigations` read and the AI evaluation stay with the calls they came from. `checks` says which switches read
 it: with evidenceCheck each cause says whether the calls show it (`verified`, and why not as `reason`), without the
-ledger `hypotheses` is empty and the window shows none. With both switches off nothing here runs and `result` stays
-null. NUL characters, which the database refuses in JSON, are taken out of every text.
+ledger `hypotheses` is empty and the window shows none. A list cut at what the row keeps of it (MAX_CAUSES, MAX_PATH,
+MAX_RULED_OUT, MAX_CALLS) is named in `cut` with how many the model gave, which the window shows. With both switches
+off nothing here runs and `result` stays null. NUL characters, which the database refuses in JSON, are taken out of every text.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from app.services.investigation.rca import split  # noqa: F401 - the shared bloc
 
 VERSION = 1
 TAG = "rca"
-# What a stored result holds at most: a model that writes more is cut, not refused.
+# What a stored result holds at most: a model that writes more is cut, not refused, and `cut` says so (_counted).
 MAX_CAUSES = 10
 MAX_PATH = 12
 MAX_RULED_OUT = 20
@@ -74,6 +75,12 @@ def _names(values: Any, limit: int) -> list[str]:
     return [t for t in (text(v) for v in (values if isinstance(values, list) else [])[:limit]) if t]
 
 
+def _counted(given: Any, limit: int, kept: int) -> Optional[dict[str, int]]:
+    """{given, kept} of a list the model gave past what the result keeps of it, None for one that fits."""
+    n = len(given) if isinstance(given, list) else 0
+    return {"given": n, "kept": kept} if n > limit else None
+
+
 def shape(block: Optional[dict], status: str, tool_log: list[dict[str, Any]], hypotheses: list[dict[str, Any]],
           *, asked_again: bool = False, ask_failed: bool = False,
           failures: Optional[list[dict[str, Any]]] = None, cause_problems: Optional[list] = None,
@@ -81,7 +88,8 @@ def shape(block: Optional[dict], status: str, tool_log: list[dict[str, Any]], hy
     """The row's `result`: what the server read of the block, with each call number given as its call. `failures`:
     what the checks still found wrong (rca.check), kept when given. `cause_problems` (evidence.Problem, given while
     evidenceCheck is on) marks each cause `verified` or not, by its place in the block. `checks`: the switches that
-    read the block."""
+    read the block. A list past its cap keeps its first items and is named in `cut` with how many the model gave and
+    how many are kept: the causes, the path and ruled_out in the result's, a cause's evidence in the cause's."""
     block = block if isinstance(block, dict) else {}
     unverified = {p.index: p.reason for p in cause_problems or []}
     causes = []
@@ -93,22 +101,31 @@ def shape(block: Optional[dict], status: str, tool_log: list[dict[str, Any]], hy
         cause: dict[str, Any] = {"resource": text(c.get("resource")), "kind": text(c.get("kind")).lower(),
                                  "started_at": text(c.get("started_at")) or None, "evidence": found,
                                  "raw_evidence": [_raw(v) for v in given[:MAX_CALLS]]}
+        if (evidence_cut := _counted(given, MAX_CALLS, len(cause["raw_evidence"]))) is not None:
+            cause["cut"] = {"evidence": evidence_cut}
         if cause_problems is not None and is_cause(c):
             cause["verified"] = index not in unverified
             if index in unverified:
                 cause["reason"] = unverified[index]
         causes.append(cause)
     no_fault = block.get("no_fault")
+    path, ruled_out = _names(block.get("path"), MAX_PATH), _names(block.get("ruled_out"), MAX_RULED_OUT)
     out: dict[str, Any] = {
         "version": VERSION,
         "status": status,
         "no_fault": no_fault if isinstance(no_fault, bool) else None,
         "causes": causes,
-        "path": _names(block.get("path"), MAX_PATH),
-        "ruled_out": _names(block.get("ruled_out"), MAX_RULED_OUT),
+        "path": path,
+        "ruled_out": ruled_out,
         "hypotheses": hypotheses,
         "asked_again": asked_again,
     }
+    cut = {key: n for key, n in (("causes", _counted(block.get("causes"), MAX_CAUSES, len(causes))),
+                                 ("path", _counted(block.get("path"), MAX_PATH, len(path))),
+                                 ("ruled_out", _counted(block.get("ruled_out"), MAX_RULED_OUT, len(ruled_out))))
+           if n is not None}
+    if cut:
+        out["cut"] = cut
     if ask_failed:
         out["ask_failed"] = True
     if failures is not None:

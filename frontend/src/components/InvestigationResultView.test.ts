@@ -93,6 +93,26 @@ describe("the report window's result and hypotheses", () => {
       .toContain(`확인 안 됨: ${ko.investigations.result.unverified.after_alert}`)
   })
 
+  it('says under each list the server cut how many of how many it shows', async () => {
+    const causes = Array.from({ length: 10 }, (_v, i) => ({ ...RESULT.causes[0], resource: `Deployment/shop/cart${i}` }))
+    const cut: InvestigationResult = {
+      ...RESULT,
+      causes: [{ ...causes[0], cut: { evidence: { given: 25, kept: 20 } } }, ...causes.slice(1)],
+      cut: { causes: { given: 11, kept: 10 }, path: { given: 14, kept: 12 }, ruled_out: { given: 21, kept: 20 } },
+    }
+    const html = await render(cut)
+    expect([...html.matchAll(/data-testid="investigation-result-cut">([^<]*)</g)].map((m) => m[1])).toEqual([
+      'Showing the first 10 of 11: the server did not keep the rest.',
+      'Showing the first 12 of 14: the server did not keep the rest.',
+      'Showing the first 20 of 21: the server did not keep the rest.',
+    ])
+    expect(html).toContain('data-testid="investigation-cause-calls-cut">Showing the first 20 of 25: the server did not keep the rest.<')
+    expect(await render(cut, 'ko')).toContain('>11개 중 앞의 10개를 보여 줍니다. 나머지는 서버가 저장하지 않았습니다.<')
+    const fits = await render(RESULT)
+    expect(fits).not.toContain('data-testid="investigation-result-cut"')
+    expect(fits).not.toContain('data-testid="investigation-cause-calls-cut"')
+  })
+
   it('shows no hypotheses when the ledger did not read the block', async () => {
     const html = await render({ ...RESULT, hypotheses: [], checks: { evidence: true, ledger: false } })
     expect(html).not.toContain('Hypotheses (')

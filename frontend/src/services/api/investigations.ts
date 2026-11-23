@@ -65,6 +65,12 @@ export interface InvestigationHypothesis {
 
 export type UnverifiedReason = 'no_evidence' | 'bad_calls' | 'name_missing' | 'after_alert'
 
+// A list the server cut at what it keeps of it: how many items the model gave and how many are kept (the first ones).
+export interface InvestigationCut {
+  given: number
+  kept: number
+}
+
 export interface InvestigationCause {
   resource: string
   kind: string
@@ -75,6 +81,8 @@ export interface InvestigationCause {
   // with evidenceCheck: whether the run's calls show the cause, and why not (absent for kind none)
   verified?: boolean
   reason?: UnverifiedReason
+  // its evidence when the model gave more numbers than the server keeps
+  cut?: { evidence?: InvestigationCut }
 }
 
 // What the server read of the report's rca block (evidenceCheck or ledger on; absent with both off).
@@ -93,6 +101,8 @@ export interface InvestigationResult {
   failures?: { kind: string; resource?: string; id?: string; finish_reason?: string }[]
   // the switches that read the block; absent on a row written before it was kept
   checks?: { evidence: boolean; ledger: boolean }
+  // the lists the model gave longer than the server keeps; absent when every list fits
+  cut?: { causes?: InvestigationCut; path?: InvestigationCut; ruled_out?: InvestigationCut }
 }
 
 export interface Investigation extends InvestigationSummary {
