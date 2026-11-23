@@ -28,10 +28,16 @@ export function retryAfterMs(error: unknown): number | null {
 
 /**
  * retryUnlessRefused, and a failure whose answer carries Retry-After (a 503 while the session store's database
- * restarts) asked again for as long as the answers say so, at retryAsAskedDelay.
+ * restarts) asked again for as long as the answers say so, at retryAsAskedDelay. A status in `answersTheSame` without
+ * Retry-After is not tried again, as a refusal is not: a read that a second later answers the same (the AI model
+ * read's 503, no model set up yet or the AI service down).
  */
-export const retryAsAsked = (times: number) => (failureCount: number, error: unknown): boolean =>
-  !isForbiddenError(error) && (retryAfterMs(error) !== null || failureCount < times)
+export const retryAsAsked = (times: number, answersTheSame: readonly number[] = []) => (failureCount: number, error: unknown): boolean => {
+  if (isForbiddenError(error)) return false
+  if (retryAfterMs(error) !== null) return true
+  const status = (error as FailedRead)?.response?.status
+  return failureCount < times && (status === undefined || !answersTheSame.includes(status))
+}
 
 /** react-query's wait growing to 30 s, never shorter than the answer's Retry-After. */
 export const retryAsAskedDelay = (failureCount: number, error: unknown): number =>
