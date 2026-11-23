@@ -53,7 +53,7 @@ def server_calls(service, calls: Sequence[tuple[str, dict, str]]) -> list[dict[s
     message with the calls, then each answer as its tool message, the form run_tool_turn appends for the model's own calls,
     so what a cluster wrote reaches the model as a tool result. `calls`: (tool name, arguments, the text the model reads).
     Claude Code fills tool results only for the calls it makes: on a subscription the caller puts the answers in its request."""
-    ids = [f"kubeast_step0_{n}" for n in range(1, len(calls) + 1)]
+    ids = [f"{thought_signatures.SERVER_CALL_ID}{n}" for n in range(1, len(calls) + 1)]
     return [
         {"role": "assistant", "content": "", "tool_calls": [
             {"id": cid, "type": "function", "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False, sort_keys=True)}}

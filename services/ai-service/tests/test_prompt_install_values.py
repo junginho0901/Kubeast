@@ -37,7 +37,7 @@ from app.services.tool_whitelists import READONLY_TOOL_NAMES
 from tests.test_alert_investigation import completion, install_loop, row, tool_call
 from tests.test_chat_turn_edges import parsed, stream, text_chunk
 from tests.test_investigation_narrowing import NarrowService, anomaly_rank_on
-from tests.test_investigation_window import STARTED, at_now
+from tests.test_investigation_window import STARTED, at_now, step_zero_reads
 from tests.test_planted_values import chat_rig
 
 OWN = "ownvalue"
@@ -201,7 +201,11 @@ async def test_an_investigation_with_every_step_on_sends_no_value_of_the_install
     system, first = calls[0]["messages"][0]["content"], calls[0]["messages"][1]["content"]
     # every part an investigation sends: the rules, step 0's two reads, the rule cards, a tool result and the second ask
     assert len(calls) == 3 and calls[0]["tools"]
-    assert "<<<CHANGES" in first and "<<<NARROWING" in first and "Rule cards, picked by the server" in first
+    assert "Step 0: the server called timeline" in first and "Step 0: the server called anomaly_rank" in first
+    assert "<<<CHANGES" not in first and "<<<NARROWING" not in first and "Rule cards, picked by the server" in first
+    # step 0's answers: the tool messages right after the first message (tool_turn.server_calls)
+    reads, answers = step_zero_reads(service)
+    assert [name for name, _ in reads] == ["timeline", "anomaly_rank"] and all(answers)
     assert any(isinstance(m, dict) and m.get("role") == "tool" for m in calls[1]["messages"])
     # named on purpose: the alert's cluster and namespace
     assert 'the namespace "apps" of cluster "self"' in system and first.startswith("Cluster: self\n")

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.ai import repeats
+from app.services.ai.thought_signatures import SERVER_CALL_ID
 from app.services.investigation import numbers
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import runner
@@ -66,7 +67,7 @@ def step_zero_reads(service):
     c1…, come after these.)"""
     sent = service.completions.calls[0]["messages"]
     calls = sent[2] if len(sent) > 2 else {}
-    if not all(c["id"].startswith("kubeast_step0_") for c in calls.get("tool_calls") or [{"id": ""}]):
+    if not all(c["id"].startswith(SERVER_CALL_ID) for c in calls.get("tool_calls") or [{"id": ""}]):
         return [], []
     results = sent[3:3 + len(calls["tool_calls"])]
     assert calls["role"] == "assistant" and calls["content"] == "" and [m["role"] for m in results] == ["tool"] * len(results)

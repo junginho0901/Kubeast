@@ -14,7 +14,7 @@ import pytest
 from app.services import provider_adapter
 from app.services.ai import thought_signatures
 from app.services.ai.thought_signatures import PLACEHOLDER, SERVER_CALL_ID
-from app.services.ai.tool_turn import run_tool_turn
+from app.services.ai.tool_turn import run_tool_turn, server_calls
 from app.services.provider_adapter import ProviderAdapter
 
 TOOLS = [{"type": "function", "function": {"name": "list_clusters", "parameters": {"type": "object", "properties": {}}}}]
@@ -174,6 +174,21 @@ async def test_reads_the_server_made_before_the_first_model_call_carry_googles_p
     await ProviderAdapter(provider="openai", model="gpt-4o-mini", api_key="k").chat.completions.create(
         model="gpt-4o-mini", messages=messages, tools=TOOLS)
     assert bodies[1]["messages"] == kept
+
+
+@pytest.mark.asyncio
+async def test_step_zeros_call_ids_come_from_server_call_id_so_google_gives_its_first_call_the_placeholder(monkeypatch):
+    monkeypatch.setattr(thought_signatures, "SERVER_CALL_ID", "renamed_step0_")  # the ids and the placeholder follow the one prefix
+    bodies = serve(monkeypatch, [answer(content="ok")])
+    reads = [("timeline", {"view": "changes"}, "[call 1] no changes"), ("anomaly_rank", {}, "[call 2] web-1 first")]
+    messages = [{"role": "system", "content": "You investigate."}, {"role": "user", "content": "Pod web-1 restarts."},
+                *server_calls(SimpleNamespace(options={}), reads)]
+    await ProviderAdapter(provider="google", model="gemini-3-pro-preview", api_key="k").chat.completions.create(
+        model="gemini-3-pro-preview", messages=messages, tools=TOOLS)
+    [step] = assistant_steps(bodies[0])
+    assert [c["id"] for c in step["tool_calls"]] == ["renamed_step0_1", "renamed_step0_2"]
+    assert step["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": PLACEHOLDER}}
+    assert "extra_content" not in step["tool_calls"][1]
 
 
 def test_only_the_servers_calls_of_the_current_turn_get_the_placeholder():
