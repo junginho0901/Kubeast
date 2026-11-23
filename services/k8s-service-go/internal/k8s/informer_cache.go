@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -65,11 +66,13 @@ type clusterInformers struct {
 
 	// nodeRev counts changes to what the node list shows; the list is built
 	// once per change and second and shared by every caller (nodeSummaries).
-	nodeRev     atomic.Uint64
-	nodeMu      sync.Mutex
-	nodeList    *nodeList
-	nodeListRev uint64
-	nodeListSec int64
+	// nodeListRows keeps each node's row and its JSON for the next build.
+	nodeRev      atomic.Uint64
+	nodeMu       sync.Mutex
+	nodeList     *nodeList
+	nodeListRev  uint64
+	nodeListSec  int64
+	nodeListRows nodeListRows
 }
 
 // newClusterInformers starts the seven informers on client. onStop is called
@@ -323,7 +326,8 @@ func (ci *clusterInformers) nodeAllocatables() map[string]nodeAllocatable {
 
 // nodeList is one build of the node list and, encoded once when first asked,
 // the JSON the handler sends: 200 people opening it at once each encoded the
-// 964 KB of 1 001 nodes again.
+// 964 KB of 1 001 nodes again. The informers' list comes with its JSON
+// already put together from its rows' (nodeListRows.list).
 type nodeList struct {
 	items []map[string]interface{}
 	once  sync.Once
@@ -333,6 +337,9 @@ type nodeList struct {
 // JSON is what json.Encoder writes for the items.
 func (l *nodeList) JSON() []byte {
 	l.once.Do(func() {
+		if l.raw != nil {
+			return
+		}
 		b, err := json.Marshal(l.items)
 		if err != nil { // the items are strings, lists and maps of them
 			b = []byte("[]")
@@ -346,7 +353,11 @@ func (l *nodeList) JSON() []byte {
 // a List returns them — built once per change and second (the age column moves
 // by the second) and shared by every caller, who must not change it: 100
 // people opening the node list of 1 001 nodes at once each listed and decoded
-// the nodes before, 6 MiB a request.
+// the nodes before, 6 MiB a request. A build lists the store as before but
+// makes again only the rows whose stored node was replaced or whose age reads
+// differently, and keeps the list when every row reads as it did: making all
+// 1 001 rows and their JSON each new second held the node list's callers behind
+// nodeMu 0.2-0.4 s at a time in a crowd of 500 (2026-11-21).
 func (ci *clusterInformers) nodeSummaries(now time.Time) *nodeList {
 	ci.touch()
 	rev, sec := ci.nodeRev.Load(), now.Unix()
@@ -355,7 +366,46 @@ func (ci *clusterInformers) nodeSummaries(now time.Time) *nodeList {
 	if ci.nodeList != nil && ci.nodeListRev == rev && ci.nodeListSec == sec {
 		return ci.nodeList
 	}
-	objs := ci.nodes.List()
+	rows, changed := nodeListRowsOf(ci.nodes.List(), ci.nodeListRows)
+	ci.nodeListRows = rows
+	if changed || ci.nodeList == nil {
+		ci.nodeList = rows.list()
+	}
+	ci.nodeListRev, ci.nodeListSec = rev, sec
+	return ci.nodeList
+}
+
+// nodeListRow is one node of the node list: the stored node it was made from,
+// its age as the row reads it, the row and the row's JSON (nil when
+// json.Marshal refused it). A row and its JSON are not changed once made.
+type nodeListRow struct {
+	node *corev1.Node
+	age  string
+	item map[string]interface{}
+	raw  []byte
+}
+
+func nodeListRowOf(n *corev1.Node) nodeListRow {
+	item := formatNodeSummary(n)
+	a, _ := item["age"].(string)
+	raw, err := json.Marshal(item)
+	if err != nil {
+		raw = nil
+	}
+	return nodeListRow{node: n, age: a, item: item, raw: raw}
+}
+
+// nodeListRows is the node list's rows by node name, kept under nodeMu.
+type nodeListRows []nodeListRow
+
+// nodeListRowsOf is the rows of the stored nodes by name, as a List returns them,
+// and whether they read differently from before. A node whose stored object is
+// the one its row was made from (the store replaces an object on each update,
+// and never changes one) and whose age reads the same keeps its row, since the
+// age is the one field of a row that moves with the clock
+// (TestTheNodeRowMovesWithTheClockOnlyInItsAge); a row made again that reads
+// byte for byte as before, a heartbeat's, keeps the one before.
+func nodeListRowsOf(objs []interface{}, before nodeListRows) (nodeListRows, bool) {
 	nodes := make([]*corev1.Node, 0, len(objs))
 	for _, o := range objs {
 		if n, ok := o.(*corev1.Node); ok {
@@ -363,12 +413,60 @@ func (ci *clusterInformers) nodeSummaries(now time.Time) *nodeList {
 		}
 	}
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
-	out := make([]map[string]interface{}, 0, len(nodes))
+	out := make(nodeListRows, 0, len(nodes))
+	changed := len(nodes) != len(before)
+	j := 0
 	for _, n := range nodes {
-		out = append(out, formatNodeSummary(n))
+		for j < len(before) && before[j].node.Name < n.Name {
+			j++
+		}
+		if j < len(before) && before[j].node.Name == n.Name {
+			old := before[j]
+			if old.node == n && age(&n.CreationTimestamp) == old.age {
+				out = append(out, old)
+				continue
+			}
+			if r := nodeListRowOf(n); old.raw == nil || !bytes.Equal(r.raw, old.raw) {
+				out = append(out, r)
+				changed = true
+				continue
+			}
+			old.node = n
+			out = append(out, old)
+			continue
+		}
+		out = append(out, nodeListRowOf(n))
+		changed = true
 	}
-	ci.nodeList, ci.nodeListRev, ci.nodeListSec = &nodeList{items: out}, rev, sec
-	return ci.nodeList
+	return out, changed
+}
+
+// list is the node list of the rows, its JSON put together from theirs: the
+// bytes json.Encoder writes for the items, as json.Marshal of a list writes
+// each item as json.Marshal of the item. Each row's JSON is left pointing into
+// the list's, so the rows hold no copy of their own.
+func (rs nodeListRows) list() *nodeList {
+	items := make([]map[string]interface{}, len(rs))
+	size := len("[]\n") + len(rs)
+	for i := range rs {
+		items[i] = rs[i].item
+		if rs[i].raw == nil {
+			return &nodeList{items: items, raw: []byte("[]\n")}
+		}
+		size += len(rs[i].raw)
+	}
+	raw := make([]byte, 0, size)
+	raw = append(raw, '[')
+	for i := range rs {
+		if i > 0 {
+			raw = append(raw, ',')
+		}
+		start := len(raw)
+		raw = append(raw, rs[i].raw...)
+		rs[i].raw = raw[start:len(raw):len(raw)]
+	}
+	raw = append(raw, ']', '\n')
+	return &nodeList{items: items, raw: raw}
 }
 
 // stripNode keeps what overview, nodeAllocatables and formatNodeSummary read;
