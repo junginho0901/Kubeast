@@ -9,7 +9,8 @@ import { test, expect, type Page } from '@playwright/test'
 // limit, as the cluster has it (core Events and events.k8s.io Events are two types of one Kind); a type that fails is
 // asked again and reported on every read; a list the server ends with an error partway is a failure, not the limit.
 // The Status column is kubectl's STATUS, and a grant limited to namespaces searching All Namespaces loads what its
-// identity lists in each of them (one user is made and removed).
+// identity lists in each of them (one user is made and removed). The expression box offers the objects' fields, not the
+// browser's globals.
 
 const SEARCH = { path: '/cluster/search', cluster: 'default' }
 const NS = 'e2e-search'
@@ -299,5 +300,22 @@ test.describe('Advanced Search examples and expressions it cannot read', () => {
     await expect(page.locator('table tbody tr'), 'no result rows').toHaveCount(0)
     await expect(page.getByTestId('search-page-info')).toHaveCount(0)
     await expect(page.getByText(/No resources match your query|쿼리에 일치하는 리소스가 없습니다/)).toHaveCount(0)
+  })
+
+  test('the expression box offers the fields of the objects read and no browser global', async ({ page }) => {
+    await open(page, ['configmaps'])
+    await expect(page.getByText(loaded(count('configmaps')))).toHaveCount(1)
+    const widget = page.locator('.suggest-widget')
+    const offered = () => widget.locator('.monaco-list-row:visible .label-name').allTextContents()
+    // every ConfigMap read has metadata, which the box offers from the objects read (inferTypes)
+    await typeQuery(page, 'metad')
+    await page.keyboard.press('Control+Space')
+    await expect.poll(offered, { timeout: 20_000 }).toContain('metadata')
+    // TextTrack, TextTrackCue, TextTrackCueList and TextTrackList are the browser's own: the box offered them here while
+    // it ran on the browser's library, and an expression names only what the objects hold (simple-eval)
+    await page.keyboard.type(' || TextTrack')
+    await page.keyboard.press('Control+Space')
+    await expect(widget.locator('.message'), 'the box answered with nothing to offer').toHaveText('No suggestions.', { timeout: 20_000 })
+    expect(await offered(), 'no browser global offered').toEqual([])
   })
 })

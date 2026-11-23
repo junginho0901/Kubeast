@@ -1,9 +1,16 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Loader2 } from 'lucide-react'
+import type * as MonacoApi from 'monaco-editor'
 import MonacoEditor, { type Monaco } from '@/components/monaco/CodeEditor'
 import { generateGlobalVarDeclarations } from './inferTypes'
 import { useColorMode } from '@/utils/colorMode'
+
+// monaco-editor 0.55 moved the TypeScript defaults to the top-level `typescript`; `languages.typescript` is no longer
+// set, and without these options the box offers the browser's globals (TextTrackCue) and none of the objects' fields.
+// A monaco without it (moved again, or built without the TypeScript part) opens the box without suggestions.
+const typescriptOf = (m: Monaco): typeof MonacoApi.typescript | undefined =>
+  (m as unknown as typeof MonacoApi).typescript
 
 interface Props {
   value: string
@@ -38,20 +45,15 @@ export default function SearchQueryEditor({
     return generateGlobalVarDeclarations(items as Record<string, any>[], 1000)
   }, [items])
 
+  // The fields of the objects read now, none when nothing is read. The compiler options are set once in beforeMount:
+  // setting them again restarts the language worker.
   useEffect(() => {
-    if (monaco && typeDefinition) {
-      const ts = (monaco.languages as any).typescript
-      if (!ts) return
-      ts.javascriptDefaults.setCompilerOptions({
-        target: ts.ScriptTarget.ESNext,
-        noLib: false,
-        allowNonTsExtensions: true,
-        lib: ['esnext'],
-      })
-      ts.javascriptDefaults.setExtraLibs([
-        { content: typeDefinition, filePath: 'globalTypes.d.ts' },
-      ])
-    }
+    if (!monaco) return
+    const ts = typescriptOf(monaco)
+    if (!ts) return
+    ts.javascriptDefaults.setExtraLibs(
+      typeDefinition ? [{ content: typeDefinition, filePath: 'globalTypes.d.ts' }] : [],
+    )
   }, [monaco, typeDefinition])
 
   function handleEditorWillMount(m: Monaco) {
@@ -65,7 +67,8 @@ export default function SearchQueryEditor({
         colors: { 'editor.background': '#00000000', 'editorGutter.background': '#00000000' },
       })
     }
-    const ts = (m.languages as any).typescript
+    // The ECMAScript library alone, for the methods after a field (`.startsWith`): no browser global is a word of an expression
+    const ts = typescriptOf(m)
     if (!ts) return
     ts.javascriptDefaults.setCompilerOptions({
       target: ts.ScriptTarget.ESNext,
