@@ -44,7 +44,7 @@ func LogSelector(l LogLabels, wl *Workload) string {
 	if wl == nil {
 		return "{}"
 	}
-	return "{" + l.Pod + "=~" + strconv.Quote(wl.podPattern()) + "}"
+	return "{" + l.Pod + "=~" + strconv.Quote(wl.PodPattern()) + "}"
 }
 
 // ErrorCountQuery counts the error lines of each container over the last d at each step.
@@ -190,7 +190,7 @@ type TraceQuery struct {
 func TraceQueries(wl *Workload) []TraceQuery {
 	pod := ""
 	if wl != nil {
-		pod = " && resource.k8s.pod.name =~ " + strconv.Quote("^(?:"+wl.podPattern()+")$")
+		pod = " && resource.k8s.pod.name =~ " + strconv.Quote("^(?:"+wl.PodPattern()+")$")
 	}
 	return []TraceQuery{
 		{Signal: SignalRequests, Query: "{ kind = server" + pod + " } | count_over_time() by (resource.service.name)"},

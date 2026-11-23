@@ -272,11 +272,12 @@ func indexedBase(job []namePart) string {
 	return group(alts)
 }
 
-// podPattern is the regular expression of the names w's controller gives its pods: a Deployment's
+// PodPattern is the regular expression of the names w's controller gives its pods: a Deployment's
 // <name>-<pod-template-hash>-<5 letters>, a ReplicaSet's and a DaemonSet's <name>-<5 letters>, a Job's that or
 // <name>-<index>-<5 letters>, a CronJob's the same after its Job's name, a StatefulSet's <name>-<ordinal>; a base past
 // generatedBase is cut as the API server cuts it. So a sibling whose name starts with w's (cart, cart-api) is left out.
-func (w *Workload) podPattern() string {
+// Log search's workload filter (logsearch.Config.LogQL) matches the pod label by it too.
+func (w *Workload) PodPattern() string {
 	random := "[" + hashLetters + "]{5}"
 	digits := namePart{class: "[0-9]", min: 1, max: 10}
 	var bases, jobs [][]namePart
@@ -307,7 +308,7 @@ func (w *Workload) podMatcher() string {
 	if w == nil {
 		return ""
 	}
-	return `,pod=~` + strconv.Quote(w.podPattern())
+	return `,pod=~` + strconv.Quote(w.PodPattern())
 }
 
 // Finding is one thing a check found, or one target it compared.
