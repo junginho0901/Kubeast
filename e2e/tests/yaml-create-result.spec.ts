@@ -33,8 +33,9 @@ async function typeYaml(page: Page, yaml: string): Promise<void> {
   await page.keyboard.press(mac ? 'Meta+A' : 'Control+A')
   await page.keyboard.press('Delete')
   if (yaml) await page.keyboard.insertText(yaml)
-  const lines = await dialog.locator('.monaco-editor .view-lines').first().evaluate((el) => (el as HTMLElement).innerText.replace(/ /g, ' ').trim())
-  expect(lines, 'the editor holds the YAML typed, nothing of the template').toBe(yaml.trim())
+  // Monaco draws what was typed on its next animation frame: the lines are read until they show it
+  const lines = () => dialog.locator('.monaco-editor .view-lines').first().evaluate((el) => (el as HTMLElement).innerText.replace(/ /g, ' ').trim())
+  await expect.poll(lines, { message: 'the editor holds the YAML typed, nothing of the template' }).toBe(yaml.trim())
 }
 
 async function createFromYaml(page: Page, yaml: string): Promise<void> {

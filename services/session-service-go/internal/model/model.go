@@ -36,6 +36,15 @@ type SessionContext struct {
 	UpdatedAt time.Time        `json:"updated_at"`
 }
 
+// OpenApproval is a write tool approval deleted with its conversation while still approved: no outcome of its call
+// had been written yet. Ids and names only, never the call's arguments.
+type OpenApproval struct {
+	ID         string     `json:"id"`
+	Tool       string     `json:"tool"`
+	Cluster    string     `json:"cluster"`
+	ApprovedAt *time.Time `json:"approved_at"`
+}
+
 // --- Request / Response DTOs ---
 
 // CreateSessionRequest is the request body for creating a session.

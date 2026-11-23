@@ -40,6 +40,25 @@ tests:
           content: system:masters
         documentIndex: 0
 
+  - it: lets the Kubeast credential get the kube-system Namespace, whose UID refuses one cluster registered twice, and no other Namespace
+    asserts:
+      - equal:
+          path: metadata.name
+          value: kubeast-impersonator
+        documentIndex: 0
+      - equal:
+          path: rules[2]
+          value:
+            apiGroups: [""]
+            resources: ["namespaces"]
+            verbs: ["get"]
+            resourceNames: ["kube-system"]
+        documentIndex: 0
+      - lengthEqual:
+          path: rules
+          count: 3
+        documentIndex: 0
+
   - it: lets the Read group read admission policies and their bindings (the Admission Policies page), not change them
     asserts:
       - equal:

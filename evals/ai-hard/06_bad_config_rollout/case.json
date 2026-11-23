@@ -1,0 +1,46 @@
+{
+ "id": "06_bad_config_rollout",
+ "title": "A rollout to a new ConfigMap: only the new pods fail",
+ "group": "hidden_cause",
+ "cluster": "default",
+ "namespace": "shop-06",
+ "question": "default 클러스터 shop-06에서 결제 금액 조회가 가끔 실패한대. 원인이 뭐야?",
+ "question_vague": "default 클러스터 shop-06에서 결제가 이상하다는 말이 있어. 원인 찾아줘.",
+ "answer_format": "rca_block_v0",
+ "expect": [
+  [
+   "pricing-settings-9b2c1",
+   "TAX_RATE_BP",
+   "0\\.10"
+  ],
+  [
+   "새 (파드|버전|레플리카|ReplicaSet)",
+   "ReplicaSet",
+   "rollout",
+   "롤아웃",
+   "배포"
+  ]
+ ],
+ "tools": [],
+ "wait": "kubectl -n $NS wait --for=condition=Available deploy/pricing deploy/checkout --timeout=10s",
+ "wait_seconds": 300,
+ "baseline_seconds": 180,
+ "inject_cmds": [
+  "kubectl -n $NS apply -f $CASE_DIR/inject.yaml",
+  "kubectl -n $NS patch deploy pricing --type=json -p '[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/envFrom/0/configMapRef/name\",\"value\":\"pricing-settings-9b2c1\"}]'",
+  "for i in $(seq 1 60); do [ \"$(kubectl -n $NS get deploy pricing -o jsonpath='{.status.updatedReplicas}')\" = 2 ] && break; sleep 2; done; kubectl -n $NS rollout pause deploy/pricing"
+ ],
+ "inject_wait": "kubectl -n $NS logs deploy/checkout --since=20s | grep -q 'request failed'",
+ "inject_wait_seconds": 180,
+ "ask_after_seconds": [300, 3900],
+ "undo_cmds": [
+  "kubectl -n $NS rollout resume deploy/pricing",
+  "kubectl -n $NS rollout undo deploy/pricing"
+ ],
+ "cooldown_seconds": 30,
+ "timeout_seconds": 420,
+ "alert": {
+  "labels": {"alertname": "ServiceRequestsFailing", "service": "checkout"},
+  "annotations": {"summary": "Some of checkout's price lookups fail", "description": "A share of checkout's requests for the payment amount has been failing for the last few minutes."}
+ }
+}

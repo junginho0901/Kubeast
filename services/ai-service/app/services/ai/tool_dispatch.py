@@ -20,6 +20,7 @@
 from typing import TYPE_CHECKING, Dict
 
 from app.services.ai import console_links, permissions, resolvers
+from app.services.ai.tools import CALLS_PARAMS, anomaly_rank_on, call_graph_on, changes_view_on
 from app.services.ai.debug_dump import log, safe_error
 
 if TYPE_CHECKING:
@@ -31,6 +32,12 @@ def _flag(value) -> bool:
     if isinstance(value, str):
         return value.strip().lower() == "true"
     return bool(value)
+
+
+def _wants_calls(value) -> bool:
+    """resource_graph's include as the model may send it: ["calls"] or "calls"; anything else is dropped."""
+    items = value if isinstance(value, list) else [value]
+    return any(isinstance(v, str) and v.strip().lower() == "calls" for v in items)
 
 
 # Feature tools (tool-server → k8s-service): the string, boolean and integer
@@ -87,8 +94,9 @@ FEATURE_TOOL_ARGS = {
     "network_flows": ({"namespace", "pod", "workload_kind", "workload_name", "verdict", "since"}, set(), {"limit"}),
     "network_drops": ({"namespace", "pod", "workload_kind", "workload_name", "since"}, set(), set()),
     "network_top_flows": ({"namespace", "pod", "workload_kind", "workload_name", "metric", "destination", "since"}, set(), set()),
-    "resource_graph": ({"namespace"}, set(), set()),
-    "timeline": ({"namespace", "since_time", "until_time", "event_type", "kind", "name"}, set(), {"limit"}),
+    "resource_graph": ({"namespace", "since", "since_time", "until_time"}, set(), set()),
+    "timeline": ({"view", "namespace", "since_time", "until_time", "event_type", "kind", "name"}, set(), {"limit"}),
+    "anomaly_rank": ({"namespace", "since_time", "until_time", "workload_kind", "workload_name"}, set(), set()),
     "gpu": (set(), set(), set()),
     # Query tools (kubectl + jq / columns / count, filtered in tool-server).
     "k8s_jq_query": ({"resource_type", "jq", "namespace", "label_selector", "field_selector"}, set(), {"limit"}),
@@ -348,7 +356,7 @@ async def execute_function_with_context(
                 tool_args["resource_manifest"] = function_args["resource_manifest"]
             result = await service._call_tool_server(function_name, tool_args)
 
-        elif function_name in FEATURE_TOOL_ARGS:
+        elif function_name in FEATURE_TOOL_ARGS and not (function_name == "anomaly_rank" and not anomaly_rank_on()):
             # Feature tools: tool-server calls k8s-service as the user; only the
             # declared arguments travel, booleans and integers normalised.
             spec = FEATURE_TOOL_ARGS[function_name]
@@ -374,6 +382,13 @@ async def execute_function_with_context(
                 tool_args[key] = resolvers._coerce_limit(service, function_args.get(key), default=0, max_value=1_000_000)
             if function_name == "prometheus_query" and _flag(function_args.get("chart")):
                 tool_args["range"] = True  # a graph needs points; chart/title/unit stay here (app/services/ai/charts.py)
+            if function_name == "resource_graph" and _wants_calls(function_args.get("include")):
+                tool_args["include"] = ["calls"]
+            if function_name == "timeline" and not changes_view_on(getattr(tool_context, "session_id", None)):
+                tool_args.pop("view", None)  # the changes view is reachable only with its switch (or step 0's)
+            if function_name == "resource_graph" and not call_graph_on():
+                for key in CALLS_PARAMS:  # the calls arguments reach tool-server only with the switch, as before them
+                    tool_args.pop(key, None)
             labels = function_args.get("alert_labels")
             if function_name in ("alerts_list", "alert_investigate") and isinstance(labels, dict):
                 tool_args["alert_labels"] = {str(k): str(v) for k, v in list(labels.items())[:10] if isinstance(v, (str, int, float))}

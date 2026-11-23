@@ -127,7 +127,7 @@ describe('drawers draw the Events section with or without events', () => {
 
   it('the Cluster View pod window\'s Describe tab: "None", or the reason', () => {
     const tr = (key: string, fallback: string, o?: Record<string, unknown>) => i18n.t(key, { defaultValue: fallback, ...o })
-    const tab = (data: Record<string, unknown>) => renderToStaticMarkup(createElement(PodDescribeTab, { data: { name: 'p', namespace: 'ns', ...data }, na: '-', tr }))
+    const tab = (data: Record<string, unknown>) => renderToStaticMarkup(createElement(PodDescribeTab, { data: { name: 'p', namespace: 'ns', ...data }, emptyValue: '-', tr }))
     const events = (html: string) => html.slice(html.indexOf('>Events</h3>'))
     expect(events(tab({ events: [] }))).toContain('>None</p>')
     expect(events(tab({ events_error: REFUSED }))).toContain('Could not load the events: events is forbidden')
@@ -136,7 +136,7 @@ describe('drawers draw the Events section with or without events', () => {
 
   it('the Cluster View pod window\'s Describe tab: Labels, Containers and Conditions say "None" as Events does', () => {
     const tr = (key: string, fallback: string, o?: Record<string, unknown>) => i18n.t(key, { defaultValue: fallback, ...o })
-    const tab = (data: Record<string, unknown>) => renderToStaticMarkup(createElement(PodDescribeTab, { data: { name: 'p', namespace: 'ns', events: [], ...data }, na: '-', tr }))
+    const tab = (data: Record<string, unknown>) => renderToStaticMarkup(createElement(PodDescribeTab, { data: { name: 'p', namespace: 'ns', events: [], ...data }, emptyValue: '-', tr }))
     const part = (html: string, title: string) => {
       const at = html.indexOf(`>${title}</h3>`)
       if (at < 0) return `no ${title} section`

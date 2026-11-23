@@ -8,11 +8,11 @@ import { formatTime, utcTitle } from '@/utils/time'
 
 interface Props {
   data: any
-  na: string
+  emptyValue: string
   tr: (key: string, fallback: string, options?: Record<string, any>) => string
 }
 
-export function PodDescribeTab({ data, na, tr }: Props) {
+export function PodDescribeTab({ data, emptyValue, tr }: Props) {
   return (
     <div className="space-y-6">
       {/* 기본 정보 */}
@@ -31,7 +31,7 @@ export function PodDescribeTab({ data, na, tr }: Props) {
           </div>
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.node', 'Node')}</p>
-            <p className="text-ink font-medium">{data.node || na}</p>
+            <p className="text-ink font-medium">{data.node || emptyValue}</p>
           </div>
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.phase', 'Phase')}</p>

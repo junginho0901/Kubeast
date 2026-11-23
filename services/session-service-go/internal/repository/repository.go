@@ -161,27 +161,65 @@ func (r *Repository) UpdateSessionTitle(ctx context.Context, id, title string) e
 	return err
 }
 
-// DeleteSession deletes a session and its related messages and context.
-// Explicitly deletes children first for compatibility with tables created
-// by SQLAlchemy ORM (which may lack ON DELETE CASCADE at the DB level).
-func (r *Repository) DeleteSession(ctx context.Context, id string) error {
+// deleteSessionStatements delete a conversation, the rows that name it first: tool_approvals reference sessions
+// without ON DELETE CASCADE (the retention purge in auth-service deletes them first too), and tables the SQLAlchemy
+// ORM created before the migrations may lack it on messages and session_contexts.
+var deleteSessionStatements = []string{
+	deleteSessionApprovals,
+	`DELETE FROM session_contexts WHERE session_id = $1`,
+	`DELETE FROM messages WHERE session_id = $1`,
+	`DELETE FROM sessions WHERE id = $1`,
+}
+
+// deleteSessionApprovals returns each approval as it was deleted, after any write to it that committed first.
+const deleteSessionApprovals = `DELETE FROM tool_approvals WHERE session_id = $1 RETURNING id, tool, cluster, status, decided_at`
+
+// DeleteSession deletes a session with its context, messages and write tool approvals, in one transaction, and
+// returns the approvals it deleted while still approved: their calls had no outcome written yet.
+func (r *Repository) DeleteSession(ctx context.Context, id string) ([]model.OpenApproval, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, `DELETE FROM session_contexts WHERE session_id = $1`, id); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM messages WHERE session_id = $1`, id); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE id = $1`, id); err != nil {
-		return err
+	var open []model.OpenApproval
+	for _, stmt := range deleteSessionStatements {
+		if stmt == deleteSessionApprovals {
+			if open, err = deleteOpenApprovals(ctx, tx, id); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if _, err := tx.Exec(ctx, stmt, id); err != nil {
+			return nil, err
+		}
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return open, nil
+}
+
+func deleteOpenApprovals(ctx context.Context, tx pgx.Tx, sessionID string) ([]model.OpenApproval, error) {
+	rows, err := tx.Query(ctx, deleteSessionApprovals, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var open []model.OpenApproval
+	for rows.Next() {
+		var a model.OpenApproval
+		var status string
+		if err := rows.Scan(&a.ID, &a.Tool, &a.Cluster, &status, &a.ApprovedAt); err != nil {
+			return nil, err
+		}
+		if status == "approved" {
+			open = append(open, a)
+		}
+	}
+	return open, rows.Err()
 }
 
 // GetMessagesBefore returns the limit messages that come right before beforeID in the conversation, oldest first; a

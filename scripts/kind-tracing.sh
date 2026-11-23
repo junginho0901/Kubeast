@@ -3,10 +3,11 @@
 # (features.tracing) and a Tempo there for the AI's trace reads (features.traceStore,
 # deploy/kind/tracing-tempo.yaml), Kubeast pointed at both (deploy/kind/tracing-values.yaml). Needs
 # scripts/kind-logsearch.sh up first (the links sit on log search lines). e2e/tests/trace-links.spec.ts
-# and ai-traces-tools.spec.ts run against this.
+# and ai-traces-tools.spec.ts run against this; Tempo's metrics-generator writes the service graph metrics
+# into kubeast-b's Prometheus and features.callGraph is on for ai-call-graph.spec.ts.
 #
 #   scripts/kind-tracing.sh up
-#   scripts/kind-tracing.sh down   # Kubeast back to trace links and reads off; Jaeger and Tempo removed
+#   scripts/kind-tracing.sh down   # Kubeast back to trace links, reads and the call graph off; Jaeger and Tempo removed
 #
 # To open the links from the laptop: kubectl port-forward -n tracing svc/jaeger 16686 (kubeast-b).
 set -euo pipefail
@@ -49,7 +50,8 @@ case "${1:-}" in
     ;;
   down)
     helm --kubeconfig "$KUBECONFIG_PATH" --kube-context "kind-$MAIN" -n "$NAMESPACE" upgrade "$RELEASE" "$ROOT/helm/kubeast" \
-      --reset-then-reuse-values --set features.tracing.enabled=false --set features.traceStore.enabled=false --wait --timeout 5m | grep -E "REVISION|STATUS"
+      --reset-then-reuse-values --set features.tracing.enabled=false --set features.traceStore.enabled=false \
+      --set features.callGraph.enabled=false --wait --timeout 5m | grep -E "REVISION|STATUS"
     store_kubectl delete namespace tracing tempo --ignore-not-found
     ;;
   *) echo "usage: $0 up | down" >&2; exit 2 ;;

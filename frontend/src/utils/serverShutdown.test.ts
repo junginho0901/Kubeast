@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { terminalEnd, terminalEndText } from './serverShutdown'
+import { followLimitText, terminalEnd, terminalEndText } from './serverShutdown'
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
 
@@ -24,6 +24,21 @@ describe('why a terminal closed', () => {
     expect(terminalEnd(1013, '')).toBeNull()
   })
 
+  it('reads a terminal refused at its account\'s cap from its close code and reason, as one to reconnect once another closes', () => {
+    expect(terminalEnd(4429, 'terminal_limit')).toBe('accountLimit')
+    expect(terminalEndText('accountLimit', echo)).toBe((en as any).serverShutdown.terminalLimit)
+    expect(terminalEndText('accountLimit', echo)).toContain('Close one, then reconnect')
+    expect(terminalEnd(4429, '')).toBeNull()
+    expect(terminalEnd(1013, 'terminal_limit')).toBeNull()
+  })
+
+  it('says a followed log refused at its account\'s cap in the screen\'s language', () => {
+    expect(followLimitText(echo)).toBe((en as any).serverShutdown.followLimit)
+    const koText = (key: string) => key.split('.').reduce((o: any, k) => o?.[k], ko) as string
+    expect(followLimitText(koText)).toBe((ko as any).serverShutdown.followLimit)
+    expect(followLimitText(koText)).toContain('실시간 보기')
+  })
+
   it('leaves the ends that say why themselves alone', () => {
     expect(terminalEnd(1000, '')).toBeNull() // the shell exited
     expect(terminalEnd(1001, '')).toBeNull() // a browser leaving the page
@@ -32,7 +47,7 @@ describe('why a terminal closed', () => {
   })
 
   it('has every line in both languages, and the English one is the fallback', () => {
-    for (const key of ['terminalReplaced', 'terminalLost', 'terminalUnchecked', 'reconnect', 'followStopped'] as const) {
+    for (const key of ['terminalReplaced', 'terminalLost', 'terminalUnchecked', 'reconnect', 'followStopped', 'terminalLimit', 'followLimit'] as const) {
       expect((en as any).serverShutdown[key]).toBeTruthy()
       expect((ko as any).serverShutdown[key]).toBeTruthy()
     }

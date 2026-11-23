@@ -71,6 +71,18 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+  - it: stops values without the repeated read switch
+    set:
+      ai.refuseRepeatedReads: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.refuseRepeatedReads
+  - it: stops values without the evidence check switch
+    set:
+      features.alertInvestigation.evidenceCheck: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.evidenceCheck
   - it: stops values without the tool result details switch
     set:
       ai.toolResultDetails: null
@@ -89,6 +101,42 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no features.networkFlowMonitor
+  - it: stops values without the investigation windows
+    set:
+      features.alertInvestigation.window: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.window
+  - it: stops values without the investigation rules switch
+    set:
+      features.alertInvestigation.rules: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.rules
+  - it: stops values without the step 0 switch
+    set:
+      features.alertInvestigation.changesFirst: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.changesFirst
+  - it: stops values without features.callGraph, which this chart added
+    set:
+      features.callGraph: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.callGraph
+  - it: stops values without ai.timelineChanges, which this chart added
+    set:
+      ai.timelineChanges: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no ai.timelineChanges
+  - it: stops values without the investigation ledger switch
+    set:
+      features.alertInvestigation.ledger: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no features.alertInvestigation.ledger
   - it: stops values without streams (the stream server), as v0.7.7's are
     set:
       streams: null

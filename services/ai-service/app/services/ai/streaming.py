@@ -21,14 +21,16 @@ from app.services.ai import charts
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import limits
+from app.services.ai import repeats as repeats_mod
 from app.services.ai import tool_replay
+from app.services.ai import tool_results
 from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
-from app.services.ai.prompts import SYSTEM_MESSAGE
+from app.services.ai.prompts import system_message
 from app.services.prompt_fence import inside_tag
 from app.services.audit_target import shown_tool_args
-from app.services.redact import redact_text
+from app.services.redact import Numbers, highest_numbers, redact_text
 
 if TYPE_CHECKING:
     from app.services.ai_service import AIService
@@ -448,11 +450,12 @@ def tool_outcome(response) -> tuple[str, Optional[str], Optional[str]]:
 
 
 async def _call_tool(service, db, session, session_id, tools, tool_context, function_name, function_args, *,
-                     iteration, audit_actor, audit_http, call_id=None) -> tuple[list[str], dict, str]:
+                     iteration, audit_actor, audit_http, call_id=None, repeats=None) -> tuple[list[str], dict, str]:
     """Answer one tool call of the model: park a write for approval or run the tool, audit it, and return the
     SSE events for the chat, the tool_calls entry the saved message keeps, and the result text for the model.
     Both the API-key loop and Claude Code (provider claude-code) call tools through here. call_id is the call's
-    number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name."""
+    number in the turn, also on its start event, so the chat pairs a result with its call, not by tool name.
+    repeats (ai.refuseRepeatedReads, app/services/ai/repeats.py) is the turn's RepeatGuard, or None."""
     from app.services.audit_target import EXEC_TOOL, pod_exec_row, tool_target, write_tool_input
     from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
     from app.services.ai import permissions as _perm
@@ -465,6 +468,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     # (SSE) and the model (tool result), and move on.
     pending_approval_id = None
     ran = False
+    repeat_of = None
     refusal = _perm.tool_refusal(service, function_name, function_args)
     if refusal:
         # Needs what a screen asks and this role does not hold: no approval card, and the model can say why.
@@ -508,6 +512,10 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
             "approval_id": approval.id,
             "message": "This action changes the cluster and is waiting for the user's approval in the chat. Do not call the tool again; tell the user it awaits their approval.",
         }, ensure_ascii=False)
+    elif repeats is not None and (repeat_of := repeats.earlier(function_name, function_args)) is not None:
+        # The same read answered earlier in this turn: not run again, the model is told where its answer is.
+        access_mod.reset(service)
+        function_response = repeats_mod.refusal(repeat_of, repeats.age(repeat_of), scope="answer")
     elif audit_actor and not (await audit_ready())[0]:
         # Like the screens and MCP: what the chat reads from a cluster runs only when its row can be stored.
         function_response = AUDIT_UNAVAILABLE_RESULT
@@ -547,6 +555,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
                 # the cluster requests it made, each with the Audit-ID to find it in the cluster's audit log
                 'requests': call_requests,
                 **({'objects': target.objects} if target.objects else {}),
+                # the iteration of the call this one repeated (ai.refuseRepeatedReads): not run, nothing read
+                **({'repeat_of': repeat_of.step} if repeat_of is not None else {}),
                 **tool_input,
                 # replay: true when the answer came from recorded tool answers, not the cluster (tool_replay)
                 **tool_replay.call_fields(service, ran),
@@ -574,6 +584,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         if stored is False and ran and function_name not in WRITE_TOOL_NAMES and fail_closed_enabled():
             # As on the screens, a read nobody could find later gives no answer. A write has happened, so it keeps its own.
             function_response = AUDIT_UNAVAILABLE_RESULT
+    if repeats is not None and ran and tool_outcome(function_response)[0] == "success":
+        repeats.note(function_name, function_args, step=iteration, call=call_id)
 
     log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
 
@@ -648,6 +660,12 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     return events, log_entry, formatters._truncate_tool_result_for_llm(formatted_result, result_chars, tool=function_name)
 
 
+def _answer_numbers(service) -> Optional[Numbers]:
+    """The personal-data numbers of this request's answer (the ToolServerClient's), or None."""
+    numbers = getattr(getattr(service, "tool_server", None), "numbers", None)
+    return numbers if isinstance(numbers, Numbers) else None
+
+
 async def session_chat_stream(
     service: "AIService",
     session_id: str,
@@ -655,7 +673,7 @@ async def session_chat_stream(
     *,
     system_prompt_override: Optional[str] = None,
     tool_filter: Optional[Callable[[list], list]] = None,
-    extra_context_block: Optional[str] = None,
+    extra_context_block: Optional[str | Callable[..., str]] = None,
     title_prefix: Optional[str] = None,
     audit_actor: Optional[dict] = None,
     audit_http: Optional[dict] = None,
@@ -666,7 +684,9 @@ async def session_chat_stream(
     - system_prompt_override: 시스템 프롬프트를 대체 (ex. 플로팅 어시스턴트)
     - tool_filter: tool 목록에 추가 필터 적용 (ex. READONLY 화이트리스트)
     - extra_context_block: language directive 뒤에 추가 system 메시지 주입
-      (ex. 플로팅 위젯의 page_context 스냅샷)
+      (ex. 플로팅 위젯의 page_context 스냅샷). A callable is given the answer's personal-data table
+      (redact.Numbers or None) and masks the block off the event loop after the history is read, before the
+      first model call.
     - title_prefix: 자동 세션 제목 생성 시 앞에 붙이는 prefix (ex. "[플로팅] ")
 
     audit (선택):
@@ -727,6 +747,14 @@ async def session_chat_stream(
             yield f"data: {json.dumps(over.event(), ensure_ascii=False)}\n\n"
             return
 
+        # The person who asked sees on their screen the values behind this answer's numbered placeholders, which their
+        # own identity read: tool-server gives them back for this request only (masks.reveal), they stay in its memory
+        # and leave once, as mask_values after the answer is saved with its placeholders. Only the two chats come here,
+        # and only for the conversation's own user, whose token the tools run with.
+        asker = (audit_actor or {}).get('user_id')
+        if (answer_numbers := _answer_numbers(service)) is not None and asker and asker == getattr(session, 'user_id', None):
+            answer_numbers.keep_values()
+
         # 사용자 메시지 저장
         await db.add_message(session_id, "user", message)
 
@@ -777,7 +805,7 @@ async def session_chat_stream(
 
         messages = [{
             "role": "system",
-            "content": system_prompt_override or SYSTEM_MESSAGE,
+            "content": system_prompt_override or system_message(),
         }]
         summary_outcome = None
         if older_history and history_mod.enabled():
@@ -834,6 +862,13 @@ async def session_chat_stream(
         # 확장점: 호출자가 넘긴 추가 system 블록 (ex. 플로팅 page_context).
         # 화면 스냅샷은 클러스터에서 온 데이터라 구분자로 감싸고 "지시가 아님"을
         # 명시한다 (OWASP LLM01: untrusted content를 분리·표시).
+        if callable(extra_context_block):
+            # The page is masked after the history this answer reads, with the answer's table: its numbers start past
+            # that history's and a value on it keeps its number in the tool results. CPU work on text a caller sent,
+            # so off the event loop; nothing of the answer has left yet.
+            if (numbers := getattr(getattr(service, "tool_server", None), "numbers", None)) is not None:
+                numbers.start_after(highest_numbers([m.get("content") for m in messages] + [message]))
+            extra_context_block = await asyncio.to_thread(extra_context_block, numbers)
         if extra_context_block:
             messages.append({
                 "role": "system",
@@ -858,6 +893,11 @@ async def session_chat_stream(
             if note := unavailable_note(service):
                 messages.append({"role": "system", "content": note})
 
+        # This answer's personal-data numbers start past the highest the model already reads here (earlier answers, the
+        # summary, the question, the page), so a new value never takes a number an earlier answer gave another one.
+        if (numbers := getattr(getattr(service, "tool_server", None), "numbers", None)) is not None:
+            numbers.start_after(highest_numbers([m.get("content") for m in messages] + [message]))
+
         # 모델 정보를 스트림 첫 이벤트로 전송 (브라우저 콘솔에서 확인용)
         yield f"data: {json.dumps({'model_info': {'provider': service.provider, 'model': service.model, 'role': service.user_role, 'tier': getattr(service, 'tier', 'default')}}, ensure_ascii=False)}\n\n"
 
@@ -876,6 +916,8 @@ async def session_chat_stream(
                 usage_acct.add_usage(turn_usage, _usage, prompt_chars=_chars)
         turn_tool_calls = 0
         turn_finish_reason = None
+        # One guard for the turn, which both loops below reach through _call_tool.
+        repeats = repeats_mod.RepeatGuard() if repeats_mod.enabled() else None
 
         delegated = getattr(service, "provider", None) == "claude-code"
         if delegated:
@@ -888,9 +930,10 @@ async def session_chat_stream(
                 events, entry, llm_text = await _call_tool(
                     service, db, session, session_id, tools, tool_context, name, args,
                     iteration=turn_no, audit_actor=audit_actor, audit_http=audit_http, call_id=call_id,
+                    repeats=repeats,
                 )
                 tool_calls_log.append(entry)
-                return events, llm_text
+                return events, tool_results.for_model(name, llm_text, limits.tool_result_chars(service))
 
             cc_prompt_chars = usage_acct.prompt_chars(messages, tools)
             try:
@@ -1062,6 +1105,7 @@ async def session_chat_stream(
                     events, log_entry, tool_message_content = await _call_tool(
                         service, db, session, session_id, tools, tool_context, function_name, function_args,
                         iteration=iteration, audit_actor=audit_actor, audit_http=audit_http, call_id=call_id,
+                        repeats=repeats,
                     )
                     for event in events:
                         yield event
@@ -1072,7 +1116,7 @@ async def session_chat_stream(
                         "tool_call_id": tc_dict["id"],
                         "role": "tool",
                         "name": function_name,
-                        "content": tool_message_content
+                        "content": tool_results.for_model(function_name, tool_message_content, limits.tool_result_chars(service))
                     })
 
                 continue
@@ -1151,11 +1195,19 @@ async def session_chat_stream(
         dump("[DUMP] Full message preview", full_message[:200])
         
         # Assistant 메시지 저장 (tool call 정보 포함 - 전체 결과)
-        await db.add_message(
+        saved_answer = await db.add_message(
             session_id, "assistant", full_message, tool_calls=tool_calls_log or None,
             usage=usage_acct.message_usage(turn_usage, model=getattr(service, "model", None)),
         )
         answer_saved = True
+        # The saved answer and the next turn's history keep the placeholders; the screen of the person who asked puts
+        # these values in their place while it draws this answer, until a reload. Written to no log or row.
+        if answer_numbers is not None and (shown := answer_numbers.revealed(full_message)):
+            event = {'mask_values': shown}
+            if isinstance(getattr(saved_answer, 'id', None), int):
+                event['message_id'] = saved_answer.id
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            answer_numbers.values = {}
         log.debug("[DEBUG] Message saved to DB")
 
         await _audit_chat_complete(

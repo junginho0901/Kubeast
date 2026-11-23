@@ -65,7 +65,7 @@ export function ResourceModal({
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, options?: Record<string, any>) =>
     t(key, { defaultValue: fallback, ...options })
-  const na = tr('common.notAvailable', 'N/A')
+  const empty = tr('common.empty', '-')
   const none = tr('common.none', 'None')
   const { open: openDetail } = useResourceDetail()
   const [localPage, setLocalPage] = useState(1)
@@ -354,7 +354,7 @@ export function ResourceModal({
                           <div>
                             <h3 className="font-medium text-ink">{pvc.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
-                              {pvc.namespace} | {pvc.capacity || na} | {pvc.storage_class || na}
+                              {pvc.namespace} | {pvc.capacity || empty} | {pvc.storage_class || empty}
                             </p>
                           </div>
                           <span className={`badge ${pvc.status === 'Bound' ? 'badge-success' : 'badge-warning'
@@ -389,8 +389,8 @@ export function ResourceModal({
                           <div>
                             <h3 className="font-medium text-ink">{node.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
-                              {tr('dashboard.resourceModal.versionLabel', 'Version')}: {node.version || na} |
-                              {tr('dashboard.resourceModal.internalIpLabel', 'Internal IP')}: {node.internal_ip || na}
+                              {tr('dashboard.resourceModal.versionLabel', 'Version')}: {node.version || empty} |
+                              {tr('dashboard.resourceModal.internalIpLabel', 'Internal IP')}: {node.internal_ip || empty}
                               {node.roles && node.roles.length > 0 && ` | ${tr('dashboard.resourceModal.rolesLabel', 'Roles')}: ${node.roles.join(', ')}`}
                             </p>
                           </div>

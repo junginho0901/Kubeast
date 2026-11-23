@@ -73,7 +73,8 @@ export function resetSessionState(): void {
 // Ends the server session (the cookie is cleared by the response). Best-effort:
 // if the call fails the cookie simply expires with the token. The tab's floating
 // chat conversation is forgotten too, so the next sign-in starts a new one, and
-// the live connection and the chat streams of this session stop (resetSessionState).
+// the live connection, the chat streams and the values of the chat answers' placeholders of this session go
+// (resetSessionState, which signing in runs too).
 export function logoutSession({ asked }: { asked: boolean } = { asked: true }): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve()
   resetSessionState()

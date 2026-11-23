@@ -133,7 +133,8 @@ auth:
   # Kubernetes user impersonation: k8s-service and tool-server act toward every
   # cluster as the signed-in user (email) in groups kubeast:viewer/operator/admin,
   # so the cluster's RBAC decides and its audit log names the person. The
-  # Kubeast credential then only needs the "impersonate" verb.
+  # Kubeast credential then only needs the "impersonate" verb, and get on the
+  # kube-system Namespace, whose UID refuses registering one cluster twice.
   # clusterRoles renders files/impersonation-rbac.yaml (group → view/edit/
   # cluster-admin bindings) into this cluster; apply the same file to every
   # external cluster you register.
@@ -366,6 +367,14 @@ ai:
   # AI tools that change a cluster (delete/scale/apply/...) are never run from
   # the model's call directly: the user approves each one in the chat first.
   writeApproval: true
+  # A read the model makes again with the same tool and arguments within one
+  # chat answer or one alert investigation, less than 60 seconds after the
+  # first answered, is not run again: the model is told at which step it
+  # already has the result and to change the arguments to read anything new.
+  # Its ai.tool.call row has status repeated and repeat_of (that step). An
+  # investigation with call numbers names the call instead ([call N]) and the
+  # row adds repeat_of_call.
+  refuseRepeatedReads: false
   # The metrics, log, trace and timeline tools say why an empty answer may be
   # empty where they did not, "M of N" for a cut answer (or that the total is
   # not known), and the window read when the call named none; a read tool's
@@ -383,10 +392,20 @@ ai:
   # number masking; disable lists rule names to skip (key_name, private_key,
   # url_credentials, authorization, jwt, aws_key, provider_key, email, phone,
   # rrn, card). Error messages shown on screen or written to the audit log are
-  # masked with every credential rule, whatever these settings.
+  # masked with every credential rule, whatever these settings. numbered (with
+  # pii, off by default) reads each value as its kind and a number (<EMAIL_1>,
+  # <PHONE_1>, <RRN_1>, <CARD_1>) that stays the same within one chat answer or
+  # alert investigation; a later answer numbers past what the conversation
+  # shows, so the same value then gets a new number; a chat answer shows the
+  # person who asked the values in their place, kept in that page's memory and
+  # never saved; a write holding <PHONE_n>, <RRN_n> or <CARD_n> is refused like
+  # one holding <EMAIL_n>. Off: one address keeps one <EMAIL_n> within a text,
+  # the other kinds read <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, and
+  # no value is shown in a placeholder's place.
   redaction:
     enabled: true
     pii: false
+    numbered: false
     disable: []
   # Chat history sent to the model: the last historyMessages user/assistant
   # messages verbatim; with summary.enabled, everything before them is folded
@@ -409,6 +428,18 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  toolResultsJSON: false  # true: the model reads each tool result as one JSON object naming its tool, cluster text as JSON strings (docs/ai-alerts.md "Planted instructions")
+  # The AI tool timeline's changes view (view: changes — what changed in a
+  # window: rollouts compared with the revision before, ConfigMap and Secret
+  # writes as metadata, Helm revisions, HPA scales, node conditions, Argo CD
+  # syncs, restarts; no value read) and the chat's instruction to read it first
+  # when asked why something broke. Off: the chat, alert investigations and the
+  # MCP server are offered timeline without it, the chat's instructions do
+  # not name it, a call naming the view is sent without it and k8s-service's
+  # changes routes answer 404 — unless alert investigations are on with
+  # features.alertInvestigation.changesFirst, whose step 0 reads them; the chat
+  # still sends its calls without the view.
+  timelineChanges: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
@@ -518,10 +549,10 @@ audit:
   # Tamper evidence for the audit rows (internal/auditchain): auth-service
   # chains every row to the one sealed before it (sha256, every sealSeconds)
   # and, when anchor.sink names an s3 sink above, writes the chain head there
-  # as a digest every anchor.hours (under <prefix>digests/). Admin → Audit log
-  # shows the chain state, verifies a range and anchors on demand. Turn on
-  # Object Lock on that bucket: the digest outside the database is what a
-  # rewritten database cannot match.
+  # as a digest every anchor.hours, a whole number (under <prefix>digests/).
+  # Admin → Audit log shows the chain state, verifies a range and anchors on
+  # demand. Turn on Object Lock on that bucket: the digest outside the
+  # database is what a rewritten database cannot match.
   integrity:
     enabled: true
     sealSeconds: 10
@@ -590,8 +621,8 @@ postgresql:
   # connection: set 0 there and put the limits in the proxy's initialization query or on the database role. The
   # schema migrations always run without the statement and lock limits, also when the role sets them. Through
   # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
-  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's) does not stay with
-  # the client that made it.
+  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's, k8s-service's health
+  # status lock) does not stay with the client that made it.
   # sessionLimits, pool and maxConnections: stage beta, a long database outage has not been tested with them yet
   # (docs/configuration.md "Stages of new values").
   sessionLimits:
@@ -696,7 +727,7 @@ autoscaling:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
-# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (behind an AWS ALB the default 5 s was enough).
+# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (AWS ALB: 25 with a 20 s deregistration delay).
 # Stage: beta, tested: Kubernetes 1.29 refuses the preStop wait, set 0 there (docs/configuration.md "Stages of new values").
 podShutdown:
   preStopSeconds: 5
@@ -946,7 +977,8 @@ features:
   # it is not held to maxPerHour and has its own daily budget, none by
   # default. One investigation took about 60,000 tokens when measured (657
   # runs on a dev install, Claude Haiku 5.5 averaged 66,424), so 200000 is
-  # about three a day.
+  # about three a day — fewer with evidenceCheck or ledger on, whose
+  # instruction goes with every model call and which may ask once more.
   alertInvestigation:
     enabled: false
     # true refuses the shared token: every receiver must send its cluster's own.
@@ -959,11 +991,43 @@ features:
     dailyTokenBudget: 200000  # the webhook's investigations, per UTC day; 0 = no budget
     manualDailyTokenBudget: 0  # "Investigate now" investigations, per UTC day; 0 = no budget (the permission decides who)
     providerPauseMinutes: 30  # after the model provider refuses for credit or the key, new alerts are skipped this long; 0 = no pause
-    maxSteps: 8               # model calls per investigation; the last one gets no tools
+    maxSteps: 8               # model calls per investigation (+1 when evidenceCheck or ledger asks again); the last one gets no tools
     timeoutSeconds: 300
+    # The time windows below, the scope groups (affected, checked and normal,
+    # changed for another reason, not looked at), facts kept apart from
+    # hypotheses and the report's six headings, in the prompt.
+    rules: false
+    # Step 0: before the first model call, the timeline tool's changes view
+    # over the change window goes into the first message (an audited tool call,
+    # no model step). Writes the windows too.
+    changesFirst: false
+    # Step 0, after the changes: anomaly_rank (features.anomalyRank) over the
+    # metrics window of the alert's namespace goes into the first message (an
+    # audited tool call, no model step; its store queries and seconds are
+    # features.anomalyRank's). Writes the windows too.
+    narrowFirst: false
+    # The report ends with a block the server takes out and keeps: the causes,
+    # the path from cause to symptom, what was ruled out and the hypotheses
+    # weighed, each closed as cause, symptom, ruled out or blocked with the
+    # calls for and against it (asked once more without tools while one is
+    # open). The report window shows them under the report. One block with
+    # evidenceCheck: both on, the model is asked again at most once.
+    ledger: false
+    window:                   # counted from the alert's start; ends are never past now
+      metricsMinutes: 15      # metrics this long either side of the start (1–360)
+      logsMinutes: 5          # logs from this long before the start (0–1440)
+      changesHours: 4         # changes from this long before the start (1–168)
     model: ""                 # ModelConfig name; empty = the default model
     language: en              # report language (en, ko, …)
     consoleUrl: ""            # e.g. https://kubeast.example.com — links in the audit summary; empty = no link
+    # The report ends with a block of its causes, each with the numbers of the
+    # tool calls that show it; before the report is kept, the server checks
+    # that those calls answered, hold the cause's name and that it does not
+    # start after the alert. Otherwise one more model call without tools asks
+    # for the report again, and what still fails is listed under the report as
+    # not verified. The block is taken out of the kept report and kept as the
+    # report's result. One block with ledger: both on, one second ask.
+    evidenceCheck: false
     inbox:
       staleAfterHours: 8      # a firing alert with no notification for this long shows "status unknown"; twice your repeat_interval
     # More read-only rules for the investigator, appended to the
@@ -978,6 +1042,30 @@ features:
     #   resources: [policyreports, clusterpolicyreports]
     #   verbs: [get, list, watch]
     extraRules: []
+  # Narrowing for the AI (the tool anomaly_rank, GET
+  # /namespaces/{namespace}/anomalies, read as the caller like a list): what
+  # differs in one namespace between a window and the window of the same length
+  # before it — failing objects, terminations by reason, restarts, CPU
+  # throttling, memory against the limit, error log shapes and counts, the
+  # services' requests, failed requests and p90 from their server spans, node
+  # pressure — ranked, at most ten. The metric checks read the cluster's
+  # Prometheus (kube-state-metrics and cAdvisor names), the log checks the log
+  # store (features.logSearch) and the trace checks the trace store
+  # (features.traceStore), each through the door of its own tools
+  # (resource.pod.read, get pods/log, audited as k8s.pod.logs.logql and
+  # k8s.traces.query); without one, its checks are listed as not run. Off: the
+  # route answers 404, reads nothing, the AI is not offered the tool and the
+  # chat's system prompt and the MCP tool list do not name it.
+  anomalyRank:
+    enabled: false
+    maxQueries: 12           # store queries one answer may make
+    checkTimeoutSeconds: 5   # each check
+    timeoutSeconds: 20       # the whole answer
+    concurrency: 4           # checks at once
+    cacheSeconds: 60         # the same caller, namespace and window answered from memory
+    # The log checks ask the log store's index first (Loki's index stats) and
+    # do not read past this many bytes over both windows (10 GiB).
+    logMaxBytes: 10737418240
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,
@@ -1064,6 +1152,10 @@ features:
     # k8s.pod.logs.logql. Off unless asked. (The AI's loki_* tools do not
     # depend on this switch.)
     logql: false
+    # The AI's loki_query asks the store's index first (Loki's index stats,
+    # mcp-grafana's lokiguard way) and is refused, with how to narrow it, past
+    # this many bytes. 0 = not asked: the query runs as it always did.
+    queryMaxBytes: 0
     # With networkPolicy on, k8s-service reaches outside the cluster on 443
     # and 6443 only; a store on another port needs {cidr, port} here. A store
     # behind a Service of this cluster: on EKS VPC CNI its ClusterIP (§15).
@@ -1188,6 +1280,21 @@ features:
     timeout: 15s
     perUserPerMinute: 20
     egress: []
+  # Who calls whom for the AI (off by default): resource_graph with include
+  # calls adds the calls between a namespace's workloads over a range (1m-24h)
+  # from the traces' service graph metrics (traces_service_graph_request_total,
+  # _failed_total, _server_seconds — Tempo's metrics-generator or the
+  # servicegraph connector of the OpenTelemetry Collector or Alloy, written to
+  # the cluster's Prometheus) and the Hubble metrics the Resource Graph's lines
+  # read, with the failing workloads that call nothing failing first and the
+  # paths from them to their failing callers; alert investigations are told to
+  # read it when several workloads fail and to write the cause → … → symptom
+  # path with the step of each link. Read as the user: the traces need a grant
+  # on the whole cluster (as the Prometheus reads), the Hubble lines
+  # resource.networkflow.read. Off: include calls reads nothing and says so,
+  # and the AI (the chat, investigations and the MCP tool list) is not offered it.
+  callGraph:
+    enabled: false
   # Alert store reads for the AI's alerts_list (off by default): an
   # Alertmanager's API v2 at url (http://alertmanager.monitoring:9093), a
   # Grafana data source proxy to one (https://<grafana>/api/datasources/proxy/uid/<Alertmanager UID>)
@@ -1262,6 +1369,17 @@ multicluster:
   # wsMaxSubscriptionsPerConn those of one browser tab.
   wsMaxSubscriptions: 2000
   wsMaxSubscriptionsPerConn: 50
+  # Terminals (pod exec, node shell) and followed logs (a container's output, a
+  # log file) one account may hold open at once on each k8s-service (on
+  # k8s-service-stream with streams on); one past it is refused before it opens,
+  # and the screen says why. 0 = no cap; the chart refuses a value below 0. A
+  # screen opens at most two of each at once (Cluster View's pod window and a
+  # drawer): 20 is ten browser tabs of that. Counted in each pod: with N pods an
+  # account may hold up to N times as many, but the followed logs of a pod that
+  # leaves move to the pods that stay, so count on the cap.
+  # Stage: beta, tested: the stream-caps e2e on the kind dev install with the defaults (2026-11-19) (docs/configuration.md "Stages of new values").
+  maxTerminalsPerAccount: 20
+  maxFollowedLogsPerAccount: 20
   # How many watches of one cluster may be waiting for the API server's first
   # answer at once; the rest wait, so a restart does not bring every subscription
   # to the API server at one moment. A start not answered in 5 s gives its place

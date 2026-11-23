@@ -24,6 +24,9 @@ import (
 type ToolCallRequest struct {
 	Name      string                 `json:"name"`
 	Arguments map[string]interface{} `json:"arguments"`
+	// Masks is the personal-data number table of the chat answer or investigation this call is part of
+	// (services/pkg/redact.Numbers): its values keep their numbers here, and the table comes back in the response.
+	Masks *redact.Numbers `json:"masks,omitempty"`
 }
 
 type ToolCallResponse struct {
@@ -32,6 +35,14 @@ type ToolCallResponse struct {
 	// Redacted says what was masked in Content before it leaves for the model
 	// (services/pkg/redact); ai-service copies it into the audit row.
 	Redacted *redact.Stats `json:"redacted,omitempty"`
+	// Masks is the request's number table with what this answer numbered, only when the request sent one. It holds
+	// keys and numbers, no value; ai-service keeps it for the next call and writes it nowhere.
+	Masks redact.NumberTable `json:"masks,omitempty"`
+	// Values is placeholder → value for what this answer numbered and Held the placeholders its text already held,
+	// only when the request's masks ask reveal: the chat stream shows them to the person who asked, whose identity the
+	// call ran as (redact.Numbers.Values, Held). Never for a request without it: investigations and MCP.
+	Values map[string]string `json:"values,omitempty"`
+	Held   []string          `json:"held,omitempty"`
 	// Access is the identity the call reached the cluster as, set once the
 	// tool ran (also when it failed); shown next to the call and audited.
 	Access *auth.Access `json:"access,omitempty"`
@@ -109,8 +120,8 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 
 	// The arguments are the model's: refuse anything that kubectl would read
 	// as a flag instead of a name (argcheck.go) before touching the cluster.
-	if err := validateToolArgs(req.Arguments); err != nil {
-		respondToolError(w, http.StatusBadRequest, err.Error(), nil, nil)
+	if err := validateCallArgs(req.Name, req.Arguments); err != nil {
+		respondToolError(w, http.StatusBadRequest, err.Error(), nil, nil, req.Masks)
 		return
 	}
 
@@ -118,29 +129,29 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 	// asks for this call; ai-service's tool filtering is not trusted on its own.
 	payload, status, err := authorizeToolCall(toolAuth, r.Header, req.Name, clusterID, req.Arguments)
 	if err != nil {
-		respondToolError(w, status, err.Error(), nil, nil)
+		respondToolError(w, status, err.Error(), nil, nil, req.Masks)
 		return
 	}
 	if err := namespaceGate(payload, clusterID, req.Name, req.Arguments); err != nil {
-		respondToolError(w, http.StatusForbidden, err.Error(), nil, nil)
+		respondToolError(w, http.StatusForbidden, err.Error(), nil, nil, req.Masks)
 		return
 	}
 	if err := maskedWriteGate(req.Name, req.Arguments); err != nil {
-		respondToolError(w, http.StatusBadRequest, err.Error(), nil, nil)
+		respondToolError(w, http.StatusBadRequest, err.Error(), nil, nil, req.Masks)
 		return
 	}
 	if status, err := approvalGate(r.Header, req.Name, clusterID, payload, req.Arguments); err != nil {
-		respondToolError(w, status, err.Error(), nil, nil)
+		respondToolError(w, status, err.Error(), nil, nil, req.Masks)
 		return
 	}
 
 	kcPath, protected, err := resolveClusterAccess(ctx, clusterID, r.Header)
 	if err != nil {
-		respondToolError(w, http.StatusBadGateway, "cluster kubeconfig: "+err.Error(), nil, nil)
+		respondToolError(w, http.StatusBadGateway, "cluster kubeconfig: "+err.Error(), nil, nil, req.Masks)
 		return
 	}
 	if err := protectedToolGate(payload, clusterID, protected, req.Name, req.Arguments); err != nil {
-		respondToolError(w, http.StatusForbidden, err.Error(), nil, nil)
+		respondToolError(w, http.StatusForbidden, err.Error(), nil, nil, req.Masks)
 		return
 	}
 	// kubectl runs as the validated user in the routed cluster.
@@ -172,8 +183,8 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 			return
 		}
 		defer release()
-		text, stats := redactToolOutput(message)
-		respondJSON(w, status, ToolCallResponse{Error: text, Redacted: addReadMasks(stats, masked), Access: &access, Requests: trailOf(rec)})
+		text, stats := maskToolOutput(message, req.Masks)
+		respondJSON(w, status, ToolCallResponse{Error: text, Redacted: addReadMasks(stats, masked), Masks: req.Masks.Copy(), Values: req.Masks.Values(), Held: req.Masks.Held(), Access: &access, Requests: trailOf(rec)})
 		return
 	}
 
@@ -185,8 +196,8 @@ func handleCall(w http.ResponseWriter, r *http.Request, tools map[string]ToolDef
 		return
 	}
 	defer release()
-	content, stats := redactToolOutput(output)
-	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: addReadMasks(stats, masked), Access: &access, Requests: trailOf(rec)})
+	content, stats := maskToolOutput(output, req.Masks)
+	respondJSON(w, http.StatusOK, ToolCallResponse{Content: content, Redacted: addReadMasks(stats, masked), Masks: req.Masks.Copy(), Values: req.Masks.Values(), Held: req.Masks.Held(), Access: &access, Requests: trailOf(rec)})
 }
 
 // bigAnswerBytes: an answer past this is masked and written holding one of bigAnswerSlots; the output cap is 1 MiB.
@@ -223,7 +234,7 @@ func answerWithoutPlace(w http.ResponseWriter, req context.Context, size int, ac
 	if req.Err() != nil {
 		return
 	}
-	respondToolError(w, http.StatusServiceUnavailable, fmt.Sprintf("tool-server is busy: this answer (%d bytes) waited for one of the %d places for big answers until it could no longer be sent in time, so it was not sent; ask again", size, bigAnswerSlots.Cap()), access, requests)
+	respondToolError(w, http.StatusServiceUnavailable, fmt.Sprintf("tool-server is busy: this answer (%d bytes) waited for one of the %d places for big answers until it could no longer be sent in time, so it was not sent; ask again", size, bigAnswerSlots.Cap()), access, requests, nil)
 }
 
 func trailOf(rec *accesstrail.Recorder) *accesstrail.Trail {
@@ -236,16 +247,22 @@ func trailOf(rec *accesstrail.Recorder) *accesstrail.Trail {
 
 // respondToolError answers a failed call. Its text is the tool's output too (a failed command's stdout, a refused patch)
 // and bound for the same places, so it is masked the same way.
-func respondToolError(w http.ResponseWriter, status int, message string, access *auth.Access, requests *accesstrail.Trail) {
-	text, stats := redactToolOutput(message)
-	respondJSON(w, status, ToolCallResponse{Error: text, Redacted: stats, Access: access, Requests: requests})
+// masks is the request's number table, nil when it sent none.
+func respondToolError(w http.ResponseWriter, status int, message string, access *auth.Access, requests *accesstrail.Trail, masks *redact.Numbers) {
+	text, stats := maskToolOutput(message, masks)
+	respondJSON(w, status, ToolCallResponse{Error: text, Redacted: stats, Masks: masks.Copy(), Values: masks.Values(), Held: masks.Held(), Access: access, Requests: requests})
 }
 
 // redactToolOutput masks one tool's output: a JSON answer string by string, so what a string holds is seen as itself.
 func redactToolOutput(output string) (string, *redact.Stats) {
-	content, stats, isJSON := redact.JSON(output, redactOpts)
+	return maskToolOutput(output, nil)
+}
+
+// maskToolOutput is redactToolOutput numbering personal data with the request's table (nil: numbers of this answer).
+func maskToolOutput(output string, masks *redact.Numbers) (string, *redact.Stats) {
+	content, stats, isJSON := redact.JSONNumbered(output, redactOpts, masks)
 	if !isJSON {
-		content, stats = redact.Text(output, redactOpts)
+		content, stats = redact.TextNumbered(output, redactOpts, masks)
 	}
 	if stats.Count == 0 {
 		return content, nil

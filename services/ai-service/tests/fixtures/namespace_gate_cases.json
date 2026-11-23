@@ -442,6 +442,69 @@
    "refused": "spans the cluster"
   },
   {
+   "tool": "anomaly_rank",
+   "args": {},
+   "refused": "namespace is required"
+  },
+  {
+   "tool": "anomaly_rank",
+   "args": {
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "anomaly_rank",
+   "args": {
+    "namespace": "web"
+   },
+   "refused": ""
+  },
+  {
+   "tool": "anomaly_rank",
+   "args": {
+    "namespace": "db"
+   },
+   "refused": "outside your grant"
+  },
+  {
+   "tool": "anomaly_rank",
+   "args": {
+    "namespace": " shop "
+   },
+   "refused": ""
+  },
+  {
+   "tool": "anomaly_rank",
+   "args": {
+    "all_namespaces": true
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "anomaly_rank",
+   "args": {
+    "all_namespaces": "true"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "anomaly_rank",
+   "args": {
+    "all_namespaces": true,
+    "namespace": "shop"
+   },
+   "refused": "spans the cluster"
+  },
+  {
+   "tool": "anomaly_rank",
+   "args": {
+    "all_namespaces": false,
+    "namespace": "shop"
+   },
+   "refused": ""
+  },
+  {
    "tool": "audit_integrity",
    "args": {},
    "refused": "spans the cluster"

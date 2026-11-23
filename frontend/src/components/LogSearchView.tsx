@@ -294,7 +294,7 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
                   <span className="min-w-0 whitespace-pre-wrap wrap-break-word" data-testid="logsearch-line-text">
                     {highlightParts(l.line, submitted?.q ?? '', submitted?.regex ?? false, submitted?.ignoreCase ?? false).map((p, j) =>
                       p.match ? (
-                        <mark key={j} className="bg-amber-500/30 text-amber-100 rounded-sm">{p.text}</mark>
+                        <mark key={j} className="bg-amber-500/30 text-amber-200 rounded-sm">{p.text}</mark>
                       ) : (
                         <span key={j}>{p.text}</span>
                       ),
