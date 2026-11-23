@@ -50,7 +50,7 @@ class AuditUnavailable(Exception):
     """The audit database cannot take a row right now (fail-closed refusal)."""
 
 
-# One probe per READY_TTL seconds; a failed write drops the cache (see write_audit).
+# One probe per READY_TTL seconds; a failed write drops the cache and a landed one sets it ready (see write_audit).
 READY_TTL_SEC = 2.0
 _ready_cache: dict[str, Any] = {"at": 0.0, "ok": True, "error": None}
 write_failures = 0
@@ -160,6 +160,14 @@ def _record(
     }
 
 
+def _landed() -> None:
+    """A row landed, so the audit table takes rows: writes count as working and a refusal readiness cached a moment
+    ago ends now instead of READY_TTL_SEC later."""
+    global _write_broken
+    _write_broken = False
+    _ready_cache.update(at=time.monotonic(), ok=True, error=None)
+
+
 def _write_failed(action: str, exc: BaseException) -> None:
     global write_failures, _write_broken
     write_failures += 1
@@ -172,14 +180,13 @@ async def commit_row(conn: Any, **fields: Any) -> None:
     """Commit the caller's transaction holding the row write_audit(**fields, conn=conn) added. Only then is that row
     mirrored to stdout and counted as landed, so an attempt the table refused, rolled back and tried again later prints
     nothing. A commit that fails counts as a failed write (readiness probes a write next) and raises."""
-    global _write_broken
     try:
         await conn.commit()
     except Exception as exc:
         _write_failed(fields.get("action", ""), exc)
         raise
     _emit_stdout(_record(**fields))
-    _write_broken = False
+    _landed()
 
 
 _INSERT_SQL = text(
@@ -233,7 +240,6 @@ async def write_audit(
     doesn't exist and we skip silently. `cluster` is the cluster the request
     acted on; callers that do not know it leave it unset (stored empty).
     """
-    global _write_broken
     if conn is None:
         _emit_stdout(_record(
             action=action, actor_user_id=actor_user_id, actor_email=actor_email, target_type=target_type, target_id=target_id,
@@ -271,7 +277,7 @@ async def write_audit(
             return True
         async with db.engine.begin() as own:
             await own.execute(_INSERT_SQL, params)
-        _write_broken = False
+        _landed()
         return True
     except Exception as exc:
         _write_failed(action, exc)
