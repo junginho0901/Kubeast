@@ -493,7 +493,7 @@ Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려
 - 먼저 `index/stats`로 기간과 그 앞 구간의 그 네임스페이스 스트림 양을 묻습니다. `features.anomalyRank.logMaxBytes`(10 GiB)를 넘거나, 줄이 하나도 없거나, Loki가 그 API를 주지 않으면 두 검사 모두 못 함으로 적힙니다.
 - 오류 모양 검사는 같은 스트림의 `patterns`를 두 구간에 걸쳐 읽습니다. Loki의 `level`이 error·fatal·critical이거나, level이 없고 모양에 `error`·`exception`·`fatal`·`panic`이 있으면 오류 모양으로 칩니다. 앞 구간의 패턴이 Loki에 없으면(위의 최근 3시간) 못 함으로 적힙니다.
 - 오류 줄 수 검사는 `sum by (<컨테이너 라벨>) (count_over_time({…} |~ "(?i)(error|exception|fatal|panic)" [<기간>]))`를 기간 길이를 step으로 한 번 돌립니다. 스트림에 `features.logSearch.labels`의 컨테이너 라벨이 있어야 합니다.
-- 워크로드를 주면 두 검사 모두 파드 라벨(`<이름>-.*`)로 그 파드만 봅니다.
+- 워크로드를 주면 두 검사 모두 파드 라벨로, 그 컨트롤러가 붙이는 이름의 파드만 봅니다: Deployment는 `<이름>-<pod-template-hash>-<5글자>`, ReplicaSet·DaemonSet은 `<이름>-<5글자>`, Job은 그것 또는 `<이름>-<인덱스>-<5글자>`, CronJob은 그 Job 이름 `<이름>-<예약 시각(분)>`(Kubeast의 실행 버튼이면 `<이름>-manual-<유닉스 초>`) 뒤에 같은 꼴, StatefulSet은 `<이름>-<순번>`이고, 긴 이름은 API 서버가 자르는 대로 자릅니다. 이름 앞부분이 같은 다른 워크로드(`cart`와 `cart-api`)는 빠지고, 지표 검사도 `pod` 라벨을 같은 규칙으로 맞춥니다.
 - 로그 도구와 같은 문을 지납니다: `resource.pod.read`, 그 네임스페이스의 `get pods/log`, 노드 셸 네임스페이스는 `resource.node.shell`이 있는 사람만, 두 구간 합이 `features.logSearch.maxRange` 안. 답 하나가 사용자별 횟수 제한의 검색 한 번이고 `k8s.pod.logs.logql` 감사 행 하나입니다.
 
 - **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 수집기가 있어야 합니다.
@@ -521,7 +521,7 @@ Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려
   - 지표에서는 Tempo `query_frontend.query_end_cutoff`(기본 30초)와 step만큼 최근 구간이 빠집니다. 이 값은 `/status/config`에서 확인할 수 있습니다.
   - 읽기 권한은 로그 검색과 같이 사용자 신원의 `get pods/log`입니다.
   - 미리 좁히기의 트레이스 검사(`anomaly_rank`)는 기간과 그 앞 구간에 TraceQL 지표 질의 셋을 돌립니다: `{ kind = server } | count_over_time()`, 같은 질의에 `status = error`, `quantile_over_time(duration, .9)` — 모두 `by (resource.service.name)`.
-    스팬에 span kind와 `service.name`이, 워크로드를 주면 리소스에 `k8s.pod.name`(`<이름>-.*`)이 있어야 합니다.
+    스팬에 span kind와 `service.name`이, 워크로드를 주면 리소스에 `k8s.pod.name`(위 로그 검사와 같은 파드 이름)이 있어야 합니다.
     step은 각 구간을 정분 경계에서 4~120칸으로 나누고, 구간 경계에 걸친 칸은 읽지 않습니다.
     TraceQL 지표가 없거나 두 구간 합이 `features.traceStore.maxRange`를 넘으면 못 함으로 적힙니다. 답 하나가 `k8s.traces.query` 감사 행 하나입니다.
 - **AI 알림 읽기**(`features.alertStore`를 쓸 때): Kubeast는 알림 저장소의 `/api/v2/alerts`(매처 `filter`)와 `/api/v2/silences`를 GET으로 읽습니다.

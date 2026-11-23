@@ -483,7 +483,7 @@ The narrowing's log checks (`anomaly_rank`):
 - They ask `index/stats` for the namespace's streams over the window and the one before first. Past `features.anomalyRank.logMaxBytes` (10 GiB), with no line there, or when Loki does not serve it, both checks are listed as not run.
 - The error shape check reads `patterns` for the same streams over both windows. A shape counts as an error when Loki's `level` is error, fatal or critical, or when there is no level and the shape holds `error`, `exception`, `fatal` or `panic`. When Loki holds no pattern for the window before (the last 3 hours, above), the check is listed as not run.
 - The error line check runs `sum by (<container label>) (count_over_time({…} |~ "(?i)(error|exception|fatal|panic)" [<window>]))` once, with a step of the window's length. It needs the container label of `features.logSearch.labels` on the streams.
-- With a workload, both narrow to its pods by the pod label (`<name>-.*`).
+- With a workload, both narrow to its pods by the pod label, matching the names its controller gives them: a Deployment's `<name>-<pod-template-hash>-<5 letters>`, a ReplicaSet's and a DaemonSet's `<name>-<5 letters>`, a Job's that or `<name>-<index>-<5 letters>`, a CronJob's the same after its Job's `<name>-<schedule minute>` (or `<name>-manual-<unix second>`, Kubeast's trigger), a StatefulSet's `<name>-<ordinal>`, a long name cut as the API server cuts it. A workload whose name starts with the same words (`cart` and `cart-api`) is left out; the metric checks match the `pod` label the same way.
 - They pass the log tools' door: `resource.pod.read`, `get pods/log` in the namespace, the node shell namespace only for holders of `resource.node.shell`, and both windows within `features.logSearch.maxRange`. Each answer is one search of the per-user rate and one `k8s.pod.logs.logql` audit row.
 
 - **Collector**: something that sends the target cluster's container logs to Loki.
@@ -510,7 +510,7 @@ The narrowing's log checks (`anomaly_rank`):
   - Metrics leave out the most recent part of the range, by Tempo's `query_frontend.query_end_cutoff` (default 30 seconds) and the step. To check, see that value in `/status/config`.
   - Read permission is the same as for log search: `get pods/log` as the user's identity.
   - The narrowing's trace checks (`anomaly_rank`) run three TraceQL metrics queries over the window and the one before: `{ kind = server } | count_over_time()`, the same with `status = error`, and `quantile_over_time(duration, .9)`, each `by (resource.service.name)`.
-    The spans need their span kind and `service.name`; with a workload, `k8s.pod.name` on the resource (`<name>-.*`).
+    The spans need their span kind and `service.name`; with a workload, `k8s.pod.name` on the resource (the pod names of the log checks, above).
     The step cuts each window into 4 to 120 steps on whole minutes, and the steps on a window's bound are not read.
     Without TraceQL metrics, or past `features.traceStore.maxRange` over both windows, they are listed as not run. Each answer is one `k8s.traces.query` audit row.
 - **AI alert reading** (`features.alertStore`, when used): Kubeast reads the alert store's `/api/v2/alerts` (matcher `filter`) and `/api/v2/silences` with GET. When silence writing is on, it also writes (next item).

@@ -115,7 +115,7 @@ func TestQueriesParseAndStayInTheNamespace(t *testing.T) {
 					if m.Name == "namespace" && m.Value == "shop" {
 						ns = true
 					}
-					if m.Name == "pod" && m.Value == `web\.v2-.*` {
+					if m.Name == "pod" && m.Value == `web\.v2-[bcdfghjklmnpqrstvwxz2456789]{1,10}-[bcdfghjklmnpqrstvwxz2456789]{5}` {
 						pod = true
 					}
 				}
