@@ -58,11 +58,15 @@ func (t *Tracker) Owed() int {
 }
 
 // payOwed writes the owed end rows, oldest first, once the database answers (the store's Ping) and the audit store is
-// ready (audit.Readier); it stops at the first row not taken, left to the next try.
+// ready (audit.Readier); it stops at the first row not taken, left to the next try. It runs on the heartbeat's
+// goroutine after a beat, so it starts no row once a third of beatEvery has passed since it began and leaves the rest,
+// in their order, to the next tick: with the beat's opTimeout and the last row's, a tick ends within beatEvery, and an
+// audit store that takes rows slowly does not hold the next beat back.
 func (t *Tracker) payOwed(ctx context.Context) {
 	if t.Owed() == 0 || t.audit == nil {
 		return
 	}
+	began, payFor := t.now(), t.beatEvery/3
 	pctx, cancel := context.WithTimeout(ctx, opTimeout)
 	err := t.store.Ping(pctx)
 	cancel()
@@ -81,8 +85,12 @@ func (t *Tracker) payOwed(ctx context.Context) {
 			t.mu.Unlock()
 			return
 		}
-		next := t.owed[0]
+		next, owed := t.owed[0], len(t.owed)
 		t.mu.Unlock()
+		if t.now().Sub(began) >= payFor {
+			slog.Info("node shell: owed end rows left to the next beat", "owed", owed)
+			return
+		}
 		wctx, cancel := context.WithTimeout(ctx, opTimeout)
 		_, err := t.audit.Write(wctx, next.rec)
 		cancel()

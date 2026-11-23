@@ -109,6 +109,84 @@ func TestOwedEndRowsKeepTheirOrderAndABound(t *testing.T) {
 	}
 }
 
+// slowAudit takes every row, each after takes on the test clock: an audit store back after an outage, slow but
+// answering within opTimeout.
+type slowAudit struct {
+	auditRows
+	c     *clock
+	takes time.Duration
+}
+
+func (a *slowAudit) Write(ctx context.Context, rec audit.Record) (int64, error) {
+	a.c.add(a.takes)
+	return a.auditRows.Write(ctx, rec)
+}
+
+// Sixteen owed rows the audit store takes in 4 s each do not hold back the heartbeat of a shell opened once the
+// database was back. Each tick runs as beatLoop runs it (beat, then payOwed; a tick the ticker gave while the last one
+// ran comes at once) and another server, in contact all along, sweeps right before the next beat: the beats stay
+// beatEvery apart, the other server takes no row and deletes no pod, the owner closes nothing, and every owed row is
+// written once, oldest first.
+func TestSlowOwedRowsDoNotHoldTheHeartbeatBack(t *testing.T) {
+	c, store, p, _ := newWorld()
+	rows := &slowAudit{c: c, takes: 4 * time.Second}
+	other := &auditRows{}
+	a, b := server(c, store, p, rows, "a"), server(c, store, p, other, "b")
+	ctx := context.Background()
+	const rowsOwed = 16
+	for i := range rowsOwed {
+		a.owedSeq++
+		a.owed = append(a.owed, owedEnd{seq: a.owedSeq, rec: endRow(fmt.Sprintf("n%d", i))})
+	}
+	closed := false
+	open(t, a, p, "s1", func() { closed = true })
+
+	savedAt := func() time.Time { a.mu.Lock(); defer a.mu.Unlock(); return a.savedAt }
+	lastSaved, next := savedAt(), c.now().Add(beatEvery)
+	for tick := 0; ; tick++ {
+		if tick > rowsOwed {
+			t.Fatalf("%d rows still owed after %d ticks", a.Owed(), tick)
+		}
+		if now := c.now(); now.Before(next) {
+			c.add(next.Sub(now))
+		}
+		tickAt := c.now()
+		a.beat(ctx)
+		if gap := savedAt().Sub(lastSaved); gap > beatEvery {
+			t.Fatalf("tick %d: beat saved %s after the one before, want at most %s", tick, gap, beatEvery)
+		}
+		lastSaved = savedAt()
+		if a.Owed() == 0 {
+			break
+		}
+		a.payOwed(ctx)
+		inContact(b)
+		b.sweep(ctx)
+		if got := p.gone(); len(got) != 0 {
+			t.Fatalf("tick %d: the other server deleted %v while its server was writing owed rows", tick, got)
+		}
+		if took := c.now().Sub(tickAt); took > beatEvery {
+			t.Fatalf("tick %d took %s, want at most %s", tick, took, beatEvery)
+		}
+		next = tickAt.Add(beatEvery)
+	}
+	if r, ok := store.Rows()["s1"]; !ok || r.Owner != "a" || closed || !p.has("s1") {
+		t.Fatalf("row %+v kept %v, closed %v, pod %v: want the live shell left with its server", r, ok, closed, p.has("s1"))
+	}
+	got := rows.all()
+	if len(got) != rowsOwed {
+		t.Fatalf("written %d rows, want %d", len(got), rowsOwed)
+	}
+	for i, r := range got {
+		if want := fmt.Sprintf("n%d", i); r.TargetID != want {
+			t.Fatalf("row %d is %s, want %s: oldest first, each once", i, r.TargetID, want)
+		}
+	}
+	if len(other.all()) != 0 {
+		t.Fatalf("the other server wrote %v", other.reasons())
+	}
+}
+
 // Run pays what is owed at a beat tick once the store is back, and tries once more as it ends.
 func TestRunWritesTheOwedRowsAtABeatAndAsItEnds(t *testing.T) {
 	store := NewMemory(nil)
