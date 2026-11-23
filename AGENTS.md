@@ -114,8 +114,10 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 ## 여러 레플리카
 
 - 서비스는 레플리카 여러 개로 돌 수 있다([docs/ko/high-availability.md](docs/ko/high-availability.md)). 한 파드만 해야 하는 일(주기 작업 · 큐)은 프로세스 메모리가 아니라 DB로 차례를 정한다:
-  작업 동안 자기 연결에 쥐는 advisory lock(`pg_try_advisory_lock`, auth-service `internal/auditsink`), 트랜잭션 하나 동안의 lock(`pg_try_advisory_xact_lock`, `internal/auditchain`),
+  작업 동안 쥐는 advisory lock(`pg_try_advisory_lock`), 트랜잭션 하나 동안의 lock(`pg_try_advisory_xact_lock`, `internal/auditchain`),
   또는 `FOR UPDATE SKIP LOCKED`로 행을 가져가기(권한 요청 · 휴면 계정 정리, ai-service 알림 조사 큐). lock을 못 잡은 파드는 그 차례를 넘긴다.
+- 작업 동안 쥐는 lock은 풀 설정으로 만든 풀 밖 전용 연결에 두고(auth-service `internal/retention`, k8s-service `internal/pglock`) `kubeast.dbConnections`에 파드마다 1로 센다.
+  풀 연결에 쥐는 lock(auth-service 감사 싱크 `internal/auditsink`)은 쥐는 동안 풀 연결 하나를 차지해, 풀 1(다른 그런 lock 옆이면 2)에서는 작업 자신의 문 · 요청에 남는 연결이 없다.
 - 프로세스 안의 한도 · 캐시 · 카운터는 파드마다다(설치 전체로는 레플리카 수만큼 곱해진다). 설치 전체에서 지켜야 하는 값은 DB나 Redis에 둔다.
   그런 일이나 상태를 더하는 변경은 docs/high-availability.md(en · ko)에 파드가 무엇을 쥐는지 적는다.
 

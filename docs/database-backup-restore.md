@@ -159,6 +159,8 @@ Off by default: nothing is deleted unless you set a window. auth-service (the
 schema owner) purges once at boot and then every 24 hours, in batches of 5000
 rows, and records every run as the audit action `admin.retention.purge`
 (actor `system`, with the windows, cutoffs and deleted counts in `after`).
+Each window runs on its own: one that fails is named in `after.failed_windows`
+and makes the record a `failure`, and the windows after it still delete.
 PostgreSQL's autovacuum reuses the freed space; the files do not shrink.
 
 | values | env | deletes |
@@ -177,5 +179,8 @@ retention:
 Pick the audit window from your regulatory baseline (for example, Korea's
 personal-information safety standard requires access records to be kept for
 at least one year, two years for some processors). With more than one
-auth-service replica, every replica runs the purge. The deletes are idempotent,
-so the only effect is one audit record per replica per day.
+auth-service replica, each replica purges on its own daily schedule, one at a
+time: a run holds a PostgreSQL advisory lock until its audit record is written,
+and a replica whose turn comes while another runs skips that turn. A run after
+another replica's finds nothing left, so there is at most one audit record per
+replica per day, and one run's counts are never split over two records.

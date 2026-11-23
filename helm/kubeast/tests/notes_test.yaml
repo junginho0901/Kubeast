@@ -63,7 +63,7 @@ tests:
       postgresql.externalHost: db.example.com
     asserts:
       - matchRegexRaw:
-          pattern: can hold up to 154 connections to db\.example\.com
+          pattern: can hold up to 156 connections to db\.example\.com
 
   - it: prints nothing of it for the chart's PostgreSQL, which the install checks
     asserts:
@@ -78,7 +78,7 @@ tests:
       streams.replicas: 1
     asserts:
       - matchRegexRaw:
-          pattern: can hold up to 174 connections to db\.example\.com
+          pattern: can hold up to 176 connections to db\.example\.com
 
   - it: behind an AWS ALB that sends to pod IPs, with neither value set, says the chart set the 25 s wait and the 20 s delay and to keep 2 or more controller pods
     set:

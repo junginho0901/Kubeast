@@ -656,8 +656,8 @@ postgresql:
   # connection: set 0 there and put the limits in the proxy's initialization query or on the database role. The
   # schema migrations always run without the statement and lock limits, also when the role sets them. Through
   # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
-  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's, k8s-service's health
-  # status lock) does not stay with the client that made it.
+  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's, the retention purge's,
+  # k8s-service's health status lock) does not stay with the client that made it.
   # sessionLimits, pool and maxConnections: stage beta, a long database outage has not been tested with them yet
   # (docs/configuration.md "Stages of new values").
   sessionLimits:
@@ -674,9 +674,10 @@ postgresql:
     modelConfigController: { maxConns: 4 }
   # max_connections of the chart's PostgreSQL (postgresql.enabled; PostgreSQL's own default is 100). 300 holds the
   # default pools with 3 pods of each service: one more pod each while a rollout surges, so 4 × (20 + 20 + 10 + 15)
-  # = 260, 4 × 1 for k8s-service's health status lock, the controller's 2 × 4 = 8, the migration pool's 4 and 10 kept
-  # for psql and PostgreSQL's 3 superuser slots: 286. streams.enabled adds (streams.replicas + 1) ×
-  # pool.k8sService.maxConns, 20 by default: 306 with 3 pods of each, so raise maxConnections then.
+  # = 260, 4 × 1 for k8s-service's health status lock and 4 × 1 for auth-service's retention lock, the controller's
+  # 2 × 4 = 8, the migration pool's 4 and 10 kept for psql and PostgreSQL's 3 superuser slots: 290. streams.enabled
+  # adds (streams.replicas + 1) × pool.k8sService.maxConns, 20 by default: 310 with 3 pods of each, so raise
+  # maxConnections then.
   maxConnections: 300
 
 # --- Pod security (Pod Security Standards "restricted") ---
