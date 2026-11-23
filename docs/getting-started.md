@@ -329,7 +329,7 @@ The code is in `app/services/anthropic_messages.py`, and responses are converted
 - **Key**: kept in a `KUBEAST_AI_KEY_*` variable, it is sent as both the `Authorization: Bearer` header and the `api-key` header.
 - **Not supported**: the old per-deployment address (`…/openai/deployments/<deployment>`) and dated `api-version`. Saving and the connection test reject them and point to the v1 address. Entra ID token authentication is not available yet either.
 - **Private Link**: for resources that resolve to a private address through Private Link, add that host to `ai.baseUrlAllowedHosts`.
-- **CRD**: put the v1 address in `spec.baseURL` (or `azureOpenAI.azureEndpoint`) and the deployment name in `spec.model`. `apiVersion`, `azureDeployment` and `azureAdToken` remain for kagent compatibility but are not used.
+- **CRD**: put the v1 address in `spec.baseURL` and the deployment name in `spec.model`. The CRD has no `azureOpenAI` block, so the API server does not keep one.
 
 **Using a Claude subscription (provider `claude-code`, personal use)** lets you chat with the `claude setup-token` value of a Claude Pro/Max subscription instead of an API key.
 Only Claude Code accepts subscription tokens, so ai-service starts Claude Code for each model call (Claude Agent SDK, `app/services/claude_code.py`).
