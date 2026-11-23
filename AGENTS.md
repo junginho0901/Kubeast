@@ -149,6 +149,10 @@ _, _ = h.auditStore.Write(r.Context(), rec)
 - `auth.impersonation.enabled`가 켜지면 k8s-service의 클러스터 transport(`auth.ImpersonationRoundTripper`)는 문맥의 사람으로 보내고, 사람이 없는 요청은 `auth.AsKubeast` 표시(서버 버전 · 클러스터마다 모두에게 쓰는 디스커버리 · 상태 확인)가 없으면 보내지 않는다(`auth.ErrNoPerson`). 표시가 있어도 클러스터 서버 URL 경로 아래 `/version` · `/api` · `/apis` · `/api/v1` · `/apis/<group>/<version>`의 GET만 보내고 나머지는 같게 거절한다(`kubeastOwnRead`, `ImpersonationRoundTripperAt`). client-go 호출은 호출자 문맥을 넘긴다(`…WithContext(ctx)` — 문맥 없는 디스커버리 메서드는 안에서 `context.Background()`). 호출자가 자기 문맥으로 요청하는 config(Helm SDK · exec · 로그 파일)는 사람을 고정한다(`UserRESTConfigFor`, `auth.WithPinnedPerson`). informer · 공유 이벤트 · 노드 파드 읽기는 이 transport를 거치지 않는 `cacheClient`(고정 신원 `kubeast:cache`)로 읽는다. tool-server는 사람이 없으면 kubectl을 준비하지 않는다(`errNoPerson`). `TestEveryUserCallCarriesThePerson`이 개요 · 디스커버리 · cluster config · hygiene · watch · 고정 config · 상태 확인 읽기를 서버 URL 경로가 있을 때와 없을 때 보고, `TestKubeastOwnRequestsAreVersionAndDiscoveryReadsOnly`가 경로 · 메서드를 본다.
 - API 서버 프록시로 Service를 읽는 곳(Prometheus · OpenCost · Hubble Relay · Whisker)은 리다이렉트를 같은 API 서버의 그 Service 프록시 경로 안에서만 따라간다(`internal/proxypath` `Follow`, `internal/k8s`는 `proxyClient` · `proxyGet`) — client-go는 따라가는 요청마다 클러스터 자격 증명과 사람 머리를 다시 붙이고, API 서버는 다른 호스트를 가리키는 `Location`을 그대로 넘긴다. 주소로 읽는 흐름 저장소는 리다이렉트를 따라가지 않는다(`FollowNone`). 실패한 답의 몸통이 Kubernetes `Status`면 API 서버 자신의 답이고(`proxypath.APIServerAnswer`), 저장소 자신의 401 · 403은 로그아웃 · 거절이 아니라 502다. 새 Service 프록시 읽기도 이 둘을 쓴다.
 
+## 기본 모델
+
+- 아무도 고르지 않았을 때 쓰는 모델(차트 `ai.model`, ai-service 기본값, `install-docker.sh`, `.env.example`, `docker-compose.yml`, 첫 설정 화면 `SetupAIModelPage`, `scripts/kind-model-*.sh`)은 고정된 스냅샷 ID로 적는다. `scripts/check-model-pins.py`(CI)가 별칭이면 실패하고, 기본값 자리가 새로 생기면 그 목록에 넣는다(`docs/ko/development.md` "기본 모델").
+
 ## 컨테이너 exec
 
 - **서버가 `pods/exec`로 띄운 프로세스는 클라이언트가 끊겨도 컨테이너에 남는다**(TTY 유무와 무관, 컨테이너 런타임이

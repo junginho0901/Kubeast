@@ -180,6 +180,16 @@ uvicorn main:app --reload --port 8001
 pytest
 ```
 
+### 기본 모델
+
+아무도 고르지 않았을 때 설치나 개발 스크립트가 쓰는 모델은 고정된 스냅샷 ID로 적습니다. 그래야 설치된 뒤 그 뒤의 모델이 바뀌지 않습니다. 대상: 차트 `ai.model`(`gpt-6-luna`), ai-service의 `OPENAI_MODEL`·`ProviderAdapter` 기본값, `install-docker.sh`, `.env.example`, `docker-compose.yml`, 첫 설정 화면의 모델, `scripts/kind-model-*.sh`의 기본값. `python3 -I scripts/check-model-pins.py`(CI 잡 "default models are pinned snapshots")가 자리마다 읽고, 별칭이거나 자리를 못 찾으면 실패합니다.
+
+- Claude: 4.6 세대부터는 ID 하나하나가 고정된 스냅샷입니다(`claude-haiku-5-5`). 그 전 모델의 짧은 이름은 날짜가 붙은 ID의 별칭입니다(`claude-haiku-4-5` → `claude-haiku-4-5-20251001`).
+- OpenAI: 스냅샷은 날짜를 붙입니다(`gpt-4o-mini-2024-07-18`). `gpt-4o-mini`는 별칭입니다. OpenAI가 자기 ID를 유일한 스냅샷으로 적은 모델(`gpt-6-luna`)은 그 모델 문서를 보고 스크립트의 `_OPENAI_OWN_SNAPSHOT`에 넣습니다.
+- `latest`가 든 이름은 고정이 아닙니다. 다른 공급자는 그 공급자 문서에서 규칙을 스크립트에 더할 때까지 실패합니다.
+- 첫 설정 화면은 모델 고르기 목록(`frontend/src/constants/modelCatalog.ts`)의 고정된 항목에서 시작합니다. 목록의 나머지 항목은 사람이 고르는 목록이라 검사하지 않습니다.
+- 기본 모델을 바꾸는 PR은 그 PR에서 평가(`scripts/ai-eval.py`)를 돌립니다.
+
 ### 헬스 체크
 
 ```bash
