@@ -455,6 +455,43 @@ def test_each_status_gets_its_own_second_ask():
     assert status == "cut" and text.startswith("Your report was cut off before its rca block ended")
 
 
+def test_no_fault_beside_a_cause_is_an_invalid_block_with_either_check():
+    # the instruction's rule: with "no_fault": true, "causes" is [] — kind none is no cause
+    log = [{"tool": "k8s_get_resources"}]
+    reads = [evidence.Read("k8s_get_resources", {}, text="Deployment/shop/cart0")]
+
+    def check(block, **switches):
+        answer = "# Report\nSeveral causes found.\n```rca\n" + json.dumps(block) + "\n```"
+        return rca.check(answer, tool_log=log, reads=reads, alert_start=None, **switches)
+
+    both = {"no_fault": True, "causes": [{"resource": "Deployment/shop/cart0", "kind": "rollout", "evidence": [1]}]}
+    for switches in ({"evidence": True, "ledger": False}, {"evidence": False, "ledger": True}):
+        checked = check(both, **switches)
+        assert (checked.status, checked.block, checked.failures) == ("invalid", None, [{"kind": "block_invalid"}])
+        assert rca.ask_again(checked, rca.rows(log), **switches).startswith("Your rca block is not the JSON asked for")
+        shaped = inv_result.shape(checked.block, checked.status, log, checked.hypotheses, failures=checked.failures)
+        assert (shaped["status"], shaped["no_fault"], shaped["causes"]) == ("invalid", None, [])
+    assert check({"no_fault": True, "causes": [{"resource": "Pod/shop/x", "kind": "none", "evidence": []}]},
+                 evidence=True, ledger=False).status == "ok"
+    assert check({**both, "no_fault": False}, evidence=True, ledger=False).failures == []
+
+
+@pytest.mark.asyncio
+async def test_a_report_that_finds_no_fault_and_a_cause_is_asked_for_again(monkeypatch):
+    contradicts = "## Summary\nweb crashes.\n\n" + block([web_cause()], [web_hypothesis()], no_fault=True)
+    service = _service(_reads_pods(), completion(content=contradicts), completion(content=GOOD))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(**BOTH), row())
+    assert service.completions.calls[2]["messages"][-1]["content"].startswith("Your rca block is not the JSON asked for")
+    assert (out["result"]["status"], out["result"]["no_fault"], out["result"]["asked_again"]) == ("ok", False, True)
+
+    service = _service(_reads_pods(), completion(content=contradicts), completion(content=contradicts))
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(**BOTH), row())
+    assert (out["result"]["status"], out["result"]["no_fault"], out["result"]["causes"]) == ("invalid", None, [])
+    assert out["result"]["failures"] == [{"kind": "block_invalid"}]
+
+
 def test_a_cause_with_no_name_does_not_open_every_cause_hypothesis_with_no_name():
     answer = "## Summary\nx\n\n" + block([cause("", [])], [hypothesis(resource="", state="cause", **{"for": [1]})])
     checked = rca.check(answer, tool_log=[{"tool": "k8s_get_resources"}], reads=[evidence.Read("k8s_get_resources", PODS, text=POD_TABLE)],
