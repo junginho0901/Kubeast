@@ -37,11 +37,14 @@ Kubeast는 등록한 클러스터에 아무것도 설치하지 않습니다. 예
 | AI 트레이스 읽기 | 스팬을 Tempo로 보내는 수집기(리소스 속성 `k8s.cluster.name`·`k8s.namespace.name`), `pods/log` 읽기 권한 — §14 끝 | `features.traceStore.enabled`(끔) | `traces_*` 도구가 빠지고 API는 404 |
 | 위생·업그레이드 점검의 폐기 API 항목 | API 서버 `/metrics` 읽기 권한 — §11 | `features.hygiene.enabled`(켬) | 그 항목만 "수집 실패"로 표시 |
 | Argo CD 가드 | Argo CD 추적 어노테이션 — §12 | `gitops.argocd.enabled`(끔) | 배지·경고 없음 |
+| AI `timeline`의 `view: "changes"`(`ai.timelineChanges`) | 사용자의 ReplicaSet·ControllerRevision·ConfigMap·Secret(메타데이터만 요청, `as=PartialObjectMetadataList`)·HPA·파드·노드 `list`, Argo CD가 돌아가는 곳이면 `applications.argoproj.io` `list` — §1. `view`에는 Secret이 없어 Read는 Secret과 Helm 릴리스를 못 읽습니다. 네임스페이스 없이 부르면 전체 네임스페이스의 재시작에는 클러스터 전체 파드 `list`가 필요합니다(접근 검토로 확인) | — | 목록을 못 읽는 출처는 `summary.not_read`(전체 재시작은 `summary.skipped`)에 이름이 오르고 null로 셉니다. 나머지는 그대로 답합니다 |
 | NetworkPolicy 보기와 연결 확인 | NetworkPolicy를 강제하는 네트워크 플러그인, 관련 네임스페이스 읽기 권한 — §7 | — | 답은 정책이 말하는 것이지 클러스터가 하는 것이 아님. 규칙이 사용자가 읽지 못하는 네임스페이스 레이블을 쓰면 "알 수 없음" |
 | 최근 흐름(드로어, AI `network_flows`) | TLS로 서비스하는 Cilium Hubble Relay, Relay Service의 `services/proxy` create 권한 — §16 | `features.networkFlows.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 클러스터 권한이 없으면 403 |
 | 네트워크 차단(드로어, AI `network_drops`) | 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble 차단 지표 — §17 | Prometheus(§3) | 칸이 나오지 않고, 도구는 지표가 없다고 알려 줌 |
 | Resource Graph 통신 선 | 최근 흐름(§16), 또는 클러스터 Prometheus에 워크로드 레이블이 붙은 Hubble TCP·차단 지표 — §18 | `features.networkFlows` 또는 Prometheus | 전환이 나오지 않고, 없는 지표는 그래프에서 알려 줌 |
+| 미리 좁히기(AI `anomaly_rank`) | 이슈 점검처럼 읽는 파드·워크로드·이벤트·노드, 지표 검사에는 클러스터 Prometheus의 kube-state-metrics·cAdvisor 시리즈 — §3, 로그 검사에는 index stats와 패턴을 주는 로그 저장소, 트레이스 검사에는 TraceQL 지표를 주는 트레이스 저장소 — §14 | `features.anomalyRank.enabled`(끔) | 도구가 빠지고 API는 404. Prometheus나 그 시리즈가 없으면 지표 검사는 못 함으로 적히고, 네임스페이스로 한정된 권한에도 못 함으로 적힘. 로그·트레이스 저장소가 없거나 `get pods/log`가 없으면 그 검사들은 못 함으로 적힘. `features.callGraph`가 켜져 있으면 조회 한도가 남을 때 호출 관계 자료(§20)로 발견 차례를 정함 |
 | 상위 통신(드로어, AI `network_top_flows`) | EKS 클러스터의 Amazon CloudWatch Network Flow Monitor 모니터, 그 모니터를 조회할 수 있는 Kubeast의 AWS 신원, 사용자의 파드 `list` 권한 — §19 | `features.networkFlowMonitor.enabled`(끔) | 칸과 도구가 빠지고 API는 404. 파드 `list` 권한이 없으면 403. AWS가 Kubeast의 신원을 거부하면 502 |
+| AI 호출 관계(`resource_graph`의 include calls) | 클러스터 Prometheus의 트레이스 서비스 그래프 지표(Tempo metrics-generator 또는 OpenTelemetry Collector의 servicegraph 커넥터)와 §18의 Hubble 지표 — §20 | `features.callGraph.enabled`(끔) | 도구가 include calls 없이 제공됨. 없는 지표·권한은 답에 자료별로 적힘 |
 
 ## 1. 권한(RBAC) — 모든 대상 클러스터
 
@@ -66,7 +69,7 @@ Kubeast는 주소가 그 사람의 것인지 알 수 없습니다. `admin.users.
 **사람이 없는 요청.** 몇몇 읽기는 Kubeast 자체 읽기이고, 클러스터 감사 로그에는 Kubeast가 남습니다.
 
 - `Impersonate-User` 헤더 없이: 서버 버전, 클러스터마다 한 번 읽어 모두에게 쓰는 API 디스커버리, 상태 확인. `/version`, `/api`, `/apis`, `/api/v1`, `/apis/<group>/<version>`(클러스터 서버 URL에 경로가 있으면 그 뒤)의 `GET`만 이렇게 나갑니다. 그 밖에는 연결 확인(클러스터 등록, 새 kubeconfig, 연결 테스트)이 UID를 얻으려고 `kube-system` Namespace를 자격 증명 자신의 권한으로 이렇게 읽습니다(§1).
-- 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트와 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
+- 고정 신원 `kubeast:cache`(§1의 `view` 권한)로: 개요 informer, 목록을 볼 수 있는 모두에게 한 번 읽어 쓰는 객체 이벤트 · 타임라인과 이벤트 API의 네임스페이스나 클러스터 전체 이벤트 · 타임라인 롤아웃의 Deployment · ReplicaSet · ControllerRevision · 노드의 파드, Kubeast가 도는 클러스터를 가리는 `kube-system` UID, `metrics.k8s.io` 그룹 확인, Prometheus·OpenCost Service 찾기.
 
 그 밖의 요청은 로그인한 사람을 알 수 없으면 보내지 않고, kubectl 도구도 실행하지 않습니다.
 
@@ -182,6 +185,8 @@ discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server
   - Lens·Headlamp와 같은 `namespace/service:port` 형식으로 적습니다.
   - API가 하위 경로에 있으면 `namespace/service:port/경로`처럼 경로까지 적습니다(예: VictoriaMetrics 클러스터 `monitoring/vmselect-main:8481/select/0/prometheus`).
   - Kubeast는 API 서버 프록시로 읽고, 상태 API로 `/-/healthy` 연결 여부와 저장소 종류(`flavor`: prometheus·victoriametrics)를 알려 줍니다.
+  - Service가 리다이렉트로 답하면 같은 API 서버의 그 Service 프록시 경로 안에서만 따라갑니다. 프록시로 가는 요청마다 Kubeast의 클러스터 자격 증명과 사용자 신원이 실리므로 그 밖의 리다이렉트는 따라가지 않고, 읽기는 까닭과 함께 502로 답합니다.
+  - 저장소가 직접 쓴 401·403(앞에 둔 kube-rbac-proxy 같은 인증 프록시)은 로그아웃이나 거절이 아니라 저장소의 문구를 담은 502입니다. API 서버가 프록시를 거절한 것은 그대로 403입니다. 인증 프록시 뒤의 저장소는 주소와 인증으로 등록합니다.
   - 저장소 종류는 `/-/healthy` 응답 문구로 판단합니다.
 - **클러스터 안 자동 발견**: 아래 순서로 찾습니다. `/-/healthy`가 응답하면 그 Service를 쓰고, 결과는 클러스터마다 기억합니다. 찾았으면 10분, 못 찾았거나 찾다가 오류 · 시간 초과가 나면 1분입니다.
   - ① 모든 Namespace에서 레이블로 찾고, Service의 포트를 모두 시도합니다. 레이블 순서는 다음과 같습니다.
@@ -237,6 +242,7 @@ VictoriaMetrics는 Prometheus 질의 API를 그대로 제공하므로 화면과 
 | `container_cpu_usage_seconds_total`, `container_memory_working_set_bytes`(라벨 `namespace`·`pod`·`container`) | kubelet의 cAdvisor(`/metrics/cadvisor`) | 최적화 표, Pod·워크로드·Service·Namespace 드로어 |
 | `node_cpu_seconds_total`, `node_memory_MemAvailable_bytes`·`MemTotal_bytes`, `node_filesystem_avail_bytes`·`size_bytes`(`mountpoint="/"`), `node_load1`, `node_network_*_bytes_total`, `node_disk_*_bytes_total` — 또는 아래 hostmetrics 이름 | node-exporter 또는 OpenTelemetry Collector `hostmetrics` | 대시보드, 노드 드로어 |
 | `kube_pod_info`, `kube_pod_container_status_restarts_total`, `kube_horizontalpodautoscaler_status_current_replicas` | kube-state-metrics | 대시보드, Namespace·워크로드·HPA 드로어 |
+| kube-state-metrics의 `kube_pod_container_status_restarts_total`, `kube_pod_container_resource_limits`(`resource="memory"`), cAdvisor의 `container_cpu_cfs_periods_total`, `container_cpu_cfs_throttled_periods_total`, `container_memory_working_set_bytes`(라벨 `namespace`·`pod`·`container`) | kube-state-metrics, kubelet의 cAdvisor | AI의 미리 좁히기(`anomaly_rank`): 재시작, CPU 걸림, limit 대비 메모리 |
 | `kubelet_volume_stats_used_bytes`·`capacity_bytes`·`available_bytes` | kubelet `/metrics` — CSI 드라이버가 볼륨 통계를 내야 합니다(hostPath·local-path는 내지 않아 N/A) | 스토리지 분석 |
 | `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`·`FB_FREE`, `DCGM_FI_DEV_MEMORY_TEMP` | NVIDIA DCGM exporter | GPU 화면 |
 | `nginx_ingress_controller_request_duration_seconds_bucket` | ingress-nginx 컨트롤러 | Ingress 드로어 지연(P50/P95/P99) |
@@ -314,6 +320,7 @@ Read 사용자에게도 열어 주려면 이 주소를 §1의 `viewerProxyServic
 
 - **Kubeast가 찾는 방법**: 이름에 `opencost`가 들어간 Service 중 **포트 9003**인 것을 `opencost`·`kubecost`·`monitoring`·`cost` Namespace에서 찾고, `/healthz`로 확인합니다.
   - 찾은 결과는 10분, 찾지 못한 결과는 5분 동안 기억합니다.
+  - Prometheus Service(§3)와 같은 규칙으로 API 서버 프록시를 거쳐 읽습니다. 리다이렉트는 자기 프록시 경로 안에서만 따라가고, OpenCost가 직접 쓴 401·403은 502입니다.
 - **조건**: OpenCost는 Prometheus를 읽고, Prometheus는 OpenCost의 `/metrics`를 다시 수집해야 합니다. OpenCost가 내보내는 가격·클러스터 지표를 할당 계산에 쓰기 때문입니다.
 - **예시**: [`opencost-values.yaml`](../../deploy/examples/target-cluster/opencost-values.yaml) — §3 예시의 Prometheus를 읽도록 맞춘 값입니다.
 
@@ -475,11 +482,19 @@ receivers:
 
 ## 14. 로그 저장소 (로그 검색)
 
-Kubeast는 Loki의 `query_range`(AI의 `loki_query`는 메트릭 쿼리도 사용)·`labels`·`label/<이름>/values`·`patterns`를 읽기만 합니다.
+Kubeast는 Loki의 `query_range`(AI의 `loki_query`는 메트릭 쿼리도 사용)·`labels`·`label/<이름>/values`·`patterns`·`index/stats`(AI의 미리 좁히기 `anomaly_rank`가 로그 검사 전에, `features.logSearch.queryMaxBytes`를 정하면 `loki_query`도)를 읽기만 합니다.
 모두 GET이므로 Grafana 데이터소스 프록시로도 읽을 수 있습니다. Loki와 수집기는 설치하지 않습니다.
 
 패턴(`loki_patterns`)을 쓰려면 Loki에 `pattern_ingester: enabled: true`가 있어야 하며, 없으면 그 도구만 "없음"으로 답합니다.
 Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려줍니다.
+
+미리 좁히기의 로그 검사(`anomaly_rank`):
+
+- 먼저 `index/stats`로 기간과 그 앞 구간의 그 네임스페이스 스트림 양을 묻습니다. `features.anomalyRank.logMaxBytes`(10 GiB)를 넘거나, 줄이 하나도 없거나, Loki가 그 API를 주지 않으면 두 검사 모두 못 함으로 적힙니다.
+- 오류 모양 검사는 같은 스트림의 `patterns`를 두 구간에 걸쳐 읽습니다. Loki의 `level`이 error·fatal·critical이거나, level이 없고 모양에 `error`·`exception`·`fatal`·`panic`이 있으면 오류 모양으로 칩니다. 앞 구간의 패턴이 Loki에 없으면(위의 최근 3시간) 못 함으로 적힙니다.
+- 오류 줄 수 검사는 `sum by (<컨테이너 라벨>) (count_over_time({…} |~ "(?i)(error|exception|fatal|panic)" [<기간>]))`를 기간 길이를 step으로 한 번 돌립니다. 스트림에 `features.logSearch.labels`의 컨테이너 라벨이 있어야 합니다.
+- 워크로드를 주면 두 검사 모두 파드 라벨(`<이름>-.*`)로 그 파드만 봅니다.
+- 로그 도구와 같은 문을 지납니다: `resource.pod.read`, 그 네임스페이스의 `get pods/log`, 노드 셸 네임스페이스는 `resource.node.shell`이 있는 사람만, 두 구간 합이 `features.logSearch.maxRange` 안. 답 하나가 사용자별 횟수 제한의 검색 한 번이고 `k8s.pod.logs.logql` 감사 행 하나입니다.
 
 - **수집기**: 대상 클러스터의 컨테이너 로그를 Loki로 보내는 수집기가 있어야 합니다.
   - 라벨 이름이 `features.logSearch.labels`와 맞아야 합니다. 기본값은 Loki가 OTLP로 받은 로그에 붙이는 `k8s_cluster_name`·`k8s_namespace_name`·`k8s_pod_name`·`k8s_container_name`입니다.
@@ -505,6 +520,10 @@ Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려
   - TraceQL 지표(`traces_metrics`)는 Tempo 3.x에서 기본으로 제공됩니다. 2.x에서는 metrics-generator `local-blocks`가 필요합니다.
   - 지표에서는 Tempo `query_frontend.query_end_cutoff`(기본 30초)와 step만큼 최근 구간이 빠집니다. 이 값은 `/status/config`에서 확인할 수 있습니다.
   - 읽기 권한은 로그 검색과 같이 사용자 신원의 `get pods/log`입니다.
+  - 미리 좁히기의 트레이스 검사(`anomaly_rank`)는 기간과 그 앞 구간에 TraceQL 지표 질의 셋을 돌립니다: `{ kind = server } | count_over_time()`, 같은 질의에 `status = error`, `quantile_over_time(duration, .9)` — 모두 `by (resource.service.name)`.
+    스팬에 span kind와 `service.name`이, 워크로드를 주면 리소스에 `k8s.pod.name`(`<이름>-.*`)이 있어야 합니다.
+    step은 각 구간을 정분 경계에서 4~120칸으로 나누고, 구간 경계에 걸친 칸은 읽지 않습니다.
+    TraceQL 지표가 없거나 두 구간 합이 `features.traceStore.maxRange`를 넘으면 못 함으로 적힙니다. 답 하나가 `k8s.traces.query` 감사 행 하나입니다.
 - **AI 알림 읽기**(`features.alertStore`를 쓸 때): Kubeast는 알림 저장소의 `/api/v2/alerts`(매처 `filter`)와 `/api/v2/silences`를 GET으로 읽습니다.
   - 무음 쓰기를 켜면 아래 항목의 요청이 더해집니다.
   - 읽을 수 있는 저장소는 다음과 같습니다.
@@ -554,7 +573,7 @@ service:
 | --- | --- |
 | Kubernetes 버전 | API 서버가 파드의 `preStop` `sleep`을 거절할 자리에서는 Helm이 아무것도 바꾸기 전에 차트가 렌더에서 멈춥니다(아래 파드 종료): 1.30 아래에서는 `podShutdown.preStopSeconds`가 0보다 크거나 `streams.enabled`가 켜져 있을 때, 1.33 아래에서는 `streams.enabled`와 `streams.preStopSeconds: 0`을 같이 둘 때입니다. `helm install`과 `helm upgrade`는 클러스터의 버전을 봅니다. `helm template`은 `--show-only`를 써도(`scripts/render-target-rbac.sh`) `--kube-version`을, 없으면 Helm 자체 기본값을 봅니다. Helm 4.0.0의 기본값은 v1.20.0, Helm 3.14 이하는 1.29 이하이므로 거기서는 클러스터의 버전을 넘깁니다 |
 | 사용자 네임스페이스 | `podSecurity.hostUsers: false`(기본)를 쓰려면 Kubernetes 1.33 이상과 이를 지원하는 노드 커널(6.3 이상)이 필요합니다. 조건이 맞지 않으면 `true` |
-| 파드 종료 | Kubernetes 1.30 이상: 차트의 Service 뒤 파드는(번들 PostgreSQL과 Redis는 빼고) 기본 `preStop` `sleep` 동작(1.30 베타·기본 켜짐, 1.34 GA)으로 SIGTERM 전에 `podShutdown.preStopSeconds`(5초) 기다리므로, 롤링 업데이트 중 이미 종료한 파드로 새 연결이 가지 않습니다. `0`이면 기다리지 않습니다 |
+| 파드 종료 | Kubernetes 1.30 이상: 차트의 Service 뒤 파드는(번들 PostgreSQL과 Redis는 빼고) 기본 `preStop` `sleep` 동작(1.30 베타·기본 켜짐, 1.34 GA)으로 SIGTERM 전에 `podShutdown.preStopSeconds`(5초) 기다리므로, 롤링 업데이트 중 Service를 거쳐 떠나는 파드로 새 연결이 가지 않습니다. 파드 IP로 보내는 로드 밸런서는 그 기다림이 끝난 뒤에도 몇 초 더 떠나는 파드로 새 요청을 보낼 수 있으므로, 그런 로드 밸런서 뒤에서는 `podShutdown.preStopSeconds`를 로드 밸런서가 그 파드에 새 요청을 그만 보낼 때까지보다 길게 둡니다(AWS Application Load Balancer 뒤에서는 25초, 대상 그룹 등록 해제 지연 20초: [여러 대로 띄우기](high-availability.md#시작하기-전에), [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md#3-바꿔야-하는-값)). `0`이면 기다리지 않습니다. `streams.enabled`를 켜면 `k8s-service-stream`은 `podShutdown.preStopSeconds`와 상관없이 같은 방식으로 `streams.preStopSeconds`(10초)를 기다리므로 Kubernetes 1.30 이상이 필요하고, 1.33 아래에서는 `streams.preStopSeconds`를 1 이상으로 둡니다(Kubernetes는 1.33부터 `sleep` 0을 받습니다) |
 | 저장소 | 내장 PostgreSQL을 쓰면 PVC — 기본 StorageClass 또는 `postgresql.storageClassName` |
 | 노출 | NodePort(기본)·LoadBalancer, 또는 Ingress 컨트롤러(`ingress.enabled`) |
 | 앞단 프록시·로드 밸런서 | 유휴 시간 제한 30초 초과(AWS ALB 기본값은 60초). 조용한 동안 실시간 목록·터미널·노드 셸·로그 실시간 보기·AI 답은 25초마다, Helm 릴리스 스트림은 30초마다 무언가를 보내므로(WebSocket 핑, SSE 주석 줄) 열린 채 유지됩니다. 게이트웨이 자체는 이들에 600~3 600초를 줍니다 |
@@ -563,6 +582,19 @@ service:
 | 콘솔 메트릭 수집 | `metrics.serviceMonitor`·`metrics.prometheusRule`을 켜려면 prometheus-operator CRD가 필요합니다([metrics.md](metrics.md)) |
 | EKS 외부 클러스터·S3 | IRSA 롤(`aws.irsaRoleArn` 등) |
 | 사설 CA·TLS를 가로채는 프록시 | `customCAs`에 적은 Secret·ConfigMap이 릴리스 네임스페이스에 먼저 있어야 합니다. 없으면 새 파드가 볼륨을 기다리느라 뜨지 않으며, 이전 파드는 계속 응답합니다 |
+
+### AI 서비스가 밖으로 여는 연결
+
+기본으로 ai-service는 공인 주소 어디로든 443(모델 공급자), tool-server는 어느 주소로든 443·6443(등록한 클러스터의 API 서버)으로 연결할 수 있습니다. `networkPolicy.aiEgress.allowListOnly: true`(기본 꺼짐)를 켜면 둘 다 적은 주소로만 나갑니다. 모델이 클러스터에서 읽은 글이 둘을 다른 곳으로 연결하게 할 수 없습니다.
+
+- ai-service: `networkPolicy.allowExternalEgressCIDRs`에 부르는 모델 공급자·게이트웨이를 적습니다. Anthropic은 Claude API의 고정 주소를 공개합니다(`160.79.104.0/23`, `153.61.224.0/22`, IPv6 `2607:6bc0::/48` — platform.claude.com "IP addresses"). Claude Code(공급자 `claude-code`)도 같은 API로 가고 다른 연결은 보내지 않습니다(`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`). 고정 주소를 공개하지 않는 공급자는 직접 둔 프록시·게이트웨이를 거치게 하고 그 주소를 적습니다. NetworkPolicy는 이름이 아니라 주소로 맞춥니다.
+- tool-server: `networkPolicy.aiEgress.clusterAPIs`(CIDR은 443·6443, `{cidr, port}`는 그 포트)와 `networkPolicy.apiserverCIDR`에 Kubeast에 등록한 모든 클러스터의 API 서버를 적습니다. AI의 kubectl이 tool-server에서 돌므로 이 클러스터의 것도 적습니다(`kubectl get endpoints kubernetes -n default`).
+- EKS: API 서버 주소는 바뀝니다(공개 엔드포인트 IP가 옮겨 가고, 비공개 엔드포인트의 네트워크 인터페이스는 업그레이드 때 바뀜). 그래서 비공개 엔드포인트가 있는 VPC·서브넷 CIDR을 적고, /32로 적지 않습니다. 공개 엔드포인트만 있는 클러스터는 적을 고정 대역이 없습니다. 비공개 엔드포인트를 켜서 VPC로 닿게 하거나, 스위치를 끈 채 둡니다.
+- IRSA를 쓰는 EKS(`aws.irsaRoleArn`, 또는 tool-server ServiceAccount의 `eks.amazonaws.com/role-arn` 주석): tool-server의 `aws-iam-authenticator`가 자격과 대상 롤을 받으려고 STS를 부릅니다. STS VPC 인터페이스 엔드포인트(`com.amazonaws.<region>.sts`, 비공개 DNS 켬, 리전 STS)를 만들고 그 서브넷을 `networkPolicy.aiEgress.stsEndpoints`에 적습니다(`{cidr, port: 443}`, CIDR만 적으면 443). 롤을 S3(세션 기록, 감사 싱크)에만 쓰고 EKS 클러스터를 등록하지 않는 설치는 `aws.irsaRoleArn`(tool-server에도 붙음) 대신 `serviceAccounts.k8sService.annotations`·`serviceAccounts.authService.annotations`로 그 서비스에만 롤을 줍니다. 그러면 STS 항목을 묻지 않습니다. 차트는 어떤 클러스터가 등록될지 모르므로, tool-server에 롤이 있으면 늘 이 항목을 묻습니다.
+- 스위치를 켰는데 `networkPolicy.enabled`가 꺼져 있거나, 두 목록 중 하나가 비어 있거나, tool-server에 IRSA 롤이 있는데(`aws.irsaRoleArn`, 또는 `serviceAccounts.toolServer.annotations`의 role-arn 주석) `stsEndpoints`가 비어 있으면 차트가 이유를 말하고 멈춥니다.
+- 목록이 바꾸지 않는 것: DNS·데이터베이스·콘솔 자체 서비스는 전처럼 열려 있습니다. 외부 데이터베이스(`postgresql.enabled: false`)면 ai-service를 포함한 모든 데이터베이스 클라이언트가 데이터베이스 포트로는 어느 주소로든 나갑니다.
+
+목록이 모자라면 멈추는 것: 적지 않은 모델의 AI 답은 두 채팅 모두 공급자 오류("응답하지 않음")로 끝나고, Admin → AI Models의 Test와 알림 조사도 같은 이유로 실패합니다. API 서버를 적지 않은 클러스터의 AI 도구는 kubectl 시간 초과로 실패하고, 그 클러스터의 화면은 그대로 돕니다(k8s-service는 막지 않음). STS 엔드포인트가 없으면 tool-server가 AWS 자격을 못 받아 모든 EKS 클러스터의 AI 도구가 실패합니다. 어느 쪽이든 화면은 답 안의 그림을 불러오지 않습니다. AI가 쓴 글의 그림은 읽는 사람이 여는 링크입니다.
 
 ### Kubeast 자체 Namespace에 누가 닿는가
 
@@ -625,7 +657,9 @@ service:
   - Relay Service는 `features.networkFlows.relay`(기본 `kube-system/hubble-relay:443`)이거나, 항목에 적은 것(`proxy:<namespace>/<service>:<port>`)입니다.
   - **Relay가 TLS로 서비스해야 합니다**(`hubble.relay.tls.server.enabled=true`). API 서버는 백엔드와 TLS일 때만 HTTP/2로 말하고, gRPC에는 HTTP/2가 필요합니다. 평문 Relay면 502나 503이 오고, 메시지에 이 설정 이름이 나옵니다.
   - API 서버는 Relay 인증서를 검사하지 않고(IP로 중계) 클라이언트 인증서도 보내지 않습니다. 그래서 클라이언트 인증서를 요구하는 Relay(`hubble.relay.tls.server.mtls=true`)는 주소 모드를 써야 합니다.
+  - Relay나 Whisker의 리다이렉트는 같은 API 서버의 그 Service 프록시 경로 안에서만 따라가고, 그 밖이면 502입니다.
 - **주소 모드**(`https://<host>:<port>`): Kubeast가 Relay에 직접 TLS로 연결합니다.
+  - 리다이렉트는 따라가지 않습니다. 리다이렉트로 답하는 Relay는 502입니다. Relay가 답하는 주소를 등록하세요.
   - `tls.existingSecret`에 `ca.crt`를 넣고, `tls.clientCertificate: true`면 mTLS용 `tls.crt`·`tls.key`도 넣습니다. 인증서에서 확인할 이름은 `tls.serverName`으로 바꿀 수 있습니다.
   - k8s-service에서 Relay로 연결할 수 있어야 합니다. `networkPolicy`가 켜져 있으면 그 주소를 `features.networkFlows.egressCIDRs`에 추가하세요.
   - 읽기 전마다 아래와 같은 권한을 클러스터에 물어(SelfSubjectAccessReview) 두 모드에서 같은 사람만 읽게 합니다.
@@ -736,6 +770,17 @@ Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그�
 - **누가 읽나**: `resource.networkflow.read`가 있고, 클러스터가 그 네임스페이스의 파드 `list`를 허용하는 사용자(Kubeast가 사용자로서 SelfSubjectAccessReview로 묻습니다). 사용자가 파드를 볼 수 없는 네임스페이스나 네임스페이스 한정 권한 밖의 상대는 네임스페이스와 주소만 보입니다. 읽을 때마다 `k8s.networkflows.query`(`provider: nfm`)로 감사 로그에 남습니다.
 - **확인**: `aws networkflowmonitor list-monitors --region <region>`에 모니터가 나오고, Pod 드로어 → 상위 통신 → 상위 통신 보기에 줄이 나오면 됩니다.
 - **검증**: 개발 클러스터의 API 대역(`deploy/kind/devtools.yaml`, e2e `network-top-flows.spec.ts`)에 AWS SDK for Go v2 클라이언트로 확인했습니다. 실제 모니터로는 아직 확인하지 않았습니다.
+
+## 20. 호출 관계 (AI `resource_graph`의 include calls)
+
+`features.callGraph.enabled`(기본 꺼짐)를 켜면 AI 도구 `resource_graph`가 `include: ["calls"]`와 `since`(1m–24h, 기본 1h) 또는 고정 구간 `since_time`–`until_time`(1m–24h. 이때 질의는 모두 구간 끝 시각으로, 레이블 이름은 그 구간으로 읽음)을 받아, 네임스페이스 워크로드 사이의 호출 관계와 — 자기가 부르는 쪽은 멀쩡한데 고장 난 워크로드를 맨 앞에 둔 — 고장 목록, 그 워크로드에서 그것을 부르는 고장 워크로드까지의 경로(원인 → … → 증상)를 더합니다. 알림 조사는 여러 워크로드가 같이 고장 나면 이것을 읽으라는 규칙을 받습니다. 자료는 둘이고 모두 클러스터 Prometheus(§3)에서 사용자로 읽습니다. 없는 자료는 답에 그 이유가 적히고 나머지 자료는 그대로 읽습니다.
+
+- **트레이스**: 서비스 그래프 지표 `traces_service_graph_request_total` · `traces_service_graph_request_failed_total` · `traces_service_graph_request_server_seconds_bucket`(레이블 `client` · `server`). Tempo metrics-generator(`service-graphs` 프로세서, 그 Prometheus로 remote write)나 OpenTelemetry Collector · Grafana Alloy의 `servicegraph` 커넥터가 씁니다. 지표 양쪽에 네임스페이스가 있으면(`client_k8s_namespace_name` · `server_k8s_namespace_name`) 질의가 그 네임스페이스로 좁혀집니다. Tempo는 `metrics_generator.processor.service_graphs.dimensions: [k8s.namespace.name]`과 `enable_client_server_prefix: true`로 씁니다(둘 다 기본값은 꺼짐이고, 접두어가 없으면 `k8s_namespace_name` 레이블 하나만 생겨 어느 쪽 값인지 알 수 없음). OpenTelemetry Collector의 `servicegraph` 커넥터와 Alloy의 `otelcol.connector.servicegraph`는 `dimensions: [k8s.namespace.name]`만 주면 됩니다(접두어는 늘 양쪽에 붙음). 스팬에 리소스 속성 `k8s.namespace.name`이 있어야 합니다(Collector의 `k8sattributes` 프로세서가 붙임). 없으면 요청 많은 간선 500개를 읽어 그 네임스페이스에 닿는 것만 남기고, 이름으로 맞춘 끝은 `matched_by`가 `_unscoped`로 끝납니다 — 다른 네임스페이스의 같은 이름 서비스도 거기에 함께 세어지기 때문이며, 트레이스 자료의 `detail`에도 적힙니다. 서비스 이름은 `k8s.deployment.name` · `k8s.statefulset.name` · `k8s.daemonset.name` 차원이 있으면 그것으로, 없으면 같은 이름의 워크로드, 그다음 같은 이름의 Service와 그 셀렉터가 고르는 워크로드에 맞춥니다. 어디에도 안 맞으면 서비스 이름 그대로 둡니다. 네임스페이스로 제한된 권한은 Prometheus를 읽지 못하므로(§3) 이 자료를 받지 않습니다 — 네임스페이스 차원이 없으면 지표가 모든 네임스페이스의 서비스를 담기 때문입니다.
+- **네트워크**: 통신 선이 읽는 Hubble TCP · 차단 지표(§18). `resource.networkflow.read`가 있는 사람만. Relay의 최근 흐름은 여기서 읽지 않습니다(AI는 `network_flows`로 읽음).
+- **지연**: `p90_ms`(`traces_service_graph_request_server_seconds_bucket`에서 계산)는 보여 주기만 하고 고장 판정에는 쓰지 않습니다. 그래서 호출이 느려지기만 하는 고장은 고장 목록이 빌 수 있습니다. Tempo 기본 칸(`histogram_buckets`: 0.1 · 0.2 · 0.4 · 0.8 · 1.6 · 3.2 · 6.4 · 12.8초)은 100ms 아래가 거칩니다 — 그 아래 p90은 첫 칸 안에서 보간한 값입니다. 네임스페이스 차원이 없으면 가장 느린 간선 500개만 읽습니다.
+- **답**: `errors`는 어느 쪽 스팬이든 오류로 표시한 호출을 세므로 부르는 쪽이 본 4xx도 들어갑니다. 모델은 원인으로 꼽기 전에 5xx인지 확인하라는 안내를 받습니다. 고장 워크로드는 최대 10개(`suspects`, 자르기 전 수는 `suspects_total`). 각각 그래프 밖에서 호출이 실패하는 상대(`failing_outside`: DB · 다른 네임스페이스)를 적습니다 — Kubeast는 그 상대의 상태를 읽지 않습니다. 고장 워크로드가 모두 다른 고장 워크로드를 부르면 `no_start: cycle`이 경로가 없는 까닭을 알려 줍니다. 차단이 있는 간선에는 Hubble의 차단 사유(`drop_reasons`, NetworkPolicy면 `POLICY_DENIED`)가 붙습니다.
+- 한 번에 읽는 양: 트레이스는 레이블 읽기 1번 + 질의 3번, 네트워크는 §18의 통신 선 읽기와 같음. 스위치가 꺼져 있으면 아무것도 읽지 않습니다.
+- **확인**: Prometheus에서 `topk(10, sum by (client, server) (increase(traces_service_graph_request_total[1h])))`.
 
 ## 검증한 버전 (2026-10-13)
 

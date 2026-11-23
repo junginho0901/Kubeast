@@ -458,7 +458,7 @@ test.describe('number check — Gateway API drawers', () => {
       t2.kubectl('delete gatewayclass/num-gc-ready gatewayclass/num-gc-plain --ignore-not-found --wait=true')
       t2.kubectl(`delete event -n default ${eventName('num-gc-ready', 'NumbersAccepted')} --ignore-not-found`)
     }
-    cleanup()
+    withUndo(cleanup(), () => cleanup())
     try {
       t2.kubectl('apply --server-side --field-manager=e2e-gw-drawers -f -', gatewayFixture(served!, NS))
       writeGatewayStatus(t2.kubectl, NS)
@@ -527,4 +527,17 @@ test.describe('number check — Gateway API drawers', () => {
       cleanup()
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

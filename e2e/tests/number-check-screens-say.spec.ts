@@ -281,7 +281,7 @@ test.describe('the screens say what they know', () => {
     try {
       const role = await request.post('/api/v1/auth/admin/roles', { headers, data: { name: `e2e-say-${RUN}`, description: 'e2e', permissions: ['admin.users.*', 'admin.clusters.*', 'menu.*'] } })
       expect(role.status(), await role.text()).toBe(201)
-      roleId = (await role.json()).id as number
+      roleId = withUndo((await role.json()).id as number, (i) => request.delete(`/api/v1/auth/admin/roles/${i}`, { headers, failOnStatusCode: false }))
       const user = async (key: string, data: object) => {
         const email = `e2e-say-${key}-${RUN}@kubeast.local`
         const res = await request.post('/api/v1/auth/admin/users', { headers, data: { name: `E2E say ${key}`, email, password: PW, ...data } })
@@ -341,4 +341,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

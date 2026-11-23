@@ -132,7 +132,7 @@ func (h *Handler) GetPodsOnNode(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(raw)
+	writeShared(w, r, raw)
 }
 
 // GetPods handles GET /api/v1/namespaces/{namespace}/pods.

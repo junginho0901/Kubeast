@@ -33,19 +33,30 @@ describe('AIMarkdown', () => {
     expect(html).toContain('text')
   })
 
-  it('an image on the console\'s own host keeps its text and loses its address, another host\'s keeps it', () => {
+  it('an image on the console\'s own host keeps its text, another host\'s is a link, and neither is fetched', () => {
     vi.stubGlobal('location', new URL('https://console.example.test/alerts'))
     try {
       for (const src of ['/api/v1/namespaces/shop/secrets/db/yaml', '//console.example.test/x', 'https://console.example.test:8443/x']) {
         const html = render(`![shown](${src})`)
-        expect(html).not.toMatch(/<img\b[^>]*\ssrc=/)
+        expect(html).not.toMatch(/<img\b/)
         expect(html).not.toContain('as="image"')
-        expect(html).toContain('alt="shown"')
+        expect(html).not.toContain('href=')
+        expect(html).toContain('<span>shown</span>')
       }
-      expect(render('![A chart](https://example.test/a.png)')).toContain('<img src="https://example.test/a.png" alt="A chart"/>')
+      const other = render('![A chart](https://example.test/a.png)')
+      expect(other).not.toMatch(/<img\b/)
+      expect(other).not.toContain('as="image"')
+      expect(other).toMatch(/<a href="https:\/\/example\.test\/a\.png" target="_blank" rel="noopener noreferrer"[^>]*>A chart<\/a>/)
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('an image inside a link is its words, which open the link', () => {
+    const html = render('[![Runbook](https://example.test/img.png)](https://example.test/runbook)')
+    expect(html).not.toContain('example.test/img.png')
+    expect(html).toMatch(/<a href="https:\/\/example\.test\/runbook" target="_blank" rel="noopener noreferrer"[^>]*>Runbook<\/a>/)
+    expect(html.match(/<a\b/g)?.length).toBe(1)
   })
 
   it('keeps tables and ranges as the shared Markdown rules read them', () => {

@@ -81,12 +81,12 @@ test.describe('data display matches the cluster', () => {
 
   test('creating from YAML posts to the version the document names (#31)', async ({ request }) => {
     const headers = await login(request)
-    const doc = [
+    const doc = withUndo([
       'apiVersion: autoscaling/v1',
       'kind: HorizontalPodAutoscaler',
       'metadata: {name: e2e-data-display-v1, namespace: default}',
       'spec: {scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: e2e-data-display-none}, maxReplicas: 2}',
-    ].join('\n')
+    ].join('\n'), () => kubectl('-n default delete hpa e2e-data-display-v1 --ignore-not-found'))
     try {
       const res = await request.post(`/api/v1/cluster/resources/yaml/create?cluster=${CLUSTER}`, { headers, data: { yaml: doc, namespace: 'default' } })
       expect(res.ok(), await res.text()).toBeTruthy()
@@ -104,11 +104,11 @@ test.describe('data display matches the cluster', () => {
 
   test('the DRA create examples create what they show (#32)', async ({ page }) => {
     test.skip(!kubectl('api-versions').split('\n').includes('resource.k8s.io/v1'), 'cluster does not serve resource.k8s.io/v1')
-    const created = [
+    const created = withUndo([
       { route: 'gpu/deviceclasses', button: 'Create DeviceClass', get: 'deviceclass example-gpu-class' },
       { route: 'gpu/resourceclaimtemplates', button: 'Create ResourceClaimTemplate', get: '-n default resourceclaimtemplate example-gpu-claim-template' },
       { route: 'gpu/resourceclaims', button: 'Create ResourceClaim', get: '-n default resourceclaim example-gpu-claim' },
-    ]
+    ], (list) => { for (const c of [...list].reverse()) kubectl(`delete ${c.get} --ignore-not-found`) })
     try {
       for (const c of created) {
         await page.goto(`/${c.route}?cluster=${CLUSTER}`)
@@ -193,4 +193,17 @@ test.describe('data display matches the cluster', () => {
     const self = list.find((c) => c.is_self_cluster)
     if (self) await expect(page.locator('tbody tr').filter({ hasText: 'self' }).first()).toContainText(/In-cluster|https:\/\//)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

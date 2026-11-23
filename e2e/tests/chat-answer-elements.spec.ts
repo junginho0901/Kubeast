@@ -86,7 +86,7 @@ function answerWithStream(page: Page, path: RegExp) {
     await route.fulfill({ contentType: 'text/event-stream', body })
     done()
   }
-  return { ready: page.route(path, handler), finished, session: () => sessionId }
+  return withUndo({ ready: page.route(path, handler), finished, session: () => sessionId }, (c) => dropSession(page, c.session()))
 }
 
 async function dropSession(page: Page, id: string) {
@@ -126,7 +126,7 @@ test.describe('What a chat answer may draw', () => {
     const title = `${MARK}-${Date.now().toString(36)}`
     const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
     expect(created.ok(), `create session: ${created.status()}`).toBeTruthy()
-    const id = (await created.json()).id as string
+    const id = withUndo((await created.json()).id as string, (i) => dropSession(page, i))
     let approved = 0
     await page.route(new RegExp(`/api/v1/ai/tool-approvals/${APPROVAL.id}`), (route) => {
       if (route.request().method() !== 'POST') return route.fulfill({ json: { ...APPROVAL, session_id: id } })
@@ -182,12 +182,12 @@ test.describe('What a chat answer may draw', () => {
     }
   })
 
-  test('AI Chat: an image on the console\'s own host keeps its text and asks the console nothing, another host\'s keeps its address', async ({ page }) => {
+  test('AI Chat: an image on the console\'s own host keeps its text, another host\'s is a link, and drawing the answer fetches neither', async ({ page }) => {
     const title = `${MARK}-img-${Date.now().toString(36)}`
     const own = `/api/v1/${MARK}/image`
     const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
     expect(created.ok(), `create session: ${created.status()}`).toBeTruthy()
-    const id = (await created.json()).id as string
+    const id = withUndo((await created.json()).id as string, (i) => dropSession(page, i))
     const asked: string[] = []
     page.on('request', (request) => {
       if (request.url().includes(MARK)) asked.push(request.url())
@@ -205,11 +205,11 @@ test.describe('What a chat answer may draw', () => {
       const bubble = page.locator(ASSISTANT).last()
       await expect(bubble).toContainText('After the images.')
       await page.waitForTimeout(1000)
-      const images = await bubble.locator('img[alt]').evaluateAll((els) => els.map((el) => [el.getAttribute('alt'), el.getAttribute('src')]))
-      expect(images.filter(([alt]) => alt !== '')).toEqual([
-        ['relative', null], ['absolute', null], ['raw', null], ['other', `https://example.test/${MARK}.png`],
-      ])
-      expect(asked.filter((url) => url.startsWith(origin))).toEqual([])
+      const images = await bubble.locator('img').evaluateAll((els) => els.map((el) => el.getAttribute('src')))
+      expect(images.filter((src) => src !== '/icon.svg')).toEqual([])
+      await expect(bubble.locator(`a[href="https://example.test/${MARK}.png"]`)).toHaveText('other')
+      for (const text of ['relative', 'absolute', 'raw']) await expect(bubble.getByText(text, { exact: true })).toHaveCount(1)
+      expect(asked).toEqual([])
     } finally {
       await dropSession(page, id)
     }
@@ -220,7 +220,7 @@ test.describe('What a chat answer may draw', () => {
     const title = `${MARK}-${Date.now().toString(36)}`
     const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
     expect(created.ok(), `create session: ${created.status()}`).toBeTruthy()
-    const id = (await created.json()).id as string
+    const id = withUndo((await created.json()).id as string, (i) => dropSession(page, i))
     const chat = answerWithStream(page, new RegExp(`/api/v1/ai/sessions/${id}/chat`))
     await chat.ready
     try {
@@ -281,4 +281,17 @@ test.describe('What a chat answer may draw', () => {
       await dropSession(page, chat.session())
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

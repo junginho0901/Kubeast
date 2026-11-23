@@ -1,0 +1,199 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: shop-web-config}
+data:
+  production.conf: |
+    db_pool=8
+    session_store=cookie
+    log_level=info
+  staging.conf: |
+    db_pool=2
+    session_store=cookie
+    log_level=debug
+    asset_host=http://assets:8080
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: shop-web-release-2-3-0}
+data:
+  VERSION: "2.3.0"
+  boot.sh: |
+    #!/bin/sh
+    APP_VERSION=$(cat /app/VERSION)
+    . "/etc/shop-web/$APP_ENV.conf"
+    echo "level=info msg=\"booting\" version=$APP_VERSION env=$APP_ENV db_pool=$db_pool"
+    sleep 3
+    mkdir -p /www/assets
+    echo "<h1>Shop</h1><p>version $APP_VERSION</p>" > /www/index.html
+    echo '{"app.css":"/assets/app.css"}' > /www/assets/manifest.json
+    echo "level=info msg=\"listening\" port=8080"
+    exec httpd -f -p 8080 -h /www
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: shop-web-release-2-4-0}
+data:
+  VERSION: "2.4.0"
+  boot.sh: |
+    #!/bin/sh
+    APP_VERSION=$(cat /app/VERSION)
+    . "/etc/shop-web/$APP_ENV.conf"
+    echo "level=info msg=\"booting\" version=$APP_VERSION env=$APP_ENV db_pool=$db_pool"
+    sleep 3
+    manifest_url="$asset_host/manifest-$APP_VERSION.json"
+    case "$manifest_url" in
+      http://*|https://*) ;;
+      *)
+        echo "level=fatal msg=\"unable to load application\" err=\"invalid asset manifest url: $manifest_url\""
+        exit 1
+        ;;
+    esac
+    if ! wget -q -T 3 -O /tmp/manifest.json "$manifest_url" 2>/dev/null; then
+      echo "level=fatal msg=\"unable to load application\" err=\"asset manifest not readable: $manifest_url\""
+      exit 1
+    fi
+    mkdir -p /www
+    echo "<h1>Shop</h1><p>version $APP_VERSION</p>" > /www/index.html
+    echo "level=info msg=\"listening\" port=8080 assets=$asset_host"
+    exec httpd -f -p 8080 -h /www
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: shop-web}
+spec:
+  replicas: 3
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: shop-web}}
+  template:
+    metadata: {labels: {app: shop-web, version: "2.3.0"}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: APP_ENV, value: production}
+          command: [sh, /app/boot.sh]
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          volumeMounts:
+            - {name: release, mountPath: /app, readOnly: true}
+            - {name: config, mountPath: /etc/shop-web, readOnly: true}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+      volumes:
+        - name: release
+          configMap: {name: shop-web-release-2-3-0}
+        - name: config
+          configMap: {name: shop-web-config}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: shop-web}
+spec:
+  selector: {app: shop-web}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: preview-web}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: preview-web}}
+  template:
+    metadata: {labels: {app: preview-web, version: "2.4.0"}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: APP_ENV, value: staging}
+          command: [sh, /app/boot.sh]
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          volumeMounts:
+            - {name: release, mountPath: /app, readOnly: true}
+            - {name: config, mountPath: /etc/shop-web, readOnly: true}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+      volumes:
+        - name: release
+          configMap: {name: shop-web-release-2-4-0}
+        - name: config
+          configMap: {name: shop-web-config}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: preview-web}
+spec:
+  selector: {app: preview-web}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: assets}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: assets}}
+  template:
+    metadata: {labels: {app: assets}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              mkdir -p /www
+              echo '{"app.css":"/app-7f3a.css","app.js":"/app-91c2.js"}' > /www/manifest-2.4.0.json
+              exec httpd -f -v -p 8080 -h /www
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {tcpSocket: {port: http}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: assets}
+spec:
+  selector: {app: assets}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: visitor}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: visitor}}
+  template:
+    metadata: {labels: {app: visitor}}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: [sh, -c]
+          args:
+            - |
+              now_cs() { cut -d' ' -f1 /proc/uptime | tr -d .; }
+              visit() {
+                t0=$(now_cs)
+                if out=$(wget -q -T 3 -O /dev/null "$2" 2>&1); then
+                  echo "level=info msg=\"page loaded\" site=$1 duration_ms=$(( ($(now_cs) - t0) * 10 ))"
+                else
+                  echo "level=error msg=\"page failed\" site=$1 duration_ms=$(( ($(now_cs) - t0) * 10 )) err=\"$(echo $out)\""
+                fi
+              }
+              echo "level=info msg=\"visitor started\""
+              n=0
+              while true; do
+                n=$((n + 1))
+                visit shop http://shop-web:8080/
+                if [ $((n % 3)) = 0 ]; then visit preview http://preview-web:8080/; fi
+                sleep 2
+              done
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}

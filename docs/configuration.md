@@ -157,7 +157,7 @@ podSecurity:
 # Availability: a Deployment you raise to 2 or more replicas, or whose autoscaling keeps minReplicas 2 or more, gets a PodDisruptionBudget (pdb.maxUnavailable, 1; pdb.enabled: false leaves them out), and every rollout starts the new pod and stops an old one only once the new one is ready (the old postgres and redis pods start stopping first)
 # So sessionRecording.fileVolume (storage: file) is mounted by two k8s-service pods while one is replaced: a ReadWriteOnce volume is mounted on one node at a time, so on more than one node give it a ReadWriteMany volume, or use storage s3 or database (docs/operations.md)
 # Probes: liveness asks /livez, which reads nothing else; readiness asks /readyz, which answers 503 from SIGTERM on and never asks the database (a shared database down would take every pod out at once); the database's state is in auth-service's and session-service's /health and k8s-service's kubeast_audit_store_up
-# podShutdown.preStopSeconds: a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later; below 1.30 the render stops while it is above 0), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, longer than the load balancer takes to stop sending new requests to a leaving pod (behind an AWS Application Load Balancer the default 5 s was enough)
+# podShutdown.preStopSeconds: a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) answers that long after it is told to stop (preStop sleep, Kubernetes 1.30 or later; below 1.30 the render stops while it is above 0), then has 30 s to shut down (a server holding terminals: the drain's wait and close wait more); behind a load balancer that sends to pod IPs, longer than the load balancer takes to stop sending new requests to a leaving pod (behind an AWS Application Load Balancer, 25 with the target group's deregistration delay at 20 s: with these no request failed in 18 gateway pod replacements, and with the default 5 s and the default delay of 300 s requests failed in 3 of 18, and in none of 12 more with the pod readiness gate on; see docs/high-availability.md)
 replicas:
   gateway: 1
 # One HPA per service, off by default; k8sService and toolServer above 1 pod need redis.enabled (docs/high-availability.md)
@@ -198,11 +198,27 @@ ai:
   baseUrlAllowedHosts: []  # register a host here when a model setting's base_url is a private address
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
+  redaction:
+    numbered: false        # with redaction.pii: every personal-data kind as its kind and a number per chat answer or investigation (<PHONE_1>),
+                           # writes holding those refused, the asker's chat answer shows the values in their place;
+                           # off: <EMAIL_n> within one text, <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, no value shown
+  timelineChanges: false   # offer the AI tool timeline's changes view (what changed in a window, no value read) and the chat's instruction to read it first
+  refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
+                             # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
+  toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
+                           # one may be empty and the console paths of the objects they name, from what they hold (features.md); off: as before
+  ruleCards:               # per kind of failure, the checks that often find its cause and their tools (features.md "Rule cards")
+    chat: false            # (alpha) true: a chat question naming a failure a card knows gets at most two cards for that turn
+    investigations: false  # (alpha) true: an alert investigation's first message holds at most two, picked by the alert's name and labels
+                           # off, both: the cards file is not read and the chat and investigations are as before
+    cards: []              # more cards of the same shape (a kind already there is replaced); the defaults are app/services/rule_cards.json
+    remove: []             # default kinds left out, e.g. [network_policy]
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
     # (0 = maxConcurrent); queueWaitSeconds: how long a turn waits for a slot before it ends as busy;
     # memoryLimit: ai-service's memory limit while the provider is on, if larger than resources.aiService.limits.memory
+  toolResultsJSON: false   # true: the model reads each tool result as one JSON object, cluster text as JSON strings (ai-alerts.md "Planted instructions")
 
 # Built-in PostgreSQL (false = external DB) and Redis (false = k8s-service caches in memory; tool-server only listens there for cluster changes)
 postgresql:
@@ -223,6 +239,10 @@ redis:
     existingSecret: ""            # a Secret of the users' keys alone; each service then reads only its own key
 networkPolicy:
   enabled: true         # default deny, plus only the flows the services use. Harmless on CNIs that do not enforce NetworkPolicy (Flannel, etc.); kind's kindnet enforces it since kind 0.24
+  aiEgress:
+    allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to clusterAPIs, stsEndpoints and apiserverCIDR (cluster-requirements.md §15)
+    clusterAPIs: []       # the API servers of the registered clusters, this one's too, as VPC or subnet CIDRs (never a /32 on EKS): a CIDR opens 443 and 6443, {cidr, port} another port
+    stsEndpoints: []      # when tool-server holds an IRSA role: the subnets of the STS VPC interface endpoint, {cidr, port: 443}
 
 # Gateway exposure
 gateway:
@@ -240,6 +260,40 @@ ingress:
   className: ""
   host: kubeast.example.com
   tls: false
+
+# AI switches added in 0.7.9, all off by default. Off, the model's prompts and tool definitions are as in 0.7.8.
+# (alpha): may change or go without notice. More in ai-alerts.md and features.md
+features:
+  alertInvestigation:
+    rules: false             # (alpha) true: the time windows below, the scope groups, facts kept apart from hypotheses and the report's
+                             # six headings, in the prompt (ai-alerts.md)
+    changesFirst: false      # (alpha) true: step 0 puts the timeline's changes over the change window into the first message (an audited
+                             # tool call, no model step); writes the windows too
+    narrowFirst: false       # (alpha) true: step 0, after the changes, puts anomaly_rank (features.anomalyRank) over the metrics window
+                             # into the first message; writes the windows too
+    ledger: false            # (alpha) true: the report ends with a block of causes, path, ruled out and hypotheses, each closed with the
+                             # calls for and against it, kept apart and shown under the report (asked once more while one is open)
+    evidenceCheck: false     # (alpha) true: the server checks that the calls each cause names answered and hold its name, asks once more
+                             # without tools otherwise and lists what still fails as not verified; with ledger, one block and one ask
+    window:                  # counted from the alert's start; ends are never past now
+      metricsMinutes: 15     # metrics this long either side of the start (1–360)
+      logsMinutes: 5         # logs from this long before the start (0–1440)
+      changesHours: 4        # changes from this long before the start (1–168)
+  anomalyRank:
+    enabled: false           # (alpha) true: the AI tool anomaly_rank and GET /namespaces/{namespace}/anomalies, what differs in one
+                             # namespace from the window before, ranked (cluster-requirements.md); off: the route answers 404, reads nothing
+    maxQueries: 12           # store queries one answer may make
+    checkTimeoutSeconds: 5   # each check
+    timeoutSeconds: 20       # the whole answer
+    concurrency: 4           # checks at once
+    cacheSeconds: 60         # the same caller, namespace and window answered from memory
+    logMaxBytes: 10737418240 # the log checks ask the log store's index first and read no more than this over both windows (10 GiB)
+  logSearch:
+    queryMaxBytes: 0         # (alpha) a number of bytes: the AI's loki_query asks the store's index first and is refused past it, with how
+                             # to narrow it (operations.md); 0: not asked, the query runs as before
+  callGraph:
+    enabled: false           # (alpha) true: the AI tool resource_graph takes include calls, who calls whom from the traces' service graph
+                             # metrics and Hubble (cluster-requirements.md); off: include calls reads nothing and the AI is not offered it
 
 # Multi-cluster load/failure isolation tuning
 multicluster:
@@ -270,7 +324,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 
 | Value | Default | Stage | Not run yet, or Tested |
 | --- | --- | --- | --- |
-| `podShutdown.preStopSeconds` | 5 | beta | Tested: a server-side dry run of the default install on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off), where the API server refused the seven Deployments with a preStop wait (`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`) and took all 58 objects with `0` |
+| `podShutdown.preStopSeconds` | 5 | beta | Tested: a server-side dry run of the default install on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off), where the API server refused the seven Deployments with a preStop wait (`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`) and took all 58 objects with `0`. That run had `streams.enabled` off: with it on, `k8s-service-stream` has a preStop `sleep` of `streams.preStopSeconds` whatever `podShutdown.preStopSeconds` is, so streams need Kubernetes 1.30 or later and, below 1.33, a `streams.preStopSeconds` of 1 or more ([cluster requirements](cluster-requirements.md) §15) |
 | `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | The users turned off in a test install |
 | `replicas.k8sService` and `replicas.toolServer` above 1 | 1 | alpha | The sizes for 2 and 3 k8s-service pods |
 | `autoscaling.<service>` | off | alpha | Tested: on EKS 1.35, HPAs on k8s-service and the gateway went from 2 to 3 pods and back, and were turned on and off, with no request through the load balancer failing |

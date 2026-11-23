@@ -32,6 +32,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/junginho0901/kubeast/services/pkg/config"
 )
 
 // Options is read from the environment once at startup (FromEnv).
@@ -46,6 +48,10 @@ type Options struct {
 	// private_key, url_credentials, authorization, jwt, aws_key, provider_key,
 	// email, phone, rrn, card.
 	Disabled map[string]bool
+	// Numbered numbers every personal-data kind (<PHONE_1>) with the caller's table, so a value keeps its number across
+	// the texts of one run (REDACTION_NUMBERED, chart ai.redaction.numbered, default false). Off: one address keeps one
+	// <EMAIL_n> within a text, the other kinds are <REDACTED:kind>, and no table is read.
+	Numbered bool
 }
 
 // Stats says what was replaced, for the audit row.
@@ -65,7 +71,7 @@ func (s *Stats) add(kind string, n int) {
 	s.Count += n
 }
 
-// FromEnv reads REDACTION_ENABLED / REDACTION_PII / REDACTION_DISABLE.
+// FromEnv reads REDACTION_ENABLED / REDACTION_PII / REDACTION_DISABLE / REDACTION_NUMBERED.
 func FromEnv() Options {
 	o := Options{Enabled: true, Disabled: map[string]bool{}}
 	if v := strings.TrimSpace(strings.ToLower(os.Getenv("REDACTION_ENABLED"))); v == "false" || v == "0" || v == "off" {
@@ -74,6 +80,7 @@ func FromEnv() Options {
 	if v := strings.TrimSpace(strings.ToLower(os.Getenv("REDACTION_PII"))); v == "true" || v == "1" || v == "on" {
 		o.PII = true
 	}
+	o.Numbered = config.EnvSwitch("REDACTION_NUMBERED") // the one switch rule, as ai-service's app/services/switch.py
 	for _, name := range strings.Split(os.Getenv("REDACTION_DISABLE"), ",") {
 		if name = strings.TrimSpace(strings.ToLower(name)); name != "" {
 			o.Disabled[name] = true
@@ -791,8 +798,14 @@ var (
 )
 
 // Text redacts free text (kubectl output, logs, YAML, JSON). Secret documents
-// are stripped even when o.Enabled is false.
+// are stripped even when o.Enabled is false. The personal-data numbers start at 1 for each text.
 func Text(s string, o Options) (string, Stats) {
+	return TextNumbered(s, o, nil)
+}
+
+// TextNumbered is Text numbering personal data with n, which keeps a value's number across the texts it is given; nil
+// starts a table for this text.
+func TextNumbered(s string, o Options, n *Numbers) (string, Stats) {
 	var st Stats
 	if s == "" {
 		return s, st
@@ -884,31 +897,49 @@ func Text(s string, o Options) (string, Stats) {
 		s = replaceOnCredentialLines(inlineQuoted, s, maskInlineQuoted, &st, "key_name")
 		s = replaceOnCredentialLines(inlinePair, s, maskInlinePair, &st, "key_name")
 	}
-	return redactPII(s, o, &st), st
+	return redactPII(s, o, &st, n), st
 }
 
-// redactPII applies the personal-data rules; one address keeps one placeholder across the text it is given.
-func redactPII(s string, o Options, st *Stats) string {
+// redactPII applies the personal-data rules. With o.Numbered each value gets the placeholder of its kind with its number
+// in n (<EMAIL_1>, <RRN_1>, <CARD_1>, <PHONE_1>), the same number wherever n meets it again; without it one address keeps
+// one placeholder across the text it is given and n is not read.
+func redactPII(s string, o Options, st *Stats, n *Numbers) string {
 	if !o.PII {
 		return s
 	}
-	if o.on("email") {
-		seen := map[string]int{}
-		s = replaceCount(emailAddr, s, func(m string) string {
-			if _, ok := seen[m]; !ok {
-				seen[m] = len(seen) + 1
-			}
-			return fmt.Sprintf("<EMAIL_%d>", seen[m])
-		}, st, "email")
+	if !o.Numbered {
+		if o.on("email") {
+			seen := map[string]int{}
+			s = replaceCount(emailAddr, s, func(m string) string {
+				if _, ok := seen[m]; !ok {
+					seen[m] = len(seen) + 1
+				}
+				return fmt.Sprintf("<EMAIL_%d>", seen[m])
+			}, st, "email")
+		}
+		if o.on("rrn") {
+			s = replaceCount(krRRN, s, func(string) string { return "<REDACTED:rrn>" }, st, "rrn")
+		}
+		if o.on("card") {
+			s = replaceCount(cardNum, s, func(string) string { return "<REDACTED:card>" }, st, "card")
+		}
+		if o.on("phone") {
+			s = replaceCount(krPhone, s, func(string) string { return "<REDACTED:phone>" }, st, "phone")
+		}
+		return s
 	}
-	if o.on("rrn") {
-		s = replaceCount(krRRN, s, func(string) string { return "<REDACTED:rrn>" }, st, "rrn")
+	if n == nil {
+		n = &Numbers{}
 	}
-	if o.on("card") {
-		s = replaceCount(cardNum, s, func(string) string { return "<REDACTED:card>" }, st, "card")
-	}
-	if o.on("phone") {
-		s = replaceCount(krPhone, s, func(string) string { return "<REDACTED:phone>" }, st, "phone")
+	n.startAfterHeld(s)
+	for _, rule := range []struct {
+		kind string
+		re   *regexp.Regexp
+	}{{"email", emailAddr}, {"rrn", krRRN}, {"card", cardNum}, {"phone", krPhone}} {
+		if o.on(rule.kind) {
+			kind := rule.kind
+			s = replaceCount(rule.re, s, func(m string) string { return n.placeholder(kind, m) }, st, kind)
+		}
 	}
 	return s
 }

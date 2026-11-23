@@ -24,7 +24,7 @@ test.describe('multi-cluster chat history (step 13)', () => {
         data: { title: `e2e-chat-${Date.now()}` },
       })
       expect(created.status()).toBe(200)
-      sessionId = (await created.json()).id
+      sessionId = withUndo((await created.json()).id, (i) => request.delete(`/api/v1/sessions/${i}`, { headers: auth, failOnStatusCode: false }))
       expect(sessionId).toBeTruthy()
 
       // listed under 'default'
@@ -42,4 +42,17 @@ test.describe('multi-cluster chat history (step 13)', () => {
       }
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

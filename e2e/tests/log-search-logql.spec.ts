@@ -115,7 +115,7 @@ test.describe('LogQL written by hand', () => {
   test("a read across namespaces leaves the node shell's namespace out for a Read user and not for an admin", async ({ request }) => {
     const id = Date.now().toString(36)
     const shellNs = 'kubeast-node-shell'
-    const shellJob = `e2e-logql-shell-${id}`
+    const shellJob = withUndo(`e2e-logql-shell-${id}`, (j) => request.delete(`/api/v1/namespaces/${shellNs}/jobs/${j}?cluster=${CLUSTER}`, { headers: bearer(admin), failOnStatusCode: false }))
     const shellMarker = `${shellJob}-marker`
     const email = `${shellJob}@kubeast.local`
     const inShell = `{k8s_namespace_name="${shellNs}"} |= "${shellMarker}"`
@@ -257,4 +257,17 @@ function madeUser<T>(id: T, headers: Record<string, string>): T {
 }
 test.afterEach(async ({ request }) => {
   for (const { id, headers } of madeUsers.splice(0)) await request.delete(`/api/v1/auth/admin/users/${id}`, { headers, failOnStatusCode: false })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
