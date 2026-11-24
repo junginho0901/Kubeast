@@ -41,6 +41,8 @@ const PLANTED = [
 ]
 const [SCRIPT, IMG, SVG] = PLANTED
 const DETAILS = PLANTED[7]
+// the time the kubelet writes before each line of a followed log
+const LINE_TIME = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+(?:Z|[+-]\d\d:\d\d) /
 
 const stamp = () => Date.now().toString(36)
 
@@ -419,7 +421,10 @@ test.describe.serial('Drawn text runs no script: a pod\'s logs and events', () =
     if (files) await expect(page.getByTestId('log-source-stdout')).toHaveAttribute('aria-pressed', 'true')
     const stdout = page.locator('pre.whitespace-pre-wrap').first()
     await expect(stdout).toContainText(PLANTED[PLANTED.length - 1], { timeout: 15_000 })
-    expect((await stdout.innerText()).trimEnd().split('\n')).toEqual(PLANTED)
+    // the tab follows the log with its times: each line is a time, then the words the pod wrote
+    const lines = (await stdout.innerText()).trimEnd().split('\n')
+    for (const line of lines) expect(line).toMatch(LINE_TIME)
+    expect(lines.map((line) => line.replace(LINE_TIME, ''))).toEqual(PLANTED)
     await settle(page)
     expect(await madeFrom(stdout)).toEqual(NOTHING_MADE)
     expect(await ran()).toEqual(NOTHING_RAN)
