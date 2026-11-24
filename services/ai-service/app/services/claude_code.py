@@ -12,7 +12,8 @@ to Claude Code through the Claude Agent SDK (pip ``claude-agent-sdk``, which car
 Every run is isolated: a temporary HOME and config directory, only that tool server, no built-in tools, no
 settings files, and every variable this service inherited blanked except PATH, locale and proxy settings,
 so the model keys and the database URL never reach it. The token reaches it only as
-``CLAUDE_CODE_OAUTH_TOKEN``. Off by default (``AI_CLAUDE_CODE_ENABLED``, chart
+``CLAUDE_CODE_OAUTH_TOKEN``, and every prompt goes to it as written (``verbatim_prompts``).
+Off by default (``AI_CLAUDE_CODE_ENABLED``, chart
 ``ai.providers.claudeCode.enabled``) and meant for an install one person uses with their own subscription:
 Anthropic's terms keep subscriptions to individual use. Runs wait for a free slot: the investigator's own one per
 server, so an investigation never holds up a chat, or a chat slot of this server (``AI_CLAUDE_CODE_MAX_CONCURRENT``,
@@ -333,6 +334,7 @@ def _options(sdk, *, model: str, system_prompt: str, token: str, workdir: str, s
         system_prompt=system_prompt or "",
         tools=[],              # no built-in tools (Bash, Read, Edit, web …)
         setting_sources=[],    # no settings, CLAUDE.md or plugins from any directory
+        verbatim_prompts=True,  # earlier turns, tool results and alert text are in the prompt: every word of it is text
         strict_mcp_config=True,
         mcp_servers={TOOL_SERVER: server} if server is not None else {},
         allowed_tools=list(allowed),
