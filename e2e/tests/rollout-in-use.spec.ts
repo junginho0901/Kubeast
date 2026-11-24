@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
-import { test, expect, type APIRequestContext, type Page, type TestStepInfo } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Locator, type Page, type TestStepInfo } from '@playwright/test'
 
 // On `self`, k8s-service, then auth-service, then the gateway are rolled (kubectl rollout restart, each waited for) while
 // a page holds a live list of the kubeast pods (Cluster View's node boxes watch them; the Pods page polls), a terminal and
@@ -75,13 +75,17 @@ async function within(ms: number, ok: () => boolean | Promise<boolean>): Promise
 
 type PodItem = {
   metadata: { name: string; deletionTimestamp?: string; labels?: Record<string, string> }
+  spec?: { nodeName?: string }
   status?: { containerStatuses?: { name: string; state?: { terminated?: { exitCode: number; reason?: string } } }[] }
 }
 
 async function podsIn(selector: string[]): Promise<PodItem[]> {
   return (JSON.parse(await kubectlAsync(['-n', KUBEAST_NS, 'get', 'pods', ...selector, '-o', 'json'])) as { items: PodItem[] }).items
 }
-const kubeastPods = async () => (await podsIn([])).map((p) => p.metadata.name)
+async function kubeastPods(): Promise<{ names: string[]; nodes: string[] }> {
+  const items = await podsIn([])
+  return { names: items.map((p) => p.metadata.name), nodes: [...new Set(items.map((p) => p.spec?.nodeName ?? '').filter(Boolean))] }
+}
 
 // What the install's Deployment gives a pod to leave in, and what its readiness asks.
 type Facts = { preStopSeconds: number; graceSeconds: number; readinessPath: string }
@@ -201,9 +205,38 @@ function watchStreams() {
   }
 }
 
-// The pod names Cluster View's node boxes show (a card's first title is its pod's name).
-const gridNames = (page: Page) =>
-  page.locator('[data-testid="cluster-view-node"] button').evaluateAll((cards) => cards.map((c) => c.querySelector('[title]')?.getAttribute('title') ?? ''))
+// The pod names each node's own view in Cluster View (?node=) shows, page by page: a box of the overview draws at most 12.
+const nodeViews = new Map<string, Page>()
+async function gridNames(page: Page, listed: { names: string[]; nodes: string[] }): Promise<string[]> {
+  const names: string[] = []
+  const most = Math.ceil(listed.names.length / 60) + 2
+  for (const node of listed.nodes) {
+    let view = nodeViews.get(node)
+    if (!view) {
+      view = nodeViews.size === 0 ? page : await page.context().newPage()
+      nodeViews.set(node, view)
+      await view.goto(`/cluster-view?cluster=${CLUSTER}&namespace=${KUBEAST_NS}&node=${encodeURIComponent(node)}`)
+    }
+    const pager = view.getByTestId('cluster-view-node-pods-pager')
+    if ((await pager.count()) === 0) continue
+    const turn = async (button: Locator) => {
+      const was = await pager.innerText()
+      await button.click({ timeout: 5_000 })
+      return within(5_000, async () => (await pager.innerText()) !== was)
+    }
+    const prev = pager.getByRole('button', { name: /Prev|이전/ })
+    const next = pager.getByRole('button', { name: /Next|다음/ })
+    let moved = true
+    for (let i = 0; moved && await prev.isEnabled(); i++) moved = i < most && await turn(prev)
+    for (let i = 0; moved; i++) {
+      names.push(...await view.locator('[data-testid="cluster-view-node"] [data-testid="cluster-view-pod"]').evaluateAll((cards) => cards.map((c) => c.querySelector('[title]')?.getAttribute('title') ?? '')))
+      if (!(await next.isEnabled())) break
+      moved = i < most && await turn(next)
+    }
+    if (!moved) names.push(`(the pages of ${node} did not turn)`)
+  }
+  return names
+}
 const twice = (names: string[]) => names.filter((n, i) => names.indexOf(n) !== i)
 const sameOnce = (shown: string[], listed: string[]) => twice(shown).length === 0 && JSON.stringify([...shown].sort()) === JSON.stringify([...listed].sort())
 
@@ -212,8 +245,9 @@ async function listAgainstKubectl(page: Page): Promise<ListSeen> {
   const from = Date.now()
   let seen: ListSeen = { shown: [], listed: [], settledMs: null }
   await within(LIST_SETTLE_MS, async () => {
-    const [shown, listed] = await Promise.all([gridNames(page), kubeastPods()])
-    seen = { shown, listed, settledMs: sameOnce(shown, listed) ? Date.now() - from : null }
+    const listed = await kubeastPods()
+    const shown = await gridNames(page, listed)
+    seen = { shown, listed: listed.names, settledMs: sameOnce(shown, listed.names) ? Date.now() - from : null }
     return seen.settledMs !== null
   })
   return seen
@@ -368,10 +402,12 @@ test.describe('rolling the install\'s services while it is in use', () => {
       watch = watchPods()
       await expect.poll(() => watch!.pods.size, { message: 'the pod watch lists the kubeast pods', timeout: 20_000 }).toBeGreaterThan(0)
 
-      // the live list: Cluster View's node boxes on the kubeast namespace, as kubectl lists it
+      // the live list: Cluster View's own view of each node the kubeast pods are on, as kubectl lists them
       await page.addInitScript(watchSockets)
-      await page.goto(`/cluster-view?cluster=${CLUSTER}&namespace=${KUBEAST_NS}`)
-      await expect.poll(async () => sameOnce(await gridNames(page), await kubeastPods()), { message: 'the boxes show the kubeast pods', timeout: 30_000 }).toBe(true)
+      await expect.poll(async () => {
+        const listed = await kubeastPods()
+        return sameOnce(await gridNames(page, listed), listed.names)
+      }, { message: 'the boxes show the kubeast pods', timeout: 30_000 }).toBe(true)
 
       // the followed log: the Logs tab of the pod's card
       const logs = await page.context().newPage()

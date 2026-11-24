@@ -434,7 +434,7 @@ test.describe('drain progress in the database (PR #858)', () => {
     try {
       probe = new Probe(request, reads, headers, 100, 10_000)
       await sleep(5_000)
-      // 60 s from the moment the PostgreSQL pod is gone; each delete's wait ends by then, so the outage stays 60 s
+      // 60 s from the moment the PostgreSQL pod is gone, up to about 63 s with the 3 s pause after the last delete; a delete starts only while its whole 15 s wait fits
       outage = await stopFor('postgres', 60, async (offAt) => {
         await sleep(10_000)
         const drain = await request.post(`/api/v1/cluster/nodes/${node}/drain?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: 15_000 }).catch(() => null)
@@ -442,9 +442,9 @@ test.describe('drain progress in the database (PR #858)', () => {
         // a ConfigMap delete on test2 every 3 s while it is off: refused (the ConfigMap stays), or done with its row
         for (const name of maps) {
           const left = 60_000 - (Date.now() - offAt)
-          if (left < 1_000) break
+          if (left < 15_000) break
           const at = Date.now()
-          const res = await request.delete(`/api/v1/cluster/namespaces/${ns}/configmaps/${name}?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: Math.min(15_000, left) }).catch(() => null)
+          const res = await request.delete(`/api/v1/cluster/namespaces/${ns}/configmaps/${name}?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: 15_000 }).catch(() => null)
           writes.push({ name, status: res?.status() ?? 0, at })
           await sleep(3_000)
         }
@@ -471,6 +471,7 @@ test.describe('drain progress in the database (PR #858)', () => {
     expect(drainDuring, 'a drain start while PostgreSQL was off is refused with 503 (its progress cannot be saved)').toBe(503)
     const accepted = writes.filter((w) => w.status >= 200 && w.status < 300).map((w) => w.name)
     test.info().annotations.push({ type: 'writes during the outage', description: writes.map((w) => `${w.name}=${w.status}`).join(' ') })
+    expect(writes.length, 'deletes sent during the outage').toBeGreaterThan(0)
     const rows = await auditRows(request, token, 'k8s.configmap.delete', since)
     const recorded = rows.filter((r) => r.Result === 'success').map((r) => r.TargetID)
     expect(accepted.filter((n) => !recorded.includes(n)), 'deletes accepted during the outage with no audit row').toEqual([])
