@@ -1156,11 +1156,7 @@ async def session_chat_stream(
                         log.debug("[DEBUG] Continuation %s/%s", continuation_index, max_continuations)
                         messages.append({
                             "role": "user",
-                            "content": (
-                                "방금 답변이 길이 제한으로 중간에 끊겼습니다. "
-                                "바로 이전 출력의 마지막 문장/항목 다음부터 자연스럽게 이어서 작성하세요. "
-                                "이미 출력한 내용은 반복하지 마세요."
-                            ),
+                            "content": chat_steps.CONTINUE,
                         })
 
                         try:

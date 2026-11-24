@@ -1,6 +1,7 @@
 """The model calls one chat answer may make (AI_CHAT_MAX_STEPS, chart ai.chat.maxSteps), what the last of them is told and
 what the chat says when that one wrote nothing. On a Claude subscription Claude Code makes the calls and stops at its own
-limit (ai.providers.claudeCode.maxTurns); one call without tools then writes the answer."""
+limit (ai.providers.claudeCode.maxTurns); one call without tools then writes the answer. An answer cut at its length goes
+on with CONTINUE."""
 
 from __future__ import annotations
 
@@ -12,6 +13,9 @@ DEFAULT_STEPS = 20
 STEPS_RANGE = (1, 100)
 SETTING = "ai.chat.maxSteps"
 CLAUDE_CODE_SETTING = "ai.providers.claudeCode.maxTurns"
+# The language is the answer's, which the model has in front of it: the instruction names none.
+CONTINUE = ("Your last answer stopped at its length limit. Go on from right after where it stopped, in the language of that "
+            "answer, and do not repeat what it already says.")
 
 
 def max_steps() -> int:

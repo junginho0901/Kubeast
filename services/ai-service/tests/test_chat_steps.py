@@ -298,6 +298,26 @@ async def test_a_last_answer_cut_at_its_length_goes_on(monkeypatch):
     assert "tools" not in model.sent(3) and model.sent(3)["messages"][-2] == {"role": "assistant", "content": "It restarts: "}
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("question", [EN, KO], ids=["english", "korean"])
+async def test_a_cut_answer_is_told_to_go_on_in_its_own_language(monkeypatch, question):
+    monkeypatch.delenv("AI_CHAT_MAX_STEPS", raising=False)
+
+    class Cut(AlwaysCalls):
+        async def create(self, **kw):
+            self.finish_reason = "length" if len(self.requests) < 3 else "stop"
+            return await super().create(**kw)
+
+    model = Cut(steps=1)
+    await ask(monkeypatch, model, question=question)
+    assert len(model.requests) == 4  # the call with a tool, the cut answer, a cut rest of it, its end
+    for n, told in ((3, 1), (4, 2)):
+        users = [m["content"] for m in model.sent(n)["messages"] if m["role"] == "user"]
+        assert users == [question] + [
+            "Your last answer stopped at its length limit. Go on from right after where it stopped, in the language of "
+            "that answer, and do not repeat what it already says."] * told
+
+
 ENGLISH = ("The model used all the calls one answer may make and wrote no answer. Ask something narrower, or ask an "
            "administrator to raise {}.")
 KOREAN = ("모델이 한 답변에 쓸 수 있는 호출을 모두 쓰고도 답을 쓰지 못했습니다. 질문을 더 좁혀 다시 묻거나, "
