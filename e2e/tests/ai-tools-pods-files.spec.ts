@@ -12,7 +12,8 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 // - storage_summary: the Storage window's /pvcs?usage=true, /pvs and /topology/storage.
 // - network_policy_effective: a drawer's Network Policies section.
 // - limit_range_violations: a LimitRange window's Violating Pods, on a pod made before the LimitRange.
-// - alerts_inbox: the Alerts inbox and one alert's window, with marks set through the screen's route and left unchanged.
+// - alerts_inbox: the Alerts inbox and one alert's window, its two links as the rule's expression, with marks set through
+//   the screen's route and left unchanged.
 // A grant limited to namespaces then calls the tools that stay inside it without naming one, with objects in a
 // namespace beside its own that must not show.
 
@@ -351,11 +352,13 @@ test.describe('AI tools: what a screen computes', () => {
     const run = runId()
     const webhookToken = Buffer.from(kubectl(['-n', 'kubeast', 'get', 'secret', 'kubeast-secrets', '-o', 'jsonpath={.data.ALERT_WEBHOOK_TOKEN}']), 'base64').toString()
     const labels = { alertname: `E2ESym4Inbox${run}`, severity: 'info', namespace: `e2e-sym4-${run}` }
+    const rule = 'sum by (pod) (up) > 1'
+    const links = { generator_url: `http://prometheus.e2e:9090/graph?g0.expr=${encodeURIComponent(rule)}&g0.tab=1`, alertmanager_url: 'http://alertmanager.e2e:9093' }
     const post = (status: string, extra: Obj = {}) => request.post(`/api/v1/alerts/webhook?cluster=${CLUSTER}`, {
       headers: { Authorization: `Bearer ${webhookToken}` },
       data: {
-        version: '4', groupKey: `{}:{alertname="${labels.alertname}"}`, status, receiver: 'kubeast', externalURL: 'http://alertmanager.e2e:9093',
-        alerts: [{ status, labels, annotations: { summary: `sym4 ${run}`, runbook: 'https://runbook.example/sym4' }, startsAt: new Date(Date.now() - 60_000).toISOString(), fingerprint: `sym4-${run}`, ...extra }],
+        version: '4', groupKey: `{}:{alertname="${labels.alertname}"}`, status, receiver: 'kubeast', externalURL: links.alertmanager_url,
+        alerts: [{ status, labels, annotations: { summary: `sym4 ${run}`, runbook: 'https://runbook.example/sym4' }, startsAt: new Date(Date.now() - 60_000).toISOString(), generatorURL: links.generator_url, fingerprint: `sym4-${run}`, ...extra }],
       },
     })
     expect((await (await withUndo(post('firing'), () => post('resolved', { endsAt: new Date().toISOString() }))).json()).stored).toBe(1)
@@ -374,7 +377,14 @@ test.describe('AI tools: what a screen computes', () => {
 
       const window = await routeOf(request, admin, `/api/v1/alerts/inbox/${id}`)
       const one = await answerOf(request, admin, 'alerts_inbox', { alert_id: id })
-      expectSameValues(one, window)
+      // The window links both addresses; the tool gives neither, only the expression the first one holds.
+      const { generator_url, alertmanager_url, ...shown } = window
+      expect({ generator_url, alertmanager_url }).toEqual(links)
+      expectSameValues(one, shown)
+      expect(one).not.toHaveProperty('generator_url')
+      expect(one).not.toHaveProperty('alertmanager_url')
+      expect(JSON.stringify(one)).not.toMatch(/prometheus\.e2e|alertmanager\.e2e/)
+      expect(one.expr).toBe(rule)
       expect([one.note, one.note_by]).toEqual([note, adminEmail])
       expect(one.alert_link).toContain(`alert=${id}`)
 
