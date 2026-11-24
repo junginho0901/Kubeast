@@ -917,7 +917,7 @@ async def session_chat_stream(
         no_calls = tool_turn.no_more_calls(service, tools)  # what a call that may call no tool adds to its request
         read_so_far = ""  # on a subscription stopped at its limit, what the tools returned, for the last call
         final = False
-        last_finish_reason = None
+        last_finish_reason = not_started = None
         iteration = 0
         # tool_calls_log: Tool call 정보 저장
         # parts: the turn in order: ("text", what the model wrote) / ("tool", call_id) — the saved answer
@@ -1089,6 +1089,7 @@ async def session_chat_stream(
                 if read_so_far and not getattr(api_error, "started", True):
                     # The closing run got no slot in time or did not start: the turn ends with what was read (no_answer below).
                     log.warning("the run that closes a Claude Code turn did not start: %s", safe_error(api_error))
+                    not_started = chat_steps.NOT_STARTED
                     break
                 log.error("model call failed (%s): %s", service.provider, safe_error(api_error))
                 await _keep_failed_answer(db, service, session_id, parts + [("text", stream_content)], tool_calls_log, turn_usage)
@@ -1217,7 +1218,7 @@ async def session_chat_stream(
         # The last step wrote nothing either
         if final and not assistant_content.strip():
             log.warning("the chat's last model call (%s, %s) wrote no answer (finish reason %s)", iteration, limit_setting, last_finish_reason)
-            assistant_content = chat_steps.no_answer(message, limit_setting, last_finish_reason)
+            assistant_content = chat_steps.no_answer(message, limit_setting, not_started or last_finish_reason)
             yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
 
         log.debug("[DEBUG] Preparing to save message. assistant_content length: %d, tool_calls: %d", len(assistant_content), len(tool_calls_log))

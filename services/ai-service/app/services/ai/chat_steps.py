@@ -14,6 +14,7 @@ DEFAULT_STEPS = 20
 STEPS_RANGE = (1, 100)
 SETTING = "ai.chat.maxSteps"
 CLAUDE_CODE_SETTING = "ai.providers.claudeCode.maxTurns"
+NOT_STARTED = "not_started"  # in place of a finish reason: a subscription's closing run got no slot or did not start
 # The language is the answer's, which the model has in front of it: the instruction names none.
 CONTINUE = ("Your last answer stopped at its length limit. Go on from right after where it stopped, in the language of that "
             "answer, and do not repeat what it already says.")
@@ -40,8 +41,13 @@ def final_message(question: str) -> str:
 
 def no_answer(question: str, setting: str, finish_reason: Optional[str] = None) -> str:
     """What the chat shows when the last call wrote no text, in the language of the question: that the calls are used up,
-    unless the answer ended at its length or the provider's filter stopped it (the last finish reason)."""
+    unless the answer ended at its length or the provider's filter stopped it (the last finish reason), or the run that
+    would have written it did not start (NOT_STARTED)."""
     korean = detect_response_language(question) == "Korean"
+    if finish_reason == NOT_STARTED:
+        if korean:
+            return "Claude Code가 바쁘거나 시작되지 않아, 읽은 것으로 답을 쓰지 못했습니다. 잠시 뒤 다시 질문하세요."
+        return "Claude Code was busy or did not start, so no answer was written from what was read. Ask again in a moment."
     if finish_reason == "length":
         if korean:
             return ("모델이 답을 쓰기 전에 답 최대 길이에 닿았습니다. 질문을 더 좁혀 다시 묻거나, "

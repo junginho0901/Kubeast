@@ -10,6 +10,7 @@ import os
 from types import SimpleNamespace
 
 import pytest
+from prometheus_client import REGISTRY
 
 from app.services import claude_code, claude_code_slots
 from app.services.ai import chat_steps, debug_dump, streaming
@@ -667,15 +668,26 @@ def kept_what_it_read(turn, said_so):
     assert (turn.complete["after"]["tool_calls"], turn.complete["after"]["finish_reason"]) == (2, "max_turns")
 
 
+NOT_STARTED = {EN: "Claude Code was busy or did not start, so no answer was written from what was read. Ask again in a moment.",
+               KO: "Claude Code가 바쁘거나 시작되지 않아, 읽은 것으로 답을 쓰지 못했습니다. 잠시 뒤 다시 질문하세요."}
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("question,sentence", [(EN, ENGLISH), (KO, KOREAN)], ids=["english", "korean"])
-async def test_a_closing_run_that_gets_no_slot_in_time_ends_the_turn_with_what_was_read(on, monkeypatch, question, sentence):  # noqa: F811
+@pytest.mark.parametrize("question", [EN, KO], ids=["english", "korean"])
+async def test_a_closing_run_that_gets_no_slot_in_time_ends_the_turn_with_what_was_read(on, monkeypatch, caplog, question):  # noqa: F811
+    def busy():
+        return REGISTRY.get_sample_value("kubeast_claude_code_busy_total", {"service": "ai"}) or 0
+
     one_slot(monkeypatch, 5, 5, 0.1)
-    sdk = on(Runs(SLOW, [("hold",), done("the other answer")]))
+    sdk, before = on(Runs(SLOW, [("hold",), done("the other answer")])), busy()
     other = asyncio.create_task(next_in_the_queue(sdk))
     turn = await ask(monkeypatch, subscription(), provider="claude-code", question=question)
     assert [p["queued"] for p in turn.payloads if "queued" in p] == [True]
-    kept_what_it_read(turn, sentence.format("ai.providers.claudeCode.maxTurns"))
+    kept_what_it_read(turn, NOT_STARTED[question])
+    assert "maxTurns" not in turn.saved["content"] and busy() == before + 1
+    assert caplog.messages[-2:] == [
+        "the run that closes a Claude Code turn did not start: Claude Code is busy; ask again in a moment.",
+        "the chat's last model call (3, ai.providers.claudeCode.maxTurns) wrote no answer (finish reason None)"]
     sdk.state["release"].set()
     assert (await other).text == "the other answer" and len(sdk.state["options"]) == 2  # the closing run never started
 
@@ -710,7 +722,7 @@ async def test_a_closing_run_that_does_not_start_ends_the_turn_with_what_was_rea
 
     monkeypatch.setattr(claude_code, "_options", options)
     turn = await ask(monkeypatch, subscription(), provider="claude-code")
-    kept_what_it_read(turn, ENGLISH.format("ai.providers.claudeCode.maxTurns"))
+    kept_what_it_read(turn, NOT_STARTED[EN])
     assert not [p for p in turn.payloads if "queued" in p] and sdk.state["running"] == 0
 
 
