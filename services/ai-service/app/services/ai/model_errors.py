@@ -88,6 +88,21 @@ def _status(err: Exception) -> Optional[int]:
     return None
 
 
+# A request refused for its size, in the words of the providers, gateways and local servers.
+_TOO_LONG = re.compile(
+    r"context.{0,10}(length|window|size|limit)|too (long|large|many tokens)|longer than the maximum|reduce the length|"
+    r"above_max_length|tokens? .{0,40}(exceed|must be <=)|exceed.{0,60}tokens",
+    re.IGNORECASE,
+)
+
+
+def refused_form(err: BaseException) -> bool:
+    """Whether err refuses what the request holds (400, 422), so another form of it may be taken: not its size, the
+    account or the key."""
+    return (_status(err) in (400, 422) and classify(err).kind == OTHER
+            and not _TOO_LONG.search(f"{_code(err)} {err}"))
+
+
 def classify(err: BaseException) -> Refusal:
     """The kind of refusal err is; OTHER when it says nothing the providers document."""
     if refused_address(err) is not None:

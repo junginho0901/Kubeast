@@ -97,20 +97,29 @@ def piece(content=None, call=None, finish_reason=None, usage=None):
                            usage=usage)
 
 
+class Refused(RuntimeError):
+    """A provider's error answer with its HTTP status and code, as the OpenAI SDK raises it."""
+
+    def __init__(self, status_code=400, message="unknown parameter", code=None):
+        super().__init__(message)
+        self.status_code, self.code = status_code, code
+
+
 class AlwaysCalls:
     """A model that calls a tool while it may, then streams `answer`; it keeps each request as it was sent. `steps`: how many
     requests it calls a tool on (None: every one that offers tools)."""
 
-    def __init__(self, answer=("It restarts: ", "out of memory."), finish_reason="stop", steps=None, refuse=()):
+    def __init__(self, answer=("It restarts: ", "out of memory."), finish_reason="stop", steps=None, refuse=(), error=None):
         self.requests, self.answer, self.finish_reason, self.steps = [], answer, finish_reason, steps
         self.refuse = list(refuse)  # the numbers of the requests answered with an error
+        self.error = error or Refused()
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
 
     async def create(self, **kw):
         self.requests.append(json.dumps(kw, ensure_ascii=False))
         n = len(self.requests)
         if n in self.refuse:
-            raise RuntimeError("400 unknown parameter")
+            raise self.error
         may_call = bool(kw.get("tools")) and kw.get("tool_choice") != "none" and (self.steps is None or n <= self.steps)
         usage = SimpleNamespace(prompt_tokens=100, completion_tokens=10, total_tokens=110)
 
@@ -252,36 +261,144 @@ async def test_an_answer_before_the_last_call_sends_what_it_sent_before_the_sett
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider", ["openai", "azure", "gemini", "ollama", "custom", "anthropic"])
 async def test_a_last_call_sent_again_still_calls_no_tool(monkeypatch, provider):
-    """A refused request is sent again without stream_options, as the calls before it are without tool_choice, and with the
-    tools and tool_choice none, which on Anthropic the first one has too."""
+    """A refused request is sent again without stream_options, as the calls before it are without tool_choice."""
     monkeypatch.setenv("AI_CHAT_MAX_STEPS", "2")
     model = AlwaysCalls(refuse=[2])
     turn = await ask(monkeypatch, model, provider=provider)
-    none_called = {"tools": [TOOL], "tool_choice": "none"}
-    first, again = ({k: v for k, v in model.sent(n).items() if k != "messages"} for n in (2, 3))
-    assert {k: first[k] for k in ("tools", "tool_choice") if k in first} == (none_called if provider == "anthropic" else {})
-    assert again == {**{k: v for k, v in first.items() if k != "stream_options"}, **none_called} and "stream_options" in first
-    assert model.sent(3)["messages"] == model.sent(2)["messages"]
+    first, again = model.sent(2), model.sent(3)
+    tools = {"tools": [TOOL], "tool_choice": "none"} if provider == "anthropic" else {}
+    assert {k: first[k] for k in ("tools", "tool_choice") if k in first} == tools
+    assert again == {k: v for k, v in first.items() if k != "stream_options"} and "stream_options" in first
     assert len(turn.ran) == 1 and turn.saved["content"].endswith("out of memory.") and not turn.errors
-    # the answered request's size, with the tools it was sent with
-    assert turn.complete["after"]["prompt_chars"] == sum(
-        len(json.dumps(model.sent(n)["messages"], ensure_ascii=False)) + len(json.dumps([TOOL], ensure_ascii=False)) for n in (1, 3))
+    # the answered request's size, with the tools where it had them
+    assert turn.complete["after"]["prompt_chars"] == size(model, 1, 3)
+
+
+def size(model, *numbers):
+    return sum(len(json.dumps(model.sent(n)["messages"], ensure_ascii=False))
+               + (len(json.dumps([TOOL], ensure_ascii=False)) if "tools" in model.sent(n) else 0) for n in numbers)
+
+
+class NoStreamOptions(AlwaysCalls):
+    """A server that refuses stream_options; what it does with tool_choice none: "takes", "ignores" or "refuses"."""
+
+    def __init__(self, none, **kw):
+        super().__init__(**kw)
+        self.none = none
+
+    async def create(self, **kw):
+        n, none = len(self.requests) + 1, kw.get("tool_choice") == "none"
+        if "stream_options" in kw or (none and self.none == "refuses"):
+            self.refuse.append(n)
+        stream = await super().create(**kw)
+        if not none or self.none == "takes":
+            return stream
+
+        async def calls():
+            yield piece(call=n, finish_reason="tool_calls")
+        return calls()
 
 
 @pytest.mark.asyncio
-async def test_a_gateway_that_takes_tool_messages_only_beside_the_tools_answers_the_last_call(monkeypatch):
+@pytest.mark.parametrize("none", ["takes", "ignores", "refuses"])
+async def test_a_server_without_stream_options_answers_the_last_call_whatever_it_does_with_tool_choice_none(monkeypatch, none):
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "3")
+    model = NoStreamOptions(none)
+    turn = await ask(monkeypatch, model, provider="custom")
+    assert turn.content[-2:] == ["It restarts: ", "out of memory."] and not turn.errors and turn.complete["result"] == "success"
+    assert len(model.requests) == 6 and not {"tools", "tool_choice"} & model.sent(6).keys()  # each call in two tries
+
+
+@pytest.mark.asyncio
+async def test_a_server_that_ignores_tool_choice_none_answers_the_last_call_sent_again(monkeypatch):
     monkeypatch.setenv("AI_CHAT_MAX_STEPS", "3")
 
-    class NeedsTools(AlwaysCalls):
+    class Ignores(AlwaysCalls):
         async def create(self, **kw):
-            if not kw.get("tools") and any(m["role"] == "tool" for m in kw["messages"]):
-                self.refuse.append(len(self.requests) + 1)
+            return await super().create(**{**kw, "tool_choice": "auto"} if kw.get("tools") else kw)
+
+    model = Ignores(refuse=[3])
+    turn = await ask(monkeypatch, model, provider="ollama")
+    assert turn.content == ["Reading 1. ", "Reading 2. ", "It restarts: ", "out of memory."] and len(model.requests) == 4
+    assert turn.saved["content"].endswith("</details>\n\nIt restarts: out of memory.") and not turn.errors
+
+
+class NeedsTools(AlwaysCalls):
+    """A gateway that takes tool messages only beside the tools (LiteLLM in front of Bedrock or Anthropic)."""
+
+    async def create(self, **kw):
+        if not kw.get("tools") and any(m["role"] == "tool" for m in kw["messages"]):
+            self.refuse.append(len(self.requests) + 1)
+        return await super().create(**kw)
+
+
+LITELLM = "litellm.UnsupportedParamsError: Bedrock doesn't support tool calling without `tools=` param specified."
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [Refused(400, LITELLM), Refused(422, LITELLM)], ids=["400", "422"])
+@pytest.mark.parametrize("provider", ["openai", "azure", "gemini", "ollama", "custom"])
+async def test_a_gateway_that_takes_tool_messages_only_beside_the_tools_answers_the_third_try(monkeypatch, provider, error):
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "3")
+    model = NeedsTools(error=error)
+    turn = await ask(monkeypatch, model, provider=provider)
+    assert len(model.requests) == 5 and ["tools" in model.sent(n) for n in range(1, 6)] == [True, True, False, False, True]
+    second, third = model.sent(4), model.sent(5)
+    assert third == {**second, "tools": [TOOL], "tool_choice": "none"} and "stream_options" not in third
+    assert not turn.errors and len(turn.ran) == 2 and turn.saved["content"].endswith("</details>\n\nIt restarts: out of memory.")
+    assert turn.complete["after"]["prompt_chars"] == size(model, 1, 2, 5) and turn.saved["usage"]["model_calls"] == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [
+    Refused(400, "This model's maximum context length is 8192 tokens.", "context_length_exceeded"), Refused(413, "Request too large"),
+    Refused(429, "Rate limit reached"), Refused(500, "server error"), Refused(401, "invalid key"),
+    Refused(400, "Your credit balance is too low"), RuntimeError("400 unknown parameter"),
+], ids=["too long", "413", "429", "500", "401", "credit", "no status"])
+async def test_there_is_no_third_try_after_another_refusal(monkeypatch, error):
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "3")
+    model = NeedsTools(error=error)
+    turn = await ask(monkeypatch, model)
+    assert ["tools" in model.sent(n) for n in range(1, len(model.requests) + 1)] == [True, True, False, False]
+    assert len(turn.errors) == 1 and turn.complete["result"] == "failure" and len(turn.saved["tool_calls"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_third_try_refused_too_is_an_error_that_keeps_what_was_read(monkeypatch):
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "3")
+    model = AlwaysCalls(refuse=[3, 4, 5])
+    turn = await ask(monkeypatch, model)
+    assert len(model.requests) == 5 and "tools" in model.sent(5)
+    assert len(turn.errors) == 1 and turn.complete["result"] == "failure" and len(turn.saved["tool_calls"]) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["anthropic", "no tools to offer", "nothing read yet"])
+async def test_two_tries_are_all_where_the_tools_would_change_nothing(monkeypatch, case):
+    """On Anthropic both tries carry them; with no tool message in the conversation no gateway asks for them."""
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "2" if case == "anthropic" else "1")
+    last = 2 if case == "anthropic" else 1
+    model = AlwaysCalls(refuse=[last, last + 1, last + 2])
+    turn = await ask(monkeypatch, model, provider="anthropic" if case == "anthropic" else "openai",
+                     tools=() if case == "no tools to offer" else (TOOL,))
+    assert len(model.requests) == last + 1 and len(turn.errors) == 1 and turn.complete["result"] == "failure"
+
+
+@pytest.mark.asyncio
+async def test_a_cut_last_answer_goes_on_as_the_last_call_was_taken(monkeypatch):
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "3")
+
+    class Cut(NeedsTools):
+        async def create(self, **kw):
+            self.answer, self.finish_reason = (("It restarts: ",), "length") if len(self.requests) == 4 else (("out of memory.",), "stop")
             return await super().create(**kw)
 
-    model = NeedsTools()
+    model = Cut()
     turn = await ask(monkeypatch, model)
-    assert ["tools" in model.sent(n) for n in (1, 2, 3, 4)] == [True, True, False, True] and len(model.requests) == 4
-    assert not turn.errors and len(turn.ran) == 2 and turn.saved["content"].endswith("</details>\n\nIt restarts: out of memory.")
+    assert len(model.requests) == 6 and not turn.errors
+    goes_on = model.sent(6)
+    assert goes_on["tools"] == [TOOL] and goes_on["tool_choice"] == "none" and goes_on["messages"][-1]["content"] == chat_steps.CONTINUE
+    assert turn.saved["content"].endswith("</details>\n\nIt restarts: out of memory.")
 
 
 @pytest.mark.asyncio

@@ -914,6 +914,7 @@ async def session_chat_stream(
         # ===== Multi-turn Tool Calling Loop =====
         max_steps = chat_steps.max_steps()  # the model calls of this answer; the last may call no tool
         limit_setting = chat_steps.SETTING
+        no_calls = tool_turn.no_more_calls(service, tools)  # what a call that may call no tool adds to its request
         read_so_far = ""  # on a subscription stopped at its limit, what the tools returned, for the last call
         final = False
         last_finish_reason = None
@@ -998,7 +999,7 @@ async def session_chat_stream(
                 _fc_kwargs = dict(
                     model=service.model,
                     messages=messages,
-                    **(tool_turn.no_more_calls(service, tools) if final else {"tools": tools}),
+                    **(no_calls if final else {"tools": tools}),
                     temperature=0.7,
                     max_tokens=limits.answer_tokens(service, 4096),
                     timeout=60.0,
@@ -1013,11 +1014,19 @@ async def session_chat_stream(
                     stream = await service.client.chat.completions.create(**_fc_kwargs, **auto, stream_options={"include_usage": True})
                 except Exception as tc_err:
                     log.warning("streaming with %s failed (%s), retrying without it", "stream_options" if final else "tool_choice='auto'", safe_error(tc_err))
-                    if final and tools and not read_so_far:
-                        # some gateways take tool messages only beside the tools; on Anthropic they are there already
-                        _fc_kwargs.update(tools=tools, tool_choice="none")
+                    try:
+                        stream = await service.client.chat.completions.create(**_fc_kwargs)
+                    except Exception as refusal:
+                        # Some gateways take tool messages only beside the tools, which only a last call goes without.
+                        from app.services.ai.model_errors import refused_form
+                        without = tools and "tools" not in _fc_kwargs and any(m.get("role") == "tool" for m in messages)
+                        if not without or not refused_form(refusal):
+                            raise
+                        log.warning("the last call was refused without tools (%s), sending them with tool_choice='none'", safe_error(refusal))
+                        no_calls = dict(tools=tools, tool_choice="none")  # an answer cut at its length goes on with them
+                        _fc_kwargs.update(no_calls)
                         call_prompt_chars = usage_acct.prompt_chars(messages, tools)
-                    stream = await service.client.chat.completions.create(**_fc_kwargs)
+                        stream = await service.client.chat.completions.create(**_fc_kwargs)
 
                 # --- streaming delta 수집 ---
                 collected_tool_calls = {}  # index -> {id, name, arguments}
@@ -1174,13 +1183,13 @@ async def session_chat_stream(
                             cont_stream = await service.client.chat.completions.create(
                                 model=service.model, messages=messages,
                                 temperature=0.7, max_tokens=limits.answer_tokens(service, 4096),
-                                stream=True, stream_options={"include_usage": True}, **tool_turn.no_more_calls(service, tools),
+                                stream=True, stream_options={"include_usage": True}, **no_calls,
                             )
                         except Exception:
                             cont_stream = await service.client.chat.completions.create(
                                 model=service.model, messages=messages,
                                 temperature=0.7, max_tokens=limits.answer_tokens(service, 4096), stream=True,
-                                **tool_turn.no_more_calls(service, tools),
+                                **no_calls,
                             )
 
                         continuation_text = ""
