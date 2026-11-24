@@ -420,4 +420,68 @@ test.describe.serial('the guarded namespaces', () => {
       await adminPage.context().close()
     }
   })
+
+  test("Cluster View's pod window and box menu offer a terminal where the Pods drawer does", async ({ browser }) => {
+    test.setTimeout(150_000)
+    const dns = kubectl('-n kube-system get pods -l k8s-app=kube-dns -o jsonpath={.items[0].metadata.name}')
+    test.skip(!dns || !aPod, 'self has no kube-dns pod or no pod in Kubeast\'s namespace to open')
+    const dnsNode = kubectl(`-n kube-system get pod ${dns} -o jsonpath={.spec.nodeName}`)
+    const ownNode = kubectl(`-n ${NS} get pod ${aPod} -o jsonpath={.spec.nodeName}`)
+    const execTab = tr('clusterView.tabs.exec')
+    const manifestTab = tr('clusterView.tabs.manifest')
+    // the pod's card in its node's own view, and the window the card opens
+    const card = (page: Page, name: string) => page.getByTestId('cluster-view-pod').filter({ has: page.locator(`[title="${name}"]`) })
+    const podWindow = (page: Page, name: string) => page.locator('div.fixed.inset-0').filter({ has: page.locator('h2', { hasText: name }) })
+    const open = async (page: Page, node: string, namespace: string, name: string) => {
+      await page.goto(`/cluster-view?cluster=self&node=${encodeURIComponent(node)}&pod=${encodeURIComponent(`${namespace}/${name}`)}`)
+      await expect(card(page, name), `${namespace}/${name} on ${node}`).toHaveCount(1, { timeout: 20_000 })
+    }
+
+    // Write holds resource.*.create and no resource.pod.exec: no terminal in the window, the menu or the drawer, and no
+    // question to the cluster about one
+    const writerPage = await signIn(browser, writerEmail)
+    try {
+      const asked: string[] = []
+      writerPage.on('request', (r) => { if (r.url().includes('subresource=exec')) asked.push(r.url()) })
+      await open(writerPage, dnsNode, 'kube-system', dns)
+      await card(writerPage, dns).click({ button: 'right' })
+      await expect(writerPage.getByRole('menu').getByRole('menuitem'), 'the menu holds Delete only').toHaveText([tr('common.delete')], { timeout: 20_000 })
+      await writerPage.keyboard.press('Escape')
+      await expect(writerPage.getByRole('menu')).toHaveCount(0)
+      await card(writerPage, dns).click()
+      const win = podWindow(writerPage, dns)
+      await expect(win.getByRole('button', { name: manifestTab, exact: true }), 'the window opens').toHaveCount(1, { timeout: 20_000 })
+      await expect(win.getByRole('button', { name: execTab, exact: true })).toHaveCount(0)
+
+      await writerPage.goto(`/workloads/pods?cluster=self&namespace=kube-system&detail=${encodeURIComponent(`Pod/kube-system/${dns}`)}`)
+      const drawer = writerPage.locator(DRAWER).last()
+      await expect(drawer.getByText(dns).first(), 'the drawer opens').toHaveCount(1, { timeout: 20_000 })
+      await expect(drawer.getByTitle(tr('pods.exec.openExec'))).toHaveCount(0)
+      expect(asked, 'nothing asked the cluster about a terminal').toEqual([])
+    } finally {
+      await writerPage.context().close()
+    }
+
+    // an Admin of this cluster: the terminal elsewhere, as the drawer has it, and none in Kubeast's own namespace
+    const adminPage = await signIn(browser, clusterAdminEmail)
+    try {
+      await open(adminPage, dnsNode, 'kube-system', dns)
+      await card(adminPage, dns).click({ button: 'right' })
+      await expect(adminPage.getByRole('menu').getByRole('menuitem')).toHaveText(['Exec', tr('common.delete')], { timeout: 20_000 })
+      await adminPage.keyboard.press('Escape')
+      await expect(adminPage.getByRole('menu')).toHaveCount(0)
+      await card(adminPage, dns).click()
+      await expect(podWindow(adminPage, dns).getByRole('button', { name: execTab, exact: true }), 'elsewhere it shows').toHaveCount(1, { timeout: 20_000 })
+
+      await open(adminPage, ownNode, NS, aPod)
+      const answered = adminPage.waitForResponse((r) => r.url().includes('/can-i') && r.url().includes('subresource=exec') && r.url().includes(`name=${aPod}`), { timeout: 20_000 })
+      await card(adminPage, aPod).click()
+      expect(await (await answered).json(), 'the server says no for its own namespace').toEqual({ allowed: false })
+      const win = podWindow(adminPage, aPod)
+      await expect(win.getByRole('button', { name: manifestTab, exact: true })).toHaveCount(1, { timeout: 20_000 })
+      await expect(win.getByRole('button', { name: execTab, exact: true })).toHaveCount(0)
+    } finally {
+      await adminPage.context().close()
+    }
+  })
 })

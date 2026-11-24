@@ -142,3 +142,45 @@ describe('Korean catalog', () => {
     expect(missing).toEqual([])
   })
 })
+
+// The keys written twice in one object of a JSON text, as `parent.key`: JSON.parse keeps the last value, so only the
+// text shows them.
+function repeatedKeys(text: string): string[] {
+  type Frame = { object: boolean; keys: Set<string>; path: string; last: string }
+  const stack: Frame[] = []
+  const repeated: string[] = []
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (c === '"') {
+      let end = i + 1
+      while (text[end] !== '"') end += text[end] === '\\' ? 2 : 1
+      const word = JSON.parse(text.slice(i, end + 1)) as string
+      i = end
+      let next = end + 1
+      while (/\s/.test(text[next] ?? '')) next++
+      const top = stack[stack.length - 1]
+      if (text[next] === ':' && top?.object) {
+        if (top.keys.has(word)) repeated.push(top.path ? `${top.path}.${word}` : word)
+        top.keys.add(word)
+        top.last = word
+      }
+    } else if (c === '{' || c === '[') {
+      const top = stack[stack.length - 1]
+      const path = !top ? '' : top.object ? (top.path ? `${top.path}.${top.last}` : top.last) : `${top.path}[]`
+      stack.push({ object: c === '{', keys: new Set(), path, last: '' })
+    } else if (c === '}' || c === ']') stack.pop()
+  }
+  return repeated
+}
+
+describe('Catalog files', () => {
+  // ko.json had setup.submitLoading twice (the same words): an edit to the first would never have shown.
+  it('write no key twice in one object', () => {
+    for (const name of ['en.json', 'ko.json']) expect(repeatedKeys(readFileSync(join(SRC, 'i18n', 'locales', name), 'utf8')), name).toEqual([])
+  })
+
+  it('are read for repeated keys by place, not by name alone, and not inside a value', () => {
+    expect(repeatedKeys('{"a": {"x": 1, "y": "x", "x": 2}, "b": {"x": [{"x": 1}, {"x": 2}]}, "c": "\\"x\\": 1", "d": {"e": {"x": 1, "x": 1}}}'))
+      .toEqual(['a.x', 'd.e.x'])
+  })
+})

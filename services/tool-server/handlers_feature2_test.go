@@ -368,7 +368,7 @@ func TestResourceGraphCalls(t *testing.T) {
 		t.Fatalf("order: %s", out[:400])
 	}
 	// the note reads the fields the answer has
-	for _, words := range []string{"_unscoped", "4xx", "5xx before naming a cause", "p90_ms is shown only", "failing_outside", "suspects_total", "no_start cycle", "drop_reasons", "POLICY_DENIED"} {
+	for _, words := range []string{"_unscoped", "error_ratio null", "not known and not 0", "truncated true", "4xx", "5xx before naming a cause", "p90_ms is shown only", "failing_outside", "suspects_total", "no_start cycle", "drop_reasons", "POLICY_DENIED"} {
 		if !strings.Contains(graphCallsNote, words) {
 			t.Errorf("calls_note says nothing of %q", words)
 		}

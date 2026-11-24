@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/anomaly"
 )
 
 // Request is one search, after the caller is authorized for the cluster and
@@ -36,19 +38,6 @@ var (
 	dnsSubdomain = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`)
 )
 
-// workloadPods is the pod name a workload's controller generates, after the
-// workload name: Deployment → ReplicaSet hash + suffix, StatefulSet → ordinal,
-// DaemonSet / ReplicaSet → suffix, Job → [index-]suffix, CronJob → schedule
-// time + Job's [index-]suffix. Stream selector regexes match the whole value.
-var workloadPods = map[string]string{
-	"Deployment":  `-[a-z0-9]{1,10}-[a-z0-9]{5}`,
-	"StatefulSet": `-[0-9]+`,
-	"DaemonSet":   `-[a-z0-9]{5}`,
-	"ReplicaSet":  `-[a-z0-9]{5}`,
-	"Job":         `(-[0-9]+)?-[a-z0-9]{5}`,
-	"CronJob":     `-[0-9]+(-[0-9]+)?-[a-z0-9]{5}`,
-}
-
 // Normalize checks the request and fills the defaults: the range (default
 // window, at most MaxRange, end not in the future) and the line limit.
 func (c Config) Normalize(req *Request, now time.Time) error {
@@ -62,7 +51,7 @@ func (c Config) Normalize(req *Request, now time.Time) error {
 		return fmt.Errorf("invalid container name %q", req.Container)
 	}
 	if req.WorkloadKind != "" || req.WorkloadName != "" {
-		if _, ok := workloadPods[req.WorkloadKind]; !ok {
+		if !anomaly.WorkloadKinds[req.WorkloadKind] {
 			return fmt.Errorf("workload_kind must be one of Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob")
 		}
 		if len(req.WorkloadName) > 253 || !dnsSubdomain.MatchString(req.WorkloadName) {
@@ -129,7 +118,7 @@ func (c Config) LogQL(req Request, clusterValue string) string {
 	case req.Pod != "":
 		m = append(m, c.Labels.Pod+"="+strconv.Quote(req.Pod))
 	case req.WorkloadKind != "":
-		m = append(m, c.Labels.Pod+"=~"+strconv.Quote(regexp.QuoteMeta(req.WorkloadName)+workloadPods[req.WorkloadKind]))
+		m = append(m, c.Labels.Pod+"=~"+strconv.Quote((&anomaly.Workload{Kind: req.WorkloadKind, Name: req.WorkloadName}).PodPattern()))
 	}
 	if req.Container != "" {
 		m = append(m, c.Labels.Container+"="+strconv.Quote(req.Container))

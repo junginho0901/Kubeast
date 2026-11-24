@@ -1,6 +1,6 @@
 // Pod 우클릭 컨텍스트 메뉴. ClusterView.tsx 에서 추출 (Phase 3.1.a).
 //
-// 부모는 좌표 + 대상 pod + admin 여부만 넘기고, Exec / Delete 액션은 콜백으로
+// 부모는 좌표 + 대상 pod + Exec 노출 여부(useCanExecPod)만 넘기고, Exec / Delete 액션은 콜백으로
 // 받는다. 상세 데이터 (PodDetail) 변환과 모달 state 토글은 부모 책임 — 이
 // 컴포넌트는 메뉴 UI 와 클릭 라우팅만 담당.
 
@@ -16,13 +16,13 @@ export interface PodContextMenuState {
 
 interface Props {
   menu: PodContextMenuState | null
-  isAdmin: boolean
+  canExec: boolean
   onClose: () => void
   onExec: (pod: NodeBoxRow) => void
   onDelete: (pod: NodeBoxRow) => void
 }
 
-export function PodContextMenu({ menu, isAdmin, onClose, onExec, onDelete }: Props) {
+export function PodContextMenu({ menu, canExec, onClose, onExec, onDelete }: Props) {
   const { t } = useTranslation()
   if (!menu) return null
   return (
@@ -40,7 +40,7 @@ export function PodContextMenu({ menu, isAdmin, onClose, onExec, onDelete }: Pro
         style={{ left: `${menu.x}px`, top: `${menu.y}px` }}
         role="menu"
       >
-        {isAdmin && (
+        {canExec && (
           <button
             onClick={(event) => {
               event.stopPropagation()

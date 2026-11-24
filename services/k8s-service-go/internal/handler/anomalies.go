@@ -308,10 +308,10 @@ func (h *Handler) callOrder(r *http.Request, run func(func(context.Context)), bu
 	})
 	order := &anomaly.CallOrder{Workload: workload}
 	var unread []string
-	read := false
+	read, cut := false, calls.Truncated
 	for _, st := range calls.Sources {
 		if st.Read {
-			read = true
+			read, cut = true, cut || st.Truncated
 			continue
 		}
 		why := st.Source + ": " + st.Reason
@@ -332,6 +332,7 @@ func (h *Handler) callOrder(r *http.Request, run func(func(context.Context)), bu
 			order.Suspects = append(order.Suspects, sp.ID)
 		}
 	}
+	order.Note.Truncated = err == nil && read && cut
 	return order
 }
 
@@ -602,6 +603,9 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 				}
 			}
 			counts = anomaly.FromLogCounts(now, prev)
+			if res.Truncated {
+				counts.Partial = seriesCut("the log store", res.SeriesTotal, len(res.Series))
+			}
 		})
 	}()
 	wg.Wait()
@@ -619,6 +623,7 @@ func (h *Handler) traceChecks(r *http.Request, run func(func(context.Context)), 
 		mu     sync.Mutex
 		got    = map[string][]anomaly.TraceSeries{}
 		failed = map[string]string{}
+		cut    = map[string]string{}
 		series int
 	)
 	for _, q := range anomaly.TraceQueries(wl) {
@@ -637,6 +642,9 @@ func (h *Handler) traceChecks(r *http.Request, run func(func(context.Context)), 
 					failed[q.Signal] = readFailure("the trace store", err)
 				default:
 					series += len(res.Series)
+					if res.Truncated {
+						cut[q.Signal] = seriesCut("the trace store's "+q.Signal+" query", res.SeriesTotal, len(res.Series))
+					}
 					for _, s := range res.Series {
 						ts := anomaly.TraceSeries{Service: s.Metric["resource.service.name"]}
 						for _, p := range s.Points {
@@ -650,23 +658,39 @@ func (h *Handler) traceChecks(r *http.Request, run func(func(context.Context)), 
 	}
 	wg.Wait()
 	reads.count("series", series)
+	// a check that compares a query cut at the reader's series is about the series read
+	partial := func(r anomaly.CheckResult, signals ...string) anomaly.CheckResult {
+		var why []string
+		for _, s := range signals {
+			if c := cut[s]; c != "" {
+				why = append(why, c)
+			}
+		}
+		r.Partial = strings.Join(why, "; ")
+		return r
+	}
 	out := make([]anomaly.CheckResult, 0, 3)
 	if why := failed[anomaly.SignalRequests]; why != "" {
 		out = append(out, anomaly.CheckResult{Check: anomaly.CheckTraceRequests, NotRun: why}, anomaly.CheckResult{Check: anomaly.CheckTraceErrors, NotRun: why})
 	} else {
-		out = append(out, anomaly.FromTraceRequests(got[anomaly.SignalRequests], win))
+		out = append(out, partial(anomaly.FromTraceRequests(got[anomaly.SignalRequests], win), anomaly.SignalRequests))
 		if why := failed[anomaly.SignalErrors]; why != "" {
 			out = append(out, anomaly.CheckResult{Check: anomaly.CheckTraceErrors, NotRun: why})
 		} else {
-			out = append(out, anomaly.FromTraceErrors(got[anomaly.SignalRequests], got[anomaly.SignalErrors], win))
+			out = append(out, partial(anomaly.FromTraceErrors(got[anomaly.SignalRequests], got[anomaly.SignalErrors], win), anomaly.SignalRequests, anomaly.SignalErrors))
 		}
 	}
 	if why := failed[anomaly.SignalLatency]; why != "" {
 		out = append(out, anomaly.CheckResult{Check: anomaly.CheckTraceLatency, NotRun: why})
 	} else {
-		out = append(out, anomaly.FromTraceLatency(got[anomaly.SignalLatency], win))
+		out = append(out, partial(anomaly.FromTraceLatency(got[anomaly.SignalLatency], win), anomaly.SignalLatency))
 	}
 	return out
+}
+
+// seriesCut is why a check is partial when a store answered more series than its reader keeps (Truncated, SeriesTotal).
+func seriesCut(what string, total, read int) string {
+	return fmt.Sprintf("%s answered %d series and only the first %d were read; the check is about those", what, total, read)
 }
 
 // storeReads is what one answer read of a store, for its audit row: the queries as sent, the range, how much came back

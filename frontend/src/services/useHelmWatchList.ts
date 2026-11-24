@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type { HelmReleaseSummary } from './api'
 import { liveSessionEnded, SESSION_ENDED_EVENT } from './auth'
-import { followQuery, resyncReads } from './useKubeWatchList'
+import { followQuery, framesDuringReads, resyncReads } from './useKubeWatchList'
 import { clearWatchProblem, recordWatchFrame } from './watchProblemStore'
 
 // Helm release watch — Server-Sent Events 로 cluster + namespace 별 release
@@ -137,6 +137,12 @@ export function followHelmReleases(
 ): () => void {
   const { cluster, namespace, queryKey } = options
   const follow = queryKey === null ? undefined : followQuery(queryClient, queryKey)
+  // The frames that come while the list is read are applied again to its answer, as a live list's are; a release's
+  // revision keeps an older frame from taking the answer back.
+  const held = queryKey === null
+    ? undefined
+    : framesDuringReads<HelmWatchEvent>(queryClient, queryKey, (events) =>
+        queryClient.setQueryData(queryKey, (prev: HelmReleaseSummary[] | undefined) => events.reduce(applyHelmWatchEvent, prev)))
   const url = buildHelmWatchURL(cluster, namespace)
   const problemKey = `${cluster}\n${url}`
   const reads = resyncReads()
@@ -211,6 +217,7 @@ export function followHelmReleases(
       try {
         const msg = JSON.parse(raw.data) as HelmWatchEvent
         if (queryKey !== null) {
+          held?.delivered([msg])
           queryClient.setQueryData(queryKey, (prev: HelmReleaseSummary[] | undefined) =>
             applyHelmWatchEvent(prev, msg),
           )
@@ -254,6 +261,7 @@ export function followHelmReleases(
     probing?.abort()
     es.close()
     reads.stop()
+    held?.stop()
     follow?.stop()
     clearWatchProblem(problemKey)
   }

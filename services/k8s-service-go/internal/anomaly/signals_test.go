@@ -16,7 +16,7 @@ func TestLogQueriesKeepToTheWorkloadAndAddNoScopeOfTheirOwn(t *testing.T) {
 		t.Fatalf("selector %s", got)
 	}
 	wl := &Workload{Kind: "Deployment", Name: "api.v2"}
-	if got := LogSelector(l, wl); got != `{k8s_pod_name=~"api\\.v2-.*"}` {
+	if got := LogSelector(l, wl); got != `{k8s_pod_name=~"api\\.v2-[bcdfghjklmnpqrstvwxz2456789]{1,10}-[bcdfghjklmnpqrstvwxz2456789]{5}"}` {
 		t.Fatalf("selector %s", got)
 	}
 	want := `sum by (k8s_container_name) (count_over_time({} |~ "(?i)(error|exception|fatal|panic)" [3600s]))`
@@ -31,7 +31,7 @@ func TestLogQueriesKeepToTheWorkloadAndAddNoScopeOfTheirOwn(t *testing.T) {
 		if !strings.Contains(q.Query, `kind = server && `) && !strings.Contains(q.Query, "kind = server ") {
 			t.Errorf("not server spans: %s", q.Query)
 		}
-		if !strings.Contains(q.Query, `resource.k8s.pod.name =~ "api\\.v2-.*"`) || !strings.HasSuffix(q.Query, "by (resource.service.name)") {
+		if !strings.Contains(q.Query, `resource.k8s.pod.name =~ "^(?:api\\.v2-[bcdfghjklmnpqrstvwxz2456789]{1,10}-[bcdfghjklmnpqrstvwxz2456789]{5})$"`) || !strings.HasSuffix(q.Query, "by (resource.service.name)") {
 			t.Errorf("query %s", q.Query)
 		}
 	}

@@ -2,6 +2,7 @@ package netflows
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -50,9 +51,10 @@ func encodeFlow(f Flow) []byte {
 }
 
 // relay is a fake Hubble Relay: it records the request and answers with the
-// given messages and trailers.
+// given messages and trailers, or with status and body ("refused" when empty).
 type relay struct {
 	status   int
+	body     string
 	messages [][]byte
 	trailer  map[string]string
 	header   map[string]string
@@ -71,8 +73,12 @@ func (r *relay) serve(t *testing.T) (*httptest.Server, *http.Client) {
 			time.Sleep(r.delay)
 		}
 		if r.status != 0 {
+			body := r.body
+			if body == "" {
+				body = "refused"
+			}
 			w.WriteHeader(r.status)
-			_, _ = w.Write([]byte("refused"))
+			_, _ = w.Write([]byte(body))
 			return
 		}
 		w.Header().Set("Content-Type", "application/grpc")
@@ -319,10 +325,10 @@ func TestQueryErrors(t *testing.T) {
 		want  error
 		text  string
 	}{
-		{"API server refuses", &relay{status: http.StatusForbidden}, ErrForbidden, "refused"},
+		{"API server refuses", &relay{status: http.StatusForbidden, body: apiStatus(http.StatusForbidden, "Forbidden", `services "https:hubble-relay:443" is forbidden`)}, ErrForbidden, "is forbidden"},
 		{"plain Relay behind the proxy", &relay{status: http.StatusServiceUnavailable}, ErrUnavailable, "hubble.relay.tls.server.enabled"},
 		{"no such service", &relay{status: http.StatusNotFound}, ErrRelayMissing, "refused"},
-		{"trailers-only refusal", &relay{header: map[string]string{"Grpc-Status": "7", "Grpc-Message": "denied"}}, ErrForbidden, "denied"},
+		{"trailers-only refusal", &relay{header: map[string]string{"Grpc-Status": "7", "Grpc-Message": "denied"}}, ErrUnavailable, "answered grpc-status 7 itself, not the cluster: denied"},
 		{"bad request", &relay{trailer: map[string]string{"Grpc-Status": "3", "Grpc-Message": "number and since"}}, ErrInvalidRequest, "number and since"},
 		{"failure after messages", &relay{messages: fixtureMessages(t, "getflows-web.bin")[:2], trailer: map[string]string{"Grpc-Status": "13", "Grpc-Message": "boom"}}, ErrUnavailable, "boom"},
 		{"no status at the end", &relay{messages: fixtureMessages(t, "getflows-web.bin")[:1]}, ErrUnavailable, "without a gRPC status"},
@@ -334,6 +340,102 @@ func TestQueryErrors(t *testing.T) {
 		if !errors.Is(err, c.want) || !strings.Contains(err.Error(), c.text) {
 			t.Errorf("%s: %v, want %v containing %q", c.name, err, c.want, c.text)
 		}
+	}
+}
+
+// apiStatus is a failed answer as the API server writes it: a Kubernetes Status.
+func apiStatus(code int, reason, message string) string {
+	b, _ := json.Marshal(map[string]any{"kind": "Status", "apiVersion": "v1", "metadata": map[string]any{}, "status": "Failure",
+		"message": message, "reason": reason, "code": code})
+	return string(b)
+}
+
+// Through the API server proxy a 401 or 403 is the cluster refusing the read only when the API server wrote it (a
+// Kubernetes Status). One the Relay or Whisker wrote itself (an authenticating proxy in front of it) is the flow source
+// not answering, with its words — not a refusal the person would take for a permission they lack.
+func TestTheFlowSourcesOwn401Or403IsNotTheClustersRefusal(t *testing.T) {
+	s := testStore()
+	req := Request{Namespace: "demo"}
+	_ = s.Normalize(&req)
+	calico := Target{Mode: "proxy", Source: SourceCalico, Relay: DefaultWhisker}
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		want   error
+		text   string
+	}{
+		{"the store's own 401", http.StatusUnauthorized, "Unauthorized", ErrUnavailable, "answered 401 itself, not the cluster: Unauthorized"},
+		{"the store's own 403", http.StatusForbidden, "Forbidden (user=dev@example.com, verb=get)", ErrUnavailable, "answered 403 itself, not the cluster: Forbidden (user=dev@example.com, verb=get)"},
+		{"the store's own 403 in JSON", http.StatusForbidden, `{"error":"forbidden"}`, ErrUnavailable, `answered 403 itself, not the cluster: {"error":"forbidden"}`},
+		{"the API server's 403", http.StatusForbidden, apiStatus(http.StatusForbidden, "Forbidden", `services "https:x:443" is forbidden: User "dev@example.com" cannot create resource "services/proxy"`), ErrForbidden, "is forbidden: User"},
+		{"the API server's 401", http.StatusUnauthorized, apiStatus(http.StatusUnauthorized, "Unauthorized", "Unauthorized"), ErrForbidden, "refused"},
+		// longer than the 512 bytes the message keeps: it is still read whole to tell whose it is
+		{"the API server's long 403", http.StatusForbidden, apiStatus(http.StatusForbidden, "Forbidden", "is forbidden: "+strings.Repeat("x", 600)), ErrForbidden, "refused"},
+	}
+	for _, c := range cases {
+		srv, client := (&relay{status: c.status, body: c.body}).serve(t)
+		_, err := s.Read(context.Background(), Target{Mode: "proxy"}, client, srv.URL+getFlowsPath, req, fixtureNow)
+		if !errors.Is(err, c.want) || !strings.Contains(err.Error(), c.text) || c.want == ErrUnavailable && errors.Is(err, ErrForbidden) {
+			t.Errorf("Relay, %s: %v, want %v containing %q", c.name, err, c.want, c.text)
+		}
+		srv, client = (&whiskerServer{status: c.status, body: c.body}).serve(t)
+		_, err = s.Read(context.Background(), calico, client, srv.URL+whiskerFlowsPath, req, whiskerNow)
+		if !errors.Is(err, c.want) || !strings.Contains(err.Error(), c.text) || c.want == ErrUnavailable && errors.Is(err, ErrForbidden) {
+			t.Errorf("Whisker, %s: %v, want %v containing %q", c.name, err, c.want, c.text)
+		}
+	}
+}
+
+// A gRPC PermissionDenied or Unauthenticated comes from past the API server — the Relay, or a proxy in front of it that
+// speaks gRPC — since the API server refuses the proxy with an HTTP status and a Status. At the start of the answer or
+// at its end, it is the Relay not answering, with its words, not the cluster refusing the read.
+func TestTheRelaysOwnGRPCRefusalIsNotTheClustersRefusal(t *testing.T) {
+	s := testStore()
+	req := Request{Namespace: "demo"}
+	_ = s.Normalize(&req)
+	for _, st := range []string{"7", "16"} {
+		for name, r := range map[string]*relay{
+			"at the start": {header: map[string]string{"Grpc-Status": st, "Grpc-Message": "RBAC: access denied"}},
+			"at the end":   {messages: fixtureMessages(t, "getflows-web.bin")[:1], trailer: map[string]string{"Grpc-Status": st, "Grpc-Message": "RBAC: access denied"}},
+		} {
+			srv, client := r.serve(t)
+			_, err := s.Read(context.Background(), Target{Mode: "proxy"}, client, srv.URL+getFlowsPath, req, fixtureNow)
+			want := "answered grpc-status " + st + " itself, not the cluster: RBAC: access denied"
+			if !errors.Is(err, ErrUnavailable) || errors.Is(err, ErrForbidden) || !strings.Contains(err.Error(), want) {
+				t.Errorf("grpc-status %s %s: %v, want %v containing %q", st, name, err, ErrUnavailable, want)
+			}
+		}
+	}
+}
+
+// At an address no API server is in between, so every 401 or 403 is the Relay's own, a Kubernetes Status too (an API
+// server registered there by mistake answering a request it cannot place): the flow source not answering, never the
+// cluster refusing the read. The same Status through the proxy stays the cluster's refusal.
+func TestEvery401Or403AtAnAddressIsTheRelaysOwn(t *testing.T) {
+	s := testStore()
+	req := Request{Namespace: "demo"}
+	_ = s.Normalize(&req)
+	cases := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"a plain 401", http.StatusUnauthorized, "Unauthorized"},
+		{"a 403 as a Status", http.StatusForbidden, apiStatus(http.StatusForbidden, "Forbidden", `forbidden: User "system:anonymous" cannot post path "/observer.Observer/GetFlows"`)},
+		{"a 401 as a Status", http.StatusUnauthorized, apiStatus(http.StatusUnauthorized, "Unauthorized", "Unauthorized")},
+	}
+	for _, c := range cases {
+		srv, client := (&relay{status: c.status, body: c.body}).serve(t)
+		_, err := s.Read(context.Background(), Target{Mode: "address", URL: srv.URL}, client, srv.URL+getFlowsPath, req, fixtureNow)
+		want := fmt.Sprintf("answered %d itself, not the cluster", c.status)
+		if !errors.Is(err, ErrUnavailable) || errors.Is(err, ErrForbidden) || !strings.Contains(err.Error(), want) {
+			t.Errorf("address, %s: %v, want %v containing %q", c.name, err, ErrUnavailable, want)
+		}
+	}
+	srv, client := (&relay{status: http.StatusForbidden, body: cases[1].body}).serve(t)
+	if _, err := s.Read(context.Background(), Target{Mode: "proxy"}, client, srv.URL+getFlowsPath, req, fixtureNow); !errors.Is(err, ErrForbidden) {
+		t.Errorf("proxy, a 403 as a Status: %v, want %v", err, ErrForbidden)
 	}
 }
 

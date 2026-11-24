@@ -9,7 +9,9 @@ import { sidebarScreens } from './sidebar-screens'
 
 // Every screen the sidebar lists (the admin ones too) and the account page, in each colour mode:
 // - a header row (.page-head) whose title and buttons do not fit sends the buttons to the next line instead of pushing
-//   the page sideways (MutatingWebhookConfigurations at 1 070 px slid the title under the sidebar);
+//   the page sideways (MutatingWebhookConfigurations at 1 070 px slid the title under the sidebar), and an AI answer
+//   with a long code line or a wide table scrolls inside its box, not the page (AI Chat slid its conversation list
+//   under the sidebar);
 // - the buttons placed in a header row are btn-primary, and buttons with words on them look the same for one job
 //   (a grey Create on the kinds a controller makes, four looks for Delete, three for CSV);
 // - text is readable: axe-core's color-contrast rule (WCAG 2.2 SC 1.4.3, 4.5:1 or 3:1 for large text), on the screens
@@ -91,6 +93,53 @@ test.describe('every screen in every colour mode', () => {
       }
     }
     expect(slid).toEqual([])
+  })
+
+  test('at 1070 px an AI answer with a long code line and a wide table scrolls inside its box, not the page', async ({ page }) => {
+    await page.setViewportSize({ width: 1070, height: 1000 })
+    const title = `e2e-wide-answer-${Date.now().toString(36)}`
+    const answer = [
+      'The scheduler restarted 51 times; its last lines before the restart:',
+      '',
+      '```',
+      `kubectl -n kube-system logs kube-scheduler-kubeast-b-control-plane --previous --tail=200 ${'--since=1h --timestamps '.repeat(8)}`,
+      '```',
+      '',
+      '| POD | RESTARTS | AGE | NODE | NOMINATED NODE | READINESS GATES | IMAGE |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
+      '| kube-controller-manager-kubeast-b-control-plane | 59 (2d5h ago) | 57d | kubeast-b-control-plane | none | none | registry.k8s.io/kube-controller-manager:v1.35.0 |',
+    ].join('\n')
+    const created = await page.request.post('/api/v1/sessions?cluster=self', { headers: XRW, data: { title } })
+    expect(created.ok(), `create session: ${created.status()}`).toBeTruthy()
+    const sessionId = withUndo((await created.json()).id as string, (i) => page.request.delete(`/api/v1/sessions/${i}?cluster=self`, { headers: XRW, failOnStatusCode: false }))
+    try {
+      const saved = await page.request.post(`/api/v1/sessions/${sessionId}/messages?cluster=self`, {
+        headers: XRW,
+        data: { messages: [{ role: 'user', content: 'why does the scheduler restart?' }, { role: 'assistant', content: answer }] },
+      })
+      expect(saved.ok(), `save messages: ${saved.status()}`).toBeTruthy()
+      await page.goto('/ai-chat?cluster=self')
+      await page.getByText(title, { exact: true }).first().click()
+      const bubble = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+      await expect(bubble.locator('pre').first()).toContainText('--timestamps', { timeout: 20_000 })
+      await expect(bubble.locator('table th').first()).toHaveText('POD')
+      const r = await page.evaluate(() => {
+        const main = document.querySelector('main')!
+        const box = [...document.querySelectorAll('main div.flex.gap-3.p-6:not(.flex-row-reverse) > .prose')].pop()!
+        const pre = box.querySelector('pre')!
+        return {
+          codeWiderThanBox: pre.scrollWidth - box.clientWidth,
+          pageOver: document.documentElement.scrollWidth - innerWidth,
+          mainOver: main.scrollWidth - main.clientWidth,
+        }
+      })
+      // the code line is wider than the answer's box, so the two numbers after it say what they are for
+      expect(r.codeWiderThanBox).toBeGreaterThan(1)
+      expect(r.pageOver, 'the page scrolls sideways').toBeLessThanOrEqual(1)
+      expect(r.mainOver, 'main scrolls sideways').toBeLessThanOrEqual(1)
+    } finally {
+      await page.request.delete(`/api/v1/sessions/${sessionId}?cluster=self`, { headers: XRW, failOnStatusCode: false })
+    }
   })
 
   test('at 1440×900 a table of rows has its list footer, and a page with a list footer fits the screen', async ({ page }) => {

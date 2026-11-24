@@ -193,6 +193,11 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
     await expect(panel.getByTestId('traffic-panel-counts')).toContainText('0 flows allowed')
     await expect(panel.getByTestId('traffic-panel-reasons')).toContainText('POLICY_DENIED')
     await expect(panel.getByTestId('traffic-panel-ports')).toHaveText('TCP 80')
+    // the panel along the right edge leaves the zoom buttons at the bottom centre clear
+    const zoom = page.locator('.react-flow__controls')
+    const [p, z] = [await panel.boundingBox(), await zoom.boundingBox()]
+    expect(!!p && !!z && z.x + z.width <= p.x, `zoom buttons ${JSON.stringify(z)} left of the traffic panel ${JSON.stringify(p)}`).toBe(true)
+    await zoom.getByRole('button', { name: 'Fit View', exact: true }).click({ trial: true, timeout: 20_000 })
     await panel.getByTestId('traffic-panel-why').click()
     const modal = page.getByTestId('netpol-check-modal')
     await expect(modal.getByTestId('netpol-check-overall')).toHaveText('Denied', { timeout: 20_000 })

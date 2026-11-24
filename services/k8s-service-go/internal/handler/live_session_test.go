@@ -498,6 +498,41 @@ func TestTheSessionEndRowIsStoredAfterTheBrowserClosed(t *testing.T) {
 	}
 }
 
+// A mutation handler writes its row on the request's context after the change
+// ran; a browser that closed the connection by then (net/http cancels that
+// context) does not take the row with it.
+func TestAMutationsRowIsStoredAfterTheBrowserClosed(t *testing.T) {
+	store := &cancelAwareAudit{}
+	guarded := audit.Guard(store, probeRefused{}, true)
+	h := &Handler{auditStore: guarded}
+
+	reqCtx, closeRequest := context.WithCancel(cluster.WithID(auth.WithPayload(context.Background(),
+		auth.TokenPayload{UserID: "u1", Email: "u1@example.com"}), "c"))
+	r := httptest.NewRequest(http.MethodDelete, "/api/v1/namespaces/ns/pods/p", nil).WithContext(reqCtx)
+	r.Header.Set("X-Request-ID", "req-1")
+	closeRequest() // the browser left while the delete ran
+
+	if err := h.recordAudit(r, "k8s.pod.delete", "pod", "p", "ns", nil); err != nil {
+		t.Fatalf("recordAudit after the browser left: %v", err)
+	}
+	if len(store.rows) != 1 {
+		t.Fatalf("rows = %d, want the delete's row", len(store.rows))
+	}
+	row := store.rows[0]
+	if row.Action != "k8s.pod.delete" || row.Result != audit.ResultSuccess || row.ActorUserID != "u1" || row.Cluster != "c" || row.RequestID != "req-1" {
+		t.Fatalf("row = %+v", row)
+	}
+	if len(store.deadlines) != 0 {
+		t.Fatalf("write deadline = %v, want none: the request had none", store.deadlines)
+	}
+	if st := guarded.Status(context.Background()); st.WriteFailures != 0 {
+		t.Fatalf("write failures = %d (%s)", st.WriteFailures, st.LastError)
+	}
+	if err := guarded.Ready(context.Background()); err != nil {
+		t.Fatalf("store marked broken: %v", err)
+	}
+}
+
 func TestAStreamEndedByItsClientSaysNothing(t *testing.T) {
 	rec := httptest.NewRecorder()
 	ctx, cancel := context.WithCancel(context.Background())
