@@ -27,12 +27,18 @@ CALLS_DESCRIPTION = (
 # timeline's changes view, offered to the model only with AI_TIMELINE_CHANGES (chart ai.timelineChanges, off by default):
 # off, timeline is offered without the view parameter and without these words (offer_timeline_changes).
 TIMELINE_CHANGES_PARAM = "view"
+# What the view does not read (k8s-service's timelineChangeSources): an answer without a change is not "nothing changed".
+TIMELINE_CHANGES_NOT_LISTED = (
+    " It does not list a replica count set without a new revision (kubectl scale, a scale button: only the Deployment's ScalingReplicaSet "
+    "events say it, while they last), a deleted object or a change to any other kind (a Service, a NetworkPolicy …), so an answer without "
+    "them is not \"nothing changed\": read the events view too."
+)
 TIMELINE_CHANGES_DESCRIPTION = (
     " view \"changes\" answers instead what changed from since_time to until_time (default the 4 hours before now, exact), newest first, at most 50: "
     "rollouts compared with the revision before (images, the names of other pod template fields, the keys of env, labels and annotations that were added, "
     "removed or changed — never a value), ConfigMap and Secret last writes and the field manager that wrote them (metadata only), Helm release revisions, "
     "HPA last scales, node creations and condition changes, Argo CD syncs and container restarts with their reason. Each object keeps only its last write, "
-    "scale or restart. summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
+    "scale or restart." + TIMELINE_CHANGES_NOT_LISTED + " summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
     "not zero (without a namespace, every namespace's restarts need listing pods across the cluster: name a namespace). Use it first for \"why did this break?\", then line the changes up with when the symptom started."
 )
 

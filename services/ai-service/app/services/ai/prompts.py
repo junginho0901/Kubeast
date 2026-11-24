@@ -344,7 +344,9 @@ _TIME_RULE = _line("- **시각으로 이으세요**")
 _TIMELINE_SIGNATURE = _line("- `timeline(")
 TIMELINE_CHANGES_LINES = {
     _TIMELINE_GUIDE: _TIMELINE_GUIDE + '. `view: "changes"`는 기간 동안 바뀐 것만 시간순으로(롤아웃의 이미지·바뀐 필드·env 키, ConfigMap·Secret 마지막 쓰기, '
-    'Helm 리비전, HPA 크기, 노드 상태, Argo CD 동기화, 재시작 — 값은 읽지 않음)',
+    'Helm 리비전, HPA 크기, 노드 상태, Argo CD 동기화, 재시작 — 값은 읽지 않음). 새 리비전이 없는 레플리카 수 변경(`kubectl scale`·스케일 버튼 — 이벤트가 '
+    '남은 동안 Deployment의 ScalingReplicaSet 이벤트에만 나옴), 지운 객체, 그 밖의 종류(Service·NetworkPolicy 등)의 수정은 안 나오니 여기 없다고 "바뀐 것 '
+    '없음"이 아닙니다 — `view` 없이 부른 이벤트도 함께 보세요',
     _TIME_RULE: _TIME_RULE + '\n- **고장 원인을 물으면 바뀐 것부터 보세요**: "왜 깨졌나·왜 안 되나"면 먼저 `timeline`을 `view: "changes"`로(증상이 시작된 시각 앞 '
     '몇 시간을 `since_time`·`until_time`으로) 불러 그동안 바뀐 것을 보세요. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 원인으로 대지 마세요.',
     _TIMELINE_SIGNATURE: "- `timeline(view, namespace, since_time, until_time, event_type, kind, name, limit)` - Change history: events and rollout revisions in "
