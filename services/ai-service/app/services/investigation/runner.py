@@ -5,7 +5,7 @@ oldest queued row, asks auth-service for the investigator's token for that
 cluster (and the alert's namespace), and runs the read-only tools through the
 same path the chat uses — tool-server checks the token's ai.tool.* rights and
 namespace, the cluster sees kubeast:investigator. At most max_steps model calls;
-the last one gets no tools, so it must answer (as HolmesGPT does) — the loop is
+the last one may call no tool, so it must answer (as HolmesGPT does) — the loop is
 app.services.ai.tool_turn, which hands it to Claude Code on a Claude subscription.
 The whole run is bounded by timeout_seconds. With rules, changes_first or
 narrow_first on, the first message also holds the time windows counted from the
@@ -161,19 +161,19 @@ def used_fields(progress: dict[str, Any]) -> dict[str, Any]:
 async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_log: list[dict[str, Any]],
                  reads: Optional[list], same_as: dict[int, int], row, cfg, remaining, usage: dict[str, Any],
                  progress: dict[str, Any], finish_reason: str = "",
-                 tool_results: Sequence[str] = ()) -> tuple[str, dict[str, Any], int]:
+                 tool_results: Sequence[str] = (), tools: Sequence[dict] = ()) -> tuple[str, dict[str, Any], int]:
     """The rca block, once for evidenceCheck and ledger (investigation/rca.py): (the report to keep, the row's
     `result`, the model calls it added — 0 or 1).
 
     The answer is split once and the checks of the switches that are on read that one block. While one finds a
-    problem, one model call without tools asks for the report again with every problem of both in one message; its
+    problem, one model call that may call no tool asks for the report again with every problem of both in one message; its
     answer replaces the first only when it has a report with a heading before a block that can be read, and is checked
     the same way. A
     second call that fails or finds the time up leaves the first answer. With evidenceCheck the causes still not
     shown are listed under the report; with the ledger the hypotheses stay in `result` with their reasons. Each switch
     leaves its counts in `progress` for the run's audit row (`evidence`, `ledger`). `finish_reason`: the provider's
     for the answer. `tool_results`: a subscription's (ToolTurn.results), which its messages do not hold, so the
-    second ask carries them as the closing call does."""
+    second ask carries them as the closing call does. `tools`: the turn's, for answer_once."""
     from app.services.ai.tool_turn import answer_once, tool_results_text
 
     def check(text: str, finish: str) -> rca.Checked:
@@ -190,7 +190,7 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
         try:
             second, second_finish = await answer_once(
                 service, messages + [{"role": "assistant", "content": answer}, {"role": "user", "content": ask}],
-                remaining=remaining, lane="investigation", usage=usage, answer_tokens=rca.ANSWER_TOKENS)
+                remaining=remaining, lane="investigation", usage=usage, answer_tokens=rca.ANSWER_TOKENS, tools=tools)
         except Exception as e:  # the model or the clock: the first answer stands
             log.warning("investigation %s: the second ask failed: %s", row.id, clean_error(e))
             second, second_finish, ask_failed = "", "", True
@@ -431,7 +431,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         answer, extra["result"], asked = await settle(service, messages, answer, tool_log=tool_log, reads=reads,
                                                       same_as=same_as, row=row, cfg=cfg, remaining=remaining,
                                                       usage=usage, progress=progress, finish_reason=turn.finish_reason,
-                                                      tool_results=turn.results)
+                                                      tool_results=turn.results, tools=tools)
         steps += asked
     return {
         "report": answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else "")

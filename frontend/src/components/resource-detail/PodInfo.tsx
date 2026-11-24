@@ -35,6 +35,7 @@ import NetworkDrops from './NetworkDrops'
 import TopTalkers from './TopTalkers'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 import { useDismiss } from '@/hooks/useDismiss'
+import { promString } from '@/utils/promString'
 
 interface Props {
   name: string
@@ -201,8 +202,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const promPodMetrics = usePrometheusQueries(
     ['pod-detail', namespace, name],
     [
-      { name: 'cpu', promql: `sum by(container)(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod="${name}",container!="",container!="POD"}[5m])) * 1000` },
-      { name: 'memory', promql: `sum by(container)(container_memory_working_set_bytes{namespace="${namespace}",pod="${name}",container!="",container!="POD"})` },
+      { name: 'cpu', promql: `sum by(container)(rate(container_cpu_usage_seconds_total{namespace=${promString(namespace)},pod=${promString(name)},container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'memory', promql: `sum by(container)(container_memory_working_set_bytes{namespace=${promString(namespace)},pod=${promString(name)},container!="",container!="POD"})` },
     ],
     { enabled: !!name && !!namespace },
   )
