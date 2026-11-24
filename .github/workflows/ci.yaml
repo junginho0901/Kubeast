@@ -213,6 +213,7 @@ jobs:
       - run: helm lint helm/kubeast
       # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
       # defaults, migrations hook Job, PVC retention, replica guards, secrets.
+      # A process for each file, as many at once as the runner has CPUs (scripts/chart-unittest.sh).
       - name: helm unittest
         timeout-minutes: 20
         run: |
@@ -229,7 +230,7 @@ jobs:
             helm plugin uninstall unittest >/dev/null 2>&1 || true
             sleep 10
           done
-          helm unittest helm/kubeast
+          scripts/chart-unittest.sh
       # `helm upgrade --reuse-values` from every release: stops with the upgrade hint or loses nothing.
       - name: upgrade from earlier releases
         run: scripts/chart-upgrade-values.sh

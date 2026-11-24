@@ -1,7 +1,7 @@
 """One model turn that may call tools, for a caller with its own loop (the alert investigator).
 
 The chat streams through app.services.ai.streaming, which has the same two branches. With an API key the loop
-runs here: at most max_steps model calls, the last one without tools so it must answer (as HolmesGPT does). On
+runs here: at most max_steps model calls, the last of which may call no tool so it must answer (as HolmesGPT does). On
 provider claude-code Claude Code runs it (max_turns = max_steps - 1) and its tool calls come back to the same
 run_tool; when it stops at that limit, one more call without tools writes the answer from the tool results.
 """
@@ -52,6 +52,12 @@ def _args(raw: Optional[str]) -> dict:
     return args if isinstance(args, dict) else {}
 
 
+def no_more_calls(service, tools: Sequence[dict]) -> dict[str, Any]:
+    """What a call after a tool loop that may call no tool adds to its request: nothing (no tools), but on Anthropic the
+    loop's own tools with tool_choice "none", since its thinking blocks are bound to the tools they were made with."""
+    return dict(tools=tools, tool_choice="none") if tools and getattr(service, "provider", None) == "anthropic" else {}
+
+
 async def run_tool_turn(service, messages: list[dict[str, Any]], tools: Sequence[dict], run_tool: ToolRunner, *,
                         max_steps: int, final_message: str, remaining: Callable[[], float],
                         lane: str = "chat", usage: Optional[dict[str, Any]] = None,
@@ -71,7 +77,9 @@ async def run_tool_turn(service, messages: list[dict[str, Any]], tools: Sequence
             messages.append({"role": "user", "content": final_message})
         kwargs: dict[str, Any] = dict(model=service.model, messages=messages, temperature=0.2,
                                  max_tokens=limits.answer_tokens(service, answer_tokens))
-        if not final and tools:
+        if final:
+            kwargs.update(no_more_calls(service, tools))
+        elif tools:
             kwargs.update(tools=tools, tool_choice="auto")
         resp = await asyncio.wait_for(service.client.chat.completions.create(**kwargs, timeout=min(120.0, remaining())),
                                       timeout=remaining())
@@ -98,22 +106,25 @@ async def run_tool_turn(service, messages: list[dict[str, Any]], tools: Sequence
 
 
 async def answer_once(service, messages: list[dict[str, Any]], *, remaining: Callable[[], float], lane: str = "chat",
-                      usage: Optional[dict[str, Any]] = None, answer_tokens: int = ANSWER_TOKENS) -> tuple[str, str]:
-    """One more model call without tools, after a turn (the investigator's rca block asks again with it): the
+                      usage: Optional[dict[str, Any]] = None, answer_tokens: int = ANSWER_TOKENS,
+                      tools: Sequence[dict] = ()) -> tuple[str, str]:
+    """One more model call that may call no tool, after a turn (the investigator's rca block asks again with it): the
     API-key path's call, or Claude Code's plain completion on a subscription. Its tokens are added to `usage`.
-    (the answer, the provider's finish reason or "")."""
+    `tools`: the turn's (no_more_calls). (the answer, the provider's finish reason or "")."""
     if getattr(service, "provider", None) == "claude-code":
         done = await asyncio.wait_for(service.client.claude_code.complete(messages, lane=lane), timeout=remaining())
         if usage is not None:
             usage_acct.add_usage(usage, done.usage, prompt_chars=usage_acct.prompt_chars(messages, None))
         return (done.text or "").strip(), ""
+    kept = no_more_calls(service, tools)
     resp = await asyncio.wait_for(
         service.client.chat.completions.create(model=service.model, messages=messages, temperature=0.2,
                                                max_tokens=limits.answer_tokens(service, answer_tokens),
-                                               timeout=min(120.0, remaining())),
+                                               timeout=min(120.0, remaining()), **kept),
         timeout=remaining())
     if usage is not None:
-        usage_acct.add_usage(usage, getattr(resp, "usage", None), prompt_chars=usage_acct.prompt_chars(messages, None))
+        usage_acct.add_usage(usage, getattr(resp, "usage", None),
+                             prompt_chars=usage_acct.prompt_chars(messages, kept.get("tools")))
     return (resp.choices[0].message.content or "").strip(), _finish(resp)
 
 
