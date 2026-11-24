@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 
 import httpx
 import openai
+import pytest
 
-from app.services.ai.model_errors import AUTH, CREDIT, OTHER, RATE, UNAVAILABLE, classify
+from app.services.ai.model_errors import AUTH, CREDIT, OTHER, RATE, UNAVAILABLE, classify, refused_form
 from app.services.anthropic_messages import AnthropicAPIError
 from app.services.claude_code import ClaudeCodeError
 
@@ -15,6 +16,45 @@ REQ = httpx.Request("POST", "https://api.example.com/v1/chat/completions")
 def oa(cls, status: int, body: dict):
     """An OpenAI SDK status error as the SDK raises it (body = the inner error object)."""
     return cls(body.get("message", ""), response=httpx.Response(status, request=REQ), body=body)
+
+
+@pytest.mark.parametrize("message", [
+    "litellm.UnsupportedParamsError: Bedrock doesn't support tool calling without `tools=` param specified. Pass `tools=` param "
+    "OR set `litellm.modify_params = True`",
+    "Requests which include `tool_use` or `tool_result` blocks must define tools",
+    "Unsupported parameter: 'stream_options'", "unknown parameter", "",
+])
+@pytest.mark.parametrize("cls,status", [(openai.BadRequestError, 400), (openai.UnprocessableEntityError, 422)])
+def test_a_request_refused_for_what_it_holds(cls, status, message):
+    assert refused_form(oa(cls, status, {"message": message, "code": "400"}))
+
+
+@pytest.mark.parametrize("message,code", [
+    ("This model's maximum context length is 128000 tokens. However, your messages resulted in 140000 tokens.", "context_length_exceeded"),
+    ("Request refused", "context_length_exceeded"),
+    ("Input tokens exceed the configured limit of 272000 tokens. Please reduce the length of the messages.", None),
+    ("Invalid 'messages[3].content': string too long.", "string_above_max_length"),
+    ("prompt is too long: 210000 tokens > 200000 maximum", None),
+    ("input length and `max_tokens` exceed context limit: 199000 + 4096 > 200000", None),
+    ("The input token count (1200000) exceeds the maximum number of tokens allowed (1048576).", "INVALID_ARGUMENT"),
+    ("The decoder prompt (length 9000) is longer than the maximum model length of 8192.", None),
+    ("the request exceeds the available context size, try increasing it", "exceed_context_size_error"),
+    ("litellm.ContextWindowExceededError: Input is too long for requested model.", None),
+    ("Prompt contains 140000 tokens and 0 draft tokens, too large for model with 131072 maximum context length", None),
+    ("`inputs` tokens + `max_new_tokens` must be <= 8192. Given: 9000 `inputs` tokens", None),
+])
+def test_a_request_refused_for_its_size_is_not_about_what_it_holds(message, code):
+    assert not refused_form(oa(openai.BadRequestError, 400, {"message": message, "code": code}))
+
+
+def test_other_refusals_are_not_about_what_the_request_holds():
+    for err in (oa(openai.AuthenticationError, 401, {"message": "Incorrect API key provided"}),
+                oa(openai.PermissionDeniedError, 403, {"message": "no"}), oa(openai.NotFoundError, 404, {"message": "no such model"}),
+                oa(openai.APIStatusError, 413, {"message": "no"}), oa(openai.RateLimitError, 429, {"message": "slow down"}),
+                oa(openai.InternalServerError, 500, {"message": "no"}), openai.APITimeoutError(request=REQ),
+                oa(openai.BadRequestError, 400, {"message": "Your credit balance is too low to access the API"}),
+                oa(openai.BadRequestError, 400, {"message": "no", "code": "invalid_api_key"}), RuntimeError("400 unknown parameter")):
+        assert not refused_form(err), err
 
 
 def test_openai_compatible_answers():

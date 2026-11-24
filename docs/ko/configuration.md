@@ -211,6 +211,10 @@ ai:
                            # 둘 다 끄면 카드 파일을 읽지 않고 채팅과 조사는 전과 같습니다
     cards: []              # 같은 꼴의 카드를 더합니다(이미 있는 종류는 바꿉니다). 기본 카드는 app/services/rule_cards.json
     remove: []             # 빼 둘 기본 종류. 예: [network_policy]
+  chat:
+    maxSteps: 20           # (beta) 채팅 답 하나에 쓸 수 있는 모델 호출 수, 1~100(벗어난 수는 가까운 끝). 마지막 호출은 도구를 부르지 않고 읽은 것으로 답합니다.
+                           # 호출이 많으면 토큰을 더 쓸 수 있고, 채팅 토큰 예산은 턴을 시작할 때 확인합니다(features.md).
+                           # Claude 구독은 providers.claudeCode.maxTurns에서 멈춘 뒤 도구 없는 호출 하나로 답합니다
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),
@@ -347,6 +351,7 @@ multicluster:
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | 돌려 봄: kind 개발 설치에서 기본값으로 stream-caps e2e(2026-11-19). 한 계정의 21번째 터미널과 실시간 로그가 거절되고 화면이 까닭을 보여 주며, 하나를 닫으면 새로 열림 |
 | `multicluster.maxStreamsPerServer` | 443 | beta | kind 개발 설치에서 상한에 닿아 화면이 까닭을 보여 주는 경우. 기본값은 거기서 한 부하 시험(2026-11-22)에서 왔음: 상한 없이 파드 하나에 터미널과 실시간 로그 800개를 열어 둠(하나에 약 0.37 MiB, 800개에서 512 Mi의 79 %) |
 | `auth` 설정의 `customRoles` 옆 `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters` | false, [] | alpha | 돌려 봄: 켠 상태의 전체 e2e를 kind 개발 설치에서 두 번(실패 없음), 100명이 한꺼번에 화면을 연 부하(오류 없음) |
+| `ai.chat.maxSteps` | 20 | beta | 이 한도에 닿는 채팅 질문을 API 키와 Claude 구독으로 kind 개발 설치에서 돌린 경우 |
 | `ai.refuseRepeatedReads` | false | alpha | 끄고 켠 AI 평가(`scripts/ai-eval.py`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.toolResultDetails` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.redaction.numbered` | false | alpha | `ai.redaction.pii`와 함께 켠 상태로 kind 개발 설치에서 한 채팅, 끄고 켠 AI 평가 |

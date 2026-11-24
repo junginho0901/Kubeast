@@ -357,6 +357,28 @@ tests:
           path: data.AI_CLAUDE_CODE_QUEUE_WAIT
           value: "60"
 
+  - it: gives a chat answer 20 model calls by default
+    asserts:
+      - equal:
+          path: data.AI_CHAT_MAX_STEPS
+          value: "20"
+
+  - it: takes the model calls of a chat answer from ai.chat.maxSteps
+    set:
+      ai.chat.maxSteps: 35
+    asserts:
+      - equal:
+          path: data.AI_CHAT_MAX_STEPS
+          value: "35"
+
+  - it: renders the model calls of a chat answer of values from before the setting as the default
+    set:
+      ai.chat.maxSteps: null
+    asserts:
+      - equal:
+          path: data.AI_CHAT_MAX_STEPS
+          value: "20"
+
   - it: keeps the rule cards off for the chat and investigations by default, with no cards added or removed
     asserts:
       - equal:

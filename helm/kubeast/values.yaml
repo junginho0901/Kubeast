@@ -426,7 +426,15 @@ ai:
   # (userDailyTokens), counted from the ai.chat.complete audit rows like the
   # Admin AI usage view; a turn over a limit is refused before the model is
   # called and audited as ai.chat.budget_exceeded. 0 turns a limit off.
+  # maxSteps: the model calls one chat answer may make (1 to 100; a number
+  # outside is the nearer end). Each may call tools but the last, which answers
+  # from what was read. More steps can cost more tokens: the budgets are checked
+  # when a turn starts, not between its calls. On a Claude subscription Claude
+  # Code stops at providers.claudeCode.maxTurns instead, and one call without
+  # tools then answers.
+  # Stage: beta, not run yet: a chat question that reaches it, on the kind dev install (docs/configuration.md "Stages of new values").
   chat:
+    maxSteps: 20
     historyMessages: 10
     summary:
       enabled: true

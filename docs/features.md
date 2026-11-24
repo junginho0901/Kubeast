@@ -21,7 +21,9 @@
   - session-service accepts only the markers `{"stopped": true}` and `{"failed": true}`, no token counts.
   - The conversation follows new text only while you are at the bottom. When you scroll up, it stays put and a "Jump to latest" button appears.
   - Tables in answers have horizontal and vertical lines, and answers have the Kubeast icon next to them.
-- **Multi-round Tool Calling** — the AI views and changes K8s with allowlisted tools, for up to 10 rounds. Read, write and admin tools are **gated by the user's permissions (JWT)**.
+- **Multi-round Tool Calling** — the AI views and changes K8s with allowlisted tools, for up to `ai.chat.maxSteps` model calls an answer (default 20, 1 to 100). Read, write and admin tools are **gated by the user's permissions (JWT)**.
+  - The last of those calls may call no tool. It is told to answer from what was read, to say what could not be read, and to use the language of the question. If it writes nothing, the answer says why: the calls are used up, with the setting to raise, or the answer reached its length, or the provider's content filter stopped it. An answer cut at its length goes on for at most 3 more calls without tools, which are not counted here.
+  - On a Claude subscription Claude Code stops at `ai.providers.claudeCode.maxTurns` (default 10) instead, and one more call without tools answers from what the tools returned.
   - With `ai.refuseRepeatedReads` (off by default), a read the model makes again with the same tool and arguments in one answer, less than 60 seconds after the first answered, is not run: the model is told at which step it already has the result and to change the arguments to read anything new. Its `ai.tool.call` row has `status: repeated` and `repeat_of` (that step). A call that failed or was refused can be made again.
   - The 52 read tools include:
     - `k8s_find_resource`, which finds multiple kinds and namespaces at once by name fragment or label
@@ -450,6 +452,7 @@ Where the cluster has Recent flows or the Hubble metrics, the Resource Graph hea
     - `ai.chat.budget.sessionTokens`: cumulative per session
     - `ai.chat.budget.userDailyTokens`: cumulative per user per UTC day
   - When a budget is exceeded, that turn is refused without calling the model, a notice appears in the chat, and the turn is audited as `ai.chat.budget_exceeded`. Usage is counted the same way as on this screen.
+  - The budgets are checked when a turn starts, not between its model calls. A turn that began under a budget runs to its end, up to `ai.chat.maxSteps` model calls, and the next one is refused, so a budget can be passed by one turn's tokens.
   - Once the user's daily budget is exceeded, the Optimization AI explanation also shows only the observation table and does not call the model.
   - When the model provider refuses, chat, floating and Optimization report it **by type** in the UI language, with the provider name and the masked original message (`app/services/ai/model_errors.py`). The types are:
     - credits or quota exhausted (OpenAI `insufficient_quota`, Claude API `billing_error` or spend limit, Gemini 402)

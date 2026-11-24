@@ -219,6 +219,10 @@ ai:
                            # off, both: the cards file is not read and the chat and investigations are as before
     cards: []              # more cards of the same shape (a kind already there is replaced); the defaults are app/services/rule_cards.json
     remove: []             # default kinds left out, e.g. [network_policy]
+  chat:
+    maxSteps: 20           # (beta) the model calls one chat answer may make, 1 to 100 (a number outside is the nearer end); the last may call
+                           # no tool and answers from what was read. More steps can cost more tokens: the chat token budgets are checked when
+                           # a turn starts (features.md). A Claude subscription: providers.claudeCode.maxTurns, then one call without tools
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
@@ -355,6 +359,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | Tested: the stream-caps e2e on the kind dev install with the defaults (2026-11-19): the 21st terminal and followed log of one account refused, the screen saying why, and a new one opened once one closed |
 | `multicluster.maxStreamsPerServer` | 443 | beta | The cap reached on the kind dev install, with the screen saying why. The default comes from a load run there (2026-11-22) that held 800 terminals and followed logs open on one pod with no cap (about 0.37 MiB each, 79 % of 512 Mi at 800) |
 | `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | Tested: the whole e2e with it on, twice on the kind dev install with no failure, and 100 people opening the screens at once with no error |
+| `ai.chat.maxSteps` | 20 | beta | A chat question that reaches it, on the kind dev install, with an API key and on a Claude subscription |
 | `ai.refuseRepeatedReads` | false | alpha | The AI evaluation (`scripts/ai-eval.py`) with it off and on, and a run on the kind dev install with it on |
 | `ai.toolResultDetails` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
 | `ai.redaction.numbered` | false | alpha | A chat on the kind dev install with it and `ai.redaction.pii` on, and the AI evaluation with it off and on |
