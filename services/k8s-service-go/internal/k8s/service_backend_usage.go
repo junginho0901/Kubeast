@@ -83,9 +83,10 @@ func backendPodsOf(slices []discoveryv1.EndpointSlice, namespace string) []strin
 // the part before their last "-" (a workload's pods) are written once with their ends grouped; a group past max goes on
 // in the next pattern.
 func backendPodPatterns(names []string, max int) []string {
-	// a regular expression's metacharacters escaped, in a PromQL string, where a backslash is written twice
-	esc := func(s string) string { return strings.ReplaceAll(regexp.QuoteMeta(s), `\`, `\\`) }
-	size := func(s string) int { return len(url.QueryEscape(s)) }
+	// a name a regular expression matches as itself (the screen's escapeRegex), measured as the query's PromQL string
+	// writes it, without its quotes (the screen's patternFitsOneQuery)
+	esc := regexp.QuoteMeta
+	size := func(s string) int { q := promString(s); return len(url.QueryEscape(q[1 : len(q)-1])) }
 	type group struct {
 		head  string
 		tails []string
@@ -165,9 +166,15 @@ func backendPodPatterns(names []string, max int) []string {
 	return patterns
 }
 
-// backendQueries are the drawer's three queries for one pod matcher.
+// promString writes s as a PromQL double-quoted string, the backslash first, then the quote, so Prometheus reads back s
+// as it was (the screen's utils/promString.ts).
+func promString(s string) string {
+	return `"` + strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `"`, `\"`) + `"`
+}
+
+// backendQueries are the drawer's three queries for one pod matcher, each value written with promString.
 func backendQueries(namespace, pattern string) map[string]string {
-	sel := fmt.Sprintf(`{namespace="%s",pod=~"%s",container!="",container!="POD"}`, namespace, pattern)
+	sel := `{namespace=` + promString(namespace) + `,pod=~` + promString(pattern) + `,container!="",container!="POD"}`
 	return map[string]string{
 		"cpu":       `sum(rate(container_cpu_usage_seconds_total` + sel + `[5m])) * 1000`,
 		"memory":    `sum(container_memory_working_set_bytes` + sel + `)`,

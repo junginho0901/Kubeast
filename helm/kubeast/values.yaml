@@ -398,8 +398,9 @@ ai:
   # is not affected. pii adds e-mail / phone / resident-registration / card
   # number masking; disable lists rule names to skip (key_name, private_key,
   # url_credentials, authorization, jwt, aws_key, provider_key, email, phone,
-  # rrn, card). Error messages shown on screen or written to the audit log are
-  # masked with every credential rule, whatever these settings. numbered (with
+  # rrn, card). Error messages shown on screen or written to the audit log, and
+  # the debugDump log lines, are masked with every credential rule, whatever
+  # enabled and disable say. numbered (with
   # pii, off by default) reads each value as its kind and a number (<EMAIL_1>,
   # <PHONE_1>, <RRN_1>, <CARD_1>) that stays the same within one chat answer or
   # alert investigation; a later answer numbers past what the conversation

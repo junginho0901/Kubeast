@@ -487,7 +487,7 @@ def('user-role-change', 'auth-service:PATCH:/admin/users/{user_id}', 'admin/user
   await sleep(600)
   const inRow = row.getByText(/^admin$/i)
   if (await inRow.count()) await inRow.first().click()
-  else await page.locator('[role="menu"], [role="listbox"], ul, div').filter({ hasText: /^(\s*(pending|member|admin|read|write)\s*)+$/i }).last().getByText(/^admin$/i).first().click()
+  else await page.locator('[role="menu"], [role="listbox"], ul, div').filter({ hasText: /^\s*(?:(?:pending|member|admin|read|write)\s*)+$/i }).last().getByText(/^admin$/i).first().click()
   await sleep(1500)
 }, async (page) => {
   const role = roleName(await findUser(page, USER_EMAIL))

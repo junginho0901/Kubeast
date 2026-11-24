@@ -747,8 +747,7 @@ def _check_model_config_policy(data: dict, current=None) -> None:
         raise HTTPException(status_code=400, detail=f"cannot use provider {claude_code.PROVIDER}: {reason}")
 
 
-# NOTE: test_model_connection has been moved to public_router (no auth required).
-# See main.py for registration.
+# test_model_connection is in app/api_public.py, on admin_router (require_admin); main.py registers it.
 
 
 def _without_stored_values(request: dict, current) -> dict:

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/junginho0901/kubeast/services/auth-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/auth-service-go/internal/security"
 )
 
 // The session cookie's Secure flag follows configuration, whatever
@@ -38,5 +39,36 @@ func TestSetAuthCookie_SecureFromConfig(t *testing.T) {
 				t.Fatalf("HttpOnly/SameSite unchanged: %+v", cookies[0])
 			}
 		})
+	}
+}
+
+// The OIDC callback's clear of the state cookie follows the same configuration
+// as the cookie it clears (OIDCLogin sets it with Secure: CookieSecure).
+func TestOIDCCallbackStateCookieClear_SecureFromConfig(t *testing.T) {
+	mgr, err := security.NewJWTManager(t.TempDir(), "iss", "aud", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secure := range []bool{true, false} {
+		h := &AuthHandler{jwtMgr: mgr, auditStore: &memAuditStore{}, cfg: config.Config{CookieSecure: secure, OIDC: config.OIDCConfig{Enabled: true}}}
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/callback?state=s1&code=c1", nil)
+		req.AddCookie(&http.Cookie{Name: oidcStateCookie, Value: "not-a-signed-state"})
+		h.OIDCCallback(rr, req)
+		var cleared *http.Cookie
+		for _, c := range rr.Result().Cookies() {
+			if c.Name == oidcStateCookie {
+				cleared = c
+			}
+		}
+		if cleared == nil || cleared.MaxAge >= 0 || cleared.Value != "" {
+			t.Fatalf("secure=%v: state cookie not cleared: %+v", secure, cleared)
+		}
+		if cleared.Secure != secure {
+			t.Fatalf("Secure = %v, want %v", cleared.Secure, secure)
+		}
+		if !cleared.HttpOnly || cleared.SameSite != http.SameSiteLaxMode || cleared.Path != "/api/v1/auth/oidc" {
+			t.Fatalf("HttpOnly/SameSite/Path unchanged: %+v", cleared)
+		}
 	}
 }

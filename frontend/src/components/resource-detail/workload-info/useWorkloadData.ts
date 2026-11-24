@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAIContext } from '@/hooks/useAIContext'
 import { api } from '@/services/api'
 import { failureText } from '@/utils/failureText'
+import { escapeRegex, promString } from '@/utils/promString'
 import { usePrometheusQueries } from '@/hooks/usePrometheusQuery'
 import { usePermission } from '@/hooks/usePermission'
 import { replicaSetOwnerRow } from '../netstoreDetail'
@@ -98,16 +99,18 @@ export function useWorkloadData({ name, namespace, kind, rawJson }: UseWorkloadD
   }, [describe?.selector_expressions, spec.selector])
 
   // Prometheus workload-level metrics
-  const podPrefix = name ? `${name}-` : ''
-  const nsFilter = namespace ? `namespace="${namespace}"` : ''
+  // the workload's pods are <name>-<suffix>: the name matched as itself
+  const podPrefix = name ? `${escapeRegex(name)}-` : ''
+  const podMatch = `pod=~${promString(`${podPrefix}.+`)}`
+  const nsFilter = namespace ? `namespace=${promString(namespace)}` : ''
   const promWorkloadMetrics = usePrometheusQueries(
     ['workload-detail', kind, namespace ?? '', name],
     [
-      { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{${nsFilter},pod=~"${podPrefix}.+",container!="",container!="POD"}[5m])) * 1000` },
-      { name: 'memory', promql: `sum(container_memory_working_set_bytes{${nsFilter},pod=~"${podPrefix}.+",container!="",container!="POD"})` },
-      { name: 'cpu_per_pod', promql: `sum by(pod)(rate(container_cpu_usage_seconds_total{${nsFilter},pod=~"${podPrefix}.+",container!="",container!="POD"}[5m])) * 1000` },
-      { name: 'mem_per_pod', promql: `sum by(pod)(container_memory_working_set_bytes{${nsFilter},pod=~"${podPrefix}.+",container!="",container!="POD"})` },
-      { name: 'restarts', promql: `sum(kube_pod_container_status_restarts_total{${nsFilter},pod=~"${podPrefix}.+"})` },
+      { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{${nsFilter},${podMatch},container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'memory', promql: `sum(container_memory_working_set_bytes{${nsFilter},${podMatch},container!="",container!="POD"})` },
+      { name: 'cpu_per_pod', promql: `sum by(pod)(rate(container_cpu_usage_seconds_total{${nsFilter},${podMatch},container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'mem_per_pod', promql: `sum by(pod)(container_memory_working_set_bytes{${nsFilter},${podMatch},container!="",container!="POD"})` },
+      { name: 'restarts', promql: `sum(kube_pod_container_status_restarts_total{${nsFilter},${podMatch}})` },
     ],
     { enabled: !!name && !!namespace && !isJob && !isCronJob },
   )

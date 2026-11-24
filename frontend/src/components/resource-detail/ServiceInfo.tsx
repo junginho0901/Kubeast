@@ -14,6 +14,7 @@ import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
+import { promString } from '@/utils/promString'
 
 // The API server applies the selector to the whole read: every row it gives is a match.
 const keepEvery = () => true
@@ -191,9 +192,9 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
     podsPastQuery
       ? []
       : [
-        { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podPattern}",container!="",container!="POD"}[5m])) * 1000` },
-        { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace="${namespace}",pod=~"${podPattern}",container!="",container!="POD"})` },
-        { name: 'pod_count', promql: `count(count by(pod)(container_cpu_usage_seconds_total{namespace="${namespace}",pod=~"${podPattern}",container!="",container!="POD"}))` },
+        { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace=${promString(namespace ?? '')},pod=~${promString(podPattern)},container!="",container!="POD"}[5m])) * 1000` },
+        { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace=${promString(namespace ?? '')},pod=~${promString(podPattern)},container!="",container!="POD"})` },
+        { name: 'pod_count', promql: `count(count by(pod)(container_cpu_usage_seconds_total{namespace=${promString(namespace ?? '')},pod=~${promString(podPattern)},container!="",container!="POD"}))` },
       ],
     { enabled: !!name && !!namespace && backendPods.length > 0 && !podsPastQuery },
   )

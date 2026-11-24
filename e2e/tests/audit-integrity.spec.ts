@@ -102,7 +102,7 @@ test.describe('Audit log integrity', () => {
 
     // The digest object is in the stand-in under the sink's prefix and says what the anchor row says.
     const file = kubectl(['-n', 'kubeast-devtools', 'exec', 'deploy/s3', '--', 'find', '/data/objects/kubeast-audit/audit/digests', '-name', path.basename(anchor.object_key)])
-    expect(file, 'digest object exists').toContain(anchor.object_key.replace(/^digests\//, 'digests/'))
+    expect(file, 'digest object exists').toContain(anchor.object_key)
     const b64 = kubectl(['-n', 'kubeast-devtools', 'exec', 'deploy/s3', '--', 'base64', file.split('\n')[0]]).replace(/\s/g, '')
     const digest = JSON.parse(Buffer.from(b64, 'base64').toString())
     expect(digest.version).toBe(1)

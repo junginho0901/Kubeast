@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -130,6 +131,30 @@ func TestAChangeThatDidNotCommitPutsItsSecretsBack(t *testing.T) {
 	}
 	if strings.Contains(rec.Error+string(rec.After), "Bearer") {
 		t.Fatalf("the row holds a header: %q %s", rec.Error, rec.After)
+	}
+}
+
+// In docker-compose mode the kubeconfig is the FilesystemSecretStore's file of the cluster: a rotation reads that file
+// before it writes, so a row change that did not commit puts the earlier kubeconfig back in it.
+func TestAKubeconfigFileRotationThatDidNotCommitPutsTheFileBack(t *testing.T) {
+	store := cluster.NewFilesystemSecretStore(t.TempDir())
+	path, err := store.WriteKubeconfig(context.Background(), "prod", "apiVersion: v1\nkind: Config\n# old\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &ClustersHandler{secrets: store}
+	writes := secretWrites([]*stagedSecret{h.stageKubeconfig("prod", "apiVersion: v1\nkind: Config\n# new\n")})
+	if err := writes.Store(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); !strings.HasSuffix(string(got), "# new\n") {
+		t.Fatalf("file after the write: %q", got)
+	}
+	if changed, left := writes.PutBack(context.Background()); !changed || left != "" {
+		t.Fatalf("PutBack = %v, %q; want the file put back", changed, left)
+	}
+	if got, _ := os.ReadFile(path); !strings.HasSuffix(string(got), "# old\n") {
+		t.Errorf("file after the change failed: %q, want the kubeconfig before", got)
 	}
 }
 
