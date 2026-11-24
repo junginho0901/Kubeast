@@ -11,6 +11,7 @@ import { PrometheusSection, Sparkline } from './PrometheusMetrics'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
+import { promString } from '@/utils/promString'
 
 interface Props {
   name: string
@@ -205,9 +206,7 @@ export default function HPAInfo({ name, namespace }: Props) {
 // can spot HPAs that flap. Gracefully hidden when Prometheus is unavailable or
 // the toggle is off (handled by PrometheusSection / range-query stub).
 function HPAScalingHistory({ name, namespace }: { name: string; namespace: string }) {
-  const escName = name.replace(/"/g, '\\"')
-  const escNs = namespace.replace(/"/g, '\\"')
-  const promql = `kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler="${escName}",namespace="${escNs}"}`
+  const promql = `kube_horizontalpodautoscaler_status_current_replicas{horizontalpodautoscaler=${promString(name)},namespace=${promString(namespace)}}`
   const { data, error } = usePrometheusRangeQuery(['hpa-replicas', namespace, name], promql, {
     step: 300, // 5-minute resolution → 288 points over 24h
   })

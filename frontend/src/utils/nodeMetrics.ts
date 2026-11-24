@@ -4,11 +4,11 @@
 // k8s_node_name): every query is "node-exporter or hostmetrics", both reduced to one series, so whichever the
 // store has answers and node-exporter wins when it has both.
 
+import { promString } from './promString'
+
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
-
-const promString = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 
 // instance=~"(?:<name>|<ip>…)(?::[0-9]+)?" — Prometheus anchors the regular expression, so node-1 does not match
 // node-10. An IPv6 address appears in brackets.
