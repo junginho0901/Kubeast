@@ -20,10 +20,12 @@
   - session-service는 표식 `{"stopped": true}`와 `{"failed": true}`만 받고 토큰 수는 받지 않습니다.
   - 대화는 맨 아래에 있을 때만 새 글을 따라가고, 위로 스크롤하면 그 자리에 멈추고 "맨 아래로" 버튼이 나타납니다.
   - 답 속의 표에는 가로·세로 선이 있고, 답 옆에는 Kubeast 아이콘이 붙습니다.
-- **다중 라운드 Tool Calling** — AI가 허용 목록에 든 툴로 K8s를 조회하고 변경합니다(최대 10라운드).
+- **다중 라운드 Tool Calling** — AI가 허용 목록에 든 툴로 K8s를 조회하고 변경합니다(답 하나에 모델 호출 `ai.chat.maxSteps`번까지, 기본 20, 1~100).
   읽기/쓰기/관리 툴은 **사용자 권한(JWT)에 따라 허용됩니다**.
   없는 이름, 없는 종류, 없는 기능(metrics-server 등)은 kubectl 오류 대신 **`not_found`(비슷한 이름 목록 포함)·`unknown_kind`·`unavailable` 결과**로 돌아옵니다.
   그래서 AI는 네임스페이스를 바꿔 가며 되묻지 않고, 한 번 찾아본 뒤 어디를 봤는지 말하고 질문합니다. 비슷한 이름은 그 사람의 네임스페이스 범위 안에서만 찾습니다.
+  - 답 하나의 마지막 모델 호출은 도구를 부를 수 없습니다. 읽은 것으로 답하고, 읽지 못한 것은 못 읽었다고 말하고, 질문의 언어로 쓰라는 지시를 받습니다. 그래도 글이 없으면 답에 호출을 모두 썼다는 말과 올릴 설정의 이름이 나옵니다. 길이에서 끊긴 답은 도구 없는 호출 3번까지 이어 쓰며, 이 호출은 여기서 세지 않습니다.
+  - Claude 구독에서는 Claude Code가 `ai.providers.claudeCode.maxTurns`(기본 10)에서 멈추고, 도구 없는 호출 하나가 도구들이 돌려준 것으로 답합니다.
   - `ai.refuseRepeatedReads`(기본 꺼짐)를 켜면 한 답 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 할 때 실행하지 않고, 그 결과가 몇 번째 걸음에 있는지와 새로 읽으려면 인자를 바꾸라고 모델에 알려 줍니다. 그 호출의 `ai.tool.call` 행에는 `status: repeated`와 `repeat_of`(그 걸음)가 남습니다. 실패했거나 거부된 호출은 다시 할 수 있습니다.
   - **규칙 카드**(`ai.ruleCards`, 기본 꺼짐): `chat`을 켜면 카드가 아는 고장(`OOMKilled`·`ImagePullBackOff` 같은 이유나 알림 이름)을 적은 질문은 그 턴에 카드를 최대 두 장 받습니다. 카드는 그 고장의 원인을 자주 찾아내는 확인 순서와 각 확인에 쓸 도구이며, 그 턴에 주어진 도구만 적힙니다. 기본 카드는 고장 종류마다 한 장이고(`app/services/rule_cards.json`), `cards`로 카드를 더하거나 바꾸고 `remove`로 기본 종류를 뺍니다. `investigations`는 알림 조사에 같은 일을 합니다([AI 알림](ai-alerts.md)).
   - 읽기 도구 52종에는 다음이 들어 있습니다.
@@ -450,6 +452,7 @@ EKS 클러스터에 `features.networkFlowMonitor`를 켜면 Pod·워크로드 �
     - `ai.chat.budget.sessionTokens` — 세션 누적
     - `ai.chat.budget.userDailyTokens` — 사용자별 UTC 하루 누적
     - 예산을 넘으면 그 턴은 모델을 호출하지 않고 거부되며, 채팅에 안내가 뜨고 `ai.chat.budget_exceeded`로 감사 로그에 남습니다. 사용량 기준은 이 화면과 같습니다.
+    - 예산은 턴을 시작할 때 확인하고 모델 호출 사이에는 확인하지 않습니다. 예산 안에서 시작한 턴은 모델 호출 `ai.chat.maxSteps`번까지 끝까지 가고 그다음 턴이 거부되므로, 한 턴의 토큰만큼 예산을 넘을 수 있습니다.
     - Optimization AI 설명도 사용자 하루 예산을 넘으면 관측 표만 보여 주고 모델은 부르지 않습니다.
   - 모델 공급자가 요청을 거절하면 채팅·플로팅·Optimization이 그 이유를 **종류별로** 화면 언어로 알려 주고, 공급자 이름과 원문(마스킹)도 함께 보여 줍니다(`app/services/ai/model_errors.py`).
     - 크레딧·한도 소진(OpenAI `insufficient_quota`, Claude API `billing_error`·지출 한도, Gemini 402)

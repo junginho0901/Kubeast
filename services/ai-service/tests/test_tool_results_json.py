@@ -264,6 +264,41 @@ async def test_a_subscription_chat_hands_claude_code_the_tool_result_as_the_swit
 
 
 @pytest.mark.asyncio
+async def test_a_subscription_chat_stopped_at_its_limit_gets_the_results_in_its_closing_request_as_the_switch_says(monkeypatch, switch):
+    """As an investigation's closing call: one call without tools, whose request, a user message, holds the results; with
+    the switch each is a JSON object there too."""
+    from app.services.ai import chat_steps
+
+    closing = []
+
+    class ClaudeCode:
+        async def turn(self, *, messages, tools, run_tool, out):
+            await run_tool("k8s_get_pod_logs", {"pod_name": "p"}, 1, 0)
+            out.parts.append(("tool", 0))
+            out.finish_reason, out.turns, out.tool_calls = "max_turns", 1, 1
+            for e in ():
+                yield e
+
+    async def create(**kw):
+        closing.append({**kw, "messages": list(kw["messages"])})
+
+        async def gen():
+            yield chunk("It restarts.", finish_reason="stop")
+        return gen()
+
+    client = SimpleNamespace(claude_code=ClaudeCode(), chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    await chat_turn(monkeypatch, client, provider="claude-code")
+    assert len(closing) == 1 and "tools" not in closing[0] and holding_mark(closing[0]["messages"]) == ["user"]
+    text, end = closing[0]["messages"][-1]["content"], "\n\n" + chat_steps.final_message("why does it restart?")
+    assert text.startswith("Tool results so far:\n\n") and text.endswith(end)
+    body = text.removeprefix("Tool results so far:\n\n").removesuffix(end)
+    if switch:
+        assert json.loads(body) == {"tool": "k8s_get_pod_logs", "args": {"pod_name": "p"}, "result": PLANTED}
+    else:
+        assert body == 'k8s_get_pod_logs {"pod_name": "p"}\n' + PLANTED
+
+
+@pytest.mark.asyncio
 async def test_the_floating_chats_screen_is_the_one_system_message_and_stays_fenced(monkeypatch, switch):
     """The screen the floating chat sends is cluster text outside a tool result: it is a system message inside
     <untrusted_context>, whose closing tag a planted one cannot write, and the switch does not move it."""

@@ -18,6 +18,7 @@ from typing import Callable, Optional, TYPE_CHECKING
 from app.services.ai import access as access_mod
 from app.services.ai import budget as budget_mod
 from app.services.ai import charts
+from app.services.ai import chat_steps
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import limits
@@ -911,7 +912,10 @@ async def session_chat_stream(
         yield f"data: {json.dumps({'model_info': {'provider': service.provider, 'model': service.model, 'role': service.user_role, 'tier': getattr(service, 'tier', 'default')}}, ensure_ascii=False)}\n\n"
 
         # ===== Multi-turn Tool Calling Loop =====
-        max_iterations = 10  # 최대 10번까지 tool call 반복 허용
+        max_steps = chat_steps.max_steps()  # the model calls of this answer; the last may call no tool
+        limit_setting = chat_steps.SETTING
+        read_so_far = ""  # on a subscription stopped at its limit, what the tools returned, for the last call
+        final = False
         iteration = 0
         # tool_calls_log: Tool call 정보 저장
         # parts: the turn in order: ("text", what the model wrote) / ("tool", call_id) — the saved answer
@@ -934,6 +938,7 @@ async def session_chat_stream(
             from app.services.claude_code import TurnResult
 
             cc_turn = TurnResult()
+            cc_results: list[str] = []
 
             async def _cc_tool(name, args, turn_no, call_id=None):
                 events, entry, llm_text = await _call_tool(
@@ -942,6 +947,7 @@ async def session_chat_stream(
                     repeats=repeats,
                 )
                 tool_calls_log.append(entry)
+                cc_results.append(tool_turn.result_text(name, args, llm_text))
                 return events, tool_results.for_model(name, llm_text, limits.tool_result_chars(service))
 
             cc_prompt_chars = usage_acct.prompt_chars(messages, tools)
@@ -971,14 +977,17 @@ async def session_chat_stream(
             assistant_content = cc_turn.text
             parts = list(cc_turn.parts)
             if cc_turn.finish_reason == "max_turns":
-                assistant_content = "죄송합니다. 정보 수집 중 최대 반복 횟수에 도달했습니다. 더 구체적인 질문으로 다시 시도해주세요."
-                parts.append(("text", assistant_content))
-                yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
+                # Stopped at its limit with no answer: the loop's last step below, without tools, writes it.
+                delegated, max_steps, limit_setting = False, iteration + 1, chat_steps.CLAUDE_CODE_SETTING
+                read_so_far = tool_turn.tool_results_text(cc_results) + "\n\n"
 
-        while iteration < max_iterations and not delegated:
+        while iteration < max_steps and not delegated:
             iteration += 1
-            log.debug("[DEBUG] Iteration %s/%s", iteration, max_iterations)
-            
+            log.debug("[DEBUG] Iteration %s/%s", iteration, max_steps)
+            final = iteration == max_steps
+            if final:
+                messages.append({"role": "user", "content": read_so_far + chat_steps.final_message(message)})
+
             # GPT 호출 (Function Calling)
             log.debug("[AI Service] Session Chat API 호출 (Iteration %s) - 요청 모델: %s", iteration, service.model)
             log.debug("[DEBUG] Messages count: %d, Tools count: %d", len(messages), len(tools))
@@ -988,7 +997,7 @@ async def session_chat_stream(
                 _fc_kwargs = dict(
                     model=service.model,
                     messages=messages,
-                    tools=tools,
+                    **(tool_turn.no_more_calls(service, tools) if final else {"tools": tools}),
                     temperature=0.7,
                     max_tokens=limits.answer_tokens(service, 4096),
                     timeout=60.0,
@@ -997,11 +1006,12 @@ async def session_chat_stream(
                 if service.provider == "openai" and session_id:
                     # Routes the session's turns to the same cache shard on older OpenAI models; newer ones ignore it.
                     _fc_kwargs["prompt_cache_key"] = f"kubeast-session-{session_id}"
-                call_prompt_chars = usage_acct.prompt_chars(messages, tools)
+                call_prompt_chars = usage_acct.prompt_chars(messages, _fc_kwargs.get("tools"))
+                auto = {} if final else {"tool_choice": "auto"}
                 try:
-                    stream = await service.client.chat.completions.create(**_fc_kwargs, tool_choice="auto", stream_options={"include_usage": True})
+                    stream = await service.client.chat.completions.create(**_fc_kwargs, **auto, stream_options={"include_usage": True})
                 except Exception as tc_err:
-                    log.warning("tool_choice='auto' streaming failed (%s), retrying without it", safe_error(tc_err))
+                    log.warning("streaming with %s failed (%s), retrying without it", "stream_options" if final else "tool_choice='auto'", safe_error(tc_err))
                     stream = await service.client.chat.completions.create(**_fc_kwargs)
 
                 # --- streaming delta 수집 ---
@@ -1073,8 +1083,8 @@ async def session_chat_stream(
                 yield "data: [DONE]\n\n"
                 return
 
-            # --- tool call이 있으면 실행 후 다음 iteration ---
-            if collected_tool_calls:
+            # --- tool call이 있으면 실행 후 다음 iteration (the last step's are not run) ---
+            if collected_tool_calls and not final:
                 log.debug("[DEBUG] Tool calls detected: %d", len(collected_tool_calls))
                 # assistant message를 dict로 구성 (OpenAI API 호환)
                 tc_list = []
@@ -1135,7 +1145,7 @@ async def session_chat_stream(
                 assistant_content = stream_content
                 if assistant_content:
                     messages.append({"role": "assistant", "content": assistant_content})
-                turn_finish_reason = last_finish_reason
+                turn_finish_reason = turn_finish_reason or last_finish_reason  # a subscription's stays max_turns
 
                 log.debug("[DEBUG] Streaming completed. finish_reason=%s, length=%d", last_finish_reason, len(assistant_content))
 
@@ -1187,12 +1197,12 @@ async def session_chat_stream(
 
                 break
         
-        # Max iterations 도달
-        if iteration >= max_iterations and not assistant_content:
-            log.warning("Max iterations (%s) reached without final response", max_iterations)
-            assistant_content = "죄송합니다. 정보 수집 중 최대 반복 횟수에 도달했습니다. 더 구체적인 질문으로 다시 시도해주세요."
+        # The last step wrote nothing either
+        if final and not assistant_content.strip():
+            log.warning("the chat's last model call (%s, %s) wrote no answer", iteration, limit_setting)
+            assistant_content = chat_steps.no_answer(message, limit_setting)
             yield f"data: {json.dumps({'content': assistant_content}, ensure_ascii=False)}\n\n"
-        
+
         log.debug("[DEBUG] Preparing to save message. assistant_content length: %d, tool_calls: %d", len(assistant_content), len(tool_calls_log))
         
         # The saved answer (KAgent-style tool blocks): the turn's text and tool calls in the order they came.

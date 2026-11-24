@@ -35,6 +35,13 @@ class ToolTurn:
     results: list[str] = field(default_factory=list)
 
 
+def result_text(name: str, args: dict, text: str) -> str:
+    """One tool result as tool_results_text lists it."""
+    if tool_results.enabled():
+        return tool_results.as_json(name, text, args)
+    return f"{name} {json.dumps(args, ensure_ascii=False)}\n{text}"
+
+
 def tool_results_text(results: Sequence[str]) -> str:
     """The tool results of a subscription's turn for a call that follows it without tools."""
     return "Tool results so far:\n\n" + "\n\n".join(results)
@@ -137,11 +144,8 @@ async def _claude_code_turn(service, messages, tools, run_tool, *, max_steps, fi
 
     async def cc_tool(name: str, args: dict, step: int, call_id: Optional[int] = None):
         text = await run_tool(name, args, step)
-        if tool_results.enabled():
-            results.append(tool_results.as_json(name, text, args))
-            return [], tool_results.for_model(name, text, limits.tool_result_chars(service))
-        results.append(f"{name} {json.dumps(args, ensure_ascii=False)}\n{text}")
-        return [], text
+        results.append(result_text(name, args, text))
+        return [], tool_results.for_model(name, text, limits.tool_result_chars(service))
 
     prompt_chars = usage_acct.prompt_chars(messages, tools)
     async with asyncio.timeout(remaining()):

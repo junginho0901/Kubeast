@@ -226,7 +226,7 @@ The chat reads text other people wrote into a cluster — pod logs, events, anno
 Where text from a cluster reaches the model:
 
 - A tool's answer is a tool result, in the chat and in an investigation, with an API key and through Claude Code. With `ai.toolResultsJSON: true` (off by default) each result is one JSON object, `{"tool": …, "result": …}`: a JSON answer Kubeast built as its object, and anything else — a log, YAML, describe or exec output, an answer cut at the model's limit — as a JSON string, so a planted line cannot end the result or read as more than data. A pod log line that is itself one JSON object stays a string too. The object keeps to the model's tool result length: the answer inside keeps the most of itself whose object fits, after escaping.
-- When an investigation on a Claude subscription stops at its step limit, the closing call has no tools and gets the results in its request; with the switch each result there is a JSON object too.
+- When an investigation or a chat answer on a Claude subscription stops at its step limit, the closing call has no tools and gets the results in its request; with the switch each result there is a JSON object too.
 - An alert's labels and annotations are the investigation's first message, as JSON between `<<<ALERT` and `ALERT>>>` markers a planted `>>>` cannot close.
 - The floating chat's screen data is a system message inside `<untrusted_context>`, whose closing tag a planted one cannot write.
 - The history of earlier turns leaves the tool blocks out whole.

@@ -357,6 +357,7 @@ So these are the same as on the API key path: the tool list, approval cards for 
   - The slots are rows of the `claude_code_slots` table in the database (lane, slot, owner, heartbeat_at). A row names no person and no conversation: its owner is the ai-service pod's name followed by 12 random hex characters, new for each run.
   - A run whose server could not refresh its slot for 60 seconds (the database did not answer) loses the slot to the next taker and still finishes. Until it ends the install runs one more than `maxConcurrentTotal`; `maxConcurrent` on each server still holds.
   - One turn is capped at `turnTimeoutSeconds` (default 300 seconds) and `maxTurns` (default 10 model calls).
+  - A chat turn that stops at `maxTurns` is followed by one more run without tools, which answers from what the tools returned. That run takes a slot and has `turnTimeoutSeconds` of its own.
   - Each turn starts one Claude Code process (up to about 300 MB). While the provider is on, ai-service's memory limit is the larger of `resources.aiService.limits.memory` (default 1Gi) and `ai.providers.claudeCode.memoryLimit` (default 2Gi: the service and 2 chat processes with the investigator's). Raise `memoryLimit` with `maxConcurrent`, about 300 MB for each more; `""` leaves the limit as `resources.aiService.limits.memory` sets it.
 - **Waiting**: a turn whose slot is not free waits up to `queueWaitSeconds` (default 60).
   - Meanwhile AI Chat and the floating chat show "Waiting for a turn — another question is running".
