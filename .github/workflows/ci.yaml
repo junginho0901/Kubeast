@@ -37,7 +37,7 @@ jobs:
           - services/netpol-oracle
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           # The images' Go (golang:1.27-alpine, its newest patch), not each go.mod's minimum: Go 1.27 builds
           # encoding/json on encoding/json/v2, which writes bytes that are not UTF-8 otherwise than 1.26 did.
@@ -70,7 +70,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           # the go job's Go
           go-version: "1.27"
@@ -119,7 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The modules' go.mod minimums differ; the images build with 1.27 (golang:1.27-alpine).
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: "1.27"
           check-latest: true
@@ -267,7 +267,7 @@ jobs:
       # Every Dockerfile's golang:X.Y is every go-version "X.Y" in this file; dependabot's base-images PR moves the Dockerfiles alone.
       - name: the images' Go is CI's Go
         run: scripts/check-go-version.sh
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: "stable"
       - run: |
@@ -339,7 +339,7 @@ jobs:
       # govulncheck also reports standard-library advisories for the toolchain
       # it runs under, so scan with the newest 1.27 patch — the one the images
       # are built with (golang:1.27-alpine) — not the go.mod minimum (1.26.0).
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: "1.27"
           check-latest: true
