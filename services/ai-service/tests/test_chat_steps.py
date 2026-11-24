@@ -17,7 +17,7 @@ from app.services.ai import chat_steps, debug_dump, streaming
 from app.services.ai.language import build_language_directive
 from tests.test_anthropic_messages import FakeAnthropic, assert_goes_on_without_calls, client_for, log_call, said
 from tests.test_claude_code import ProcessError, ResultMessage, on, slots_db, until  # noqa: F401  (fixtures)
-from tests.test_tool_results_json import TOOL
+from tests.test_tool_results_json import RESULTS_END, RESULTS_HEAD, TOOL
 
 EN, KO = "why does it restart?", "web 파드가 왜 재시작하나요?"
 RECORDED = os.path.join(os.path.dirname(__file__), "fixtures", "chat_requests_two_steps.json")
@@ -608,8 +608,8 @@ async def test_a_subscription_turn_stopped_at_its_limit_is_answered_by_one_call_
     assert options.max_turns == 10 and options.mcp_servers and not getattr(closing_options, "mcp_servers", None)
     # the question, then in one request what the tools returned and the last call's message; the same system prompt
     assert first == KO and closing_options.system_prompt == options.system_prompt
-    assert closing.endswith('Tool results so far:\n\nk8s_get_pod_logs {"pod_name": "pod-1"}\nlog of pod-1\n\n'
-                            'k8s_get_pod_logs {"pod_name": "pod-2"}\nlog of pod-2\n\n' + chat_steps.final_message(KO))
+    assert closing.endswith(RESULTS_HEAD + 'k8s_get_pod_logs {"pod_name": "pod-1"}\nlog of pod-1\n\n'
+                            'k8s_get_pod_logs {"pod_name": "pod-2"}\nlog of pod-2' + RESULTS_END + "\n\n" + chat_steps.final_message(KO))
     assert "User: " + KO in closing
     assert turn.content == ["Looking.", "It restarts: ", "out of memory."] and not turn.errors
     assert turn.ran == ["k8s_get_pod_logs"] * 2

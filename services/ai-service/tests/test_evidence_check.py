@@ -14,6 +14,7 @@ from app.services.investigation import runner
 from app.services.investigation.settings import InvestigationSettings, load
 from tests.test_alert_investigation import (FakeClaudeCode, FakeService, FakeSubscriptionService, cfg, completion,
                                             install_loop, row, tool_call)
+from tests.test_tool_results_json import RESULTS_END, RESULTS_HEAD
 
 NOW = datetime(2026, 10, 13, 12, 0, 0)  # row()'s alert start
 PODS = {"resource_type": "pods", "namespace": "apps"}
@@ -384,8 +385,8 @@ async def test_a_subscription_second_ask_carries_the_tool_results_its_messages_l
     assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
     ask = messages[-1]["content"]
     # as the closing call gives them: each result under its tool and arguments, with its call number
-    assert ask.startswith('Tool results so far:\n\nk8s_get_resources {"resource_type": "pods", "namespace": "apps"}\n'
-                          f"[call 1]\n{POD_TABLE}\n\n")
+    assert ask.startswith(RESULTS_HEAD + 'k8s_get_resources {"resource_type": "pods", "namespace": "apps"}\n'
+                          f"[call 1]\n{POD_TABLE}" + RESULTS_END + "\n\n")
     assert "- StatefulSet/apps/db: db does not appear in what calls 1 returned" in ask and ask.endswith("No tools now.")
 
 
