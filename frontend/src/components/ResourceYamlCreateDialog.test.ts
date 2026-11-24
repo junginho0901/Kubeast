@@ -90,7 +90,17 @@ describe('the Create from YAML window', () => {
     expect(yamlEditorHeight(YAML_60)).toBe(YAML_EDITOR_MAX)
   })
 
-  it('scrolls a refusal longer than the window with the editor, above the buttons', () => {
+  it('scrolls a long refusal in a box of its own, by the keyboard too, so the editor keeps the rest of the height', () => {
+    held.error = Array.from({ length: 80 }, (_, i) => `line ${i}`).join('\n')
+    const { root, part } = draw(YAML_60)
+    const refusal = find(root, 'data-testid="yaml-create-error"')!
+    expect(refusal.parent).toBe(part)
+    // shrink-0: a box that scrolls has no least height of its own, and the editor gives up height before it
+    expect(refusal.classes).toEqual(expect.arrayContaining(['max-h-40', 'shrink-0', 'overflow-y-auto', 'whitespace-pre-wrap']))
+    expect(refusal.attrs).toContain('tabindex="0"')
+  })
+
+  it('keeps a refusal and what was made before it with the editor, above the buttons', () => {
     held.error = Array.from({ length: 80 }, (_, i) => `line ${i}`).join('\n')
     held.made = [{ kind: 'ConfigMap', name: 'a', namespace: 'demo' }]
     const refused = draw(YAML_60)

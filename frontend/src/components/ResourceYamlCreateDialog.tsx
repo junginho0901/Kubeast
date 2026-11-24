@@ -135,8 +135,13 @@ export default function ResourceYamlCreateDialog({
           </p>
         )}
 
+        {/* a long one (an admission webhook's) scrolls in its own box, so the editor keeps the rest of the height */}
         {error && (
-          <p data-testid="yaml-create-error" className="mt-3 text-sm text-red-400 wrap-break-word whitespace-pre-wrap">
+          <p
+            data-testid="yaml-create-error"
+            tabIndex={0}
+            className="mt-3 max-h-40 shrink-0 overflow-y-auto text-sm text-red-400 wrap-break-word whitespace-pre-wrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-400"
+          >
             {error}
           </p>
         )}
