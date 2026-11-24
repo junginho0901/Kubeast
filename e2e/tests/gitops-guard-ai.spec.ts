@@ -25,12 +25,22 @@ async function desiredReplicas(request: APIRequestContext, admin: Record<string,
   return typeof n === 'number' ? n : null
 }
 
-async function askForScale(page: Page): Promise<void> {
+// The chat screen makes a conversation for the first question on a page just opened, one per askForScale; they are
+// removed after the test, passed or not.
+const conversationMade = (page: Page) =>
+  page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
+async function deleteConversations(request: APIRequestContext, headers: Record<string, string>, ids: string[]) {
+  for (const id of ids) await request.delete(`/api/v1/sessions/${id}`, { headers, failOnStatusCode: false })
+}
+
+async function askForScale(page: Page, made: string[]): Promise<void> {
   await page.goto('/ai-chat?cluster=self')
   await page.waitForLoadState('networkidle')
   const input = page.getByPlaceholder(PLACEHOLDER_RE)
   await input.fill(QUERY)
+  const created = conversationMade(page)
   await page.getByRole('button', { name: SEND_RE }).click()
+  made.push((await (await created).json()).id as string)
   await expect(input).toBeDisabled({ timeout: 15_000 })
   await expect(input).toBeEnabled({ timeout: 120_000 })
 }
@@ -53,10 +63,11 @@ test.describe('Argo CD guard — AI write tools', () => {
     await page.locator('input[type="password"]').first().fill(ADMIN_PASSWORD)
     await page.locator('button[type="submit"]').first().click()
     await page.waitForFunction(() => !document.querySelector('input[autocomplete="email"]'), { timeout: 20000 })
+    const made = withUndo<string[]>([], (ids) => deleteConversations(request, admin, ids))
     try {
       let card = page.locator(CARD).last()
       for (let attempt = 1; attempt <= 3 && (await page.locator(CARD).count()) === 0; attempt++) {
-        await askForScale(page)
+        await askForScale(page, made)
         card = page.locator(CARD).last()
       }
       await expect(card, 'approval card for k8s_scale').toBeVisible({ timeout: 10_000 })
@@ -68,6 +79,20 @@ test.describe('Argo CD guard — AI write tools', () => {
       expect(await desiredReplicas(request, admin), 'replicas unchanged').toBe(before)
     } finally {
       await ctx.close()
+      await deleteConversations(request, admin, made)
     }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
