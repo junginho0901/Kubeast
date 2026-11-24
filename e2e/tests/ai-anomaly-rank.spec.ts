@@ -196,19 +196,21 @@ test.describe('AI tool anomaly_rank', () => {
         apiVersion: 'apps/v1', kind: 'Deployment', metadata: { name: 'crash', namespace: NS },
         spec: {
           replicas: 1, selector: { matchLabels: { app: 'crash' } },
-          template: { metadata: { labels: { app: 'crash' } }, spec: { terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: IMAGE, imagePullPolicy: 'IfNotPresent', command: ['false'] }] } },
+          template: { metadata: { labels: { app: 'crash', 'app.kubernetes.io/name': 'crash' } }, spec: { terminationGracePeriodSeconds: 0, containers: [{ name: 'app', image: IMAGE, imagePullPolicy: 'IfNotPresent', command: ['false'] }] } },
         },
       }),
     ].join('\n---\n'))
 
     // the second cluster: a pod that exits three times and then stays up (its first run waits a minute, so the
-    // restart counter is scraped at 0 first), and a pod holding FILL_MIB of its LIMIT_MIB in a memory-backed emptyDir
+    // restart counter is scraped at 0 first), and a pod holding FILL_MIB of its LIMIT_MIB in a memory-backed emptyDir;
+    // both carry app.kubernetes.io/name, so the cluster's Kyverno require-labels policy (Audit,
+    // deploy/kind/kyverno-policies.yaml) leaves no Warning event that the Dashboard would list as an issue
     const status = second ? await (await request.get(`/api/v1/cluster/prometheus/status?cluster=${SECOND}`, { headers: bearer(admin) })).json() : {}
     if (second && status.available) {
       second('apply -f -', [
         `apiVersion: v1\nkind: Namespace\nmetadata: {name: ${NS}}`,
         JSON.stringify({
-          apiVersion: 'v1', kind: 'Pod', metadata: { name: 'settle', namespace: NS },
+          apiVersion: 'v1', kind: 'Pod', metadata: { name: 'settle', namespace: NS, labels: { 'app.kubernetes.io/name': 'settle' } },
           spec: {
             terminationGracePeriodSeconds: 0,
             containers: [{
@@ -220,7 +222,7 @@ test.describe('AI tool anomaly_rank', () => {
           },
         }),
         JSON.stringify({
-          apiVersion: 'v1', kind: 'Pod', metadata: { name: 'near', namespace: NS },
+          apiVersion: 'v1', kind: 'Pod', metadata: { name: 'near', namespace: NS, labels: { 'app.kubernetes.io/name': 'near' } },
           spec: {
             terminationGracePeriodSeconds: 0,
             containers: [{

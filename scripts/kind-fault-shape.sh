@@ -293,7 +293,7 @@ switch() {
   [ "$(release_status)" = deployed ] || die "release $RELEASE is $(release_status), not deployed: run back (or finish that operation) first"
   local auto
   auto=$(h get values "$RELEASE" --all -o json | jq -r '(.autoscaling // {}) | to_entries[] | select(.value.enabled == true) | .key' | tr '\n' ' ')
-  [ -z "$auto" ] || die "autoscaling is on for: $auto— their HPAs set the pod count, not replicas. Turn them off first. Nothing changed."
+  [ -z "$auto" ] || die "autoscaling is on for: ${auto}— their HPAs set the pod count, not replicas. Turn them off first. Nothing changed."
   load_start || note_start
   load_start
   [ "$(chart_hash)" = "$START_CHART" ] || die "the chart files in $CHART differ from the ones noted at start ($(short "$START_CHART")): a switch from here would change the templates too. Run it from the checkout of the start, or back and start again. Nothing changed."

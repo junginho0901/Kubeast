@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { test, expect, type Locator } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 
 // AI Chat 회귀 — Phase 2.3 의 streaming.py 추출 (4a~4c) 의 자동 검증.
 // 이전엔 사용자가 brower 로 매 PR 확인했지만 토큰 비용은 자동/수동 동일하고
@@ -34,6 +34,12 @@ const answerText = (el: Locator) => el.evaluate((n) => {
   return c.textContent ?? ''
 })
 
+// The conversation the chat screen makes for its first question, and its removal after the test, passed or not.
+const conversationMade = (page: Page) =>
+  page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
+const deleteConversation = (page: Page, id: string) =>
+  page.request.delete(`/api/v1/sessions/${id}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, failOnStatusCode: false })
+
 test.describe('AI Chat', () => {
   test('initial render — input area visible', async ({ page }) => {
     const errors: string[] = []
@@ -56,26 +62,31 @@ test.describe('AI Chat', () => {
     const sendButton = page.getByRole('button', { name: SEND_RE })
 
     await input.fill('안녕')
+    const created = conversationMade(page)
     await sendButton.click()
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      // user message 즉시 표시
+      await expect(page.locator('div.flex-row-reverse').filter({ hasText: '안녕' })).toBeVisible({
+        timeout: 5000,
+      })
 
-    // user message 즉시 표시
-    await expect(page.locator('div.flex-row-reverse').filter({ hasText: '안녕' })).toBeVisible({
-      timeout: 5000,
-    })
+      // streaming 시작 → input disabled + Stop 보임
+      await expect(input).toBeDisabled({ timeout: 10_000 })
+      await expect(page.getByRole('button', { name: STOP_RE })).toBeVisible()
 
-    // streaming 시작 → input disabled + Stop 보임
-    await expect(input).toBeDisabled({ timeout: 10_000 })
-    await expect(page.getByRole('button', { name: STOP_RE })).toBeVisible()
+      // streaming 끝 → input enabled
+      await expect(input).toBeEnabled({ timeout: 60_000 })
 
-    // streaming 끝 → input enabled
-    await expect(input).toBeEnabled({ timeout: 60_000 })
-
-    // assistant 응답에 한글 포함 (LLM 이 한국어로 응답해야)
-    const assistantMessages = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
-    const lastAssistant = assistantMessages.last()
-    const text = (await lastAssistant.innerText()).trim()
-    expect(text.length).toBeGreaterThan(0)
-    expect(text).toMatch(/[가-힣]/) // 한글 음절 1자 이상
+      // assistant 응답에 한글 포함 (LLM 이 한국어로 응답해야)
+      const assistantMessages = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+      const lastAssistant = assistantMessages.last()
+      const text = (await lastAssistant.innerText()).trim()
+      expect(text.length).toBeGreaterThan(0)
+      expect(text).toMatch(/[가-힣]/) // 한글 음절 1자 이상
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
 
   test('tool-calling query — the answer names the pods kube-system really runs', async ({ page }) => {
@@ -87,18 +98,23 @@ test.describe('AI Chat', () => {
     const sendButton = page.getByRole('button', { name: SEND_RE })
 
     await input.fill(POD_QUERY)
+    const created = conversationMade(page)
     await sendButton.click()
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      // streaming 끝까지 — tool 호출 포함이라 일반 query 보다 길 수 있음 (the answer starts before it ends: right after the
+      // click the input can still be enabled)
+      await expect(input).toBeDisabled({ timeout: 15_000 })
+      await expect(input).toBeEnabled({ timeout: 90_000 })
 
-    // streaming 끝까지 — tool 호출 포함이라 일반 query 보다 길 수 있음 (the answer starts before it ends: right after the
-    // click the input can still be enabled)
-    await expect(input).toBeDisabled({ timeout: 15_000 })
-    await expect(input).toBeEnabled({ timeout: 90_000 })
-
-    const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
-    // a tool was called (its block is on screen) and the answer itself names real pods
-    expect(await lastAssistant.locator('.md-details').count()).toBeGreaterThan(0)
-    const answer = await answerText(lastAssistant)
-    expect(pods.some((p) => answer.includes(p)), `the answer names one of ${pods.join(', ')}:\n${answer}`).toBe(true)
+      const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+      // a tool was called (its block is on screen) and the answer itself names real pods
+      expect(await lastAssistant.locator('.md-details').count()).toBeGreaterThan(0)
+      const answer = await answerText(lastAssistant)
+      expect(pods.some((p) => answer.includes(p)), `the answer names one of ${pods.join(', ')}:\n${answer}`).toBe(true)
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
 
   test('stop button cancels streaming mid-response', async ({ page }) => {
@@ -111,37 +127,42 @@ test.describe('AI Chat', () => {
 
     // 답변이 길게 나올 만한 query
     await input.fill('Kubernetes 의 deployment / service / pod 의 차이를 자세히 설명해줘')
+    const created = conversationMade(page)
     await sendButton.click()
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      // streaming 시작 확인
+      await expect(stopButton).toBeVisible({ timeout: 10_000 })
 
-    // streaming 시작 확인
-    await expect(stopButton).toBeVisible({ timeout: 10_000 })
+      // 중간에 Stop 클릭 (응답 첫 글자 도착 후)
+      await page.waitForTimeout(2000)
+      await stopButton.click()
 
-    // 중간에 Stop 클릭 (응답 첫 글자 도착 후)
-    await page.waitForTimeout(2000)
-    await stopButton.click()
-
-    // input 즉시 또는 1~2초 안에 enabled 복귀 (streaming 종료)
-    await expect(input).toBeEnabled({ timeout: 5_000 })
-    await expect(stopButton).toHaveCount(0)
-    // the stream really stopped: the answer does not grow any more (stopped before the first word, there is no
-    // answer bubble at all — nothing was written or saved). The answer is measured without the action row under it,
-    // which opens after the stop and adds "Stopped · usage not available"
-    const assistants = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
-    const answerLength = () => assistants.last().evaluate((el) => {
-      const copy = el.cloneNode(true) as HTMLElement
-      copy.querySelectorAll('[data-testid="message-actions-row"]').forEach((row) => row.remove())
-      return (copy.textContent ?? '').length
-    })
-    const before = await assistants.count()
-    const stopped = before ? await answerLength() : 0
-    await page.waitForTimeout(3000)
-    expect(await assistants.count()).toBe(before)
-    if (before) {
-      expect(await answerLength(), 'the answer stopped growing').toBe(stopped)
-      await expect(assistants.last().getByTestId('message-actions-row'), 'the row under it says it stopped').toContainText(/Stopped|멈춤/, { timeout: 10_000 })
+      // input 즉시 또는 1~2초 안에 enabled 복귀 (streaming 종료)
+      await expect(input).toBeEnabled({ timeout: 5_000 })
+      await expect(stopButton).toHaveCount(0)
+      // the stream really stopped: the answer does not grow any more (stopped before the first word, there is no
+      // answer bubble at all — nothing was written or saved). The answer is measured without the action row under it,
+      // which opens after the stop and adds "Stopped · usage not available"
+      const assistants = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+      const answerLength = () => assistants.last().evaluate((el) => {
+        const copy = el.cloneNode(true) as HTMLElement
+        copy.querySelectorAll('[data-testid="message-actions-row"]').forEach((row) => row.remove())
+        return (copy.textContent ?? '').length
+      })
+      const before = await assistants.count()
+      const stopped = before ? await answerLength() : 0
+      await page.waitForTimeout(3000)
+      expect(await assistants.count()).toBe(before)
+      if (before) {
+        expect(await answerLength(), 'the answer stopped growing').toBe(stopped)
+        await expect(assistants.last().getByTestId('message-actions-row'), 'the row under it says it stopped').toContainText(/Stopped|멈춤/, { timeout: 10_000 })
+      }
+      // nothing looks busy after the stop (no "…" placeholder left)
+      await expect(page.locator('.animate-bounce')).toHaveCount(0)
+    } finally {
+      await deleteConversation(page, sessionId)
     }
-    // nothing looks busy after the stop (no "…" placeholder left)
-    await expect(page.locator('.animate-bounce')).toHaveCount(0)
   })
 
   test('copy button strips tool details from clipboard', async ({ page, context }) => {
@@ -154,21 +175,27 @@ test.describe('AI Chat', () => {
     // tool 호출 query — message.content 에 <details>🔧 가 박힘
     const pods = kubeSystemPods()
     await input.fill(POD_QUERY)
+    const created = conversationMade(page)
     await sendButton.click()
-    await expect(input).toBeDisabled({ timeout: 15_000 })
-    await expect(input).toBeEnabled({ timeout: 90_000 })
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      await expect(input).toBeDisabled({ timeout: 15_000 })
+      await expect(input).toBeEnabled({ timeout: 90_000 })
 
-    // Copy 버튼 클릭 (마지막 assistant message). 영어 i18n: "Copy" / 한국어: "복사".
-    const copyButton = page.getByRole('button', { name: /^copy$|^복사$/i }).last()
-    await copyButton.click()
+      // Copy 버튼 클릭 (마지막 assistant message). 영어 i18n: "Copy" / 한국어: "복사".
+      const copyButton = page.getByRole('button', { name: /^copy$|^복사$/i }).last()
+      await copyButton.click()
 
-    // clipboard 내용에 <details> HTML 메타가 없어야 함 (stripToolDetails 동작)
-    const clipboardText: string = await page.evaluate(() => navigator.clipboard.readText())
-    expect(clipboardText.length).toBeGreaterThan(0)
-    expect(clipboardText).not.toContain('<details>')
-    expect(clipboardText).not.toContain('<summary>🔧')
-    // what is copied is the answer: it names the pods
-    expect(pods.some((p) => clipboardText.includes(p)), clipboardText).toBe(true)
+      // clipboard 내용에 <details> HTML 메타가 없어야 함 (stripToolDetails 동작)
+      const clipboardText: string = await page.evaluate(() => navigator.clipboard.readText())
+      expect(clipboardText.length).toBeGreaterThan(0)
+      expect(clipboardText).not.toContain('<details>')
+      expect(clipboardText).not.toContain('<summary>🔧')
+      // what is copied is the answer: it names the pods
+      expect(pods.some((p) => clipboardText.includes(p)), clipboardText).toBe(true)
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
 
   test('clicking same session twice does not blank the chat', async ({ page }) => {
@@ -178,33 +205,52 @@ test.describe('AI Chat', () => {
     // baseline 세션 생성 — 짧은 query
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await input.fill('hi')
+    const created = conversationMade(page)
     await page.getByRole('button', { name: SEND_RE }).click()
-    await expect(input).toBeDisabled({ timeout: 15_000 })
-    await expect(input).toBeEnabled({ timeout: 30_000 })
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      await expect(input).toBeDisabled({ timeout: 15_000 })
+      await expect(input).toBeEnabled({ timeout: 30_000 })
 
-    // 좌측 sidebar 의 첫 번째 세션 (방금 생성된 것) 찾아서 두 번 연달아 클릭
-    // session item selector — 사이드바 안의 클릭 가능한 세션 행
-    const firstSession = page.locator('[class*="cursor-pointer"]').filter({ hasText: /hi|새 채팅|new chat/i }).first()
-    await firstSession.click()
-    const messages = page.locator('div.flex.gap-3.p-6')
-    await expect(messages.first()).toBeVisible({ timeout: 5_000 })
-    const before = await messages.count()
+      // 좌측 sidebar 의 첫 번째 세션 (방금 생성된 것) 찾아서 두 번 연달아 클릭
+      // session item selector — 사이드바 안의 클릭 가능한 세션 행
+      const firstSession = page.locator('[class*="cursor-pointer"]').filter({ hasText: /hi|새 채팅|new chat/i }).first()
+      await firstSession.click()
+      const messages = page.locator('div.flex.gap-3.p-6')
+      await expect(messages.first()).toBeVisible({ timeout: 5_000 })
+      const before = await messages.count()
 
-    // 같은 세션 재클릭 직후 — welcome 화면 ("Start a new chat") 이 뜨면 안 됨
-    await firstSession.click()
-    await page.waitForTimeout(1000)
-    expect(await messages.count()).toBe(before)
+      // 같은 세션 재클릭 직후 — welcome 화면 ("Start a new chat") 이 뜨면 안 됨
+      await firstSession.click()
+      await page.waitForTimeout(1000)
+      expect(await messages.count()).toBe(before)
 
-    // welcome 화면의 quick questions 영역이 보이지 않아야 함
-    const welcomeHeading = page.getByText(/Start a new chat|새 채팅을 시작|새 대화/i).first()
-    await expect(welcomeHeading).not.toBeVisible({ timeout: 2000 }).catch(() => {
-      // 만약 visible 이라면 이전 버그 재발 — fail 메시지 명확히
-      throw new Error('welcome 화면이 같은 세션 재클릭 후 보임 (회귀)')
-    })
+      // welcome 화면의 quick questions 영역이 보이지 않아야 함
+      const welcomeHeading = page.getByText(/Start a new chat|새 채팅을 시작|새 대화/i).first()
+      await expect(welcomeHeading).not.toBeVisible({ timeout: 2000 }).catch(() => {
+        // 만약 visible 이라면 이전 버그 재발 — fail 메시지 명확히
+        throw new Error('welcome 화면이 같은 세션 재클릭 후 보임 (회귀)')
+      })
 
-    // user message ("hi") 가 여전히 보여야 함
-    await expect(page.locator('div.flex-row-reverse').filter({ hasText: 'hi' })).toBeVisible({
-      timeout: 3_000,
-    })
+      // user message ("hi") 가 여전히 보여야 함
+      await expect(page.locator('div.flex-row-reverse').filter({ hasText: 'hi' })).toBeVisible({
+        timeout: 3_000,
+      })
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

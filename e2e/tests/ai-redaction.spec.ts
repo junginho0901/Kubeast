@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -30,6 +30,12 @@ const LISTED_KEY = `fake-listed-key-${STAMP}`
 // Same selectors as ai-chat.spec.ts.
 const PLACEHOLDER_RE = /메시지|message/i
 const SEND_RE = /^전송$|^send$/i
+
+// The conversation the chat screen makes for its first question, and its removal after the test, passed or not.
+const conversationMade = (page: Page) =>
+  page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 90_000 })
+const deleteConversation = (page: Page, id: string) =>
+  page.request.delete(`/api/v1/sessions/${id}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, failOnStatusCode: false })
 
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
@@ -98,46 +104,52 @@ test.describe('AI tool results are redacted', () => {
       (r) => /\/api\/v1\/ai\/sessions\/[^/]+\/chat/.test(r.url()) && r.request().method() === 'POST',
       { timeout: 90_000 },
     )
+    const created = conversationMade(page)
     await input.fill(`${NS} 네임스페이스의 configmap ${NAME} 의 YAML 을 k8s_get_resource_yaml 로 보여줘`)
     await page.getByRole('button', { name: SEND_RE }).click()
-    const stream = await streamPromise
-    await expect(input).toBeEnabled({ timeout: 120_000 })
-    const body = await stream.text()
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      const stream = await streamPromise
+      await expect(input).toBeEnabled({ timeout: 120_000 })
+      const body = await stream.text()
 
-    expect(body, 'the tool must have run').toContain('function_result')
-    expect(body).not.toContain(PW_VALUE)
-    expect(body).not.toContain(URL_PW)
-    expect(body).toContain('DB_PASSWORD: <REDACTED:DB_PASSWORD>')
-    expect(body).toContain('postgres://app:<REDACTED:password>@db:5432/app')
-    expect(body).not.toContain(GLUED_PW)
-    expect(body).not.toContain(GLUED_KEY)
-    expect(body).toContain('PGPASSWORD: <REDACTED:PGPASSWORD>')
-    expect(body).toContain('APIKEY: <REDACTED:APIKEY>')
-    expect(body).toContain('PWD: /app')
-    for (const value of [SHORT_PW, GLUED_SHORT_PW, PLURAL_KEY, PLURAL_PW, LISTED_KEY]) expect(body).not.toContain(value)
-    expect(body).toMatch(/LOG_LINE: .{0,30}<REDACTED:api_keys>/)
-    expect(body).toContain('MYSQL_PASS: <REDACTED:MYSQL_PASS>')
-    expect(body).toContain('PGPASS: <REDACTED:PGPASS>')
-    expect(body).toContain('api_keys: <REDACTED:api_keys>')
-    expect(body).toContain('passwords: <REDACTED:passwords>')
-    expect(body).toContain('first_pass: done')
-    expect(body).toMatch(/total_tokens: \\*"120/)
-    expect(body).toContain('secrets: my-tls')
-    expect(body).toContain('LOG_LEVEL: debug')
+      expect(body, 'the tool must have run').toContain('function_result')
+      expect(body).not.toContain(PW_VALUE)
+      expect(body).not.toContain(URL_PW)
+      expect(body).toContain('DB_PASSWORD: <REDACTED:DB_PASSWORD>')
+      expect(body).toContain('postgres://app:<REDACTED:password>@db:5432/app')
+      expect(body).not.toContain(GLUED_PW)
+      expect(body).not.toContain(GLUED_KEY)
+      expect(body).toContain('PGPASSWORD: <REDACTED:PGPASSWORD>')
+      expect(body).toContain('APIKEY: <REDACTED:APIKEY>')
+      expect(body).toContain('PWD: /app')
+      for (const value of [SHORT_PW, GLUED_SHORT_PW, PLURAL_KEY, PLURAL_PW, LISTED_KEY]) expect(body).not.toContain(value)
+      expect(body).toMatch(/LOG_LINE: .{0,30}<REDACTED:api_keys>/)
+      expect(body).toContain('MYSQL_PASS: <REDACTED:MYSQL_PASS>')
+      expect(body).toContain('PGPASS: <REDACTED:PGPASS>')
+      expect(body).toContain('api_keys: <REDACTED:api_keys>')
+      expect(body).toContain('passwords: <REDACTED:passwords>')
+      expect(body).toContain('first_pass: done')
+      expect(body).toMatch(/total_tokens: \\*"120/)
+      expect(body).toContain('secrets: my-tls')
+      expect(body).toContain('LOG_LEVEL: debug')
 
-    // audit: the ai.tool.call row names what was masked
-    const since = new Date(Date.now() - 180_000).toISOString()
-    const audit = await request.get('/api/v1/auth/admin/audit-logs', {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { action: 'ai.tool.call', since, limit: 50 },
-    })
-    expect(audit.ok()).toBeTruthy()
-    const { items } = (await audit.json()) as { items: Array<Record<string, any>> }
-    const withRedaction = items.filter((e) => {
-      const after = e.After ?? e.after ?? {}
-      return after.tool === 'k8s_get_resource_yaml' && after.redacted && after.redacted.count >= 1
-    })
-    expect(withRedaction.length, JSON.stringify(items.slice(0, 3))).toBeGreaterThanOrEqual(1)
+      // audit: the ai.tool.call row names what was masked
+      const since = new Date(Date.now() - 180_000).toISOString()
+      const audit = await request.get('/api/v1/auth/admin/audit-logs', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { action: 'ai.tool.call', since, limit: 50 },
+      })
+      expect(audit.ok()).toBeTruthy()
+      const { items } = (await audit.json()) as { items: Array<Record<string, any>> }
+      const withRedaction = items.filter((e) => {
+        const after = e.After ?? e.after ?? {}
+        return after.tool === 'k8s_get_resource_yaml' && after.redacted && after.redacted.count >= 1
+      })
+      expect(withRedaction.length, JSON.stringify(items.slice(0, 3))).toBeGreaterThanOrEqual(1)
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
 
   test('a credential in the first message does not become the conversation title', async ({ request }) => {
@@ -171,16 +183,22 @@ test.describe('AI tool results are redacted', () => {
       (r) => /\/api\/v1\/ai\/sessions\/[^/]+\/chat/.test(r.url()) && r.request().method() === 'POST',
       { timeout: 90_000 },
     )
+    const created = conversationMade(page)
     // kubeast-secrets exists in the kubeast namespace on the dev cluster.
     await input.fill('kubeast 네임스페이스의 secret kubeast-secrets 의 YAML 을 k8s_get_resource_yaml 로 보여줘')
     await page.getByRole('button', { name: SEND_RE }).click()
-    const stream = await streamPromise
-    await expect(input).toBeEnabled({ timeout: 120_000 })
-    const body = await stream.text()
-    expect(body).toContain('function_result')
-    expect(body).toContain('<REDACTED:secret>')
-    // no base64 secret value: every data value is the placeholder
-    expect(body).not.toMatch(/DEFAULT_ADMIN_PASSWORD: [A-Za-z0-9+/=]{8,}/)
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      const stream = await streamPromise
+      await expect(input).toBeEnabled({ timeout: 120_000 })
+      const body = await stream.text()
+      expect(body).toContain('function_result')
+      expect(body).toContain('<REDACTED:secret>')
+      // no base64 secret value: every data value is the placeholder
+      expect(body).not.toMatch(/DEFAULT_ADMIN_PASSWORD: [A-Za-z0-9+/=]{8,}/)
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
 })
 
