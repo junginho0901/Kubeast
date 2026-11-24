@@ -53,15 +53,52 @@ describe("what Cluster View's pod window tells the floating chat of the pod", ()
     }
   })
 
-  it('names each init container with its ready, state and restart count, a sidecar as one', () => {
-    expect(sent(layerOf(podToDetail(SIDECAR_NOT_READY)))).toMatchObject({
-      status: 'Running', state: 'NotReady', health: 'warn',
-      containers: [{ name: 'app', ready: true }],
-      init_containers: [{ name: 'side', ready: false, restart_count: 0, restart_policy: 'Always', state: { running: { started_at: '2026-11-01T00:00:30Z' } } }],
-    })
+  it('names each init container with its ready, restart count and what state it is in, a sidecar as one', () => {
+    const sidecar = sent(layerOf(podToDetail(SIDECAR_NOT_READY)))
+    expect(sidecar).toMatchObject({ status: 'Running', state: 'NotReady', health: 'warn', containers: [{ name: 'app', ready: true }] })
+    expect(sidecar.init_containers).toEqual([{ name: 'side', ready: false, restart_count: 0, restart_policy: 'Always', state: { running: {} } }])
     const failed = sent(layerOf(podToDetail(INIT_FAILED)))
     expect(failed).toMatchObject({ state: 'Error', health: 'error' })
-    expect(failed.init_containers).toEqual([{ name: 'setup', ready: false, restart_count: 4, state: INIT_FAILED.init_containers[0].state }])
+    expect(failed.init_containers).toEqual([{ name: 'setup', ready: false, restart_count: 4, state: { terminated: { exit_code: 1, reason: 'Error' } } }])
+    const states = (...list: unknown[]) =>
+      sent(layerOf(podToDetail({ ...INIT_FAILED, init_containers: list.map((state, i) => init(`i${i}`, false, state as object)) }))).init_containers.map((c: { state?: unknown }) => c.state)
+    expect(states({ waiting: { reason: 'CrashLoopBackOff', message: 'back-off' } }, {}, null)).toEqual([{ waiting: { reason: 'CrashLoopBackOff' } }, undefined, undefined])
+  })
+
+  it('gives no message of an init container, so none is cut before the server masks it', () => {
+    const pem = `-----BEGIN PRIVATE KEY-----\n${'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEH'.repeat(5)}\n-----END PRIVATE KEY-----`
+    const texts = ['secret "db" not found', pem, `${'e'.repeat(70)}\n${pem}`, `${'x'.repeat(299)}😀`, `${'x'.repeat(281)} ghp_0123456789abcdefghijABCDEFGHIJ012345`, 'x'.repeat(4096)]
+    for (const message of texts) {
+      const list = [
+        { ...init('waits', false, { waiting: { reason: 'CreateContainerConfigError', message } }), last_state: { terminated: { exit_code: 1, reason: 'Error', message } } },
+        init('ended', false, { terminated: { exit_code: 1, reason: 'Error', message, started_at: '', finished_at: '' } }),
+      ]
+      const pod = podToDetail({ ...INIT_FAILED, init_containers: list })
+      for (const tab of ['summary', 'logs', 'rbac', 'manifest', 'exec', 'describe'] as const) {
+        const data = dataOf(pod, { tab, manifest: 'kind: Pod' })
+        expect(data.init_containers, tab).toEqual([
+          { name: 'waits', ready: false, restart_count: 0, state: { waiting: { reason: 'CreateContainerConfigError' } } },
+          { name: 'ended', ready: false, restart_count: 0, state: { terminated: { exit_code: 1, reason: 'Error' } } },
+        ])
+        expect(JSON.stringify(data.init_containers), tab).not.toContain('message')
+        for (const part of [message, message.slice(0, 20), message.slice(-20)]) expect(JSON.stringify(data), tab).not.toContain(JSON.stringify(part).slice(1, -1))
+      }
+    }
+  })
+
+  it('gives a reason only as one short word: a runtime may write any text there', () => {
+    const reasons = (reason: unknown) =>
+      dataOf(podToDetail({ ...INIT_FAILED, init_containers: [init('w', false, { waiting: { reason } }), init('t', false, { terminated: { exit_code: 3, reason } })] }))
+        .init_containers.map((c: { state: Record<string, { reason?: string }> }) => Object.values(c.state)[0].reason)
+    for (const word of ['PodInitializing', 'CreateContainerConfigError', 'OOMKilled', 'ErrImageNeverPull', 'ContainerStatusUnknown', 'a'.repeat(40)]) {
+      expect(reasons(word), word).toEqual([word, word])
+    }
+    for (const text of ['seccomp killed', 'password=abc', 'token: abc', 'Error\n', '\nError', '😀', 'a'.repeat(41), '', null, undefined, 3, { a: 'b' }]) {
+      expect(reasons(text), String(text)).toEqual([undefined, undefined])
+    }
+    // the state and the exit code stay
+    expect(dataOf(podToDetail({ ...INIT_FAILED, init_containers: [init('t', false, { terminated: { exit_code: 3, reason: 'seccomp killed' } })] })).init_containers[0].state)
+      .toEqual({ terminated: { exit_code: 3 } })
   })
 
   it('says none of it until a window opened from a box has read the pod', () => {
@@ -86,12 +123,57 @@ describe("what Cluster View's pod window tells the floating chat of the pod", ()
     expect(dataOf(pod, { tab: 'logs', describe: INIT_FAILED }).init_containers).toHaveLength(1)
   })
 
-  it("stays within a layer's size with the longest message a container may end on, the manifest beside it", () => {
-    const long = { terminated: { exit_code: 1, reason: 'Error', message: 'x'.repeat(4096) } }
-    const pod = podToDetail({ ...INIT_FAILED, init_containers: [init('setup', false, long)] })
-    const data = sent(layerOf(pod, { tab: 'manifest', manifest: 'y: z\n'.repeat(2000) }))
-    expect(data.__truncated__).toBeUndefined()
-    expect(data).toMatchObject({ state: 'Error', init_containers: [{ name: 'setup', state: { terminated: { exit_code: 1, reason: 'Error' } } }] })
-    expect(data.init_containers[0].state.terminated.message).toBe(`${'x'.repeat(300)}…`)
+  // the pod of a layer near its size: what a container's message and the manifest leave
+  const image = 'registry.example.test/team/service-name:2026.11.24-abcdef0'
+  const main = (n: number, state: object) => ({ name: `app-${n}`, image, ready: false, restart_count: 3, state })
+  const ended = (message: string) => ({ terminated: { exit_code: 1, reason: 'Error', message, started_at: '2026-11-24T10:00:00Z', finished_at: '2026-11-24T10:00:03Z' } })
+  const done = (n: number, message = '') => ({ ...init(`init-${n}`, true, { terminated: { exit_code: 0, reason: 'Completed', message } }) })
+  const crashing = (n: number) => ({ ...init(`init-${n}`, false, { waiting: { reason: 'CrashLoopBackOff', message: '가'.repeat(400) } }), restart_count: 7 })
+  const waiting = (n: number) => init(`init-${n}`, false, { waiting: { reason: 'PodInitializing', message: '' } })
+  const podOf = (containers: object[], init_containers: object[]) => podToDetail({
+    name: 'web-6d4cf56db6-abcde', namespace: 'shop', node_name: 'ip-10-80-1-23.ap-northeast-2.compute.internal', status: 'Init:CrashLoopBackOff', phase: 'Pending',
+    restart_count: 7, created_at: '2026-11-24T10:00:00Z', containers, init_containers,
+  })
+  const MANIFEST = '        - name: SOME_ENV_VALUE\n          value: "something"\n'.repeat(200)
+  const bytes = (data: unknown) => new Blob([JSON.stringify(data)]).size
+  // what is sent of the layer, and of the same layer without the State, Health and init containers
+  function besides(pod: PodDetail, manifest?: string) {
+    const layer = layerOf(pod, manifest ? { tab: 'manifest', manifest } : {})
+    const { state: _state, health: _health, init_containers: _inits, ...rest } = layer.data!
+    return { now: sent(layer), without: sent({ ...layer, data: rest }) }
+  }
+
+  it.each([
+    ['3 containers, 2 init containers done and 1 crashing', [1, 2, 3].map((n) => main(n, { running: { started_at: '' } })), [done(0), done(1), crashing(2)], MANIFEST, 3],
+    ['3 containers, 1 init container crashing and 4 waiting', [1, 2, 3].map((n) => main(n, { running: { started_at: '' } })), [crashing(0), ...[1, 2, 3, 4].map(waiting)], MANIFEST, 5],
+    ['a container that ended on 2,048 bytes, 2 init containers done', [main(1, ended('E'.repeat(2048)))], [done(0), done(1)], MANIFEST, 2],
+    ['a container that ended on 3,000 bytes, 1 init container done', [main(1, ended('E'.repeat(3000)))], [done(0)], MANIFEST, undefined],
+    ['a container that ended on 3,150 bytes, 1 init container done on 400 characters', [main(1, ended('E'.repeat(3150)))], [done(0, 'm'.repeat(400))], MANIFEST, undefined],
+    ['6 containers that cannot pull, 3 init containers done',
+      Array.from({ length: 6 }, (_, n) => main(n, { waiting: { reason: 'ImagePullBackOff', message: `Back-off pulling image ${'x'.repeat(380)}` } })), [done(0), done(1), done(2)], MANIFEST, undefined],
+    ['a Korean manifest, 1 init container done', [1, 2, 3].map((n) => main(n, { running: { started_at: '' } })), [done(0)], '        description: "결제 서비스 설정 값 설명"\n'.repeat(200), 1],
+    ['2 containers that ended on 3,800 bytes, 5 init containers crashing', [main(1, ended('E'.repeat(3800))), main(2, ended('E'.repeat(3800)))], [0, 1, 2, 3, 4].map(crashing), undefined, 5],
+    ['a container that ended on 4,096 bytes, 5 init containers crashing', [main(1, ended('E'.repeat(4096)))], [0, 1, 2, 3, 4].map(crashing), undefined, 5],
+  ])("keeps every container a layer of its size keeps: %s", (_name, containers, inits, manifest, given) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { now, without } = besides(podOf(containers, inits), manifest)
+    expect(now.__truncated__).toBeUndefined()
+    expect(bytes(now)).toBeLessThanOrEqual(8192)
+    expect(now.containers).toEqual(without.containers)
+    if (given !== undefined) expect(now.init_containers).toHaveLength(given)
+  })
+
+  it('gives way where the layer is nearly full: the init containers that are done, the others, then State and Health', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const steps = new Set<string>()
+    for (let length = 2400; length < 3500; length += 1) {
+      const { now, without } = besides(podOf([main(1, ended('E'.repeat(length))), main(2, { running: { started_at: '' } })], [done(0), crashing(1), done(2)]), MANIFEST)
+      expect(now.__truncated__, String(length)).toBe(without.__truncated__)
+      expect(now.containers, String(length)).toEqual(without.containers)
+      if (now.__truncated__) continue
+      expect(bytes(now)).toBeLessThanOrEqual(8192)
+      steps.add(`${now.init_containers?.map((c: { name: string }) => c.name).join() ?? '-'} ${now.state ?? '-'} ${now.health ?? '-'}`)
+    }
+    expect([...steps]).toEqual(['init-1,init-0,init-2 CrashLoopBackOff error', 'init-1 CrashLoopBackOff error', '- CrashLoopBackOff error', '- - -'])
   })
 })
