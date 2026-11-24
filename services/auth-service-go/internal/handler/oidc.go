@@ -408,7 +408,7 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		h.oidcFail(w, r, "oidc_state", "", errors.New("missing state cookie"))
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: "", Path: "/api/v1/auth/oidc", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: "", Path: "/api/v1/auth/oidc", MaxAge: -1, HttpOnly: true, Secure: h.cfg.CookieSecure, SameSite: http.SameSiteLaxMode})
 	st, err := verifyState(h.jwtMgr.SharedSecret(), c.Value, time.Now())
 	if err != nil || q.Get("state") == "" || q.Get("state") != st.State {
 		h.oidcFail(w, r, "oidc_state", "", fmt.Errorf("state check failed: %v", err))
