@@ -1012,6 +1012,10 @@ async def session_chat_stream(
                     stream = await service.client.chat.completions.create(**_fc_kwargs, **auto, stream_options={"include_usage": True})
                 except Exception as tc_err:
                     log.warning("streaming with %s failed (%s), retrying without it", "stream_options" if final else "tool_choice='auto'", safe_error(tc_err))
+                    if final and tools and not read_so_far:
+                        # some gateways take tool messages only beside the tools; on Anthropic they are there already
+                        _fc_kwargs.update(tools=tools, tool_choice="none")
+                        call_prompt_chars = usage_acct.prompt_chars(messages, tools)
                     stream = await service.client.chat.completions.create(**_fc_kwargs)
 
                 # --- streaming delta 수집 ---
