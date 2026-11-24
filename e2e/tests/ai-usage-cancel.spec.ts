@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 // A turn the user stops half-way still costs tokens, so it is still accounted
 // for: ai.chat.complete is written with finish_reason "cancelled". The ai.*
@@ -28,6 +28,12 @@ async function auditRows(request: APIRequestContext, token: string, action: stri
   return ((await res.json()) as { items: AuditItem[] | null }).items ?? []
 }
 
+// The conversation the chat screen makes for its first question, and its removal after the test, passed or not.
+const conversationMade = (page: Page) =>
+  page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
+const deleteConversation = (page: Page, id: string) =>
+  page.request.delete(`/api/v1/sessions/${id}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, failOnStatusCode: false })
+
 test.describe('AI usage accounting — cancelled turns and cluster column', () => {
   test('stopping a stream records ai.chat.complete with finish_reason cancelled', async ({ page, request }) => {
     const token = await adminToken(request)
@@ -38,37 +44,55 @@ test.describe('AI usage accounting — cancelled turns and cluster column', () =
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await expect(input).toBeVisible()
     await input.fill('Kubernetes 의 deployment / service / pod 의 차이를 아주 자세히, 예시를 들어 길게 설명해줘')
+    const created = conversationMade(page)
     await page.getByRole('button', { name: SEND_RE }).click()
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      const stop = page.getByRole('button', { name: STOP_RE })
+      await expect(stop).toBeVisible({ timeout: 10_000 })
+      await page.waitForTimeout(1500)
+      await stop.click()
+      await expect(input).toBeEnabled({ timeout: 10_000 })
 
-    const stop = page.getByRole('button', { name: STOP_RE })
-    await expect(stop).toBeVisible({ timeout: 10_000 })
-    await page.waitForTimeout(1500)
-    await stop.click()
-    await expect(input).toBeEnabled({ timeout: 10_000 })
+      // The cancelled turn shows up within a few seconds (written from the
+      // cancellation path as a background task).
+      await expect
+        .poll(
+          async () => {
+            const rows = await auditRows(request, token, 'ai.chat.complete', since)
+            return rows.map((r) => (r.After ?? r.after ?? {}).finish_reason)
+          },
+          { timeout: 20_000, message: 'ai.chat.complete with finish_reason=cancelled' },
+        )
+        .toContain('cancelled')
 
-    // The cancelled turn shows up within a few seconds (written from the
-    // cancellation path as a background task).
-    await expect
-      .poll(
-        async () => {
-          const rows = await auditRows(request, token, 'ai.chat.complete', since)
-          return rows.map((r) => (r.After ?? r.after ?? {}).finish_reason)
-        },
-        { timeout: 20_000, message: 'ai.chat.complete with finish_reason=cancelled' },
-      )
-      .toContain('cancelled')
+      const rows = await auditRows(request, token, 'ai.chat.complete', since)
+      const cancelled = rows.find((r) => (r.After ?? r.after ?? {}).finish_reason === 'cancelled')!
+      const after = cancelled.After ?? cancelled.after
+      expect(typeof after.duration_ms).toBe('number')
+      expect(after.duration_ms).toBeGreaterThan(0)
+      expect(after.cluster).toBe('self')
+      expect(cancelled.Cluster ?? cancelled.cluster, 'cluster column is the turn cluster, not the writer default').toBe('self')
 
-    const rows = await auditRows(request, token, 'ai.chat.complete', since)
-    const cancelled = rows.find((r) => (r.After ?? r.after ?? {}).finish_reason === 'cancelled')!
-    const after = cancelled.After ?? cancelled.after
-    expect(typeof after.duration_ms).toBe('number')
-    expect(after.duration_ms).toBeGreaterThan(0)
-    expect(after.cluster).toBe('self')
-    expect(cancelled.Cluster ?? cancelled.cluster, 'cluster column is the turn cluster, not the writer default').toBe('self')
-
-    // ai.chat.send of the same turn carries the cluster column too.
-    const sends = await auditRows(request, token, 'ai.chat.send', since)
-    expect(sends.length).toBeGreaterThanOrEqual(1)
-    expect(sends[0].Cluster ?? sends[0].cluster).toBe('self')
+      // ai.chat.send of the same turn carries the cluster column too.
+      const sends = await auditRows(request, token, 'ai.chat.send', since)
+      expect(sends.length).toBeGreaterThanOrEqual(1)
+      expect(sends[0].Cluster ?? sends[0].cluster).toBe('self')
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

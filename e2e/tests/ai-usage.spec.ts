@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test'
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 // Every chat turn leaves an ai.chat.complete audit record (tokens, tool calls,
 // duration) and the admin AI-usage view aggregates them per user. Depends on
@@ -15,6 +15,12 @@ async function adminToken(request: APIRequestContext): Promise<string> {
   return (await res.json()).access_token
 }
 
+// The conversation the chat screen makes for its first question, and its removal after the test, passed or not.
+const conversationMade = (page: Page) =>
+  page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
+const deleteConversation = (page: Page, id: string) =>
+  page.request.delete(`/api/v1/sessions/${id}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, failOnStatusCode: false })
+
 test.describe('AI usage accounting', () => {
   test('a chat turn is recorded as ai.chat.complete and shows up in the admin usage view', async ({ page, request }) => {
     const token = await adminToken(request)
@@ -25,65 +31,71 @@ test.describe('AI usage accounting', () => {
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await expect(input).toBeVisible()
     await input.fill('안녕, 한 문장으로만 인사해줘')
+    const created = conversationMade(page)
     await page.getByRole('button', { name: SEND_RE }).click()
-    await expect(input).toBeDisabled({ timeout: 10_000 })
-    await expect(input).toBeEnabled({ timeout: 120_000 })
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      await expect(input).toBeDisabled({ timeout: 10_000 })
+      await expect(input).toBeEnabled({ timeout: 120_000 })
 
-    // The audit record for the turn.
-    const audit = await request.get('/api/v1/auth/admin/audit-logs', {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { action: 'ai.chat.complete', since, limit: 20 },
-    })
-    expect(audit.ok()).toBeTruthy()
-    const { items } = (await audit.json()) as { items: Array<Record<string, any>> }
-    expect(items.length, 'one ai.chat.complete row per turn').toBeGreaterThanOrEqual(1)
-    const after = items[0].After ?? items[0].after ?? {}
-    expect(typeof after.duration_ms).toBe('number')
-    expect(after.duration_ms).toBeGreaterThan(0)
-    expect(typeof after.tool_calls).toBe('number')
-    expect(typeof after.iterations).toBe('number')
-    expect(after.model, 'model recorded').toBeTruthy()
-    // tokens are either numbers (provider sent usage) or null (it did not) — never missing
-    expect(['number', 'object']).toContain(typeof after.total_tokens)
-    // what ai-service sent is counted by itself, so it is always a number and never small for a real turn
-    expect(after.model_calls).toBeGreaterThanOrEqual(1)
-    expect(after.prompt_chars).toBeGreaterThan(1000)
-    // cache fields follow the token fields: numbers with usage, null without
-    expect(typeof after.cached_tokens).toBe(typeof after.total_tokens)
-    expect(typeof after.cache_creation_tokens).toBe(typeof after.total_tokens)
+      // The audit record for the turn.
+      const audit = await request.get('/api/v1/auth/admin/audit-logs', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { action: 'ai.chat.complete', since, limit: 20 },
+      })
+      expect(audit.ok()).toBeTruthy()
+      const { items } = (await audit.json()) as { items: Array<Record<string, any>> }
+      expect(items.length, 'one ai.chat.complete row per turn').toBeGreaterThanOrEqual(1)
+      const after = items[0].After ?? items[0].after ?? {}
+      expect(typeof after.duration_ms).toBe('number')
+      expect(after.duration_ms).toBeGreaterThan(0)
+      expect(typeof after.tool_calls).toBe('number')
+      expect(typeof after.iterations).toBe('number')
+      expect(after.model, 'model recorded').toBeTruthy()
+      // tokens are either numbers (provider sent usage) or null (it did not) — never missing
+      expect(['number', 'object']).toContain(typeof after.total_tokens)
+      // what ai-service sent is counted by itself, so it is always a number and never small for a real turn
+      expect(after.model_calls).toBeGreaterThanOrEqual(1)
+      expect(after.prompt_chars).toBeGreaterThan(1000)
+      // cache fields follow the token fields: numbers with usage, null without
+      expect(typeof after.cached_tokens).toBe(typeof after.total_tokens)
+      expect(typeof after.cache_creation_tokens).toBe(typeof after.total_tokens)
 
-    // The aggregated view groups it under the admin user.
-    const usage = await request.get('/api/v1/auth/admin/ai-usage', {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { since, group: 'user' },
-    })
-    expect(usage.ok()).toBeTruthy()
-    const body = (await usage.json()) as { group: string; rows: Array<Record<string, any>> }
-    expect(body.group).toBe('user')
-    const mine = body.rows.find((r) => r.key === EMAIL)
-    expect(mine, JSON.stringify(body.rows)).toBeTruthy()
-    expect(mine!.requests).toBeGreaterThanOrEqual(1)
-    expect(mine!.tool_calls).toBeGreaterThanOrEqual(0)
-    expect(mine!.prompt_chars).toBeGreaterThanOrEqual(after.prompt_chars)
-    expect(mine!.cached_tokens).toBeGreaterThanOrEqual(0)
+      // The aggregated view groups it under the admin user.
+      const usage = await request.get('/api/v1/auth/admin/ai-usage', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { since, group: 'user' },
+      })
+      expect(usage.ok()).toBeTruthy()
+      const body = (await usage.json()) as { group: string; rows: Array<Record<string, any>> }
+      expect(body.group).toBe('user')
+      const mine = body.rows.find((r) => r.key === EMAIL)
+      expect(mine, JSON.stringify(body.rows)).toBeTruthy()
+      expect(mine!.requests).toBeGreaterThanOrEqual(1)
+      expect(mine!.tool_calls).toBeGreaterThanOrEqual(0)
+      expect(mine!.prompt_chars).toBeGreaterThanOrEqual(after.prompt_chars)
+      expect(mine!.cached_tokens).toBeGreaterThanOrEqual(0)
 
-    // Unknown group is rejected, not silently defaulted.
-    const bad = await request.get('/api/v1/auth/admin/ai-usage', {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { group: 'namespace' },
-    })
-    expect(bad.status()).toBe(400)
+      // Unknown group is rejected, not silently defaulted.
+      const bad = await request.get('/api/v1/auth/admin/ai-usage', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { group: 'namespace' },
+      })
+      expect(bad.status()).toBe(400)
 
-    // The admin page renders the row.
-    await page.goto('/admin/ai-usage')
-    await page.waitForLoadState('networkidle')
-    await expect(page.getByRole('heading', { name: /AI 사용량|AI Usage/i })).toBeVisible()
-    // on whichever page of the rows that fit the screen it falls (most tokens first)
-    const mineOnScreen = page.getByTestId('ai-usage-table').getByText(EMAIL, { exact: true })
-    const next = page.getByTestId('ai-usage-pager').getByRole('button', { name: /^(Next|다음)$/ })
-    await expect(page.getByTestId('ai-usage-table').locator('tbody:not([aria-hidden="true"]) tr td').first()).not.toHaveText(/^(Loading|불러오는 중)/, { timeout: 15_000 })
-    for (let p = 0; p < 100 && (await mineOnScreen.count()) === 0 && !(await next.isDisabled()); p++) await next.click()
-    await expect(mineOnScreen).toBeVisible({ timeout: 15_000 })
+      // The admin page renders the row.
+      await page.goto('/admin/ai-usage')
+      await page.waitForLoadState('networkidle')
+      await expect(page.getByRole('heading', { name: /AI 사용량|AI Usage/i })).toBeVisible()
+      // on whichever page of the rows that fit the screen it falls (most tokens first)
+      const mineOnScreen = page.getByTestId('ai-usage-table').getByText(EMAIL, { exact: true })
+      const next = page.getByTestId('ai-usage-pager').getByRole('button', { name: /^(Next|다음)$/ })
+      await expect(page.getByTestId('ai-usage-table').locator('tbody:not([aria-hidden="true"]) tr td').first()).not.toHaveText(/^(Loading|불러오는 중)/, { timeout: 15_000 })
+      for (let p = 0; p < 100 && (await mineOnScreen.count()) === 0 && !(await next.isDisabled()); p++) await next.click()
+      await expect(mineOnScreen).toBeVisible({ timeout: 15_000 })
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
 
   test('an Optimization AI explanation is recorded as ai.chat.complete with phase optimization', async ({ request }) => {
@@ -122,4 +134,17 @@ test.describe('AI usage accounting', () => {
     // tokens are either numbers (provider sent usage) or null (it did not) — never missing
     expect(['number', 'object']).toContain(typeof after.total_tokens)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })
