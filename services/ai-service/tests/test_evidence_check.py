@@ -385,8 +385,9 @@ async def test_a_subscription_second_ask_carries_the_tool_results_its_messages_l
     assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
     ask = messages[-1]["content"]
     # as the closing call gives them: each result under its tool and arguments, with its call number
-    assert ask.startswith(RESULTS_HEAD + 'k8s_get_resources {"resource_type": "pods", "namespace": "apps"}\n'
-                          f"[call 1]\n{POD_TABLE}" + RESULTS_END + "\n\n")
+    table = POD_TABLE.replace("\n", "\n| ")
+    assert ask.startswith(RESULTS_HEAD + '| k8s_get_resources {"resource_type": "pods", "namespace": "apps"}\n'
+                          f"| [call 1]\n| {table}" + RESULTS_END + "\n\n")
     assert "- StatefulSet/apps/db: db does not appear in what calls 1 returned" in ask and ask.endswith("No tools now.")
 
 

@@ -608,8 +608,8 @@ async def test_a_subscription_turn_stopped_at_its_limit_is_answered_by_one_call_
     assert options.max_turns == 10 and options.mcp_servers and not getattr(closing_options, "mcp_servers", None)
     # the question, then in one request what the tools returned and the last call's message; the same system prompt
     assert first == KO and closing_options.system_prompt == options.system_prompt
-    assert closing.endswith(RESULTS_HEAD + 'k8s_get_pod_logs {"pod_name": "pod-1"}\nlog of pod-1\n\n'
-                            'k8s_get_pod_logs {"pod_name": "pod-2"}\nlog of pod-2' + RESULTS_END + "\n\n" + chat_steps.final_message(KO))
+    assert closing.endswith(RESULTS_HEAD + '| k8s_get_pod_logs {"pod_name": "pod-1"}\n| log of pod-1\n| \n'
+                            '| k8s_get_pod_logs {"pod_name": "pod-2"}\n| log of pod-2' + RESULTS_END + "\n\n" + chat_steps.final_message(KO))
     assert "User: " + KO in closing
     assert turn.content == ["Looking.", "It restarts: ", "out of memory."] and not turn.errors
     assert turn.ran == ["k8s_get_pod_logs"] * 2
