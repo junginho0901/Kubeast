@@ -362,6 +362,7 @@ So these are the same as on the API key path: the tool list, approval cards for 
 - **Waiting**: a turn whose slot is not free waits up to `queueWaitSeconds` (default 60).
   - Meanwhile AI Chat and the floating chat show "Waiting for a turn — another question is running".
   - Past that the answer ends with "Claude Code is busy; ask again in a moment."
+  - The run after `maxTurns` waits the same way, with what was read still on screen. When no slot comes in time or it does not start, the answer keeps what was read and ends by saying that the calls are used up and naming the setting to raise.
   - Stop leaves the queue at once, and the turn takes no slot.
 - **Alert → AI investigation** also runs on this provider.
   - Investigations use one slot per server separate from chat (the investigator runs one at a time) and outside `maxConcurrentTotal`, so chat does not wait during an investigation. With 3 servers, up to 3 investigations run at once.

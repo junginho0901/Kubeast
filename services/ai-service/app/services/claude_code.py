@@ -412,7 +412,7 @@ async def _run_once(sdk, prompt: str, options, on_message: Callable[[Any], None]
                         result = message
                     else:
                         _note_refusal(sdk, message, seen)
-                        on_message(message)
+                    on_message(message)
         except TimeoutError:
             raise ClaudeCodeError(f"Claude Code did not finish within {int(turn_timeout())} s") from None
         except ClaudeCodeError:
@@ -432,6 +432,12 @@ async def _run_once(sdk, prompt: str, options, on_message: Callable[[Any], None]
 class Completion:
     text: str = ""
     usage: Optional[dict] = None
+
+
+@dataclass
+class Queued:
+    """A streamed completion's run waits for its slot (True), or starts after waiting (False)."""
+    waiting: bool
 
 
 async def complete(messages: Sequence[dict], *, model: str, token: str, lane: str = "chat") -> Completion:
@@ -491,7 +497,8 @@ class _TextPieces:
 
 
 async def stream_complete(messages: Sequence[dict], *, model: str, token: str, lane: str = "chat") -> AsyncIterator[Any]:
-    """One plain completion as it is written: yields the text pieces (str), then the Completion."""
+    """One plain completion as it is written: yields the text pieces (str) and, while its run has no slot, Queued; then the
+    Completion. A run's error says in `started` whether Claude Code had sent anything."""
     reason = unavailable_reason()
     if reason:
         raise ClaudeCodeError(reason)
@@ -500,10 +507,16 @@ async def stream_complete(messages: Sequence[dict], *, model: str, token: str, l
     pieces = _TextPieces(sdk)
     queue: asyncio.Queue = asyncio.Queue()
     done = object()
+    started = False
 
     def on_message(message) -> None:
+        nonlocal started
+        started = True
         for piece in pieces.feed(message):
             queue.put_nowait(("text", piece))
+
+    def on_wait(waiting: bool) -> None:
+        queue.put_nowait(("queued", Queued(waiting)))
 
     async def pump() -> None:
         stderr: deque = deque(maxlen=STDERR_LINES)
@@ -511,7 +524,7 @@ async def stream_complete(messages: Sequence[dict], *, model: str, token: str, l
             with tempfile.TemporaryDirectory(prefix="kubeast-cc-") as workdir:
                 options = _options(sdk, model=model, system_prompt=system_prompt, token=token, workdir=workdir,
                                    stderr=stderr.append, partial=True)
-                queue.put_nowait((done, await _run(sdk, prompt, options, on_message, stderr, lane)))
+                queue.put_nowait((done, await _run(sdk, prompt, options, on_message, stderr, lane, on_wait)))
         except Exception as e:  # handed to the consumer; cancellation is not caught
             queue.put_nowait((done, e))
 
@@ -522,13 +535,15 @@ async def stream_complete(messages: Sequence[dict], *, model: str, token: str, l
             kind, value = await queue.get()
             if kind is done:
                 if isinstance(value, Exception):
+                    value.started = started
                     raise value
                 text = str(value.result or "".join(sent))
                 if not sent and text:
                     yield text  # nothing came in pieces
                 yield Completion(text=text, usage=usage_of(value.usage))
                 return
-            sent.append(value)
+            if kind == "text":
+                sent.append(value)
             yield value
     finally:
         if not task.done():
@@ -559,6 +574,9 @@ class _Completions:
 
         async def chunks():  # the text as it is written, then the end and the usage, as an API stream ends
             async for item in stream_complete(messages, model=model or self._model, token=self._token):
+                if isinstance(item, Queued):
+                    yield SimpleNamespace(choices=[], usage=None, queued=item.waiting)
+                    continue
                 if isinstance(item, Completion):
                     end = SimpleNamespace(content=None, tool_calls=None, role=None)
                     yield SimpleNamespace(choices=[SimpleNamespace(delta=end, finish_reason="stop", index=0)], usage=None)

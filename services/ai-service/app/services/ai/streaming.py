@@ -1020,6 +1020,8 @@ async def session_chat_stream(
                 last_finish_reason = None
 
                 async for chunk in stream:
+                    if read_so_far and getattr(chunk, "queued", None) is not None:
+                        yield f"data: {json.dumps({'queued': chunk.queued})}\n\n"  # as the subscription's first run says it
                     if getattr(chunk, "usage", None) is not None:
                         stream_usage = chunk.usage
                     if not chunk.choices:
@@ -1070,6 +1072,10 @@ async def session_chat_stream(
                     )
 
             except Exception as api_error:
+                if read_so_far and not getattr(api_error, "started", True):
+                    # The closing run got no slot in time or did not start: the turn ends with what was read (no_answer below).
+                    log.warning("the run that closes a Claude Code turn did not start: %s", safe_error(api_error))
+                    break
                 log.error("model call failed (%s): %s", service.provider, safe_error(api_error))
                 await _keep_failed_answer(db, service, session_id, parts + [("text", stream_content)], tool_calls_log, turn_usage)
                 yield f"data: {json.dumps(model_error(service, api_error), ensure_ascii=False)}\n\n"

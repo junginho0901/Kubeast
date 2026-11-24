@@ -2,6 +2,7 @@
 an answer: the last call may call no tool and answers from what was read. On a Claude subscription Claude Code stops at its
 own limit and one call without tools answers. The calls before the last are what they were before the setting
 (fixtures/chat_requests_two_steps.json, recorded from the code before it)."""
+import asyncio
 import io
 import json
 import logging
@@ -10,11 +11,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services import claude_code
+from app.services import claude_code, claude_code_slots
 from app.services.ai import chat_steps, debug_dump, streaming
 from app.services.ai.language import build_language_directive
 from tests.test_anthropic_messages import FakeAnthropic, assert_goes_on_without_calls, client_for, log_call, said
-from tests.test_claude_code import ProcessError, ResultMessage, on, slots_db  # noqa: F401  (fixtures)
+from tests.test_claude_code import ProcessError, ResultMessage, on, slots_db, until  # noqa: F401  (fixtures)
 from tests.test_tool_results_json import TOOL
 
 EN, KO = "why does it restart?", "web 파드가 왜 재시작하나요?"
@@ -416,6 +417,105 @@ async def test_a_subscriptions_closing_call_that_fails_keeps_what_was_read(on, m
     assert len(turn.errors) == 1 and turn.complete["result"] == "failure"
     assert turn.saved["usage"]["failed"] is True and len(turn.saved["tool_calls"]) == 2
     assert turn.saved["content"].startswith("Looking.\n\n<details>") and turn.saved["content"].endswith("It restarts")
+
+
+SLOW = [*STOPPED[:-1], ("sleep", 0.3), STOPPED[-1]]
+
+
+def one_slot(monkeypatch, *waits):
+    """One chat slot, on this server and in the install, and how long each run may wait for it, in the order they ask."""
+    monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_MAX_CONCURRENT", 1, raising=False)
+    monkeypatch.setattr(claude_code.settings, "AI_CLAUDE_CODE_MAX_CONCURRENT_TOTAL", 1, raising=False)
+    monkeypatch.setattr(claude_code_slots, "POLL_SECONDS", 0.02)
+    left = list(waits)
+    monkeypatch.setattr(claude_code, "queue_wait", lambda: left.pop(0))
+
+
+async def next_in_the_queue(sdk):
+    """Another question, asked while the turn's first run holds the slot."""
+    await until(lambda: sdk.state["running"] == 1)
+    return await claude_code.complete([{"role": "user", "content": "another question"}], model="m", token="t")
+
+
+def kept_what_it_read(turn, said_so):
+    """A turn whose closing run never started: a success with the first run's reads, ending in `said_so`."""
+    assert turn.content == ["Looking.", said_so] and not turn.errors
+    assert turn.saved["content"].startswith("Looking.\n\n<details>") and turn.saved["content"].endswith("</details>\n\n" + said_so)
+    assert len(turn.saved["tool_calls"]) == 2 and "failed" not in turn.saved["usage"] and turn.saved["usage"]["model_calls"] == 2
+    assert turn.complete["result"] == "success" and turn.complete["error"] is None
+    assert (turn.complete["after"]["tool_calls"], turn.complete["after"]["finish_reason"]) == (2, "max_turns")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("question,sentence", [(EN, ENGLISH), (KO, KOREAN)], ids=["english", "korean"])
+async def test_a_closing_run_that_gets_no_slot_in_time_ends_the_turn_with_what_was_read(on, monkeypatch, question, sentence):  # noqa: F811
+    one_slot(monkeypatch, 5, 5, 0.1)
+    sdk = on(Runs(SLOW, [("hold",), done("the other answer")]))
+    other = asyncio.create_task(next_in_the_queue(sdk))
+    turn = await ask(monkeypatch, subscription(), provider="claude-code", question=question)
+    assert [p["queued"] for p in turn.payloads if "queued" in p] == [True]
+    kept_what_it_read(turn, sentence.format("ai.providers.claudeCode.maxTurns"))
+    sdk.state["release"].set()
+    assert (await other).text == "the other answer" and len(sdk.state["options"]) == 2  # the closing run never started
+
+
+@pytest.mark.asyncio
+async def test_a_closing_run_that_waits_for_its_slot_says_so_and_then_answers(on, monkeypatch):  # noqa: F811
+    one_slot(monkeypatch, 5, 5, 5)
+    sdk = on(Runs(SLOW, [("sleep", 0.3), done("the other answer")], [("stream", ["It restarts: ", "out of memory."]), done("It restarts: out of memory.")]))
+    other = asyncio.create_task(next_in_the_queue(sdk))
+    turn = await ask(monkeypatch, subscription(), provider="claude-code")
+    said_in_order = [p.get("queued", p.get("content")) for p in turn.payloads if "queued" in p or "content" in p]
+    assert said_in_order == ["Looking.", True, False, "It restarts: ", "out of memory."] and not turn.errors
+    assert turn.saved["content"].endswith("</details>\n\nIt restarts: out of memory.") and turn.saved["usage"]["model_calls"] == 3
+    assert (await other).text == "the other answer" and sdk.state["max_running"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fails", ["Claude Code ends at once", "it never says anything", "no room for its directory"])
+async def test_a_closing_run_that_does_not_start_ends_the_turn_with_what_was_read(on, monkeypatch, fails):  # noqa: F811
+    closing = [("sleep", 5)] if fails == "it never says anything" else [("raise", ProcessError("Command failed with exit code 1"))]
+    sdk = on(Runs(STOPPED, closing))
+    real, asked = claude_code._options, []
+
+    def options(*a, **kw):
+        asked.append(kw)
+        if len(asked) == 2:
+            if fails == "it never says anything":
+                monkeypatch.setattr(claude_code, "turn_timeout", lambda: 0.05)
+            if fails == "no room for its directory":
+                raise OSError(28, "No space left on device")
+        return real(*a, **kw)
+
+    monkeypatch.setattr(claude_code, "_options", options)
+    turn = await ask(monkeypatch, subscription(), provider="claude-code")
+    kept_what_it_read(turn, ENGLISH.format("ai.providers.claudeCode.maxTurns"))
+    assert not [p for p in turn.payloads if "queued" in p] and sdk.state["running"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("closing", [
+    [("refuse", "rate_limit", 1792407600), ("raise", ProcessError("Command failed with exit code 1"))],
+    [("result", ResultMessage(subtype="success", is_error=True, num_turns=1, result="Invalid bearer token", api_error_status=401))],
+], ids=["a usage window", "a refused token"])
+async def test_a_closing_run_the_provider_refuses_is_an_error(on, monkeypatch, closing):  # noqa: F811
+    """It started: what the provider said reaches the page, as in the first run."""
+    on(Runs(STOPPED, closing))
+    turn = await ask(monkeypatch, subscription(), provider="claude-code")
+    assert [p["error_key"] for p in turn.errors] == ["modelUsageWindow" if len(closing) == 2 else "modelAuth"]
+    assert turn.complete["result"] == "failure" and turn.saved["usage"]["failed"] is True and len(turn.saved["tool_calls"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_first_run_that_gets_no_slot_in_time_is_still_an_error(on, monkeypatch):  # noqa: F811
+    one_slot(monkeypatch, 5, 0.05)
+    sdk = on(Runs([("hold",), done("the other answer")]))
+    other = asyncio.create_task(claude_code.complete([{"role": "user", "content": "another question"}], model="m", token="t"))
+    await until(lambda: sdk.state["running"] == 1)
+    turn = await ask(monkeypatch, subscription(), provider="claude-code")
+    assert [p["error_key"] for p in turn.errors] == ["claudeCodeBusy"] and not turn.content and turn.complete["result"] == "failure"
+    sdk.state["release"].set()
+    await other
 
 
 @pytest.mark.asyncio

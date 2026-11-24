@@ -293,6 +293,21 @@ async def test_a_turn_with_a_free_slot_says_nothing_of_waiting(one_slot):
     assert not any("queued" in e for e in events)
 
 
+async def test_a_streamed_completion_that_waits_says_so_in_chunks_without_choices(one_slot):
+    """What reads the stream's text passes over them, as over the usage at its end (the Optimization explanation)."""
+    async def chunks():
+        completions = claude_code.ClaudeCodeChat(model="m", token="t").chat.completions
+        return [c async for c in await completions.create(messages=[{"role": "user", "content": "x"}], stream=True)]
+
+    first = asyncio.create_task(claude_code.complete([{"role": "user", "content": "x"}], model="m", token="t"))
+    await asyncio.sleep(0.02)
+    waited = await asyncio.wait_for(chunks(), 5)
+    await first
+    assert [(c.choices, c.usage, c.queued) for c in waited[:2]] == [([], None, True), ([], None, False)]
+    assert [c.choices[0].delta.content for c in waited[2:] if c.choices] == [OK.result, None]
+    assert not any(hasattr(c, "queued") for c in await chunks())  # a free slot
+
+
 async def test_a_turn_that_waits_past_the_queue_wait_ends_busy(one_slot, monkeypatch):
     monkeypatch.setattr(claude_code, "queue_wait", lambda: 0.05)
     sdk = holding(monkeypatch)
