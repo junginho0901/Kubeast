@@ -38,7 +38,7 @@ test.describe('AI chat on a pod that does not exist', () => {
     // The old behaviour ran up to the 10-call cap; one miss plus one find plus at most two follow-ups is the new ceiling.
     expect(result.toolCalls, `the chat kept searching:\n${result.reply}`).toBeLessThanOrEqual(4)
     expect(result.reply, 'the reply must say the pod was not found').toMatch(NOT_FOUND_RE)
-    // the chat's own sentence when its last model call wrote nothing either (app/services/ai/chat_steps.py)
-    expect(result.reply).not.toMatch(/쓸 수 있는 호출을 모두 쓰고도|used all the calls one answer may make/)
+    // the chat's own sentences when its last model call wrote nothing either (app/services/ai/chat_steps.py)
+    expect(result.reply).not.toMatch(/쓸 수 있는 호출을 모두 쓰고도|used all the calls one answer may make|답 최대 길이에 닿았습니다|reached its answer length|콘텐츠 필터가 답이|content filter stopped the answer/)
   })
 })

@@ -383,6 +383,70 @@ async def test_no_text_from_the_last_call_is_said_in_the_language_of_the_questio
     assert question not in buf.getvalue()
 
 
+LENGTH = {EN: "The model reached its answer length before it wrote an answer. Ask something narrower, or ask an administrator to "
+              "raise the model's answer length (max_tokens).",
+          KO: "모델이 답을 쓰기 전에 답 최대 길이에 닿았습니다. 질문을 더 좁혀 다시 묻거나, 관리자에게 이 모델의 답 최대 길이(max_tokens)를 "
+              "올려 달라고 요청하세요."}
+FILTER = {EN: "The model provider's content filter stopped the answer before any of it came. Ask the question in other words.",
+          KO: "모델 공급자의 콘텐츠 필터가 답이 나오기 전에 답을 막았습니다. 다른 말로 다시 질문하세요."}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("question", [EN, KO], ids=["english", "korean"])
+@pytest.mark.parametrize("finish_reason,sentences,requests", [("length", LENGTH, 5), ("content_filter", FILTER, 2)])
+async def test_a_last_answer_stopped_before_any_text_says_what_stopped_it(monkeypatch, question, finish_reason, sentences, requests):
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "2")
+    model = AlwaysCalls(answer=(), finish_reason=finish_reason)
+    turn = await ask(monkeypatch, model, question=question)
+    said_so = sentences[question]
+    assert turn.content == ["Reading 1. ", said_so] and turn.saved["content"].endswith("</details>\n\n" + said_so)
+    assert "maxSteps" not in turn.saved["content"] and len(model.requests) == requests  # a cut answer goes on three times
+    assert turn.complete["after"]["finish_reason"] == finish_reason and turn.complete["result"] == "success"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ends,sentence", [
+    (["length", "stop"], ENGLISH.format("ai.chat.maxSteps")), (["length", "content_filter"], FILTER[EN]), (["length", None], LENGTH[EN]),
+    ([None], ENGLISH.format("ai.chat.maxSteps")), (["tool_calls"], ENGLISH.format("ai.chat.maxSteps")),
+], ids=["length, then stop", "length, then the filter", "length, then nothing", "nothing", "a call"])
+async def test_the_last_finish_reason_decides_the_sentence(monkeypatch, ends, sentence):
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "2")
+
+    class Ends(AlwaysCalls):
+        async def create(self, **kw):
+            if self.requests:  # after the call that reads
+                self.finish_reason = ends[len(self.requests) - 1]
+            return await super().create(**kw)
+
+    model = Ends(answer=())
+    turn = await ask(monkeypatch, model)
+    assert len(model.requests) == 1 + len(ends) and turn.content == ["Reading 1. ", sentence]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("question", [EN, KO], ids=["english", "korean"])
+async def test_an_answer_anthropic_refuses_says_the_filter_stopped_it(monkeypatch, question):
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "2")
+
+    class Refuses(AnthropicCalls):
+        def __call__(self, request):
+            body = json.loads(request.content)
+            if body["tool_choice"]["type"] != "none":
+                return super().__call__(request)
+            self.replies.append({"content": [], "stop_reason": "refusal", "usage": {}})
+            return FakeAnthropic.__call__(self, request)
+
+    turn = await ask(monkeypatch, client_for(Refuses(""), "claude-haiku-5-5"), provider="anthropic", question=question)
+    assert turn.content == [FILTER[question]] and not turn.errors
+
+
+@pytest.mark.asyncio
+async def test_a_last_answer_the_filter_stopped_part_way_keeps_its_text_alone(monkeypatch):
+    monkeypatch.setenv("AI_CHAT_MAX_STEPS", "2")
+    turn = await ask(monkeypatch, AlwaysCalls(answer=("It restarts: ",), finish_reason="content_filter"))
+    assert turn.content == ["Reading 1. ", "It restarts: "] and turn.saved["content"].endswith("</details>\n\nIt restarts:")
+
+
 @pytest.mark.asyncio
 async def test_an_answer_with_no_text_before_the_last_call_says_nothing_of_the_limit(monkeypatch):
     """As before: only the limit has a sentence."""

@@ -6,6 +6,7 @@ on with CONTINUE."""
 from __future__ import annotations
 
 import os
+from typing import Optional
 
 from app.services.ai.language import detect_response_language
 
@@ -37,9 +38,22 @@ def final_message(question: str) -> str:
     )
 
 
-def no_answer(question: str, setting: str) -> str:
-    """What the chat shows when the last call wrote no text, in the language of the question."""
-    if detect_response_language(question) == "Korean":
+def no_answer(question: str, setting: str, finish_reason: Optional[str] = None) -> str:
+    """What the chat shows when the last call wrote no text, in the language of the question: that the calls are used up,
+    unless the answer ended at its length or the provider's filter stopped it (the last finish reason)."""
+    korean = detect_response_language(question) == "Korean"
+    if finish_reason == "length":
+        if korean:
+            return ("모델이 답을 쓰기 전에 답 최대 길이에 닿았습니다. 질문을 더 좁혀 다시 묻거나, "
+                    "관리자에게 이 모델의 답 최대 길이(max_tokens)를 올려 달라고 요청하세요.")
+        return ("The model reached its answer length before it wrote an answer. Ask something narrower, or ask an "
+                "administrator to raise the model's answer length (max_tokens).")
+    if finish_reason == "content_filter":
+        if korean:
+            return "모델 공급자의 콘텐츠 필터가 답이 나오기 전에 답을 막았습니다. 다른 말로 다시 질문하세요."
+        return ("The model provider's content filter stopped the answer before any of it came. Ask the question in other "
+                "words.")
+    if korean:
         return (f"모델이 한 답변에 쓸 수 있는 호출을 모두 쓰고도 답을 쓰지 못했습니다. 질문을 더 좁혀 다시 묻거나, "
                 f"관리자에게 {setting} 값을 올려 달라고 요청하세요.")
     return ("The model used all the calls one answer may make and wrote no answer. Ask something narrower, or ask an "
