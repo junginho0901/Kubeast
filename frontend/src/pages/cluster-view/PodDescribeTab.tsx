@@ -31,7 +31,7 @@ export function PodDescribeTab({ data, emptyValue, tr }: Props) {
           </div>
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.node', 'Node')}</p>
-            <p className="text-ink font-medium">{data.node || emptyValue}</p>
+            <p className="text-ink font-medium">{data.node_name || emptyValue}</p>
           </div>
           <div>
             <p className="text-sm text-slate-400">{tr('clusterView.describe.phase', 'Phase')}</p>
@@ -115,7 +115,7 @@ export function PodDescribeTab({ data, emptyValue, tr }: Props) {
                   </div>
                   <div>
                     <span className="text-slate-400">{tr('clusterView.describe.containerRestarts', 'Restart Count')}: </span>
-                    <span className="text-ink">{container.restart_count}</span>
+                    <span className="text-ink">{container.restart_count ?? 0}</span>
                   </div>
                 </div>
               </div>
