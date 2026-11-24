@@ -24,6 +24,7 @@ from app.services.ai import limits
 from app.services.ai import repeats as repeats_mod
 from app.services.ai import tool_replay
 from app.services.ai import tool_results
+from app.services.ai import tool_turn
 from app.services.ai import usage as usage_acct
 from app.services.ai.debug_dump import dump, log, safe_error
 
@@ -1156,12 +1157,13 @@ async def session_chat_stream(
                             cont_stream = await service.client.chat.completions.create(
                                 model=service.model, messages=messages,
                                 temperature=0.7, max_tokens=limits.answer_tokens(service, 4096),
-                                stream=True, stream_options={"include_usage": True},
+                                stream=True, stream_options={"include_usage": True}, **tool_turn.no_more_calls(service, tools),
                             )
                         except Exception:
                             cont_stream = await service.client.chat.completions.create(
                                 model=service.model, messages=messages,
                                 temperature=0.7, max_tokens=limits.answer_tokens(service, 4096), stream=True,
+                                **tool_turn.no_more_calls(service, tools),
                             )
 
                         continuation_text = ""

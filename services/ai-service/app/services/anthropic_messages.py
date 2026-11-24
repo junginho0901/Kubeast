@@ -11,7 +11,10 @@ Thinking: Claude 5 models think by default, and when tool results go back the
 thinking blocks of that assistant turn must go back unmodified. The callers
 keep only text and tool calls, so the blocks are kept here by the turn's first
 tool_use id (globally unique, so a client shared by requests does not mix
-them) and put back in front of that assistant message.
+them) and put back in front of that assistant message. A block is bound to the
+system text, the tools and the messages before it, so a call after a tool loop
+that may call no tool keeps the loop's tools (tool_turn.no_more_calls), and a
+request without tools goes without the blocks.
 """
 
 from __future__ import annotations
@@ -181,6 +184,7 @@ class AnthropicMessagesClient:
 
     def build_request(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         model = kwargs.get("model") or self.model
+        tools = [t.get("function") or {} for t in kwargs.get("tools") or [] if t.get("type", "function") == "function"]
         system: list[str] = []
         messages: list[dict[str, Any]] = []
 
@@ -203,7 +207,8 @@ class AnthropicMessagesClient:
                 add("user", [{"type": "text", "text": text}] if text else [])
             elif role == "assistant":
                 calls = m.get("tool_calls") or []
-                blocks = self._recall(calls[0].get("id")) if calls else []
+                # The API refuses a thinking block (400) in a request without the tools it was made with.
+                blocks = self._recall(calls[0].get("id")) if calls and tools else []
                 text = _text_of(m.get("content"))
                 if text:
                     blocks.append({"type": "text", "text": text})
@@ -231,7 +236,6 @@ class AnthropicMessagesClient:
         if system:
             body["system"] = "\n".join(system)
 
-        tools = [t.get("function") or {} for t in kwargs.get("tools") or [] if t.get("type", "function") == "function"]
         if tools:
             body["tools"] = [
                 {"name": f.get("name") or "", "description": f.get("description") or "",
