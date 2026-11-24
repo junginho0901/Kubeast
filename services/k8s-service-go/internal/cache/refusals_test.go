@@ -98,10 +98,11 @@ func freshRefusals(t *testing.T) *refusalCounts {
 }
 
 // A store and a read the Redis user may not run are each counted under their command, and the cache goes on reading
-// them as misses; what it may run, a delete here, counts nothing.
+// them as misses; what it may run, a delete here, counts nothing, and neither does go-redis naming itself on connect
+// (CLIENT SETINFO), which the chart's Redis refuses.
 func TestCommandsRedisRefusesForTheUsersACLAreCountedByCommand(t *testing.T) {
 	counts := freshRefusals(t)
-	c := NewWithUser("127.0.0.1", aclRedis(t, "SET", "GET"), 0, "k8s-service", "pw")
+	c := NewWithUser("127.0.0.1", aclRedis(t, "SET", "GET", "CLIENT"), 0, "k8s-service", "pw")
 	if !c.IsConnected() {
 		t.Fatal("not connected to the stand-in")
 	}
