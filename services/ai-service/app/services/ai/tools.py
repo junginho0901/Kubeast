@@ -29,8 +29,8 @@ CALLS_DESCRIPTION = (
 TIMELINE_CHANGES_PARAM = "view"
 # What the view does not read (k8s-service's timelineChangeSources): an answer without a change is not "nothing changed".
 TIMELINE_CHANGES_NOT_LISTED = (
-    " It does not list a replica count set without a new revision (kubectl scale, a scale button: only the Deployment's ScalingReplicaSet "
-    "events say it, while they last), a deleted object or a change to any other kind (a Service, a NetworkPolicy …), so an answer without "
+    " It does not list a replica count set without a new revision (kubectl scale, a scale button: only events say it, while they last — "
+    "a Deployment's ScalingReplicaSet), a deleted object or a change to any other kind (a Service, a NetworkPolicy …), so an answer without "
     "them is not \"nothing changed\": read the events view too."
 )
 TIMELINE_CHANGES_DESCRIPTION = (
