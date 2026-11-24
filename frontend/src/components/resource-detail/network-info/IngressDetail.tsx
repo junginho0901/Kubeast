@@ -10,6 +10,7 @@ import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { PrometheusSection, MetricCard } from '../PrometheusMetrics'
 import { DescribeFailure, DescribeStale } from '../DescribeFailure'
 import { ingressClassRows } from '../netstoreDetail'
+import { promString } from '@/utils/promString'
 
 interface Props {
   name: string
@@ -150,9 +151,7 @@ export default function IngressDetail({ name, namespace, rawJson }: Props) {
 // Hidden entirely when Prometheus is unavailable / toggle off.
 function IngressLatencyMetrics({ name, namespace }: { name: string; namespace?: string }) {
   const ns = namespace ?? ''
-  const escName = name.replace(/"/g, '\\"')
-  const escNs = ns.replace(/"/g, '\\"')
-  const selector = `ingress="${escName}",exported_namespace="${escNs}"`
+  const selector = `ingress=${promString(name)},exported_namespace=${promString(ns)}`
   const histBucket = `nginx_ingress_controller_request_duration_seconds_bucket{${selector}}`
   const buildQ = (q: number) =>
     `histogram_quantile(${q}, sum(rate(${histBucket}[5m])) by (le))`

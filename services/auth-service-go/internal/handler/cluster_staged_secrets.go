@@ -33,14 +33,15 @@ type stagedSecret struct {
 	unsure bool
 }
 
-// stageKubeconfig stages cluster id's kubeconfig Secret.
+// stageKubeconfig stages cluster id's kubeconfig Secret (a file in docker-compose mode), read where the write goes.
 func (h *ClustersHandler) stageKubeconfig(id cluster.ID, blob string) *stagedSecret {
 	s := &stagedSecret{what: "kubeconfig", value: blob, write: func(ctx context.Context, v string) error {
 		_, err := h.secrets.WriteKubeconfig(ctx, id, v)
 		return err
 	}}
 	if rd, ok := h.secrets.(cluster.SecretReader); ok {
-		s.read = func(ctx context.Context) (string, error) { return rd.ReadKubeconfig(ctx, cluster.SecretName(id)) }
+		name := cluster.KubeconfigName(h.secrets, id)
+		s.read = func(ctx context.Context) (string, error) { return rd.ReadKubeconfig(ctx, name) }
 	}
 	return s
 }

@@ -49,6 +49,15 @@ type SecretStore interface {
 // SecretName returns the Secret name holding cluster id's kubeconfig.
 func SecretName(id ID) string { return "cluster-kubeconfig-" + string(id) }
 
+// KubeconfigName returns the name store keeps cluster id's kubeconfig under, the one its WriteKubeconfig returns and
+// its ReadKubeconfig reads: the file of a FilesystemSecretStore, else SecretName(id).
+func KubeconfigName(store any, id ID) string {
+	if fs, ok := store.(*FilesystemSecretStore); ok {
+		return fs.kubeconfigPath(id)
+	}
+	return SecretName(id)
+}
+
 // PrometheusSecretName returns the Secret name holding cluster id's external
 // Prometheus Authorization header (key PrometheusAuthKey).
 func PrometheusSecretName(id ID) string { return "cluster-prometheus-" + string(id) }
@@ -176,6 +185,10 @@ func NewFilesystemSecretStore(dir string) *FilesystemSecretStore {
 	return &FilesystemSecretStore{dir: dir}
 }
 
+func (s *FilesystemSecretStore) kubeconfigPath(id ID) string {
+	return filepath.Join(s.dir, string(id)+".yaml")
+}
+
 func (s *FilesystemSecretStore) ReadKubeconfig(_ context.Context, secretName string) (string, error) {
 	b, err := os.ReadFile(secretName)
 	if err != nil {
@@ -188,7 +201,7 @@ func (s *FilesystemSecretStore) WriteKubeconfig(_ context.Context, id ID, conten
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return "", err
 	}
-	path := filepath.Join(s.dir, string(id)+".yaml")
+	path := s.kubeconfigPath(id)
 	tmp, err := os.CreateTemp(s.dir, ".kubeconfig-*.tmp")
 	if err != nil {
 		return "", err

@@ -17,6 +17,7 @@ import { useAIContext } from '@/hooks/useAIContext'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { DescribeFailure, ListReadFailure } from './DescribeFailure'
 import { failureText } from '@/utils/failureText'
+import { promString } from '@/utils/promString'
 
 interface Props { name: string }
 
@@ -112,10 +113,10 @@ export default function NamespaceInfo({ name }: Props) {
   const promNsMetrics = usePrometheusQueries(
     ['namespace-detail', name],
     [
-      { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace="${name}",container!="",container!="POD"}[5m])) * 1000` },
-      { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace="${name}",container!="",container!="POD"})` },
-      { name: 'pod_count', promql: `count(kube_pod_info{namespace="${name}"})` },
-      { name: 'restart_total', promql: `sum(kube_pod_container_status_restarts_total{namespace="${name}"})` },
+      { name: 'cpu', promql: `sum(rate(container_cpu_usage_seconds_total{namespace=${promString(name)},container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'memory', promql: `sum(container_memory_working_set_bytes{namespace=${promString(name)},container!="",container!="POD"})` },
+      { name: 'pod_count', promql: `count(kube_pod_info{namespace=${promString(name)}})` },
+      { name: 'restart_total', promql: `sum(kube_pod_container_status_restarts_total{namespace=${promString(name)}})` },
     ],
     { enabled: !!name },
   )
