@@ -113,6 +113,6 @@ async def test_the_codes_postgresql_answers_for_a_text_it_refuses(db):
         assert caught.value.orig.sqlstate == code and refused_for_its_text(caught.value) is True
     with pytest.raises(Exception) as caught:
         async with db.engine.begin() as conn:
-            await conn.execute(text("ALTER SEQUENCE auth_audit_logs_id_seq MAXVALUE 1"))
+            await conn.execute(text("ALTER SEQUENCE auth_audit_logs_id_seq MAXVALUE 100 RESTART 100"))
             await conn.execute(text("SELECT nextval('auth_audit_logs_id_seq'), nextval('auth_audit_logs_id_seq')"))
     assert caught.value.orig.sqlstate == "2200H" and refused_for_its_text(caught.value) is False
