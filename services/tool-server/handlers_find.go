@@ -95,16 +95,33 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 				continue
 			}
 		}
-		for _, ns := range nsTargets(namespaces) {
+		var refused []string // the namespaces of a grant the cluster refused the kind in
+		var refusal, failure string
+		for i, ns := range nsTargets(namespaces) {
 			cmd := []string{"get", kind}
 			cmd = append(cmd, ns...)
 			cmd = append(cmd, "-o", "custom-columns=NS:.metadata.namespace,NAME:.metadata.name,LABELS:.metadata.labels", "--no-headers")
 			text, err := runKubectl(ctx, headers, cmd...)
 			if err != nil {
-				if f, ok := classifyKubectlFailure(err); ok && f.Status == "unknown_kind" {
-					notes = append(notes, fmt.Sprintf("kind %q is not served by this cluster", kind))
-				} else {
-					notes = append(notes, fmt.Sprintf("%s: %s", kind, strings.TrimPrefix(err.Error(), "kubectl failed: ")))
+				why := strings.TrimPrefix(err.Error(), "kubectl failed: ")
+				f, ok := classifyKubectlFailure(err)
+				switch {
+				case ok && f.Status == "unknown_kind":
+					failure = fmt.Sprintf("kind %q is not served by this cluster", kind)
+				// one place, or a kind without namespaces, which the next namespace would answer the same
+				case len(namespaces) < 2 || strings.Contains(why, "at the cluster scope"):
+					failure = fmt.Sprintf("%s: %s", kind, why)
+				case ok && f.Status == "forbidden":
+					refused = append(refused, namespaces[i])
+					if refusal == "" {
+						refusal = why
+					}
+					continue
+				default:
+					failure = fmt.Sprintf("%s: %s: %s", kind, namespaces[i], why)
+					if rest := namespaces[i+1:]; len(rest) > 0 {
+						failure += "; not searched after it: " + notedNames(rest)
+					}
 				}
 				break
 			}
@@ -144,6 +161,12 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 				}
 				matches = append(matches, entry)
 			}
+		}
+		if len(refused) > 0 {
+			notes = append(notes, fmt.Sprintf("%s: %s: %s", kind, notedNames(refused), refusal))
+		}
+		if failure != "" {
+			notes = append(notes, failure)
 		}
 	}
 	none := len(matches) == 0
@@ -234,11 +257,7 @@ func namespacesNamed(ctx context.Context, headers http.Header, needle string, gr
 	}
 	var parts []string
 	if first != nil {
-		listed := strings.Join(unread[:min(len(unread), findNotedNames)], ", ")
-		if more := len(unread) - findNotedNames; more > 0 {
-			listed += fmt.Sprintf(" and %d more", more)
-		}
-		parts = append(parts, listed+": "+why(first))
+		parts = append(parts, notedNames(unread)+": "+why(first))
 	}
 	if tried < named && len(names) < most {
 		parts = append(parts, fmt.Sprintf("%d of the grant's %d namespaces with such a name were looked at", tried, named))
@@ -247,6 +266,15 @@ func namespacesNamed(ctx context.Context, headers http.Header, needle string, gr
 		note = "namespaces: " + strings.Join(parts, "; ")
 	}
 	return names, note
+}
+
+// notedNames lists names as a note does: findNotedNames of them and how many more there are.
+func notedNames(names []string) string {
+	listed := strings.Join(names[:min(len(names), findNotedNames)], ", ")
+	if more := len(names) - findNotedNames; more > 0 {
+		listed += fmt.Sprintf(" and %d more", more)
+	}
+	return listed
 }
 
 func isNamespaceKind(kind string) bool {
