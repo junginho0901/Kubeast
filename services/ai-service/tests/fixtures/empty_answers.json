@@ -140,6 +140,90 @@
   "holds": "something"
  },
  {
+  "name": "a log whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "{\"container\":\"app\",\"hint\":\"The previous container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the current log (previous=false), the pod's events and its last state (k8s_describe_resource: reason, exit code) instead; a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a log whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "{\"container\":\"app\",\"hint\":\"The previous container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the current log (previous=false), the pod's events and its last state (k8s_describe_resource: reason, exit code) instead; a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a log whose file is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "{\"container\":\"app\",\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"failed to try resolving symlinks in path \\\"/var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log\\\": lstat /var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log: no such file or directory\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a log whose file is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "{\"container\":\"app\",\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"failed to try resolving symlinks in path \\\"/var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log\\\": lstat /var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log: no such file or directory\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a search of a log whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "{\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a search of a log whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "{\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "logs whose containers are gone",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "{\"containers\":[\"app\",\"side\"],\"hint\":\"The log of each container listed is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "logs whose containers are gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "{\"containers\":[\"app\",\"side\"],\"hint\":\"The log of each container listed is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a log beside one whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "[pod/web-1/app] unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef[pod/web-1/side] ready\n",
+  "holds": "something"
+ },
+ {
+  "name": "a log beside one whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "[pod/web-1/app] unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef[pod/web-1/side] ready\n",
+  "holds": "something"
+ },
+ {
+  "name": "a line of a log with the words of one that is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n",
+  "holds": "something"
+ },
+ {
+  "name": "a line of a log with the words of one that is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n",
+  "holds": "something"
+ },
+ {
   "name": "a list of no name",
   "tool": "k8s_get_resources",
   "details": false,

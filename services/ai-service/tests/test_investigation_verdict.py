@@ -1156,6 +1156,11 @@ async def test_a_line_made_to_read_as_a_tools_answer_is_a_log_line_and_is_in_no_
     assert [s["source"] for s in kept["looked_at"]] == ["logs"] and all("call" not in n for n in kept["not_looked_at"])
 
 
+def no_log(reason="unable to retrieve container logs for containerd://" + "0" * 64, **more):
+    """tool-server's answer of a log the node no longer has (notfound.go)."""
+    return json.dumps({"hint": "The previous container's log is gone.", "namespace": "apps", "pod": "web-1", "reason": reason, "status": "no_log", **more})
+
+
 @pytest.mark.parametrize("raw, problem, status", [
     (json.dumps({"error": "Error in k8s_get_pod_logs: pods \"web-1\" is forbidden"}, ensure_ascii=False), 'Error in k8s_get_pod_logs: pods "web-1" is forbidden', None),
     (json.dumps({"error": "권한 없음: 'k8s_get_pod_logs'는 read 역할에서 사용할 수 없습니다."}, ensure_ascii=False),
@@ -1171,6 +1176,8 @@ async def test_a_line_made_to_read_as_a_tools_answer_is_a_log_line_and_is_in_no_
     (not_found("web-1"), None, "not_found"), (not_found("web-1", searched_truncated=True), None, "not_found"),
     (json.dumps({"status": "container_required", "pod": "p", "namespace": "n", "containers": ["a"], "hint": "x"}), None, "container_required"),
     (json.dumps({"status": "no_previous", "pod": "p", "namespace": "n", "container": "a", "hint": "x"}), None, "no_previous"),
+    (no_log(), None, "no_log"), (no_log("cannot", containers=["a", "b"]), None, "no_log"), (no_log("cannot", container="a"), None, "no_log"),
+    (no_log(level="warn"), None, None), ('{"status": "no_log"}', None, None), (json.dumps({"status": "no_log", "pod": "p", "namespace": "n", "hint": "x"}), None, None),
     (json.dumps({"status": "unknown_kind", "kind": "x", "similar_kinds": [], "hint": "x"}), None, "unknown_kind"),
     (json.dumps({"status": "unavailable", "feature": "metrics-server", "reason": "r", "alternative": "a"}), None, "unavailable"),
     ("plain text", None, None), ('{"status": {"phase": "Running"}}', None, None), ("[1]", None, None),
@@ -1202,6 +1209,83 @@ async def test_a_raw_text_tool_that_failed_or_was_refused_is_a_failed_call(monke
     monkeypatch.setattr(tool_replay, "call_fields", lambda service, ran: {"replay": True, "replay_hit": True})
     out, _ = await run_of(monkeypatch, [("k8s_get_pod_logs", {"pod_name": "web-1"}, LOG_LINE)], NONE_FOUND, {"pod": "web-1"})
     assert "error" not in out["tool_calls"][0]
+
+
+GONE = ("k8s_get_pod_logs", {"pod_name": "web-1", "namespace": "apps", "container": "web", "previous": True})
+KUBELET = "unable to retrieve container logs for containerd://" + "0" * 64
+
+
+@pytest.mark.asyncio
+async def test_a_log_the_node_no_longer_has_was_read_by_no_call_and_shows_nothing(monkeypatch):
+    given = answer("A cause was found.", "cause_found", [cause(POD, [1])], shown(POD, 1), hypotheses=[hypothesis(resource=POD, **{"for": [1]})])
+    audits = []
+    out, service = await run_of(monkeypatch, [(*GONE, no_log(container="web"))], given, {"pod": "web-1"}, audits=audits, ledger=True)
+    kept = out["result"]["verdict"]
+    assert (kept["outcome"], kept["why"], kept["looked_at"]) == ("cannot_tell", ["symptom_not_shown", "cause_not_shown"], [])
+    assert {"source": "logs", "reason": "no_answer"} in kept["not_looked_at"]
+    assert {"call": 1, "tool": "k8s_get_pod_logs", "reason": "no_answer", "detail": "no_log"} in kept["not_looked_at"]
+    assert (out["result"]["causes"][0]["verified"], out["result"]["causes"][0]["reason"]) == (False, "empty_answer")
+    h = out["result"]["hypotheses"][0]
+    assert h["closed"] is False and {"reason": "no_evidence", "side": "for"} in h["problems"]
+    # the call was made, and its row says so; nothing the kubelet wrote is in the lists
+    entry = out["tool_calls"][0]
+    assert "error" not in entry and entry["no_log"] is True and KUBELET not in json.dumps(out["result"])
+    assert [(a["result"], a["error"]) for a in audits if a["action"] == "ai.tool.call"] == [("success", None)]
+    # the model reads the whole answer, with where else to look
+    sent = service.completions.calls[1]["messages"][-1]["content"]
+    assert KUBELET in sent and "The previous container's log is gone." in sent
+
+
+@pytest.mark.asyncio
+async def test_a_hypothesis_is_ruled_out_by_no_log_that_was_not_there(monkeypatch):
+    for raw, closed in ((no_log(container="web"), False), ("ready\n", True)):
+        ruled = hypothesis(resource=POD, state="ruled_out", **{"for": [], "against": [1]})
+        given = answer("Cannot tell.", "cannot_tell", [], {"resource": POD, "evidence": []}, hypotheses=[ruled])
+        for switches in ({}, {"verdict": False}, {"evidence_check": False, "verdict": False}):
+            out, _ = await run_of(monkeypatch, [(*GONE, raw)], given, {"pod": "web-1"}, ledger=True, **switches)
+            assert out["result"]["hypotheses"][0]["closed"] is closed, (raw, switches)
+            assert ("no_log" in out["tool_calls"][0]) is not closed
+
+
+@pytest.mark.asyncio
+async def test_with_the_verdict_off_the_pod_a_missing_logs_answer_names_shows_no_cause(monkeypatch):
+    for switches in ({"verdict": False}, {"verdict": False, "ledger": True}):
+        given = answer("A cause was found.", "cause_found", [cause(POD, [1])], shown(POD, 1), hypotheses=[hypothesis(resource=POD, **{"for": [1]})])
+        out, _ = await run_of(monkeypatch, [(*GONE, no_log(container="web"))], given, {"pod": "web-1"}, **switches)
+        assert (out["result"]["causes"][0]["verified"], out["result"]["causes"][0]["reason"]) == (False, "name_missing"), switches
+        # as the kubelet's own line did, which names no object
+        out, _ = await run_of(monkeypatch, [(*GONE, KUBELET)], given, {"pod": "web-1"}, **switches)
+        assert (out["result"]["causes"][0]["verified"], out["result"]["causes"][0]["reason"]) == (False, "name_missing"), switches
+
+
+@pytest.mark.asyncio
+async def test_a_repeat_of_a_read_of_no_log_closes_no_hypothesis(monkeypatch):
+    monkeypatch.setenv("AI_REFUSE_REPEATED_READS", "true")
+    given = answer("Cannot tell.", "cannot_tell", [], {"resource": POD, "evidence": []},
+                   hypotheses=[hypothesis(resource=POD, state="ruled_out", **{"for": [], "against": [2]})])
+    for raw, closed in ((no_log(container="web"), False), ("ready\n", True)):
+        out, _ = await run_of(monkeypatch, [(*GONE, raw), (*GONE, raw)], given, {"pod": "web-1"}, ledger=True)
+        assert "repeat_of" in out["tool_calls"][1] and out["result"]["hypotheses"][0]["closed"] is closed
+
+
+@pytest.mark.parametrize("raw", [KUBELET + "\n", "starting\n" + KUBELET, KUBELET + ": retrying", no_log(level="warn"), no_log() + "\n" + LOG_LINE])
+@pytest.mark.asyncio
+async def test_a_line_that_holds_the_kubelets_words_is_a_log_line(monkeypatch, raw):
+    out, _ = await run_of(monkeypatch, [(*GONE, raw)], CANNOT, {"pod": "web-1"})
+    assert [s["source"] for s in out["result"]["verdict"]["looked_at"]] == ["logs"] and "no_log" not in out["tool_calls"][0]
+    assert not answers.no_log(GONE[0], raw) and answers.no_log(GONE[0], no_log()) and not answers.no_log("k8s_describe_resource", no_log())
+
+
+def test_the_chat_reads_no_log_as_a_call_that_was_made_and_draws_it_as_json():
+    from app.services.ai.formatters import _build_tool_display, _format_tool_result
+
+    raw = no_log(container="web")
+    assert tool_outcome(raw) == ("success", None, "no_log")
+    text, is_json, is_yaml = _format_tool_result(*GONE, raw)
+    assert (json.loads(text), is_json, is_yaml) == (json.loads(raw), True, False)
+    assert _build_tool_display(*GONE, text, is_json, is_yaml) is None
+    for other in ("ready\n", KUBELET + "\n", KUBELET, "", "# No line was read: the newest 50 lines were asked for.\n"):
+        assert _format_tool_result(*GONE, other) == (other, False, False)
 
 
 def test_an_answer_that_read_nothing_says_which_in_the_lists_words():

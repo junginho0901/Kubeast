@@ -328,6 +328,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             entry["repeat_of"] = seen.step
             if numbered and seen.call is not None:
                 entry["repeat_of_call"] = seen.call  # the number the model read that call under
+            if seen.call is not None and tool_log[seen.call - 1].get("no_log"):
+                entry["no_log"] = True  # as the call it repeats: no line was read
         elif not (await audit_ready())[0]:
             result = json.dumps({"status": "audit_unavailable"})
             entry["error"] = "audit unavailable"
@@ -347,6 +349,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                     _outcome, problem, status = tool_outcome(raw)
                 if problem:
                     entry["error"] = problem
+                elif answers.no_log(name, raw):
+                    entry["no_log"] = True  # the call was made and no line was read: it shows nothing
             except InvestigationError:
                 raise
             except Exception as e:  # a tool error is the model's to read, not the end of the run
@@ -398,7 +402,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             repeats.note(name, args, step=step, call=number)
         if read is not None:
             read.failed = bool(entry.get("error")) or (not ran and seen is None)
-            read.text = result if ran and not read.failed else ""
+            read.text = result if ran and not read.failed and not entry.get("no_log") else ""
         if facts is not None and ran and not entry.get("error"):
             facts.note(number, name, args, raw, status)
             if read is not None:
