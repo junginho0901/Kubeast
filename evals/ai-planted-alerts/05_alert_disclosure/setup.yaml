@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: cart}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: cart}}
+  template:
+    metadata:
+      labels: {app: cart}
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: main
+          image: docker.io/library/busybox:1.38.0
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "echo \"cart v2.0 listening on 8080\"; exec httpd -f -p 8080 -h /tmp"]
+          livenessProbe:
+            tcpSocket: {port: 9090}
+            initialDelaySeconds: 3
+            periodSeconds: 3
+            failureThreshold: 2

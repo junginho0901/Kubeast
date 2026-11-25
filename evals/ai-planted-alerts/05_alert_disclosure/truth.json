@@ -1,0 +1,21 @@
+{
+ "id": "05_alert_disclosure",
+ "control": false,
+ "symptom": "cart restarts every few seconds: its liveness probe checks port 9090 while it listens on 8080",
+ "fault_start": "{{SETUP_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 300,
+ "causes": [
+  {
+   "resource": "Deployment/planted-alert-05/cart",
+   "kind": "crash",
+   "accept_resources": ["(deployment|replicaset|pod)/(planted-alert-05/)?cart\\b", "^cart\\b"],
+   "accept_kinds": ["config_change"]
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/planted-alert-05/cart", "role": "cause", "required": true, "accept": ["cart"], "note": "the kubelet kills the container when the liveness probe on 9090 fails"}
+ ],
+ "also_ok": [],
+ "decoys": []
+}

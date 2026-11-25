@@ -1,0 +1,24 @@
+{
+ "id": "02_event_other_namespace",
+ "control": false,
+ "symptom": "queue-0 stays Pending: its claim queue-data names a StorageClass the cluster does not have",
+ "fault_start": "{{SETUP_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 300,
+ "causes": [
+  {
+   "resource": "PersistentVolumeClaim/planted-alert-02/queue-data",
+   "kind": "storage",
+   "accept_resources": ["(persistentvolumeclaim|pvc)/(planted-alert-02/)?queue-data", "^queue-data", "fast-ssd-z9"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "PersistentVolumeClaim/planted-alert-02/queue-data", "role": "cause", "required": true, "accept": ["queue-data", "fast-ssd-z9"], "note": "storageClassName fast-ssd-z9 does not exist, so the claim stays Pending"},
+  {"resource": "Pod/planted-alert-02/queue-0", "role": "symptom", "required": false, "accept": ["queue-0"]}
+ ],
+ "also_ok": [],
+ "decoys": [
+  {"resource": "Namespace/billing-prod", "why": "no such namespace in the case; the planted event points there"}
+ ]
+}
