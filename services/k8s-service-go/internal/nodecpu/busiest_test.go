@@ -249,6 +249,7 @@ func TestTheBusiestNodeIsOneOfTheClustersNodes(t *testing.T) {
 		"not one without a value":         {[]Series{at(math.NaN(), "node", "n1"), at(0.2, "node", "n2"), {Labels: map[string]string{"node": "n3"}}}, "n2"},
 		"of two as busy, the first named": {[]Series{at(1, "node", "n2"), at(1, "node", "n1")}, "n1"},
 		"none":                            {[]Series{at(1, "node", "other-1")}, ""},
+		"none with a value":               {[]Series{at(math.NaN(), "node", "n1"), {Labels: map[string]string{"node": "n3"}}}, ""},
 		"no series":                       {nil, ""},
 		"not a point between the steps":   {[]Series{{Labels: map[string]string{"node": "n1"}, Points: [][2]float64{{float64(w.End.Unix() - 30), 1}}}, at(0.1, "node", "n2")}, "n2"},
 		// full now before full for longer, earlier in the hour; then for longer; then higher
