@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -41,6 +43,8 @@ type storeFixture struct {
 	// noBefore: no shape and no error line of the window before; noErrorsBefore: no error line of it, the shapes as they
 	// are; noLines: no shape and no error line at all
 	noBefore, noErrorsBefore, noLines bool
+	// errorLines, when set, are each container's error lines (unix seconds), in place of those above
+	errorLines map[string][]int64
 	// fresh: the first of those services has no span in the window before
 	fresh bool
 }
@@ -69,6 +73,61 @@ func (f *storeFixture) tempoReqs() []*http.Request {
 func (f *storeFixture) reads() int { return len(f.lokiReqs()) + len(f.tempoReqs()) }
 
 func unixAt(h, m int) int64 { return time.Date(2026, 11, 15, h, m, 0, 0, time.UTC).Unix() }
+
+// errorLines are error lines of the window before (00:20) and of the window (01:20).
+func errorLines(before, now int) []int64 {
+	return append(slices.Repeat([]int64{unixAt(0, 20)}, before), slices.Repeat([]int64{unixAt(1, 20)}, now)...)
+}
+
+var countedRange = regexp.MustCompile(`\[(\d+)s\](?: offset (\d+)s)?\)`)
+
+// countedLines are the series Loki's query frontend answers r's error line count with: it moves the range's bounds out
+// to multiples of the step, and each point has the lines of the query's range that ends its offset before it.
+func countedLines(t *testing.T, r *http.Request, lines map[string][]int64) string {
+	q := r.URL.Query()
+	read := func(s string) int64 {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			t.Errorf("the error line count %v: %v", q, err)
+		}
+		return n
+	}
+	m := countedRange.FindStringSubmatch(q.Get("query"))
+	if m == nil {
+		t.Errorf("no range in the error line count %s", q.Get("query"))
+		return ""
+	}
+	length, offset, step := read(m[1]), int64(0), read(q.Get("step"))
+	if m[2] != "" {
+		offset = read(m[2])
+	}
+	start, end := read(q.Get("start"))/1e9, read(q.Get("end"))/1e9
+	start, end = start/step*step, (end+step-1)/step*step
+	containers := make([]string, 0, len(lines))
+	for c := range lines {
+		containers = append(containers, c)
+	}
+	slices.Sort(containers)
+	var series []string
+	for _, c := range containers {
+		var values []string
+		for at := start; at <= end; at += step {
+			n := 0
+			for _, l := range lines[c] {
+				if l > at-offset-length && l <= at-offset {
+					n++
+				}
+			}
+			if n > 0 {
+				values = append(values, fmt.Sprintf(`[%d,"%d"]`, at, n))
+			}
+		}
+		if len(values) > 0 {
+			series = append(series, fmt.Sprintf(`{"metric":{"k8s_container_name":%q},"values":[%s]}`, c, strings.Join(values, ",")))
+		}
+	}
+	return strings.Join(series, ",")
+}
 
 func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 	t.Helper()
@@ -102,30 +161,22 @@ func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 			f.mu.Lock()
 			containers := f.containers
 			f.mu.Unlock()
-			if f.noLines {
-				_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[]}}`))
-				return
-			}
-			if f.noBefore || f.noErrorsBefore {
-				_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"k8s_container_name":"app"},"values":[[%d,"9"]]}]}}`, unixAt(1, 30))
-				return
-			}
-			if containers > 0 {
-				series := make([]string, 0, containers)
+			lines := map[string][]int64{}
+			switch {
+			case f.errorLines != nil:
+				lines = f.errorLines
+			case f.noLines:
+			case f.noBefore || f.noErrorsBefore:
+				lines["app"] = errorLines(0, 9)
+			case containers > 0:
 				for i := 0; i < containers; i++ {
-					before, now := 2, 2
-					if i == containers-1 {
-						before, now = 0, 9
-					}
-					series = append(series, fmt.Sprintf(`{"metric":{"k8s_container_name":"c%03d"},"values":[[%d,"%d"],[%d,"%d"]]}`, i, unixAt(0, 30), before, unixAt(1, 30), now))
+					lines[fmt.Sprintf("c%03d", i)] = errorLines(2, 2)
 				}
-				_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[%s]}}`, strings.Join(series, ","))
-				return
+				lines[fmt.Sprintf("c%03d", containers-1)] = errorLines(0, 9)
+			default:
+				lines["app"], lines["sidecar"] = errorLines(2, 9), errorLines(4, 5)
 			}
-			_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[
-				{"metric":{"k8s_container_name":"app"},"values":[[%d,"2"],[%d,"9"]]},
-				{"metric":{"k8s_container_name":"sidecar"},"values":[[%d,"4"],[%d,"5"]]}]}}`,
-				unixAt(0, 30), unixAt(1, 30), unixAt(0, 30), unixAt(1, 30))
+			_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[%s]}}`, countedLines(t, r, lines))
 		default:
 			http.NotFound(w, r)
 		}
@@ -618,6 +669,49 @@ func TestAnomaliesSayWhichServiceWasNotCompared(t *testing.T) {
 	f.services, f.fresh = traces.MaxSeries+1, true
 	if _, _, partial = f.readOf(t, "shop"); partial[anomaly.CheckTraceLatency] != alone+"; the trace store's latency query answered 101 series and only the first 100 were read; the check is about those" {
 		t.Fatalf("partial %q", partial[anomaly.CheckTraceLatency])
+	}
+}
+
+// Whatever its bounds, the error lines are those of the window and of the window before, to the second: Loki answers at
+// multiples of the step, which a window's bounds seldom are.
+func TestAnomaliesCountErrorLinesOnTheWindowsBounds(t *testing.T) {
+	day := func(h, m, s int) time.Time { return time.Date(2026, 11, 15, h, m, s, 0, time.UTC) }
+	for name, win := range map[string]anomaly.Window{
+		"the hour before now":            {Start: day(0, 30, 0), End: day(1, 30, 0)},
+		"an hour on the hour":            {Start: day(0, 0, 0), End: day(1, 0, 0)},
+		"an hour that ends on a second":  {Start: day(0, 29, 19), End: day(1, 29, 19)},
+		"five minutes":                   {Start: day(1, 22, 0), End: day(1, 27, 0)},
+		"1201 seconds":                   {Start: day(1, 9, 59), End: day(1, 30, 0)},
+		"across midnight":                {Start: day(-2, 17, 0), End: day(0, 43, 0)},
+		"an hour that ends at half past": {Start: day(-1, 30, 0), End: day(0, 30, 0)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newStoreFixture(t, config.Config{})
+			start, end, length := win.Start.Unix(), win.End.Unix(), int64(win.Length()/time.Second)
+			f.errorLines = map[string][]int64{
+				// two lines in the window before and nine in the window, its ends among them; one on each side of both
+				"app": append([]int64{start - length, start - length + 1, start, end + 1}, slices.Repeat([]int64{start + 1, end - 1, end}, 3)...),
+			}
+			w := httptest.NewRecorder()
+			f.h.GetNamespaceAnomalies(w, logSearchRequestAs("/api/v1/namespaces/shop/anomalies?start="+win.Start.Format(time.RFC3339)+"&end="+win.End.Format(time.RFC3339), "self", "shop", podReader))
+			var res anomaly.Result
+			if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil || w.Code != http.StatusOK {
+				t.Fatalf("%d %s %v", w.Code, w.Body, err)
+			}
+			c := logCountOf(t, res)
+			if c.Target != "container app" || c.Verdict != anomaly.VerdictAnomalous || *c.Now != 9 || c.Before == nil || *c.Before != 2 {
+				t.Fatalf("%+v", c)
+			}
+			counts := 0
+			for _, r := range f.lokiReqs() {
+				if r.URL.Query().Get("step") != "" {
+					counts++
+				}
+			}
+			if counts != 1 {
+				t.Fatalf("%d count queries", counts)
+			}
+		})
 	}
 }
 
