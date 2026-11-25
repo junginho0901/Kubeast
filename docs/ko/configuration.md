@@ -290,7 +290,8 @@ ingress:
 # 있습니다. 알림은 규칙 식으로 모델에 가고, 채팅 질문은 출력 형식을 달라고 할 때만 그 형식의 도구로 좁혀지고, Gemini 모델의 호출에는
 # thought signature가 함께 돌아가고, anthropic 공급자에서는 도구를 부르는 차례 뒤의 호출이 그 도구 목록을 그대로 보내되 부르지 않게 하고,
 # Claude 구독의 알림 조사에서는 조사를 닫는 호출과 다시 묻기가 도구 결과를 표식 사이에 담고,
-# 채팅 답의 마지막 모델 호출은 도구를 부르지 않고 답하라는 지시를 받고(ai.chat.maxSteps), Claude Code는 모든 프롬프트를 쓴 그대로 받습니다.
+# 채팅 답의 마지막 모델 호출은 도구를 부르지 않고 답하라는 지시를 받고(ai.chat.maxSteps), 길이에서 잘린 채팅 답의 나머지를 청하는 글이 바뀌고,
+# Claude Code는 모든 프롬프트를 쓴 그대로 받습니다.
 # AI 도구 get_pod_metrics·issues·logsearch·alerts_inbox·investigations의 답도 스위치 없이 바뀝니다(upgrade-0.7.9.md 4절 "API 답").
 # (alpha): 예고 없이 바뀌거나 없어질 수 있습니다. 자세한 것은 ai-alerts.md·features.md에 있습니다
 features:
