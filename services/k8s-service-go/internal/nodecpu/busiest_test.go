@@ -171,7 +171,7 @@ func TestPodsInNamespacesTheCallerMayNotListAreCountedNotNamed(t *testing.T) {
 	s.in.PodsError = "the pods on the node: forbidden"
 	s.in.Readable = func(ns string) bool { return ns == "shop-03" }
 	line := busiest(s)
-	holds(t, line, "shop-03/search-1", "1 pod in 1 namespace whose pods you may not list, or it was not asked whether you may, used 0.97 together, counted and not named", "; the pods on the node: forbidden.")
+	holds(t, line, "shop-03/search-1", "1 pod in 1 namespace whose pods you may not list, or it was not asked whether you may, used 0.97 together, counted and not named", "; the pods on the node: forbidden;")
 	for _, word := range []string{"reports", "monthly"} {
 		if strings.Contains(line, word) {
 			t.Errorf("%q is in %s", word, line)

@@ -144,7 +144,7 @@ func TestNodeBusiestSaysWhatItCouldNotRead(t *testing.T) {
 		"too many CPUs":               {&fakeNodeCPU{prometheus: true, nodes: big}, "the 2 nodes have 2028 CPUs together, more than the 2000 read at once", 0},
 		"no node":                     {&fakeNodeCPU{prometheus: true, nodes: []map[string]interface{}{}}, "the cluster lists no node", 0},
 		"too many names":              {&fakeNodeCPU{prometheus: true, nodes: many}, "the names of 1500 nodes do not fit one query: get_node_metrics with node reads one", 0},
-		"the pods did not answer":     {&fakeNodeCPU{prometheus: true, podsErr: context.DeadlineExceeded}, "; the pods on the node did not answer in time.", 3},
+		"the pods did not answer":     {&fakeNodeCPU{prometheus: true, podsErr: context.DeadlineExceeded}, "; the pods on the node did not answer in time;", 3},
 		"a failed query":              {&fakeNodeCPU{prometheus: true, queryErr: errors.New("query failed")}, "Prometheus: query failed", 1},
 		"only other hosts' CPUs":      {&fakeNodeCPU{prometheus: true, busiest: outside}, nodecpu.NoCPUsOfNodes, 1},
 		"no CPU at all":               {&fakeNodeCPU{prometheus: true, busiest: []k8s.PrometheusRangeSeries{}}, nodecpu.NoCPUsOfNodes, 1},
