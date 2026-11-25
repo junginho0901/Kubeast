@@ -316,16 +316,16 @@ func TestCostDiscovery_OneSearchThatNoCallerCuts(t *testing.T) {
 		srv.hold(true)
 		ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 		defer cancel()
-		if answerOf(t, "the caller who left", ask(ctx, s)) {
+		if searchAnswer(t, "the caller who left", ask(ctx, s)) {
 			t.Fatal("found while every list waits")
 		}
 		inLine, leave := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer leave()
-		if answerOf(t, "the caller in line", ask(inLine, s)) {
+		if searchAnswer(t, "the caller in line", ask(inLine, s)) {
 			t.Fatal("found while every list waits")
 		}
 		srv.hold(false)
-		if !answerOf(t, "the next caller", ask(context.Background(), s)) {
+		if !searchAnswer(t, "the next caller", ask(context.Background(), s)) {
 			t.Error("not found by the search that went on")
 		}
 		if n := lists(srv); n != len(costNamespaces) {
@@ -337,10 +337,10 @@ func TestCostDiscovery_OneSearchThatNoCallerCuts(t *testing.T) {
 		s, srv := newCostServer(t, true)
 		ctx, calls := WithClusterCalls(context.Background(), "", func() {})
 		calls.waitedOut.Store(true)
-		if answerOf(t, "the held request", ask(ctx, s)) || lists(srv) != 0 {
+		if searchAnswer(t, "the held request", ask(ctx, s)) || lists(srv) != 0 {
 			t.Errorf("a held request looked: %d lists", lists(srv))
 		}
-		if !answerOf(t, "the next caller", ask(context.Background(), s)) {
+		if !searchAnswer(t, "the next caller", ask(context.Background(), s)) {
 			t.Error("the next caller did not look")
 		}
 	})
@@ -351,12 +351,12 @@ func TestCostDiscovery_OneSearchThatNoCallerCuts(t *testing.T) {
 		t.Cleanup(func() { discoveryTime = was })
 		s, srv := newCostServer(t, true)
 		srv.hold(true)
-		if answerOf(t, "its caller", ask(context.Background(), s)) {
+		if searchAnswer(t, "its caller", ask(context.Background(), s)) {
 			t.Fatal("found while every list waits")
 		}
 		srv.hold(false)
 		n := lists(srv)
-		if answerOf(t, "the next caller", ask(context.Background(), s)) || lists(srv) != n {
+		if searchAnswer(t, "the next caller", ask(context.Background(), s)) || lists(srv) != n {
 			t.Errorf("asked again within the five minutes: %d more lists", lists(srv)-n)
 		}
 	})

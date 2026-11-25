@@ -314,8 +314,8 @@ func askPrometheus(ctx context.Context, s *Service) <-chan bool {
 	return answer
 }
 
-// answerOf is the answer of a caller who must have one by now.
-func answerOf(t *testing.T, who string, answer <-chan bool) bool {
+// searchAnswer is the answer of a caller who must have one by now.
+func searchAnswer(t *testing.T, who string, answer <-chan bool) bool {
 	t.Helper()
 	select {
 	case ok := <-answer:
@@ -345,7 +345,7 @@ func TestPrometheusDiscovery_ASearchOutlivesTheCallerWhoStartedIt(t *testing.T) 
 			s := newPromService(cs, nil)
 			ctx, cancel := cut()
 			defer cancel()
-			if answerOf(t, "the caller who left", askPrometheus(ctx, s)) {
+			if searchAnswer(t, "the caller who left", askPrometheus(ctx, s)) {
 				t.Fatal("found while every list waits")
 			}
 			srv.hold(false)
@@ -401,11 +401,11 @@ func TestPrometheusDiscovery_ACallerInLineLeavesOnItsOwnTime(t *testing.T) {
 	srv.waitLists(t, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	if answerOf(t, "the caller in line", askPrometheus(ctx, s)) {
+	if searchAnswer(t, "the caller in line", askPrometheus(ctx, s)) {
 		t.Error("found while every list waits")
 	}
 	srv.hold(false)
-	if !answerOf(t, "the first caller", first) {
+	if !searchAnswer(t, "the first caller", first) {
 		t.Error("the first caller's search was cut")
 	}
 	if lists, _ := srv.counts(); lists != oneRound {
@@ -463,10 +463,10 @@ func TestPrometheusDiscovery_ASearchKeepsThePersonWhoStartedIt(t *testing.T) {
 	ann := askPrometheus(ctx, s)
 	srv.waitLists(t, 1)
 	leave()
-	answerOf(t, "ann", ann)
+	searchAnswer(t, "ann", ann)
 	bob := askPrometheus(asUser(context.Background(), "bob", nil), s)
 	srv.hold(false)
-	if !answerOf(t, "bob", bob) {
+	if !searchAnswer(t, "bob", bob) {
 		t.Error("not found by the search ann started")
 	}
 	srv.mu.Lock()
@@ -502,7 +502,7 @@ func TestPrometheusDiscovery_ASearchIsNotHeldAndIsItsStartersOnTheRecord(t *test
 	second := askPrometheus(inLine, s)
 	calls.waitedOut.Store(true) // another of its reads ran out its wait meanwhile
 	srv.hold(false)
-	if !answerOf(t, "the request that started it", first) || !answerOf(t, "the request in line", second) {
+	if !searchAnswer(t, "the request that started it", first) || !searchAnswer(t, "the request in line", second) {
 		t.Error("not found: the search was held with its request's reads")
 	}
 	if lists, _ := srv.counts(); lists != oneRound {
