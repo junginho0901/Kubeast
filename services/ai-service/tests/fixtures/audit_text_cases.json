@@ -1,0 +1,204 @@
+{
+  "text": [
+    {
+      "name": "an empty value",
+      "hex": "",
+      "want": ""
+    },
+    {
+      "name": "plain text",
+      "hex": "4d6f7a696c6c612f352e3020285831313b204c696e7578207838365f363429",
+      "want": "Mozilla/5.0 (X11; Linux x86_64)"
+    },
+    {
+      "name": "text in other scripts",
+      "hex": "ed8c8ceb939c20ec9db4eba68420c3a920e697a5e69cac20f09f9880",
+      "want": "\ud30c\ub4dc \uc774\ub984 \u00e9 \u65e5\u672c \ud83d\ude00"
+    },
+    {
+      "name": "control characters other than 0x00",
+      "hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f7f",
+      "want": "\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f\u007f"
+    },
+    {
+      "name": "U+FFFD and the characters next to the surrogates",
+      "hex": "efbfbded9fbfee8080efbfbff48fbfbf",
+      "want": "\ufffd\ud7ff\ue000\uffff\udbff\udfff"
+    },
+    {
+      "name": "a byte that begins no character",
+      "hex": "ff",
+      "want": "\ufffd"
+    },
+    {
+      "name": "bytes that begin no character among text",
+      "hex": "6375726cfffe2f382e30",
+      "want": "curl\ufffd\ufffd/8.0"
+    },
+    {
+      "name": "a character cut short",
+      "hex": "61e282",
+      "want": "a\ufffd\ufffd"
+    },
+    {
+      "name": "a surrogate written as bytes",
+      "hex": "61eda08062",
+      "want": "a\ufffd\ufffd\ufffdb"
+    },
+    {
+      "name": "a code point past the last",
+      "hex": "61f490808062",
+      "want": "a\ufffd\ufffd\ufffd\ufffdb"
+    },
+    {
+      "name": "an overlong form of a slash",
+      "hex": "61c0af62",
+      "want": "a\ufffd\ufffdb"
+    },
+    {
+      "name": "0x00 in the middle",
+      "hex": "776562002d31",
+      "want": "web-1"
+    },
+    {
+      "name": "0x00 alone",
+      "hex": "00",
+      "want": ""
+    },
+    {
+      "name": "0x00 and a bad byte",
+      "hex": "00ff00",
+      "want": "\ufffd"
+    }
+  ],
+  "indexed": [
+    {
+      "name": "a name of 253 bytes",
+      "text": "a",
+      "times": 253,
+      "chars": 253
+    },
+    {
+      "name": "the longest that always fits",
+      "text": "a",
+      "times": 2692,
+      "chars": 2692
+    },
+    {
+      "name": "one byte longer",
+      "text": "a",
+      "times": 2693,
+      "chars": 2692
+    },
+    {
+      "name": "far longer",
+      "text": "a",
+      "times": 100000,
+      "chars": 2692
+    },
+    {
+      "name": "three-byte characters, the cut between two of them",
+      "text": "\uac00",
+      "times": 1000,
+      "chars": 897
+    },
+    {
+      "name": "four-byte characters, the cut between two of them",
+      "text": "\ud83d\ude00",
+      "times": 1000,
+      "chars": 673
+    }
+  ],
+  "json": [
+    {
+      "name": "no keys",
+      "input": "{}",
+      "want": "{}"
+    },
+    {
+      "name": "an ordinary payload",
+      "input": "{\"replicas\":3,\"image\":\"nginx:1.27\",\"labels\":{\"app\":\"web\"},\"list\":[1,2.5,-0.1,1e21,true,false,null]}",
+      "want": "{\"replicas\":3,\"image\":\"nginx:1.27\",\"labels\":{\"app\":\"web\"},\"list\":[1,2.5,-0.1,1e21,true,false,null]}"
+    },
+    {
+      "name": "text in other scripts",
+      "input": "{\"a\":\"\ud30c\ub4dc \u00e9 \ud83d\ude00\"}",
+      "want": "{\"a\":\"\ud30c\ub4dc \u00e9 \ud83d\ude00\"}"
+    },
+    {
+      "name": "escapes that are stored",
+      "input": "{\"a\":\"\\\\\\\"\\n\\t\\u0001\\u001f\\u0041\\uac00\\u2028\\uffff\"}",
+      "want": "{\"a\":\"\\\\\\\"\\n\\t\\u0001\\u001f\\u0041\\uac00\\u2028\\uffff\"}"
+    },
+    {
+      "name": "a pair of surrogates",
+      "input": "{\"a\":\"\\ud83d\\ude00\\uD83D\\uDE01\"}",
+      "want": "{\"a\":\"\\ud83d\\ude00\\uD83D\\uDE01\"}"
+    },
+    {
+      "name": "a backslash before u0000 that is itself escaped",
+      "input": "{\"a\":\"\\\\u0000\"}",
+      "want": "{\"a\":\"\\\\u0000\"}"
+    },
+    {
+      "name": "two escaped backslashes before ud800",
+      "input": "{\"a\":\"\\\\\\\\ud800\"}",
+      "want": "{\"a\":\"\\\\\\\\ud800\"}"
+    },
+    {
+      "name": "0x00",
+      "input": "{\"a\":\"\\u0000\"}",
+      "want": "{\"a\":\"\\ufffd\"}"
+    },
+    {
+      "name": "0x00 after an escaped backslash",
+      "input": "{\"a\":\"\\\\\\u0000x\"}",
+      "want": "{\"a\":\"\\\\\\ufffdx\"}"
+    },
+    {
+      "name": "0x00 in a key",
+      "input": "{\"replicas\":5,\"replicas\\u0000\":3}",
+      "want": "{\"replicas\":5,\"replicas\\ufffd\":3}"
+    },
+    {
+      "name": "0x00 deep inside",
+      "input": "{\"input\":{\"args\":[{\"v\":\"a\\u0000b\"}]}}",
+      "want": "{\"input\":{\"args\":[{\"v\":\"a\\ufffdb\"}]}}"
+    },
+    {
+      "name": "a first half alone",
+      "input": "{\"a\":\"\\ud800\"}",
+      "want": "{\"a\":\"\\ufffd\"}"
+    },
+    {
+      "name": "a first half before text",
+      "input": "{\"a\":\"\\ud83dx\"}",
+      "want": "{\"a\":\"\\ufffdx\"}"
+    },
+    {
+      "name": "a first half before another escape",
+      "input": "{\"a\":\"\\ud83d\\u0041\"}",
+      "want": "{\"a\":\"\\ufffd\\u0041\"}"
+    },
+    {
+      "name": "a first half before a pair",
+      "input": "{\"a\":\"\\ud800\\ud83d\\ude00\"}",
+      "want": "{\"a\":\"\\ufffd\\ud83d\\ude00\"}"
+    },
+    {
+      "name": "a second half alone",
+      "input": "{\"a\":\"\\uDC00\"}",
+      "want": "{\"a\":\"\\ufffd\"}"
+    },
+    {
+      "name": "the halves the wrong way round",
+      "input": "{\"a\":\"\\udc00\\ud800\"}",
+      "want": "{\"a\":\"\\ufffd\\ufffd\"}"
+    },
+    {
+      "name": "a half in a key",
+      "input": "{\"\\ud800\":1}",
+      "want": "{\"\\ufffd\":1}"
+    }
+  ]
+}

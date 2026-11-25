@@ -38,6 +38,8 @@ Viewing is through the admin screen (`admin.audit.read`) and CSV (`admin.audit.e
 ## 4. Storage
 
 - **DB**: `auth_audit_logs` (shared by all services; auth-service manages the schema). Go's `audit.PostgresStore` and Python's `audit_writer.py` INSERT into the same columns.
+  - A row is stored whatever text it holds. What PostgreSQL does not take is written as text it does: U+FFFD for a byte that is not UTF-8 and for half a pair of surrogates, 0x00 dropped (U+FFFD in JSON), and the first 2,692 bytes of an indexed column (`service`, `action`, `actor_user_id`, `target_id`). Any other text is stored as it came (`audit.storable`, `audit_text.py`; shared cases in `audit_text_cases.json`).
+  - A row PostgreSQL refuses for its text all the same is counted and logged (`audit: row refused for its text`, ai-service `audit row refused for its text`) and does not count as a broken store: the next readiness check asks the table with a probe write.
 - **stdout**: one line through the service logger (JSON).
   - Line format: `{"time":…,"level":"INFO","msg":"audit","event":"audit","audit":{id,service,action,result,error,actor_user_id,actor_email,target_type,target_id,target_email,cluster,namespace,path,request_ip,user_agent,request_id,before,after}}`
   - The top-level `event: "audit"` is the routing key for the log pipeline.

@@ -118,6 +118,7 @@ type Guarded struct {
 	checkedAt time.Time
 	lastPing  error
 	broken    bool // a write failed and none has landed since
+	doubt     bool // a row was refused for its text since the last probe: the next Ready probes a write
 	probedAt  time.Time
 	lastProbe error
 
@@ -139,7 +140,9 @@ func Guard(store Store, pinger Pinger, failClosed bool) *Guarded {
 }
 
 // Write persists through the inner Store, counting and logging failures. A
-// failure also drops the Ready cache so the next check pings again. The write
+// failure also drops the Ready cache so the next check pings again. A row
+// refused for its text does not count as a broken store, which may take the
+// next one: the next Ready asks it with a probe write. The write
 // keeps ctx's values and deadline but not its cancellation: a request whose
 // client went away after its change ran (net/http cancels the request's
 // context when the connection closes) still gets its row, the write going on
@@ -153,17 +156,24 @@ func (g *Guarded) Write(ctx context.Context, rec Record) (int64, error) {
 		err = fmt.Errorf("%w: %w", errWriteGraceOver, err)
 	}
 	g.mu.Lock()
-	if err != nil {
+	switch {
+	case err == nil:
+		g.broken, g.doubt = false, false
+	case refusedForItsText(err):
+		g.doubt = true
+	default:
 		g.checkedAt, g.probedAt = time.Time{}, time.Time{}
 		g.broken = true
-	} else {
-		g.broken = false
 	}
 	g.mu.Unlock()
 	if err != nil {
 		g.failures.Add(1)
 		g.lastFail.Store(&writeFailure{at: time.Now(), err: err.Error()})
-		slog.ErrorContext(ctx, "audit: write failed", "action", rec.Action, "error", err)
+		msg := "audit: write failed"
+		if refusedForItsText(err) {
+			msg = "audit: row refused for its text"
+		}
+		slog.ErrorContext(ctx, msg, "action", rec.Action, "error", err)
 	}
 	return id, err
 }
@@ -213,6 +223,9 @@ func (g *Guarded) Ready(ctx context.Context) error {
 	}
 	if g.lastPing != nil {
 		return fmt.Errorf("%w: %v", ErrUnavailable, g.lastPing)
+	}
+	if g.doubt {
+		g.doubt, g.broken, g.probedAt = false, true, time.Time{}
 	}
 	if g.broken && g.prober != nil {
 		if time.Since(g.probedAt) >= g.ttl {
