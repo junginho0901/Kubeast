@@ -2972,6 +2972,8 @@
           "optimization": "활성 모델"
         },
         "fromChart": "차트에서 정함: {{name}}",
+        "kept": "여기서 고른 \"{{name}}\" 모델은 차트가 모델을 정하지 않으면 적용됩니다.",
+        "takeAway": "없애기",
         "answers": "지금 답하는 모델: {{name}}",
         "answersChart": "지금 답하는 모델: 차트의 ai.* 값",
         "choiceDisabled": "\"{{name}}\" 모델은 꺼져 있어 답하지 않습니다.",

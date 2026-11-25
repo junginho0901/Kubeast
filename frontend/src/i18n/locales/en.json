@@ -4422,6 +4422,8 @@
           "optimization": "Active model"
         },
         "fromChart": "Set in the chart: {{name}}",
+        "kept": "\"{{name}}\" is chosen here and applies once the chart names no model.",
+        "takeAway": "Take away",
         "answers": "Answers now: {{name}}",
         "answersChart": "Answers now: the model of the chart's ai.* values",
         "choiceDisabled": "\"{{name}}\" is disabled, so it does not answer.",

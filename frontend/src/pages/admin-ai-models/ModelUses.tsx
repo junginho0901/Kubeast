@@ -42,7 +42,7 @@ export default function ModelUses({ configs }: { configs: ModelConfigResponse[] 
   const pick = async (u: ModelUseState, value: string) => {
     const configId = value ? Number(value) : null
     if (configId === (u.choice?.id ?? null)) return
-    const name = configId === null ? asBefore(u.use) : configs.find((c) => c.id === configId)?.name
+    const name = configId === null ? u.chart_model || asBefore(u.use) : configs.find((c) => c.id === configId)?.name
     // it changes where the use's data goes and what it costs: say so before it runs
     const ok = await confirm({
       title: tr('admin.aiModels.perUse.confirmTitle', 'Change the model'),
@@ -96,6 +96,17 @@ export default function ModelUses({ configs }: { configs: ModelConfigResponse[] 
               {linesOf(u, tr).map((line) => (
                 <p key={line.text} className={`mt-1 text-xs break-words ${line.problem ? 'text-amber-300' : 'text-slate-400'}`}>{line.text}</p>
               ))}
+              {u.chart_model && u.choice && (
+                // the locked field does not show it, and it answers again once the chart names no model
+                <div className="mt-1 flex items-start gap-2 text-xs" data-testid={`model-use-${u.use}-kept`}>
+                  <span className="min-w-0 flex-1 break-words text-amber-300">
+                    {tr('admin.aiModels.perUse.kept', '"{{name}}" is chosen here and applies once the chart names no model.', { name: u.choice.name })}
+                  </span>
+                  <button type="button" className="btn-row shrink-0" disabled={choose.isPending} onClick={() => void pick(u, '')} data-testid={`model-use-${u.use}-take-away`}>
+                    {tr('admin.aiModels.perUse.takeAway', 'Take away')}
+                  </button>
+                </div>
+              )}
               {choose.variables?.use === u.use && <ActionFailure error={choose.error} action="change" testId={`model-use-${u.use}-error`} className="mt-1" />}
             </div>
           ))}
