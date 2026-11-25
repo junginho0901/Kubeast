@@ -8,6 +8,7 @@ ties calls to hypotheses at the end, by their numbers. The server then holds eac
 - a cause or a symptom needs a call that answered, among those for it;
 - ruled_out needs a call that answered, among those against it;
 - blocked needs the reason it could not be checked (a refused or failed call may be given for it);
+- a read of a pod's log that the node had no log for (the entry's no_log) is no call that answered;
 - every number names a call of this run; a state outside the four is open.
 
 A report whose hypotheses are not all closed (or that has none while it finds a fault) is asked for once more,
@@ -42,6 +43,10 @@ def check(block: Optional[dict], tool_log: list[dict[str, Any]]) -> list[dict[st
     hypothesis's `cut`)."""
     raw = (block or {}).get("hypotheses")
     out: list[dict[str, Any]] = []
+
+    def answered(refs: list[dict[str, Any]]) -> bool:
+        return any(not c.get("failed") and not tool_log[c["call"] - 1].get("no_log") for c in refs)
+
     for i, h in enumerate((raw if isinstance(raw, list) else [])[:MAX_HYPOTHESES], 1):
         if not isinstance(h, dict):
             continue
@@ -52,9 +57,9 @@ def check(block: Optional[dict], tool_log: list[dict[str, Any]]) -> list[dict[st
         problems: list[dict[str, Any]] = []
         if state == OPEN:
             problems.append({"reason": "open"})
-        elif state in ("cause", "symptom") and not any(not c.get("failed") for c in pro):
+        elif state in ("cause", "symptom") and not answered(pro):
             problems.append({"reason": "no_evidence", "side": "for"})
-        elif state == "ruled_out" and not any(not c.get("failed") for c in con):
+        elif state == "ruled_out" and not answered(con):
             problems.append({"reason": "no_evidence", "side": "against"})
         elif state == "blocked" and not blocked:
             problems.append({"reason": "no_reason"})
