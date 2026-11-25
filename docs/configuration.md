@@ -222,6 +222,9 @@ ai:
                            # of a name not found still says to stop searching and ask; off: as before
   faultOnset: false        # (alpha) the chat and alert investigations say when each failure began and list one that was there before apart from
                            # the cause; issues and anomaly_rank answer since when a failing object's state is known (features.md); off: as before
+  causeNaming: false       # (alpha) how an answer names its causes in AI Chat and in an investigation's rca block: the object that holds
+                           # what is wrong and not the one the symptom shows on, its kind with one line of meaning each, both ends of a
+                           # slow or broken call, every independent cause (features.md, ai-alerts.md); off: as before
   refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
                              # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
   toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
@@ -400,6 +403,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `ai.timelineChangesMore` | false | alpha | The AI evaluation with it off and on beside `ai.timelineChanges`, and a run on the kind dev install with both on |
 | `ai.causeQuestions` | false | alpha | The AI evaluation with it off and on, the planted instruction cases with it on, and a run on the kind dev install with it on |
 | `ai.faultOnset` | false | alpha | The AI evaluation (chat and `--alerts`) with it off and on, with and without `ai.causeQuestions`, the planted instruction cases with it on, and a run on the kind dev install with it on |
+| `ai.causeNaming` | false | alpha | The AI evaluation with it off and on, chat and alert investigations (`scripts/ai-eval.py --alerts`), the planted instruction cases with it on, and a run on the kind dev install with it on |
 | `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | Tested: `allowListOnly` on kind, whose network plugin enforced the egress rules (2026-11-24): the chat answered with the model provider's addresses listed and ended with the provider's error without them |
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | The alert investigations of the AI evaluation (`scripts/ai-eval.py --alerts`) with each switch off and on, and a run on the kind dev install with them on |
 | `features.alertInvestigation.ledger`, `evidenceCheck` (on, either adds one model call to `maxSteps` when it asks again) | true, true | alpha | The alert investigations of the AI evaluation with each off and on, and a run on the kind dev install with them on |

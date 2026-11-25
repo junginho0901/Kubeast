@@ -485,7 +485,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                                       # spans the cluster, so such a token is refused it (permissions.CLUSTER_WIDE_TOOLS)
                                       node_neighbors=cfg.node_neighbors and not row.namespace)
     if rca.on(cfg):
-        tail = rca.instruction(evidence=cfg.evidence_check, hypotheses=cfg.ledger, verdict=verdict_on)
+        tail = rca.instruction(evidence=cfg.evidence_check, hypotheses=cfg.ledger, verdict=verdict_on, naming=cfg.cause_naming)
     else:
         tail = numbers.NOTE if numbered else ""
     messages: list[dict[str, Any]] = [

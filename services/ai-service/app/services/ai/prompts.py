@@ -4,13 +4,14 @@
 # 없음 (self / instance 의존 X). 호출처에서 SYSTEM_MESSAGE 를 직접 import 해서
 # 사용하거나 system_prompt_override 로 덮어쓸 수 있다. 채팅은 system_message() 로
 # 받는다 (timeline 의 changes 보기 스위치 AI_TIMELINE_CHANGES 와 그 더 많은 출처 AI_TIMELINE_CHANGES_MORE, anomaly_rank 스위치
-# ANOMALY_RANK_ENABLED, 노드 이웃 스위치 NODE_NEIGHBORS_ENABLED, 원인을 묻는 질문의 규칙 스위치 AI_CAUSE_QUESTIONS, 고장이 시작된 때의 규칙 스위치 AI_FAULT_ONSET).
+# ANOMALY_RANK_ENABLED, 노드 이웃 스위치 NODE_NEIGHBORS_ENABLED, 원인을 묻는 질문의 규칙 스위치 AI_CAUSE_QUESTIONS, 고장이 시작된 때의 규칙 스위치
+# AI_FAULT_ONSET, 원인을 적는 법 스위치 AI_CAUSE_NAMING).
 #
 # 변경 시 주의: AI 응답의 형식·언어·도구 호출 정책이 모두 이 프롬프트에 의존.
 # 키워드 ("Kubeast", "도구 호출", "Critical Rules" 등) 가 사라지면 행동이
 # 바뀐다 — tests/test_prompts.py 의 회귀 테스트로 보호.
 
-from app.services import switch
+from app.services import cause_naming, switch
 from app.services.ai.tools import anomaly_rank_on, call_graph_on, fault_onset_on, node_neighbors_on, timeline_changes_more_on, timeline_changes_on
 
 SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
@@ -503,6 +504,11 @@ CAUSE_QUESTION_LINES = {
     _EXAMPLE_SOLUTION: "7. Cause found → Provide solution with commands; otherwise → the next check",
 }
 
+# How an answer names its causes (AI_CAUSE_NAMING, chart ai.causeNaming, off by default; app/services/cause_naming.py), with
+# or without the rules for why questions: the last part of how to answer.
+_LANGUAGE_HEADING = _line("## Language / 언어")
+CAUSE_NAMING_LINES = {_LANGUAGE_HEADING: cause_naming.CHAT_SECTION + "\n\n" + _LANGUAGE_HEADING}
+
 
 # When a failure began (AI_FAULT_ONSET, chart ai.faultOnset, off by default): a section right before the naming rules
 # (_NAMESPACE_HEADING), after the rules for why questions where they are on. It names no tool to call first and no outcome.
@@ -518,7 +524,7 @@ ONSET_SECTION = """### 전부터 있던 고장과 물은 고장
 def system_message() -> str:
     """The chat's system prompt: SYSTEM_MESSAGE, with the lines of each switch that is on (timeline's changes view and its
     further sources, anomaly_rank, resource_graph's calls, get_node_metrics with a node, the rules for why questions, when a
-    failure began); with every one off, SYSTEM_MESSAGE as it is."""
+    failure began, how to name causes); with every one off, SYSTEM_MESSAGE as it is."""
     lines: dict = {}
     changes, anomaly, calls = timeline_changes_on(), anomaly_rank_on(), call_graph_on()
     state_rule = _STATE_RULE
@@ -534,6 +540,8 @@ def system_message() -> str:
     if fault_onset_on():
         heading = lines.get(_NAMESPACE_HEADING, _NAMESPACE_HEADING)
         lines[_NAMESPACE_HEADING] = _swapped(heading, _NAMESPACE_HEADING, ONSET_SECTION + "\n\n" + _NAMESPACE_HEADING)
+    if cause_naming.on():
+        lines.update(CAUSE_NAMING_LINES)
     rule = None
     if anomaly:
         lines.update(ANOMALY_RANK_LINES)

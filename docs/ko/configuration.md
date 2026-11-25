@@ -213,6 +213,9 @@ ai:
                            # 결과 글은 여전히 검색을 멈추고 물으라고 합니다. 끄면 전과 같습니다
   faultOnset: false        # (alpha) 채팅과 알림 조사가 고장마다 시작한 때를 말하고, 전부터 있던 고장은 원인과 따로 적습니다.
                            # issues와 anomaly_rank는 고장 난 객체의 상태를 언제부터 아는지 답합니다(features.md). 끄면 전과 같습니다
+  causeNaming: false       # (alpha) AI Chat의 답과 조사의 rca 묶음에서 원인을 적는 법: 증상이 보이는 객체가 아니라 잘못된 것을 가진 객체,
+                           # 뜻을 한 줄씩 붙인 고장 종류, 느리거나 끊긴 호출의 양 끝, 서로 다른 원인 모두
+                           # (features.md, ai-alerts.md). 끄면 전과 같습니다
   refuseRepeatedReads: false # (alpha) true면 채팅 답·조사 하나 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면
                              # 실행하지 않고 그 결과가 어디 있는지 모델에 알려 줍니다. 끄면 전과 같습니다
   toolResultDetails: false # (alpha) true면 도구 결과에 잘린 답의 "M of N", 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭,
@@ -390,6 +393,7 @@ multicluster:
 | `ai.timelineChangesMore` | false | alpha | `ai.timelineChanges`와 함께 끄고 켠 AI 평가, 둘 다 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.causeQuestions` | false | alpha | 끄고 켠 AI 평가, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.faultOnset` | false | alpha | 끄고 켠 AI 평가(채팅과 `--alerts`), `ai.causeQuestions`가 있을 때와 없을 때, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.causeNaming` | false | alpha | 끄고 켠 AI 평가의 채팅과 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | 돌려 봄: 네트워크 플러그인이 밖으로 나가는 규칙을 지킨 kind에서 `allowListOnly`를 켬(2026-11-24). 모델 공급자 주소를 목록에 넣은 채팅은 답했고, 뺀 채팅은 공급자 오류로 끝남 |
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | 스위치를 하나씩 끄고 켠 AI 평가의 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.ledger`, `evidenceCheck`(켜면 다시 물을 때 `maxSteps`에 모델 호출 하나가 더해짐) | true, true | alpha | 하나씩 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |

@@ -118,11 +118,11 @@ INVESTIGATION_SWITCHES = (
     "ALERT_INVESTIGATION_NARROW_FIRST", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_EVIDENCE_CHECK",
     "ALERT_INVESTIGATION_VERDICT",
     "CALL_GRAPH_ENABLED", "AI_TIMELINE_CHANGES", "AI_TIMELINE_CHANGES_MORE", "AI_RULE_CARDS_INVESTIGATIONS", "AI_RULE_CARDS_SYMPTOMS",
-    "AI_TOOL_RESULT_DETAILS", "NODE_NEIGHBORS_ENABLED", "AI_FAULT_ONSET",
+    "AI_TOOL_RESULT_DETAILS", "NODE_NEIGHBORS_ENABLED", "AI_FAULT_ONSET", "AI_CAUSE_NAMING",
 )
 CHAT_SWITCHES = ("AI_TIMELINE_CHANGES", "AI_TIMELINE_CHANGES_MORE", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED", "AI_RULE_CARDS_CHAT",
                  "AI_TOOL_RESULT_DETAILS", "AI_CAUSE_QUESTIONS", "AI_RULE_CARDS_SYMPTOMS",
-                 "NODE_NEIGHBORS_ENABLED", "AI_FAULT_ONSET")
+                 "NODE_NEIGHBORS_ENABLED", "AI_FAULT_ONSET", "AI_CAUSE_NAMING")
 
 
 def found(text: str) -> list[str]:
@@ -189,7 +189,7 @@ async def test_an_investigation_with_every_step_on_sends_no_value_of_the_install
     anomaly_rank_on(monkeypatch)
     settings = inv_settings.load()  # as the worker reads it
     assert all((settings.rules, settings.changes_first, settings.narrow_first, settings.ledger, settings.evidence_check,
-                settings.verdict, settings.call_paths))
+                settings.verdict, settings.call_paths, settings.cause_naming))
     assert settings.internal_token == INSTALL_ENV["INTERNAL_API_TOKEN"]
     assert settings.console_url == INSTALL_ENV["ALERT_INVESTIGATION_CONSOLE_URL"]
     service = InstallService([

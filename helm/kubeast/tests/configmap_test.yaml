@@ -913,6 +913,28 @@ tests:
       - equal:
           path: data.AI_FAULT_ONSET
           value: "false"
+  - it: keeps how answers name causes off by default
+    asserts:
+      - equal:
+          path: data.AI_CAUSE_NAMING
+          value: "false"
+  - it: turns how answers name causes on from ai.causeNaming, on its own
+    set:
+      ai.causeNaming: true
+    asserts:
+      - equal:
+          path: data.AI_CAUSE_NAMING
+          value: "true"
+      - equal:
+          path: data.AI_CAUSE_QUESTIONS
+          value: "false"
+  - it: values without ai.causeNaming, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.causeNaming: null
+    asserts:
+      - equal:
+          path: data.AI_CAUSE_NAMING
+          value: "false"
 
   - it: values without ai.redaction.numbered, as an earlier chart's --reuse-values keeps them, render it off
     set:

@@ -17,6 +17,9 @@ inside the block (or at its length before it) is `cut` and asked for once more, 
 With features.alertInvestigation.verdict on too, the block also says the report's outcome and the calls that show the
 alert's symptom, and the same check and second ask hold it to the calls (investigation/verdict.py); off, nothing of it
 is asked for or read.
+
+With ai.causeNaming on too, the instruction also says how "causes" is filled (app/services/cause_naming.py); the shape and
+what reads it stay the same.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
+from app.services import cause_naming
 from app.services.investigation import numbers
 
 KINDS = ("crash", "oom", "image", "config_change", "rollout", "network_policy", "dns", "resource_limit", "quota", "node",
@@ -83,8 +87,8 @@ _OUTCOME_SAYS = (
     "down what was checked and normal and what was not looked at from the calls themselves: the block has no list of them.")
 
 
-def instruction(*, evidence: bool, hypotheses: bool, verdict: bool = False) -> str:
-    """The system prompt's last part, with the call numbers' sentence first."""
+def instruction(*, evidence: bool, hypotheses: bool, verdict: bool = False, naming: bool = False) -> str:
+    """The system prompt's last part, with the call numbers' sentence first. `naming`: with how "causes" is filled."""
     shape = (
         "{" + (_OUTCOME_SHAPE if verdict else "") + '"no_fault": false,\n'
         f' "causes": [{{"resource": "Kind/namespace/name", "kind": "{"|".join(KINDS)}", '
@@ -116,7 +120,7 @@ def instruction(*, evidence: bool, hypotheses: bool, verdict: bool = False) -> s
                 + (", and shows the hypotheses as a table under it: do not write that table yourself." if hypotheses
                    else " that is kept."))
     return (numbers.NOTE + " At the very end of the report, after the headings, add one fenced code block tagged rca "
-            "holding one JSON object:\n```rca\n" + shape + "```\n" + " ".join(says))
+            "holding one JSON object:\n```rca\n" + shape + "```\n" + (cause_naming.INVESTIGATION if naming else "") + " ".join(says))
 
 
 def _close(body: str) -> Optional[tuple[int, int]]:
