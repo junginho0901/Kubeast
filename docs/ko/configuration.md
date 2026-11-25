@@ -323,7 +323,7 @@ features:
     pastReports:             # 같은 알림의 지난 조사, 최근 30일 것(ai-alerts.md). 새 표나 칸은 없습니다
       window: false          # (alpha) true면 Alerts의 알림 창에 결론 · 원인 · 보고서와 함께 최대 다섯 개를 보여 줍니다
       model: false           # (alpha) true면 조사의 첫 입력에 표식 사이로 최대 다섯 줄을 넣습니다. evidenceCheck가 확인하고
-                             # 오브젝트 · 이벤트 · 지표를 읽은 호출이 이름을 말한 원인만입니다(켠 뒤의 조사부터 남깁니다)
+                             # 오브젝트나 이벤트를 읽은 호출이 이름을 말한 원인만입니다(켠 뒤의 조사부터 남깁니다)
     window:                  # 알림 시작 시각에서 셉니다. 끝은 늦어도 지금입니다
       metricsMinutes: 15     # 시작 앞뒤로 이만큼의 지표(1–360)
       logsMinutes: 5         # 시작 이만큼 전부터의 로그(0–1440)

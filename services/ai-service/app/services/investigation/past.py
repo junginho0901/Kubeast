@@ -12,14 +12,14 @@ of them and never a report's text. A cluster removed and registered again under 
   markers (prompt.past_block), made of the server's words and of fields held to a form: the time, that a cause was found,
   and each cause's object (Kind/namespace/name) and kind (rca.KINDS). No text of a report, a hypothesis, a label or a
   note goes in. A line is given only for an investigation whose outcome is a cause found, and a cause only when the
-  evidence check verified it, a call given for it named its object as one (names_in: the answer of a read of objects,
-  events or metrics gives the name where an object's name goes — a name that is only in a log line, a message or what
-  was asked is none), its name is a Kubernetes name of at most NAME_CHARS characters, its kind one of Kubernetes' own,
-  and only in the alert's own namespace when it has one (the investigator's token is limited to it). Which call named it
-  is kept with the cause while the switch is on (`named_by`), so an investigation made with it off gives no line. The
-  lines have no call number, so no cause of the run can rest on them. A read that fails leaves the run without them. The
-  run's audit row names the investigations it was given; while the switch is on alerts_inbox gives the run no report
-  either (asks_for_report).
+  evidence check verified it, a call given for it named its object as one (names_in: the answer of a read of the
+  cluster's own objects or events gives the name where an object's name goes — a name that is only in a log line, a
+  trace, a metric's label, a message or what was asked is none), its name is a Kubernetes name of at most NAME_CHARS
+  characters, its kind one of Kubernetes' own, and only in the alert's own namespace when it has one (the investigator's
+  token is limited to it). Which call named it is kept with the cause while the switch is on (`named_by`), so an
+  investigation made with it off gives no line. The lines have no call number, so no cause of the run can rest on them.
+  A read that fails leaves the run without them. The run's audit row names the investigations it was given; while the
+  switch is on alerts_inbox gives the run no report either (asks_for_report).
 """
 
 from __future__ import annotations
@@ -178,26 +178,27 @@ async def listed(db, item, investigation, now: datetime) -> Optional[list[dict[s
 
 # --- what a run's calls named --------------------------------------------------------------------------------------------
 
-# The reads of objects, events and metrics: their answers give an object's name where an object's name goes. Not among
-# them: the logs, which whatever runs in a container writes, the traces, whose names the applications set, the queries
-# whose answer the model shapes (k8s_jq_query, k8s_tabular_query), and the alerts, rules and lists of names
-# (verdict.NO_SYMPTOM).
+# The reads of the cluster's own objects and events, kubectl top among them (its rows are the pods and nodes there are):
+# their answers give an object's name where an object's name goes, and who may write one there the API server asks. Not
+# among them: the logs, which whatever runs in a container writes, the traces and the metrics of a store, whose names and
+# labels the applications send (one may write a kube_ metric itself, and a scrape that honors labels keeps its pod and
+# namespace), the queries whose answer the model shapes (k8s_jq_query, k8s_tabular_query), and the alerts, rules and lists
+# of names (verdict.NO_SYMPTOM).
 NAMING = frozenset({
     "issues", "k8s_get_resources", "k8s_get_resource_yaml", "k8s_describe_resource", "k8s_get_events", "timeline", "anomaly_rank",
     "resource_graph", "storage_summary", "network_policy_check", "network_policy_effective", "get_pod_metrics", "get_node_metrics",
-    "prometheus_query",
 })
 # kubectl's reads of one object by its name: an answer is that object's, so it is there.
 _BY_NAME = frozenset({"k8s_get_resources", "k8s_get_resource_yaml", "k8s_describe_resource"})
 # The fields of a listed item that hold an object's name; any other text of it (a message, a summary, a value) names none.
 _NAME_FIELDS = frozenset({
-    "name", "namespace", "exported_namespace", "node", "nodename", "node_name", "owner", "ownername", "owner_name", "pod_name",
-    "workload_name", "target",
-    *(label for labels in verdict.OBJECT_LABELS for label in labels)}) - {"app", "container", "exported_container", "service_name"}
+    "name", "namespace", "node", "nodename", "node_name", "owner", "ownername", "owner_name", "pod", "pod_name", "workload_name",
+    "target"})
 # What an object's writer fills freely: no field in them is the name of an object that was read.
 _FREE_FIELDS = frozenset({"annotations", "labels", "data", "stringData", "binaryData", "env"})
-# PromQL that writes a label itself: its answer can hold a name nothing has.
-_OWN_LABELS = re.compile(r"\b(?:label_replace|label_join|absent|absent_over_time|info)\s*\(")
+# The part of a read of objects that comes from the traces and the traffic: who calls whom (resource_graph include calls).
+# An end that is a box of the graph is in its nodes too; another has the name its trace gave it.
+_NOT_OBJECTS = frozenset({"calls"})
 NAMED_BY = "named_by"
 MAX_NAMES = 2000  # of one answer, kept while the run lasts
 
@@ -211,10 +212,10 @@ def _listed(value: Any, item: bool = False) -> Iterator[str]:
         return
     if not isinstance(value, dict):
         return
-    # an anomaly's target is an object's name in the checks of objects and metrics; in those of logs and traces it is theirs
-    other_target = "check" in value and verdict.CHECK_SOURCES.get(str(value["check"])) not in ("objects", "metrics")
+    # an anomaly's target is an object's name in the checks of objects; in those of metrics, logs and traces it is theirs
+    other_target = "check" in value and verdict.CHECK_SOURCES.get(str(value["check"])) != "objects"
     for key, part in value.items():
-        if key in answers._ABOUT or (key == "target" and other_target) or (item and key in _FREE_FIELDS):
+        if key in answers._ABOUT or key in _NOT_OBJECTS or (key == "target" and other_target) or (item and key in _FREE_FIELDS):
             continue
         if isinstance(part, (dict, list)):
             if key == "pods" and isinstance(part, list):  # "<namespace>/<pod> <status> …" of k8s_get_resources' long list
@@ -254,8 +255,6 @@ def names_in(tool: str, args: Any, raw: Any, status: Optional[str]) -> frozenset
 
 def _names_of(tool: str, args: dict, raw: Any, status: Optional[str]) -> set[str]:
     if answers.unread(tool, raw, status) is not None or answers.empty(tool, raw):
-        return set()
-    if tool == "prometheus_query" and any(_OWN_LABELS.search(v) for v in args.values() if isinstance(v, str)):
         return set()
     found = [args["resource_name"]] if tool in _BY_NAME and isinstance(args.get("resource_name"), str) else []
     if tool not in answers.RAW_TEXT_TOOLS:

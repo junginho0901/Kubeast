@@ -1204,11 +1204,11 @@ features:
       # An investigation's first message holds at most five lines of them
       # between markers: when, and the objects and kinds of the causes the
       # evidenceCheck of that time verified (none with evidenceCheck off) and
-      # a read of objects, events or metrics named (kept with the cause while
-      # this is on: an earlier investigation gives no line), in the alert's
-      # own namespace. They have no call number, so no cause can rest on
-      # them, and the run reads no stored report through alerts_inbox. The
-      # run's audit row names the investigations they are of.
+      # a read of objects or events named (kept with the cause while this is
+      # on: an earlier investigation gives no line), in the alert's own
+      # namespace. They have no call number, so no cause can rest on them,
+      # and the run reads no stored report through alerts_inbox. The run's
+      # audit row names the investigations they are of.
       model: false
     inbox:
       staleAfterHours: 8      # a firing alert with no notification for this long shows "status unknown"; twice your repeat_interval

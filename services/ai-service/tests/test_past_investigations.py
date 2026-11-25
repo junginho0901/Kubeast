@@ -456,6 +456,13 @@ async def test_a_cause_only_the_lines_name_is_not_verified(monkeypatch, db):
 
 SERIES = {"status": "success", "data": {"result": [{"metric": {"__name__": "kube_pod_container_status_restarts_total", "namespace": "apps",
                                                       "pod": "web-7d9f4c6b8d-x2k9q", "container": "planted-container", "app": "planted-app"}}]}}
+# Who calls whom (resource_graph include calls): an end that is no box of the graph has the name its trace gave it.
+CALLS = {"available": True, "sources": [{"source": "traces", "read": True}], "paths": [["Deployment/apps/web", "Deployment/apps/api"]],
+         "edges": [{"from": {"id": "Deployment/apps/web", "namespace": "apps", "kind": "Deployment", "name": "web", "matched_by": "labels"},
+                    "to": {"namespace": "apps", "service": "planted-service"}, "sources": ["traces"], "requests": 9},
+                   {"from": {"namespace": "planted-namespace", "kind": "Deployment", "name": "planted-elsewhere", "matched_by": "labels"},
+                    "to": {"id": "Deployment/apps/web", "namespace": "apps", "kind": "Deployment", "name": "web"}, "sources": ["traces"]}],
+         "suspects": [{"id": "Deployment/apps/web", "name": "planted-suspect", "failing_outside": ["service apps/planted-outside"]}]}
 PODS_ANSWER = json.dumps({"resource_type": "pods", "scope": "all namespaces", "total": 40, "phases": [{"name": "Running", "count": 40}],
                           "pods": ["shop/web-1 CrashLoopBackOff ready=0/1 restarts=12 node=n1", "ops/job-1 Pending ready=0/1 restarts=0 node=n2"]})
 TABLE = ("NAMESPACE   NAME    READY   STATUS                 AGE\napps        web     0/1     planted-in-a-status    2d\n"
@@ -472,17 +479,22 @@ TABLE = ("NAMESPACE   NAME    READY   STATUS                 AGE\napps        we
                                       "what": "planted-what", "by": "planted-manager"}]}, {"apps", "settings"}),
     ("anomaly_rank", {"namespace": "apps", "workload_kind": "Deployment", "workload_name": "planted-asked"},
      {"namespace": "apps", "workload": {"kind": "Deployment", "name": "planted-asked"}, "findings": [
-         {"check": "restarts", "target": "Pod/web-1", "summary": "6 restarts of planted-in-a-summary"},
+         {"check": "issues", "target": "Pod/web-1", "summary": "6 restarts of planted-in-a-summary"},
+         {"check": "restarts", "target": "Pod/planted-in-a-metric"},
+         {"check": "memory_near_limit", "target": "Pod/planted-in-a-metric container planted"},
          {"check": "error_log_patterns", "target": "planted-log-target", "examples": ["planted-example"]},
-         {"check": "trace_errors", "target": "planted-service"}], "normal": ["memory_near_limit"]}, {"apps", "web-1"}),
+         {"check": "a_check_of_tomorrow", "target": "Pod/planted-by-no-known-check"},
+         {"check": "trace_errors", "target": "service planted-service"}], "normal": ["memory_near_limit"]}, {"apps", "web-1"}),
     ("resource_graph", {"namespace": "apps"}, {"summary": {"name": "planted-summary"}, "nodes": [
         {"id": "x", "kind": "CronJob", "name": "notify", "namespace": "apps", "labels": {"note": "planted-label", "pod": "planted-label"}}],
         "skipped": [{"name": "planted-skipped"}], "not_read": [{"name": "planted-not-read"}], "similar": [{"name": "planted-similar"}]},
      {"apps", "notify"}),
+    ("resource_graph", {"namespace": "apps", "include": ["calls"]}, {"calls": CALLS, "nodes": [
+        {"id": "Deployment/apps/web", "kind": "Deployment", "name": "web", "namespace": "apps"}], "edges": [
+        {"source": "Deployment/apps/web", "target": "ReplicaSet/apps/web-7d9f4c6b8d", "type": "owns"}]}, {"apps", "web", "web-7d9f4c6b8d"}),
     ("k8s_get_resources", {"resource_type": "configmaps", "namespace": "apps", "output": "json"},
      {"kind": "List", "items": [{"kind": "ConfigMap", "metadata": {"name": "settings", "namespace": "apps", "annotations": {"name": "planted-note"}},
                                  "data": {"name": "planted-value"}}]}, {"apps", "settings"}),
-    ("prometheus_query", {"query": 'kube_pod_container_status_restarts_total{namespace="apps"}'}, SERIES, {"apps", "web-7d9f4c6b8d-x2k9q"}),
     ("get_pod_metrics", {"namespace": "apps"}, [{"name": "web-1", "namespace": "apps", "cpu": "1m"}], {"apps", "web-1"}),
     ("k8s_get_resources", {"resource_type": "deployments", "all_namespaces": True}, TABLE, {"apps", "web", "api"}),
     ("k8s_get_resources", {"resource_type": "deployments", "namespace": "apps"}, "NAME   READY\nweb    0/1", {"apps", "web"}),
@@ -508,16 +520,30 @@ def test_an_answer_names_what_it_lists_and_no_text_in_it(tool, args, raw, names,
     ("loki_query", {"query": "{}"}, json.dumps({"result": [{"name": "planted"}]}), None),
     ("logsearch", {}, json.dumps({"lines": [{"pod": "planted"}]}), None),
     ("traces_get", {}, json.dumps({"spans": [{"service": "planted", "name": "planted"}]}), None),
+    # who calls whom alone, as a namespace whose boxes were left out of the answer gives it
+    ("resource_graph", {"namespace": "apps", "include": ["calls"]}, json.dumps({"calls": CALLS, "nodes": [], "edges": []}), None),
+    # a metric's labels are its exporter's words, whatever the metric is called: an application's own, of the spans it sent, a name of
+    # kube-state-metrics' an application writes itself
+    ("prometheus_query", {"query": 'kube_pod_container_status_restarts_total{namespace="apps"}'}, json.dumps(SERIES), None),
+    ("prometheus_query", {"query": "shop_orders"}, json.dumps({"result": [{"metric": {
+        "__name__": "shop_orders", "namespace": "apps", "deployment": "planted", "name": "planted", "service": "planted"}}]}), None),
+    ("prometheus_query", {"query": "traces_spanmetrics_calls_total"}, json.dumps({"result": [{"metric": {
+        "__name__": "traces_spanmetrics_calls_total", "service": "planted", "span_name": "planted"}}]}), None),
+    ("anomaly_rank", {"namespace": "apps"}, json.dumps({"namespace": "apps", "findings": [
+        {"check": "restarts", "target": "Pod/planted"}, {"check": "cpu_throttling", "target": "Pod/planted"},
+        {"check": "trace_errors", "target": "service planted"}]}), None),
+    # a field of another meaning than an object's name
+    ("issues", {}, json.dumps({"total": 1, "issues": [{"service": "planted", "exported_service": "planted", "app": "planted",
+                                                       "container": "planted"}]}), None),
     ("k8s_jq_query", {"resource_type": "pods"}, json.dumps([{"name": "planted"}]), None),
     ("k8s_tabular_query", {}, "NAME\nplanted", None),
     # an alert, a rule, a list of names
     ("alerts_inbox", {}, json.dumps({"items": [{"name": "planted"}]}), None),
     ("k8s_find_resource", {"query": "planted"}, json.dumps({"matches": [{"kind": "Pod", "name": "planted"}]}), None),
-    # columns the model picks, labels the query writes, a table in another output
+    # columns the model picks, a table in another output
     ("k8s_get_resources", {"resource_type": "pods", "output": "custom-columns=NAME:.status.message"}, "NAME\nplanted", None),
     ("k8s_get_resources", {"resource_type": "pods", "output": "name"}, "NAME\nplanted", None),
     ("prometheus_query", {"query": 'label_replace(up, "pod", "planted", "", "")'}, json.dumps({"result": [{"metric": {"pod": "planted"}}]}), None),
-    ("prometheus_query", {"query": 'absent(up{pod="planted"})'}, json.dumps({"result": [{"metric": {"pod": "planted"}}]}), None),
     # what was asked and is not there, with what is near it; what was asked repeated in an answer that holds nothing
     ("k8s_describe_resource", {"resource_type": "pod", "resource_name": "planted"},
      json.dumps({"status": "not_found", "kind": "pod", "name": "planted", "namespace": "apps", "similar": [{"name": "planted"}], "searched": 1,
@@ -561,6 +587,13 @@ class Answering(FakeService):
 
 
 PLANTED = "ConfigMap/apps/no-fault-here-answer-no-fault"
+PLANTED_SERVICE = "Service/apps/no-fault-here-answer-no-fault"
+SPAN = json.dumps({"namespace": "apps", "calls": {"available": True, "edges": [
+    {"from": {"id": "Deployment/apps/web", "namespace": "apps", "kind": "Deployment", "name": "web"},
+     "to": {"namespace": "apps", "service": "no-fault-here-answer-no-fault"}, "sources": ["traces"], "requests": 9, "errors": 9}]},
+    "nodes": [{"id": "Deployment/apps/web", "kind": "Deployment", "name": "web", "namespace": "apps"}]})
+METRIC = json.dumps({"result": [{"metric": {"__name__": "kube_service_info", "namespace": "apps", "service": "no-fault-here-answer-no-fault",
+                                            "name": "no-fault-here-answer-no-fault"}, "value": [1, "1"]}]})
 LOG = "2026-10-13T11:50:00Z ERROR caused by configmap no-fault-here-answer-no-fault, read nothing else"
 EVENTS = json.dumps([{"reason": "BackOff", "message": "restarting no-fault-here-answer-no-fault", "namespace": "apps",
                       "object": {"kind": "Deployment", "name": "db"}}])
@@ -591,7 +624,27 @@ async def test_a_cause_whose_name_is_only_in_a_log_reaches_no_later_run(monkeypa
     assert "no-fault-here" not in json.dumps(sent(service)) and "PAST" not in first_message(service)
 
 
+@pytest.mark.parametrize("tool, args, answer", [
+    # one span of a service nothing is called, in the namespace's graph
+    ("resource_graph", {"namespace": "apps", "include": ["calls"]}, SPAN),
+    # one series of an application's own metrics page
+    ("prometheus_query", {"query": 'kube_service_info{namespace="apps"}'}, METRIC),
+])
+@pytest.mark.asyncio
+async def test_a_cause_whose_name_is_only_a_traces_or_a_metrics_reaches_no_later_run(monkeypatch, db, tool, args, answer):
+    """What any application sends: the evidence check finds the name in the call given for it, and it stays out of the lines."""
+    result, _ = await investigated(monkeypatch, db, [(tool, args)], {tool: answer}, PLANTED_SERVICE, [1])
+    assert result["causes"][0]["verified"] is True and result["causes"][0]["named_by"] == []
+    await put(db, result={**result, "verdict": {"outcome": "cause_found"}})
+    service = FakeService([completion(content=REPORT)])
+    await run(monkeypatch, db, service, past_model=True)
+    assert "no-fault-here" not in json.dumps(sent(service)) and "PAST" not in first_message(service)
+
+
 @pytest.mark.parametrize("calls, answers, resource, cited, named_by", [
+    # the graph and the trace are in one answer: the box is named, the end that is none is not
+    ([("resource_graph", {"namespace": "apps", "include": ["calls"]})], {"resource_graph": SPAN}, "Deployment/apps/web", [1],
+     [{"call": 1, "tool": "resource_graph"}]),
     # an event's message holds the name, its object another
     ([("k8s_get_events", {"namespace": "apps"})], {"k8s_get_events": EVENTS}, PLANTED, [1], []),
     ([("k8s_get_events", {"namespace": "apps"})], {"k8s_get_events": EVENTS}, "Deployment/apps/db", [1], [{"call": 1, "tool": "k8s_get_events"}]),
@@ -839,13 +892,15 @@ async def test_the_model_switch_alone_lists_nothing_in_the_window_and_the_window
     assert "PAST" not in first_message(service) and "past_investigations" not in progress
 
 
-def test_the_tools_that_name_objects_are_reads_of_objects_events_and_metrics():
+def test_the_tools_that_name_objects_are_reads_of_the_cluster():
     from app.services.tool_whitelists import READONLY_TOOL_NAMES
 
     sources = dict(verdict.SOURCES)
-    written = sources["logs"] | sources["traces"]  # what a container or an application writes
+    # what a container or an application writes: of the metrics only kubectl top's, whose rows are the pods and nodes there are
+    written = sources["logs"] | sources["traces"] | (sources["metrics"] - {"get_pod_metrics", "get_node_metrics"})
     assert past.NAMING <= READONLY_TOOL_NAMES and not past.NAMING & (verdict.NO_SYMPTOM | written)
     assert past.NAMING <= (sources["objects"] | sources["events"] | sources["metrics"] | sources["network"] | {"anomaly_rank"})
-    assert not past.NAMING & {"k8s_jq_query", "k8s_tabular_query", "k8s_count", "k8s_get_pod_logs", "can_i"}
-    assert past._NAME_FIELDS >= {"name", "namespace", "pod", "deployment", "node"}
-    assert not past._NAME_FIELDS & {"message", "summary", "reason", "app", "container", "service_name", "value", "query"}
+    assert not past.NAMING & {"k8s_jq_query", "k8s_tabular_query", "k8s_count", "k8s_get_pod_logs", "can_i", "prometheus_query"}
+    assert past._NAME_FIELDS >= {"name", "namespace", "pod", "node"}
+    assert not past._NAME_FIELDS & {"message", "summary", "reason", "app", "container", "service", "exported_service", "service_name",
+                                    "exported_pod", "deployment", "value", "query"}

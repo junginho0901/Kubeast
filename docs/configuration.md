@@ -335,7 +335,7 @@ features:
     pastReports:             # the same alert's earlier investigations, the last 30 days' (ai-alerts.md); no new table or column
       window: false          # (alpha) true: the alert's window in Alerts lists at most five, with their outcome, causes and report
       model: false           # (alpha) true: an investigation's first message holds at most five lines of them between markers; the causes
-                             # evidenceCheck verified and an object, event or metric read named only (kept from then on)
+                             # evidenceCheck verified and a read of objects or events named only (kept from then on)
     window:                  # counted from the alert's start; ends are never past now
       metricsMinutes: 15     # metrics this long either side of the start (1–360)
       logsMinutes: 5         # logs from this long before the start (0–1440)
