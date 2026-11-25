@@ -984,12 +984,12 @@ def answering(raws, *replies):
     return service
 
 
-async def run_of(monkeypatch, calls, text, labels, **switches):
+async def run_of(monkeypatch, calls, text, labels, audits=None, **switches):
     """A run whose model makes `calls` ((tool, args, raw answer)) and answers `text`, twice when it is asked again."""
     service = answering([raw for _, _, raw in calls],
                         completion(calls=[tool_call(f"c{i}", tool, args) for i, (tool, args, _) in enumerate(calls)]),
                         completion(content=text), completion(content=text))
-    install_loop(monkeypatch, service, [])
+    install_loop(monkeypatch, service, [] if audits is None else audits)
 
     async def all_offered(tools, svc):
         return tools
@@ -1161,6 +1161,13 @@ async def test_a_line_made_to_read_as_a_tools_answer_is_a_log_line_and_is_in_no_
     (json.dumps({"error": "권한 없음: 'k8s_get_pod_logs'는 read 역할에서 사용할 수 없습니다."}, ensure_ascii=False),
      "권한 없음: 'k8s_get_pod_logs'는 read 역할에서 사용할 수 없습니다.", None),
     (json.dumps({"status": "forbidden", "reason": "pods/log", "hint": "x"}), "forbidden", "forbidden"),
+    # a grant limited to namespaces, refused before tool-server (permissions.namespace_scope_error)
+    (json.dumps({"status": "forbidden", "message": "forbidden: namespace 'db' is outside your grant on self (apps)"}, ensure_ascii=False), "forbidden", "forbidden"),
+    (json.dumps({"status": "forbidden", "message": "forbidden: namespace is required; your grant on self is limited to namespaces apps"}), "forbidden", "forbidden"),
+    # not as ai-service writes it: other bytes, another key
+    ('{"status":"forbidden","message":"forbidden: namespace is required; your grant on self is limited to namespaces apps"}', None, None),
+    (json.dumps({"status": "forbidden", "message": "forbidden: namespace is required; your grant on self is limited to namespaces apps", "level": "warn"}), None, None),
+    (json.dumps({"status": "forbidden", "message": "forbidden: no"}), None, None),
     (not_found("web-1"), None, "not_found"), (not_found("web-1", searched_truncated=True), None, "not_found"),
     (json.dumps({"status": "container_required", "pod": "p", "namespace": "n", "containers": ["a"], "hint": "x"}), None, "container_required"),
     (json.dumps({"status": "no_previous", "pod": "p", "namespace": "n", "container": "a", "hint": "x"}), None, "no_previous"),
@@ -1181,6 +1188,12 @@ async def test_a_raw_text_tool_that_failed_or_was_refused_is_a_failed_call(monke
         out, _ = await run_of(monkeypatch, [("k8s_get_pod_logs", {"pod_name": "web-1"}, raw)], NONE_FOUND, {"pod": "web-1"})
         assert out["tool_calls"][0]["error"] == error
         assert {"call": 1, "tool": "k8s_get_pod_logs", "reason": "failed", "detail": error} in out["result"]["verdict"]["not_looked_at"]
+    # the investigator's own grant refused the read: not an answer that names the alert's namespace
+    grant = json.dumps({"status": "forbidden", "message": "forbidden: namespace 'db' is outside your grant on self (apps)"}, ensure_ascii=False)
+    audits = []
+    out, _ = await run_of(monkeypatch, [("k8s_get_pod_logs", {"pod_name": "db-0", "namespace": "db"}, grant)], NONE_FOUND, {}, audits=audits)
+    assert out["tool_calls"][0]["error"] == "forbidden" and out["result"]["verdict"]["outcome"] == "cannot_tell"
+    assert [(a["result"], a["error"]) for a in audits if a["action"] == "ai.tool.call"] == [("failure", "forbidden")]
     # a replay's own refusal is one of ai-service's, whatever the tool
     miss = json.dumps({"error": "No recorded answer", "status": "replay_miss"})
     monkeypatch.setattr(tool_replay, "call_fields", lambda service, ran: {"replay": True, "replay_hit": False})
