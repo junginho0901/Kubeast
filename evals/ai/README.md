@@ -373,8 +373,8 @@ Before a round: `features.alertInvestigation` on with a webhook token and `maxPe
 and `scripts/kind-logsearch.sh up`. For the real path, the add-on with the rules, and the second cluster's Prometheus
 and Alertmanager as `deploy/kind/second-cluster.yaml` and `deploy/kind/alertmanager.yaml` have them. With
 `dedupeHours` at its 24, a real alert whose labels already fired in that window folds into the earlier investigation,
-which the row says; posted alerts never fold. The alert path has not run on kind yet: its waits and the words of the
-text check are first guesses.
+which the row says; posted alerts never fold. The alert path's first round on the kind dev install, of hard cases with
+posted alerts, ended on 2026-11-24; its waits and the words of the text check are the first guesses from before it.
 
 ## The second scoring
 

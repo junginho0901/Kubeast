@@ -205,9 +205,15 @@ ai:
                            # (in-cluster Ollama, internal LLM gateway).
                            # api_key_env is OPENAI/ANTHROPIC/GEMINI_API_KEY, CLAUDE_CODE_OAUTH_TOKEN (claude-code only) or KUBEAST_AI_KEY_*
   redaction:
+    enabled: true          # credentials are masked in what leaves for the model: tool results, log analysis, resource explanations and the floating
+                           # chat's page. A Secret's data is stripped either way, and the screens are not affected
+    pii: false             # true: e-mail addresses and phone, resident registration and card numbers too
     numbered: false        # (alpha) with redaction.pii: every personal-data kind as its kind and a number per chat answer or investigation (<PHONE_1>),
                            # writes holding those refused, the asker's chat answer shows the values in their place;
                            # off: <EMAIL_n> within one text, <REDACTED:phone>, <REDACTED:rrn>, <REDACTED:card>, no value shown
+    disable: []            # rules left out: key_name, private_key, url_credentials, authorization, jwt, aws_key, provider_key, email, phone, rrn, card.
+                           # Error messages on screen and in the audit log, and the debugDump lines, get every credential rule whatever
+                           # enabled and disable say
   timelineChanges: false   # (alpha) offer the AI tool timeline's changes view (what changed in a window, no value read) and the chat's instruction to read it first
   timelineChangesMore: false # (alpha) that view also lists, in a named namespace, Jobs made, NetworkPolicy and Service writes and replica counts
                            # set (metadata only, four or five more lists a call); alone it opens nothing; off: as before
@@ -232,6 +238,7 @@ ai:
     maxSteps: 20           # (beta) the model calls one chat answer may make, 1 to 100 (a number outside is the nearer end); the last may call
                            # no tool and answers from what was read. More steps can cost more tokens: the chat token budgets are checked when
                            # a turn starts (features.md). A Claude subscription: providers.claudeCode.maxTurns, then one call without tools
+  debugDump: false         # true: model responses, tool arguments and tool results go to ai-service's log, masked and cut in length. For debugging only
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: Claude Code runs per ai-service server (memory); maxConcurrentTotal: across every replica
@@ -270,7 +277,7 @@ gateway:
     nodePort: 30333
   trustedProxies: []      # CIDRs of front proxies (Ingress controller, LB) — the client address in the audit log is read from behind them
   allowedOrigins: []      # browser origins to open the API and WebSocket to besides the gateway's own host and the Ingress host (none = same host only)
-  servedByHeader: false   # true: every answer carries X-Kubeast-Gateway with the gateway pod's name, for rollout tests (off: clients would see the pod names)
+  servedByHeader: false   # (alpha) true: every answer carries X-Kubeast-Gateway with the gateway pod's name, for rollout tests (off: clients would see the pod names)
   accessLog:
     upstreamTimes: false  # true: each access log line also gives the request's time, the service's connect, header and response times (s), its address and the client's port
   preStopSeconds: null    # the gateway pods' preStop wait (grace period = this + 30; 0 = none); null = podShutdown.preStopSeconds, raised to 25 while above 0 behind an AWS ALB that sends to pod IPs (ingress below with alb.ingress.kubernetes.io/target-type: ip)
@@ -287,7 +294,12 @@ ingress:
   # annotations:
   #   alb.ingress.kubernetes.io/target-type: ip
 
-# AI switches added in 0.7.9. With all of them off, the model's prompts and tool definitions are as in 0.7.8.
+# AI switches added in 0.7.9. With all of them off, the model's prompts and tool definitions are as in 0.7.8, but for the changes with no
+# switch: an alert reaches the model as its rule's expression, a chat question is held to one output form's tools only when it asks for that
+# form, a Gemini model's calls go back with their thought signatures, on provider anthropic a call after a tool loop keeps the loop's tools
+# and calls none of them, on a Claude subscription an alert investigation's closing call and second ask hold the tool results between
+# markers, a chat answer's last model call calls no tool and is told to answer (ai.chat.maxSteps), and Claude Code receives
+# every prompt as written.
 # (alpha): may change or go without notice. More in ai-alerts.md and features.md
 features:
   alertInvestigation:
@@ -299,8 +311,8 @@ features:
                              # given the same way; writes the windows too
     ledger: true             # (alpha) true: the report ends with a block of causes, path, ruled out and hypotheses, each closed with the
                              # calls for and against it, kept apart and shown under the report (asked once more while one is open)
-    evidenceCheck: true      # (alpha) true: the server checks that the calls each cause names answered and hold its name, asks once more
-                             # without tools otherwise and lists what still fails as not verified; with ledger, one block and one ask
+    evidenceCheck: true      # (alpha) true: the server checks that the calls each cause names answered and hold its name, asks once more,
+                             # with no tool to call, otherwise and lists what still fails as not verified; with ledger, one block and one ask
     verdict: true            # (alpha) true, with evidenceCheck or ledger: the block also says a cause was found, no fault was found or it
                              # cannot tell, held to the calls; the server lists what was checked and normal and what was not looked at
     window:                  # counted from the alert's start; ends are never past now
@@ -359,7 +371,6 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | Value | Default | Stage | Not run yet, or Tested |
 | --- | --- | --- | --- |
 | `podShutdown.preStopSeconds` | 5 | beta | Tested: a server-side dry run of the default install on Kubernetes 1.29.14 (kind, the `PodLifecycleSleepAction` feature gate off), where the API server refused the seven Deployments with a preStop wait (`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`) and took all 58 objects with `0`. That run had `streams.enabled` off: with it on, `k8s-service-stream` has a preStop `sleep` of `streams.preStopSeconds` whatever `podShutdown.preStopSeconds` is, so streams need Kubernetes 1.30 or later and, below 1.33, a `streams.preStopSeconds` of 1 or more ([cluster requirements](cluster-requirements.md) §15) |
-| `podStartup.quickReady` | true | beta | A pod of each server deleted by hand and a node drain on the kind dev install, how long the ModelConfig controller's rollout takes, and the probes' requests and log lines over a quiet day |
 | `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | The users turned off in a test install |
 | `replicas.k8sService` and `replicas.toolServer` above 1 | 1 | alpha | The sizes for 2 and 3 k8s-service pods |
 | `autoscaling.<service>` | off | alpha | Tested: on EKS 1.35, HPAs on k8s-service and the gateway went from 2 to 3 pods and back, and were turned on and off, with no request through the load balancer failing |
@@ -374,6 +385,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | Tested: the stream-caps e2e on the kind dev install with the defaults (2026-11-19): the 21st terminal and followed log of one account refused, the screen saying why, and a new one opened once one closed |
 | `multicluster.maxStreamsPerServer` | 443 | beta | The cap reached on the kind dev install, with the screen saying why. The default comes from a load run there (2026-11-22) that held 800 terminals and followed logs open on one pod with no cap (about 0.37 MiB each, 79 % of 512 Mi at 800) |
 | `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters`, in the `auth` settings beside `customRoles` | false, [] | alpha | Tested: the whole e2e with it on, twice on the kind dev install with no failure, and 100 people opening the screens at once with no error |
+| `podStartup.quickReady` | true | beta | A pod of each server deleted by hand and a node drain on the kind dev install, how long the ModelConfig controller's rollout takes, and the probes' requests and log lines over a quiet day |
 | `ai.chat.maxSteps` | 20 | beta | A chat question that reaches it, on the kind dev install, with an API key and on a Claude subscription |
 | `ai.refuseRepeatedReads` | false | alpha | The AI evaluation (`scripts/ai-eval.py`) with it off and on, and a run on the kind dev install with it on |
 | `ai.toolResultDetails` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
@@ -387,7 +399,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | The alert investigations of the AI evaluation (`scripts/ai-eval.py --alerts`) with each switch off and on, and a run on the kind dev install with them on |
 | `features.alertInvestigation.ledger`, `evidenceCheck` (on, either adds one model call to `maxSteps` when it asks again) | true, true | alpha | The alert investigations of the AI evaluation with each off and on, and a run on the kind dev install with them on |
 | `features.alertInvestigation.verdict` (with `evidenceCheck` or `ledger`; nothing with both off) | true | alpha | The alert investigations of the AI evaluation with it off and on beside `evidenceCheck`, and a run on the kind dev install with it on |
-| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | The e2e `ai-anomaly-rank.spec.ts` on the kind dev install, and the AI evaluation with it off and on |
+| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | The AI evaluation with it alone off and on. Tested: the e2e `ai-anomaly-rank.spec.ts` in a whole e2e run on a kind install with the AI switches on (2026-11-25), its four tests passing |
 | `features.nodeNeighbors.enabled` | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on, and a run on the kind dev install with it on |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | A `loki_query` on the kind dev install with it set |
 | `features.callGraph.enabled` | false | alpha | The e2e `ai-call-graph.spec.ts` on the kind dev install, and the AI evaluation with it off and on |

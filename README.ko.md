@@ -37,6 +37,7 @@ helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 \
 | 문서 | 내용 |
 | --- | --- |
 | [설치와 첫 설정](docs/ko/getting-started.md) | 설치 방법 3가지 · 제거 · 첫 접속 · 클러스터 연결 · AI 켜기 |
+| [0.7.8에서 0.7.9로 업그레이드](docs/ko/upgrade-0.7.9.md) | 업그레이드 전에 확인할 것 · 바꿔야 하는 값 · 업그레이드가 한 번 하는 일 · 되돌리기 |
 | [0.7.7에서 0.7.8로 업그레이드](docs/ko/upgrade-0.7.8.md) | 업그레이드 전에 확인할 것 · 바꿔야 하는 값 · 업그레이드가 한 번 하는 일 · 되돌리기 |
 | [변경 기록](CHANGELOG.md) | 릴리스마다 바뀐 것(0.7.8부터, 영어) |
 | [기능 한눈에](docs/ko/features.md) | AI 어시스턴트 · 멀티클러스터와 역할·권한 · 리소스 관리 · Helm · GPU · 관측성 · 인증·감사 |

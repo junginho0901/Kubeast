@@ -1114,8 +1114,8 @@ features:
     # The report ends with a block the server takes out and keeps: the causes,
     # the path from cause to symptom, what was ruled out and the hypotheses
     # weighed, each closed as cause, symptom, ruled out or blocked with the
-    # calls for and against it (asked once more without tools while one is
-    # open). The report window shows them under the report. One block with
+    # calls for and against it (asked once more, with no tool to call, while one
+    # is open). The report window shows them under the report. One block with
     # evidenceCheck: both on, the model is asked again at most once.
     ledger: true
     window:                   # counted from the alert's start; ends are never past now
@@ -1128,8 +1128,8 @@ features:
     # The report ends with a block of its causes, each with the numbers of the
     # tool calls that show it; before the report is kept, the server checks
     # that those calls answered, hold the cause's name and that it does not
-    # start after the alert. Otherwise one more model call without tools asks
-    # for the report again, and what still fails is listed under the report as
+    # start after the alert. Otherwise one more model call, which may call no
+    # tool, asks for the report again, and what still fails is listed under the report as
     # not verified. The block is taken out of the kept report and kept as the
     # report's result. One block with ledger: both on, one second ask.
     evidenceCheck: true
@@ -1168,7 +1168,8 @@ features:
   # k8s.traces.query); without one, its checks are listed as not run. Off: the
   # route answers 404, reads nothing, the AI is not offered the tool and the
   # chat's system prompt and the MCP tool list do not name it.
-  # Stage: beta, not run yet: the e2e ai-anomaly-rank.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
+  # Stage: beta, tested: the e2e ai-anomaly-rank.spec.ts in a whole e2e run on a kind install (2026-11-25);
+  # not run yet: the AI evaluation with it alone off and on (docs/configuration.md "Stages of new values").
   anomalyRank:
     enabled: true
     maxQueries: 12           # store queries one answer may make, every one counted; a metric check is one query over both windows, from 12 up three are kept for the call order (features.callGraph), and the log checks' reads of one line (at most two) come from what is left: 14 makes room for all of them when every store answers
