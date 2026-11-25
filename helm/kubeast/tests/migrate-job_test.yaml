@@ -45,6 +45,33 @@ tests:
             secretRef:
               name: kubeast-secrets
 
+  # auth-service refuses to start with OIDC on and no OIDC_CLIENT_SECRET, before it looks at MIGRATE_ONLY; the Job has none.
+  - it: runs with OIDC off whatever auth.oidc says, so it asks for no client secret, with auth.oidc.existingSecret too
+    template: migrate-job.yaml
+    set:
+      migrations.mode: job
+      auth.oidc.enabled: true
+      auth.oidc.issuerUrl: https://idp.example.com
+      auth.oidc.clientId: kubeast
+      auth.oidc.existingSecret: company-oidc
+      auth.oidc.redirectUrl: https://kubeast.example.com/api/v1/auth/oidc/callback
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OIDC_ENABLED
+            value: "false"
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OIDC_ENABLED
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OIDC_ISSUER_URL
+            value: https://idp.example.com
+
   - it: ends the Job after 10 minutes, so a database it cannot reach fails the hook instead of retrying past Helm's timeout
     template: migrate-job.yaml
     set:
