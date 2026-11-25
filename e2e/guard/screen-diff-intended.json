@@ -1,3 +1,32 @@
 {
-  "rules": []
+  "rules": [
+    {
+      "screen": "^(default|dark|light) · /cluster/resource-graph on (self|default|test2)$",
+      "why": "The Resource Graph's zoom, Fit View and interactivity buttons sit in a row at the bottom centre (frontend/src/pages/ResourceGraph.tsx, 0ccf607e9), where v0.7.8 drew them in the bottom-left corner under the legend.",
+      "pr": "#1077"
+    },
+    {
+      "screen": "^(default|dark|light) · /gateway/(backendtlspolicies|gatewayclasses|gateways|grpcroutes|httproutes|policies|referencegrants) on (self|default|test2)$",
+      "within": "[data-testid=\"sidebar-nav\"] a[href=\"/gateway/httproutes\"] > svg",
+      "why": "The sidebar's HTTPRoutes icon (Route, frontend/src/components/kindIcons.ts) is drawn mirrored by lucide-react 1.77.0 (frontend/package-lock.json, 1767b08df), where v0.7.8 had 1.70.0.",
+      "pr": "#1075"
+    },
+    {
+      "screen": "^(default|dark|light) · /workloads/(cronjobs|daemonsets|deployments|hpas|jobs|pdbs|pods|replicasets|statefulsets|vpas) on (self|default|test2)$",
+      "within": "[data-testid=\"sidebar-nav\"] a[href=\"/workloads/cronjobs\"] > svg",
+      "why": "The sidebar's CronJobs icon (CalendarClock, frontend/src/components/kindIcons.ts) is drawn with a smaller clock by lucide-react 1.77.0 (frontend/package-lock.json, 1767b08df), where v0.7.8 had 1.70.0.",
+      "pr": "#1075"
+    },
+    {
+      "screen": "^(default|dark|light) · drawer CronJob \\(namespace under test\\)$",
+      "within": "div[class*=\"fixed\"][class*=\"inset-y-0\"][class*=\"right-0\"] div.items-start.justify-between > div.min-w-0 > div.mb-1 > svg",
+      "why": "The CronJob drawer's kind icon (CalendarClock, frontend/src/components/resource-detail/ResourceDetailHeader.tsx) is drawn with a smaller clock by lucide-react 1.77.0 (frontend/package-lock.json, 1767b08df), where v0.7.8 had 1.70.0.",
+      "pr": "#1075"
+    },
+    {
+      "screen": "^((default|dark|light) · /alerts on self|default · /alerts on default)$",
+      "why": "A long alert name is cut to two lines (frontend/src/pages/alerts/AlertInbox.tsx, 81f6eda1e), where v0.7.8 drew all of it, on a third line: block beside line-clamp-2 turned the cut off. The rows under it move up and the fitting table can hold one more.",
+      "pr": "#1087"
+    }
+  ]
 }

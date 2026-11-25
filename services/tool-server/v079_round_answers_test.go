@@ -13,7 +13,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
 
-// The v0.7.9 switches tool-server reads or passes on, each unset: what the chart renders by default.
+// The v0.7.9 switches tool-server reads or passes on, each unset: what the chart renders with them set off.
 var v079ToolServerSwitches = []string{
 	"AI_TIMELINE_CHANGES", "ALERT_INVESTIGATION_ENABLED", "ALERT_INVESTIGATION_CHANGES_FIRST", "CALL_GRAPH_ENABLED",
 	"ANOMALY_RANK_ENABLED", "AI_TOOL_RESULT_DETAILS", "AI_TOOL_RESULTS_JSON", "LOG_SEARCH_QUERY_MAX_BYTES", "REDACTION_NUMBERED",

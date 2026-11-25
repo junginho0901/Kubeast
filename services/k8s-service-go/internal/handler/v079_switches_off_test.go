@@ -19,7 +19,7 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
-// The v0.7.9 switches k8s-service reads, each unset: what the chart renders by default.
+// The v0.7.9 switches k8s-service reads, each unset: what the chart renders with them set off.
 var v079Switches = []string{"ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED", "AI_TIMELINE_CHANGES", "AI_TIMELINE_CHANGES_MORE",
 	"ALERT_INVESTIGATION_CHANGES_FIRST", "NODE_NEIGHBORS_ENABLED"}
 

@@ -215,7 +215,7 @@ function rowOf(user: string, request: string, route: string, screens: Set<string
   const leftOut = sorted.real.length > 0 && rowsLeftOut(a, n, b)
   const tail = sorted.real.length > 0 ? tailCopies(a, n, b) : () => false
   for (const d of sorted.real) {
-    const rule = ignored(route, d.cell, user, String(n.status), clusterOf(request), leftOut, tail(d.cell))
+    const rule = ignored(route, d.cell, user, String(n.status), clusterOf(request), leftOut, tail(d.cell), d)
     if (rule) known.push({ ...d, why: rule.why, pr: rule.pr })
     else real.push(d)
   }

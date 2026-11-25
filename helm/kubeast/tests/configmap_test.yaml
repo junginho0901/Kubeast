@@ -379,14 +379,14 @@ tests:
           path: data.AI_CHAT_MAX_STEPS
           value: "20"
 
-  - it: keeps the rule cards off for the chat and investigations by default, with no cards added or removed
+  - it: renders the rule card switches as the chart's defaults, with no cards added or removed
     asserts:
       - equal:
           path: data.AI_RULE_CARDS_CHAT
           value: "false"
       - equal:
           path: data.AI_RULE_CARDS_INVESTIGATIONS
-          value: "false"
+          value: "true"
       - equal:
           path: data.AI_RULE_CARDS_SYMPTOMS
           value: "false"
@@ -739,17 +739,17 @@ tests:
           path: data.ALERT_INVESTIGATION_MANUAL_DAILY_TOKEN_BUDGET
           value: "150000"
 
-  - it: keeps the investigation rules and step 0 off with the windows of 15 minutes, 5 minutes and 4 hours by default
+  - it: renders the investigation rules and step 0 as the chart's defaults, with the windows of 15 minutes, 5 minutes and 4 hours
     asserts:
       - equal:
           path: data.ALERT_INVESTIGATION_RULES
-          value: "false"
+          value: "true"
       - equal:
           path: data.ALERT_INVESTIGATION_CHANGES_FIRST
-          value: "false"
+          value: "true"
       - equal:
           path: data.ALERT_INVESTIGATION_NARROW_FIRST
-          value: "false"
+          value: "true"
       - equal:
           path: data.ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES
           value: "15"
@@ -789,11 +789,11 @@ tests:
           path: data.ALERT_INVESTIGATION_CHANGES_WINDOW_HOURS
           value: "24"
 
-  - it: keeps the investigation ledger off by default
+  - it: turns the investigation ledger on by default
     asserts:
       - equal:
           path: data.ALERT_INVESTIGATION_LEDGER
-          value: "false"
+          value: "true"
 
   - it: passes the investigation ledger when it is on
     set:
@@ -836,13 +836,13 @@ tests:
           path: data.CALL_GRAPH_ENABLED
           value: "true"
 
-  - it: keeps the step 0 narrowing off for values from a chart without it (--reuse-values)
+  - it: renders the step 0 narrowing as this chart's default for values from a chart without it (--reuse-values)
     set:
       features.alertInvestigation.narrowFirst: null
     asserts:
       - equal:
           path: data.ALERT_INVESTIGATION_NARROW_FIRST
-          value: "false"
+          value: "true"
 
   - it: keeps timeline's changes view from the AI by default and takes it from ai.timelineChanges
     asserts:
@@ -904,14 +904,14 @@ tests:
           path: data.REDACTION_NUMBERED
           value: "false"
 
-  - it: keeps the repeated read refusal and the investigation's evidence check off by default
+  - it: renders the repeated read refusal and the investigation's evidence check as the chart's defaults
     asserts:
       - equal:
           path: data.AI_REFUSE_REPEATED_READS
           value: "false"
       - equal:
           path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
-          value: "false"
+          value: "true"
 
   - it: passes the repeated read refusal and the evidence check as they are set
     set:
@@ -925,11 +925,11 @@ tests:
           path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
           value: "true"
 
-  - it: keeps the investigation's outcome off by default
+  - it: turns the investigation's outcome on by default
     asserts:
       - equal:
           path: data.ALERT_INVESTIGATION_VERDICT
-          value: "false"
+          value: "true"
 
   - it: passes the investigation's outcome as it is set
     set:
@@ -939,13 +939,13 @@ tests:
           path: data.ALERT_INVESTIGATION_VERDICT
           value: "true"
 
-  - it: values without the investigation's outcome, as an earlier chart's --reuse-values keeps them, render it off
+  - it: values without the investigation's outcome, as an earlier chart's --reuse-values keeps them, render this chart's default
     set:
       features.alertInvestigation.verdict: null
     asserts:
       - equal:
           path: data.ALERT_INVESTIGATION_VERDICT
-          value: "false"
+          value: "true"
 
   - it: keeps the tool result details off by default
     asserts:
@@ -960,6 +960,82 @@ tests:
       - equal:
           path: data.AI_TOOL_RESULT_DETAILS
           value: "true"
+
+  - it: renders every 0.7.9 AI switch off when the values set it off
+    set:
+      ai.timelineChanges: false
+      ai.refuseRepeatedReads: false
+      ai.toolResultDetails: false
+      ai.ruleCards.chat: false
+      ai.causeQuestions: false
+      ai.timelineChangesMore: false
+      ai.ruleCards.symptoms: false
+      ai.ruleCards.investigations: false
+      ai.toolResultsJSON: false
+      features.anomalyRank.enabled: false
+      features.callGraph.enabled: false
+      features.nodeNeighbors.enabled: false
+      features.alertInvestigation.rules: false
+      features.alertInvestigation.changesFirst: false
+      features.alertInvestigation.narrowFirst: false
+      features.alertInvestigation.ledger: false
+      features.alertInvestigation.evidenceCheck: false
+      features.alertInvestigation.verdict: false
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES
+          value: "false"
+      - equal:
+          path: data.AI_REFUSE_REPEATED_READS
+          value: "false"
+      - equal:
+          path: data.AI_TOOL_RESULT_DETAILS
+          value: "false"
+      - equal:
+          path: data.AI_RULE_CARDS_CHAT
+          value: "false"
+      - equal:
+          path: data.AI_CAUSE_QUESTIONS
+          value: "false"
+      - equal:
+          path: data.AI_TIMELINE_CHANGES_MORE
+          value: "false"
+      - equal:
+          path: data.AI_RULE_CARDS_SYMPTOMS
+          value: "false"
+      - equal:
+          path: data.AI_RULE_CARDS_INVESTIGATIONS
+          value: "false"
+      - equal:
+          path: data.AI_TOOL_RESULTS_JSON
+          value: "false"
+      - equal:
+          path: data.ANOMALY_RANK_ENABLED
+          value: "false"
+      - equal:
+          path: data.CALL_GRAPH_ENABLED
+          value: "false"
+      - equal:
+          path: data.NODE_NEIGHBORS_ENABLED
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_RULES
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_CHANGES_FIRST
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_NARROW_FIRST
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_LEDGER
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
+          value: "false"
+      - equal:
+          path: data.ALERT_INVESTIGATION_VERDICT
+          value: "false"
 
   # auth-service makes each group from the names as the chart does (handler/role.go); a comma, which would split the
   # list, goes as "-", which makes the same group.

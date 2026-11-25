@@ -472,7 +472,7 @@ ai:
   # (docs/configuration.md "Stages of new values").
   ruleCards:
     chat: false
-    investigations: false
+    investigations: true
     symptoms: false
     cards: []
     remove: []
@@ -1100,24 +1100,24 @@ features:
     # hypotheses and the report's six headings, in the prompt.
     # rules, changesFirst, narrowFirst, ledger, evidenceCheck, verdict and window: stage alpha, not run yet: the AI
     # evaluation's alert investigations with each off and on (docs/configuration.md "Stages of new values").
-    rules: false
+    rules: true
     # Step 0: before the first model call, the timeline tool's changes view
     # over the change window, given to the model as that call's tool result
     # (an audited tool call, no model step; on a Claude subscription in the
     # first message between markers). Writes the windows too.
-    changesFirst: false
+    changesFirst: true
     # Step 0, after the changes: anomaly_rank (features.anomalyRank) over the
     # metrics window of the alert's namespace, given the same way (an audited
     # tool call, no model step; its store queries and seconds are
     # features.anomalyRank's). Writes the windows too.
-    narrowFirst: false
+    narrowFirst: true
     # The report ends with a block the server takes out and keeps: the causes,
     # the path from cause to symptom, what was ruled out and the hypotheses
     # weighed, each closed as cause, symptom, ruled out or blocked with the
     # calls for and against it (asked once more without tools while one is
     # open). The report window shows them under the report. One block with
     # evidenceCheck: both on, the model is asked again at most once.
-    ledger: false
+    ledger: true
     window:                   # counted from the alert's start; ends are never past now
       metricsMinutes: 15      # metrics this long either side of the start (1–360)
       logsMinutes: 5          # logs from this long before the start (0–1440)
@@ -1132,14 +1132,14 @@ features:
     # for the report again, and what still fails is listed under the report as
     # not verified. The block is taken out of the kept report and kept as the
     # report's result. One block with ledger: both on, one second ask.
-    evidenceCheck: false
+    evidenceCheck: true
     # With evidenceCheck or ledger on (nothing with both off), the block also
     # says the outcome: a cause found, no fault found or cannot tell, with the
     # calls that show the alert's symptom. The server keeps cannot tell when
     # the calls do not hold what the report says, with why under the report,
     # and lists what was checked and normal and what was not looked at from
     # the run's calls.
-    verdict: false
+    verdict: true
     inbox:
       staleAfterHours: 8      # a firing alert with no notification for this long shows "status unknown"; twice your repeat_interval
     # More read-only rules for the investigator, appended to the
@@ -1168,9 +1168,9 @@ features:
   # k8s.traces.query); without one, its checks are listed as not run. Off: the
   # route answers 404, reads nothing, the AI is not offered the tool and the
   # chat's system prompt and the MCP tool list do not name it.
-  # Stage: alpha, not run yet: the e2e ai-anomaly-rank.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
+  # Stage: beta, not run yet: the e2e ai-anomaly-rank.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
   anomalyRank:
-    enabled: false
+    enabled: true
     maxQueries: 12           # store queries one answer may make, every one counted; a metric check is one query over both windows, from 12 up three are kept for the call order (features.callGraph), and the log checks' reads of one line (at most two) come from what is left: 14 makes room for all of them when every store answers
     checkTimeoutSeconds: 5   # each check
     timeoutSeconds: 20       # the whole answer

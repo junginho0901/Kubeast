@@ -197,7 +197,7 @@ data:
   ALERT_INVESTIGATION_ENABLED: {{ .Values.features.alertInvestigation.enabled | quote }}
   {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's defaults */}}
   {{- $anomalyRank := dig "anomalyRank" (dict) .Values.features }}
-  ANOMALY_RANK_ENABLED: {{ dig "enabled" false $anomalyRank | quote }}
+  ANOMALY_RANK_ENABLED: {{ dig "enabled" true $anomalyRank | quote }}
   ANOMALY_RANK_MAX_QUERIES: {{ dig "maxQueries" 12 $anomalyRank | int64 | quote }}
   ANOMALY_RANK_CHECK_TIMEOUT_SEC: {{ dig "checkTimeoutSeconds" 5 $anomalyRank | int64 | quote }}
   ANOMALY_RANK_TIMEOUT_SEC: {{ dig "timeoutSeconds" 20 $anomalyRank | int64 | quote }}
@@ -222,7 +222,7 @@ data:
   ALERT_INVESTIGATION_TIMEOUT_SECONDS: {{ .timeoutSeconds | int64 | quote }}
   ALERT_INVESTIGATION_RULES: {{ .rules | quote }}
   ALERT_INVESTIGATION_CHANGES_FIRST: {{ .changesFirst | quote }}
-  ALERT_INVESTIGATION_NARROW_FIRST: {{ dig "narrowFirst" false . | quote }}
+  ALERT_INVESTIGATION_NARROW_FIRST: {{ dig "narrowFirst" true . | quote }}
   ALERT_INVESTIGATION_LEDGER: {{ .ledger | quote }}
   ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES: {{ .window.metricsMinutes | int64 | quote }}
   ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES: {{ .window.logsMinutes | int64 | quote }}
@@ -231,7 +231,7 @@ data:
   ALERT_INVESTIGATION_LANGUAGE: {{ .language | quote }}
   ALERT_INVESTIGATION_CONSOLE_URL: {{ .consoleUrl | quote }}
   ALERT_INVESTIGATION_EVIDENCE_CHECK: {{ .evidenceCheck | quote }}
-  ALERT_INVESTIGATION_VERDICT: {{ dig "verdict" false . | quote }}
+  ALERT_INVESTIGATION_VERDICT: {{ dig "verdict" true . | quote }}
   ALERT_INBOX_STALE_HOURS: {{ .inbox.staleAfterHours | int64 | quote }}
   {{- end }}
   AUTH_INVESTIGATOR_TOKEN_URL: "http://auth-service:8004/api/v1/auth/internal/investigator-token"

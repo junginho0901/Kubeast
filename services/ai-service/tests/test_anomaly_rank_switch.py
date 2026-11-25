@@ -1,5 +1,5 @@
 """anomaly_rank is named to the model only where it is turned on (ANOMALY_RANK_ENABLED, chart
-features.anomalyRank.enabled, off by default): off, the chat's system prompt is SYSTEM_MESSAGE as it was before the tool
+features.anomalyRank.enabled, on by default): off, the chat's system prompt is SYSTEM_MESSAGE as it was before the tool
 and the MCP server does not list it; on, its three lines follow the lines they belong after. The chat's and an
 investigation's tool lists follow the cluster's features (features.GATES) either way; off, dispatch and an investigation
 answer a call of it as they did before the tool."""

@@ -222,7 +222,7 @@ ai:
                            # search does not end it (ai-alerts.md); off: as before
   ruleCards:               # per kind of failure, the checks that often find its cause and their tools (features.md "Rule cards")
     chat: false            # (alpha) true: a chat question naming a failure a card knows gets at most two cards for that turn
-    investigations: false  # (alpha) true: an alert investigation's first message holds at most two, picked by the alert's name and labels
+    investigations: true   # (alpha) true: an alert investigation's first message holds at most two, picked by the alert's name and labels
                            # off, both: the cards file is not read and the chat and investigations are as before
     symptoms: false        # (alpha) true: a card is also picked by what is said to be wrong, in English or Korean, in the question or in an alert's
                            # name, summary and description, and the cards error_rate, latency and resource_pressure are added; needs chat or investigations
@@ -287,28 +287,28 @@ ingress:
   # annotations:
   #   alb.ingress.kubernetes.io/target-type: ip
 
-# AI switches added in 0.7.9, all off by default. Off, the model's prompts and tool definitions are as in 0.7.8.
+# AI switches added in 0.7.9. With all of them off, the model's prompts and tool definitions are as in 0.7.8.
 # (alpha): may change or go without notice. More in ai-alerts.md and features.md
 features:
   alertInvestigation:
-    rules: false             # (alpha) true: the time windows below, the scope groups, facts kept apart from hypotheses and the report's
+    rules: true              # (alpha) true: the time windows below, the scope groups, facts kept apart from hypotheses and the report's
                              # six headings, in the prompt (ai-alerts.md)
-    changesFirst: false      # (alpha) true: step 0 reads the timeline's changes over the change window before the first model call (an
+    changesFirst: true       # (alpha) true: step 0 reads the timeline's changes over the change window before the first model call (an
                              # audited tool call, no model step), given as that call's tool result; writes the windows too
-    narrowFirst: false       # (alpha) true: step 0, after the changes, reads anomaly_rank (features.anomalyRank) over the metrics window,
+    narrowFirst: true        # (alpha) true: step 0, after the changes, reads anomaly_rank (features.anomalyRank) over the metrics window,
                              # given the same way; writes the windows too
-    ledger: false            # (alpha) true: the report ends with a block of causes, path, ruled out and hypotheses, each closed with the
+    ledger: true             # (alpha) true: the report ends with a block of causes, path, ruled out and hypotheses, each closed with the
                              # calls for and against it, kept apart and shown under the report (asked once more while one is open)
-    evidenceCheck: false     # (alpha) true: the server checks that the calls each cause names answered and hold its name, asks once more
+    evidenceCheck: true      # (alpha) true: the server checks that the calls each cause names answered and hold its name, asks once more
                              # without tools otherwise and lists what still fails as not verified; with ledger, one block and one ask
-    verdict: false           # (alpha) true, with evidenceCheck or ledger: the block also says a cause was found, no fault was found or it
+    verdict: true            # (alpha) true, with evidenceCheck or ledger: the block also says a cause was found, no fault was found or it
                              # cannot tell, held to the calls; the server lists what was checked and normal and what was not looked at
     window:                  # counted from the alert's start; ends are never past now
       metricsMinutes: 15     # metrics this long either side of the start (1–360)
       logsMinutes: 5         # logs from this long before the start (0–1440)
       changesHours: 4        # changes from this long before the start (1–168)
   anomalyRank:
-    enabled: false           # (alpha) true: the AI tool anomaly_rank and GET /namespaces/{namespace}/anomalies, what differs in one
+    enabled: true            # (beta) true: the AI tool anomaly_rank and GET /namespaces/{namespace}/anomalies, what differs in one
                              # namespace from the window before, ranked (cluster-requirements.md); off: the route answers 404, reads nothing
     maxQueries: 12           # store queries one answer may make, every one counted; a metric check is one query over both windows, from 12
                              # up three are kept for the call order (features.callGraph), and the log checks' reads of one line (at most
@@ -378,16 +378,16 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `ai.refuseRepeatedReads` | false | alpha | The AI evaluation (`scripts/ai-eval.py`) with it off and on, and a run on the kind dev install with it on |
 | `ai.toolResultDetails` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
 | `ai.redaction.numbered` | false | alpha | A chat on the kind dev install with it and `ai.redaction.pii` on, and the AI evaluation with it off and on |
-| `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, false, false, [], [] | alpha | The AI evaluation with `chat` and `investigations` each off and on, then with `symptoms` off and on beside them, and a run on the kind dev install with them on |
+| `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, true, false, [], [] | alpha | The AI evaluation with `chat` and `investigations` each off and on, then with `symptoms` off and on beside them, and a run on the kind dev install with them on |
 | `ai.toolResultsJSON` | false | alpha | The planted instruction cases (`evals/ai-planted/`) with it off and on and the AI evaluation with it on, against a model |
 | `ai.timelineChanges` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
 | `ai.timelineChangesMore` | false | alpha | The AI evaluation with it off and on beside `ai.timelineChanges`, and a run on the kind dev install with both on |
 | `ai.causeQuestions` | false | alpha | The AI evaluation with it off and on, the planted instruction cases with it on, and a run on the kind dev install with it on |
 | `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | `allowListOnly` on a cluster whose network plugin enforces egress rules (kind with Calico or Cilium): the chat with the model provider's address listed and without it |
-| `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | false, false, false, 15, 5, 4 | alpha | The alert investigations of the AI evaluation (`scripts/ai-eval.py --alerts`) with each switch off and on, and a run on the kind dev install with them on |
-| `features.alertInvestigation.ledger`, `evidenceCheck` (on, either adds one model call to `maxSteps` when it asks again) | false, false | alpha | The alert investigations of the AI evaluation with each off and on, and a run on the kind dev install with them on |
-| `features.alertInvestigation.verdict` (with `evidenceCheck` or `ledger`; nothing with both off) | false | alpha | The alert investigations of the AI evaluation with it off and on beside `evidenceCheck`, and a run on the kind dev install with it on |
-| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | false, 12, 5, 20, 4, 60, 10737418240 | alpha | The e2e `ai-anomaly-rank.spec.ts` on the kind dev install, and the AI evaluation with it off and on |
+| `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | The alert investigations of the AI evaluation (`scripts/ai-eval.py --alerts`) with each switch off and on, and a run on the kind dev install with them on |
+| `features.alertInvestigation.ledger`, `evidenceCheck` (on, either adds one model call to `maxSteps` when it asks again) | true, true | alpha | The alert investigations of the AI evaluation with each off and on, and a run on the kind dev install with them on |
+| `features.alertInvestigation.verdict` (with `evidenceCheck` or `ledger`; nothing with both off) | true | alpha | The alert investigations of the AI evaluation with it off and on beside `evidenceCheck`, and a run on the kind dev install with it on |
+| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | The e2e `ai-anomaly-rank.spec.ts` on the kind dev install, and the AI evaluation with it off and on |
 | `features.nodeNeighbors.enabled` | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on, and a run on the kind dev install with it on |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | A `loki_query` on the kind dev install with it set |
 | `features.callGraph.enabled` | false | alpha | The e2e `ai-call-graph.spec.ts` on the kind dev install, and the AI evaluation with it off and on |

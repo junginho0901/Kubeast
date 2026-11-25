@@ -3,14 +3,15 @@ import path from 'node:path'
 
 import { test, expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
 
-import { comparePictures, compileIntended, type IntendedRule } from './screen-compare'
+import { comparePictures, compileIntended, intendedWithin, type IntendedRule } from './screen-compare'
 import { CLUSTER, DRAWER, DRAWER_KINDS, DRAWERS, BASE, ROLES, SIDEBAR, applyFixtures, drawerTargets, openCluster, quiet, removeFixtures, track, type Tracker } from './shared'
 
 // Safety net (b), the screen comparison: the build under test against the build it replaces, picture by picture. Every
 // sidebar screen, /account and a drawer of every kind on self in each colour mode, and the sidebar on default and
 // test2, opened on both builds at the same moment with the clock fixed. Two pictures that differ are looked at again
 // (old, new, old: old differing from itself is noise) and, a minute later when each build's cache has expired, once
-// more; what still differs fails unless screen-diff-intended.json names it with a reason and a PR. A selector in
+// more; what still differs fails unless screen-diff-intended.json names it with a reason and a PR. A rule there that
+// names an element (within) covers only it, and the rest of that screen is compared. A selector in
 // screen-diff-masks.json covers a value that moves by itself, with why.
 // Needs scripts/before-stack.sh up <tag>, E2E_BEFORE_URL and E2E_SCREEN_DIFF=1; E2E_DIFF_OUT keeps the table and the
 // pictures of each difference in a directory.
@@ -18,7 +19,9 @@ import { CLUSTER, DRAWER, DRAWER_KINDS, DRAWERS, BASE, ROLES, SIDEBAR, applyFixt
 const BEFORE = (process.env.E2E_BEFORE_URL || '').replace(/\/$/, '')
 const OUT = process.env.E2E_DIFF_OUT || ''
 const read = <T>(file: string) => JSON.parse(fs.readFileSync(path.join(__dirname, file), 'utf8')) as T
-const intended = compileIntended(read<{ rules: IntendedRule[] }>('screen-diff-intended.json').rules)
+const INTENDED = read<{ rules: IntendedRule[] }>('screen-diff-intended.json').rules
+const intended = compileIntended(INTENDED)
+const within = intendedWithin(INTENDED)
 const MASKS = read<{ rules: { screen: string; selector: string; why: string }[] }>('screen-diff-masks.json').rules.map((r) => ({ ...r, screen: new RegExp(r.screen) }))
 const MODES = ['default', 'dark', 'light'] as const
 const OTHER_CLUSTERS = ['default', 'test2']
@@ -94,7 +97,7 @@ async function graphAtRest(page: Page): Promise<void> {
 // A picture once two in a row are the same, or the last of six.
 async function steady(page: Page, job: Job): Promise<Buffer> {
   await graphAtRest(page)
-  const mask = (): Locator[] => MASKS.filter((m) => m.screen.test(job.id)).map((m) => page.locator(m.selector))
+  const mask = (): Locator[] => [...MASKS.filter((m) => m.screen.test(job.id)).map((m) => m.selector), ...within(job.id)].map((s) => page.locator(s))
   let last: Buffer | null = null
   for (let i = 0; i < 6; i++) {
     const shot = await page.screenshot({ animations: 'disabled', caret: 'hide', mask: mask() })
