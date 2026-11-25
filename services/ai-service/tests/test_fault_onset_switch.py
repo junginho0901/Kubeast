@@ -137,7 +137,7 @@ def test_on_the_two_tools_say_what_since_is(monkeypatch):
         assert before[name].count(words) == 1
         assert after[name] == before[name].replace(words, words + more)
         assert "since" in more
-    assert "no since is not known, not new" in after["issues"] and "already_there" in after["anomaly_rank"] and "worse" in after["anomaly_rank"]
+    assert "no since is not known, not new" in after["issues"] and "already_there says it was failing all through the window before this one too, an hour and more" in after["anomaly_rank"] and "worse" in after["anomaly_rank"]
     # the catalog itself and the parameters are left as they are
     for kept, offered in zip(tools.K8S_READONLY_TOOLS, tools.offer_fault_onset(tools.K8S_READONLY_TOOLS), strict=True):
         assert kept["function"]["parameters"] == offered["function"]["parameters"] and kept["function"]["name"] == offered["function"]["name"]
@@ -196,7 +196,8 @@ def test_on_an_investigations_prompt_gets_two_rules_and_nothing_else_changes(rul
 
 def test_an_investigations_rules_say_when_an_older_failure_is_the_cause():
     added = inv_prompt.onset_rules(True)
-    for words in ("Say when each thing you found began", "the minutes before the start count as near it", "not known, which is not new",
+    for words in ("Say when each thing you found began", "often 15 minutes and up to an hour, so what began that long before the start counts as near it",
+                  "not known, which is not new",
                   "Look first at what began near the alert's start", "do not name it as the cause unless the alert is about it",
                   "a result shows the alert's symptom coming from it", "or it got worse near the alert's start", "it then began when it got worse"):
         assert words in added, words

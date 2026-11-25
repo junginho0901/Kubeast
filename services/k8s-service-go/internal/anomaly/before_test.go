@@ -22,6 +22,37 @@ func wantOrder(t *testing.T, res Result, want ...string) {
 	}
 }
 
+// A state was there before a window only when it failed all through the window before it, and for as long as an alert's
+// rule may wait (AlertWait): the one an alert is about began that long before the alert's start, and the window starts
+// 15 minutes before it.
+func TestWhatAnAlertWaitedForWasNotThereBefore(t *testing.T) {
+	fired := now.Add(-time.Minute)
+	alert := Window{Start: fired.Add(-15 * time.Minute), End: now}
+	hour := Window{Start: now.Add(-time.Hour), End: now}
+	day := Window{Start: now.Add(-24 * time.Hour), End: now}
+	for name, c := range map[string]struct {
+		w     Window
+		since time.Time
+		want  bool
+	}{
+		"15 minutes waited for, begun a minute before that": {alert, fired.Add(-16 * time.Minute), false},
+		"15 minutes waited for, seen late":                  {alert, fired.Add(-22 * time.Minute), false},
+		"half an hour waited for":                           {alert, fired.Add(-31 * time.Minute), false},
+		"an hour waited for":                                {alert, fired.Add(-63 * time.Minute), false},
+		"in the window":                                     {alert, fired, false},
+		"an hour and 16 minutes before":                     {alert, fired.Add(-76 * time.Minute), true},
+		"a day before":                                      {alert, fired.Add(-24 * time.Hour), true},
+		"all through the hour before":                       {hour, now.Add(-2*time.Hour - time.Second), true},
+		"in the hour before":                                {hour, now.Add(-2*time.Hour + time.Second), false},
+		"in the day before":                                 {day, now.Add(-30 * time.Hour), false},
+		"before the day before":                             {day, now.Add(-49 * time.Hour), true},
+	} {
+		if got := c.w.WasThereBefore(c.since); got != c.want {
+			t.Errorf("%s: %v", name, got)
+		}
+	}
+}
+
 // What was there before the window comes after what is new and what grew, and says so in place of "no earlier data".
 func TestAStateThereBeforeTheWindowComesAfterWhatIsNew(t *testing.T) {
 	w := Window{Start: now.Add(-time.Hour), End: now}

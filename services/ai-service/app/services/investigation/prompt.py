@@ -121,10 +121,10 @@ def onset_rules(rules: bool) -> str:
     with the rules and under "What I checked" without them."""
     heading = RULES_HEADINGS[4] if rules else REPORT_HEADINGS[1]
     return (
-        "- Say when each thing you found began and set it beside the alert's start (a rule waits before it fires, so the minutes "
-        "before the start count as near it): since where a result has it, an event's first and last time and count, a pod's restarts "
-        "with its last termination, the time of a change, the window before. A beginning no result shows is not known, which is not "
-        "new.\n"
+        "- Say when each thing you found began and set it beside the alert's start (a rule waits before it fires, often 15 minutes "
+        "and up to an hour, so what began that long before the start counts as near it): since where a result has it, an event's first "
+        "and last time and count, a pod's restarts with its last termination, the time of a change, the window before. A beginning "
+        "no result shows is not known, which is not new.\n"
         "- Look first at what began near the alert's start. What began well before it, or was the same in the window before "
         "(already_there), was already there: do not name it as the cause unless the alert is about it, a result shows the alert's "
         "symptom coming from it, or it got worse near the alert's start (more restarts or errors, fewer ready pods; it then began when "

@@ -523,8 +523,9 @@ ai:
   # first, also in the logs of workloads that are Ready, so it reads more. The
   # results of issues and anomaly_rank say from when the record shows a failing
   # object failing (since), out of the lists they read anyway, and anomaly_rank
-  # puts a state from before its window after the rest unless another check found
-  # it grown. The floating chat and the MCP server get those results, not the
+  # puts a state that was there all through the window before its own, an hour
+  # and more (an alert's rule may wait that long), after the rest unless another
+  # check found it grown. The floating chat and the MCP server get those results, not the
   # instructions. Off: the instructions and the results are as before.
   # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   faultOnset: false

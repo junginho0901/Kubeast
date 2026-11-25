@@ -9,7 +9,7 @@ import (
 )
 
 // IssueRow is what the issue check (k8s.Issue) gives a row of: the object, how bad, why, and where it was asked for
-// (with_since) from when the record shows it, with Before when that is before the window.
+// (with_since) from when the record shows it, with Before when it was there before the window (Window.WasThereBefore).
 type IssueRow struct {
 	Kind     string
 	Name     string

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -296,6 +297,52 @@ func (f *sinceAnomalies) CollectIssues(ctx context.Context, opts k8s.IssuesOptio
 		issues[3].Since = "2026-11-15T01:10:00Z"
 	}
 	return issues, err
+}
+
+// alertAnomalies' issue check finds what an alert that waited 15 minutes is about, its cause and one that another alert
+// waited an hour for, beside twelve pods that have been failing for hours.
+type alertAnomalies struct{ fakeAnomalies }
+
+func (f *alertAnomalies) CollectIssues(context.Context, k8s.IssuesOptions) ([]k8s.Issue, error) {
+	row := func(name, since string) k8s.Issue {
+		return k8s.Issue{Kind: "Deployment", Namespace: "shop", Name: name, Severity: "critical", Reason: "Unavailable", Since: since}
+	}
+	issues := []k8s.Issue{row("z-web", "2026-11-15T01:12:30Z"), row("z-db", "2026-11-15T01:11:00Z"), row("z-queue", "2026-11-15T00:26:00Z")}
+	for i := range 12 {
+		issues = append(issues, row(fmt.Sprintf("a-old-%02d", i), "2026-11-14T20:00:00Z"))
+	}
+	return issues, nil
+}
+
+// An investigation's window starts 15 minutes before the alert: what a rule waited 15 minutes or an hour for began before
+// it and is not said to have been there before, and comes before what was.
+func TestAnomaliesOfAnAlertThatWaitedDoNotCallItsCauseThereBefore(t *testing.T) {
+	f := &alertAnomalies{}
+	h := anomalyHandler(&f.fakeAnomalies, config.Config{})
+	h.anomalySrc = f
+	// the alert fired at 01:29 and the investigation asked at 01:30
+	_, res := getAnomalies(h, "/api/v1/namespaces/shop/anomalies?start=2026-11-15T01:14:00Z&end=2026-11-15T01:30:00Z&with_since=true", flowReader)
+	if len(res.Findings) != anomaly.MaxFindings || res.FindingsTotal < 15 {
+		t.Fatalf("%d of %d findings", len(res.Findings), res.FindingsTotal)
+	}
+	var states []anomaly.Finding
+	for _, fd := range res.Findings {
+		if fd.Check == anomaly.CheckIssues {
+			states = append(states, fd)
+		}
+	}
+	if len(states) < 4 {
+		t.Fatalf("%+v", res.Findings)
+	}
+	for i, fd := range states {
+		target, there, says := "Deployment/a-old-", true, "critical now (already there before the window): "
+		if i < 3 {
+			target, there, says = "Deployment/"+[]string{"z-db", "z-queue", "z-web"}[i], false, "critical now (no earlier data): "
+		}
+		if !strings.HasPrefix(fd.Target, target) || fd.AlreadyThere != there || !strings.HasPrefix(fd.Summary, says) {
+			t.Errorf("%d: %+v", i, fd)
+		}
+	}
 }
 
 // with_since: the issue check is asked for it, a state from before the window says so, and the answer is kept apart from

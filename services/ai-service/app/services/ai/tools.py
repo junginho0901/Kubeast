@@ -85,8 +85,9 @@ ISSUES_SINCE = (
 )
 ANOMALY_RANK_ORDER = "then the larger ratio, the warnings of the state now last. "
 ANOMALY_RANK_SINCE = (
-    "since on a failing object is the time from which the record shows it failing (none: not known); already_there says that is before "
-    "the window, and such a finding comes after the rest unless it has worse: another check found the same pod new or grown in the window. "
+    "since on a failing object is the time from which the record shows it failing (none: not known); already_there says it was failing all "
+    "through the window before this one too, an hour and more, and such a finding comes after the rest unless it has worse: another check "
+    "found the same pod new or grown in the window. "
 )
 
 K8S_READONLY_TOOLS: List[Dict] = [

@@ -94,6 +94,16 @@ func (w Window) Length() time.Duration { return w.End.Sub(w.Start) }
 // Before is the window of the same length that ends where w starts.
 func (w Window) Before() Window { return Window{Start: w.Start.Add(-w.Length()), End: w.Start} }
 
+// AlertWait is how long an alert's rule may wait before it fires, 15 minutes in most of the common rules and an hour in the
+// longest: what the alert is about has been failing that long at its start, around which an investigation's window is.
+const AlertWait = time.Hour
+
+// WasThereBefore reports whether a state that began at since was there before w: all through the window before it, and
+// AlertWait or longer when w starts. One that began in between is what changed, or may be what an alert waited for.
+func (w Window) WasThereBefore(since time.Time) bool {
+	return since.Before(w.Before().Start) && since.Before(w.Start.Add(-AlertWait))
+}
+
 // ParseWindow reads start and end (RFC3339, both optional). The end defaults to now, cut to the minute so that the same
 // question in the same minute is the same window; an end after now is now. The start defaults to an hour before the end.
 func ParseWindow(start, end string, now time.Time) (Window, error) {
@@ -319,12 +329,12 @@ func (w *Workload) podMatcher() string {
 // whether it is new is then not known.
 const NoEarlier = "no earlier data"
 
-// ThereBefore is said in NoEarlier's place of a state that began before the window (Finding.AlreadyThere).
+// ThereBefore is said in NoEarlier's place of a state that was there before the window (Finding.AlreadyThere).
 const ThereBefore = "already there before the window"
 
 // Finding is one thing a check found, or one target it compared. New: the window before has data and none of it there;
 // with no data in the window before it is not set, before is left out and the summary says NoEarlier. Since, where it was
-// asked for, is from when the record shows a state, AlreadyThere that this is before the window, and Worse that another
+// asked for, is from when the record shows a state, AlreadyThere that it was there before (Window.WasThereBefore), and Worse that another
 // check found its object grown in the window all the same.
 type Finding struct {
 	Check    string   `json:"check"`

@@ -847,7 +847,7 @@ func issueRows(issues []k8s.Issue, win anomaly.Window) ([]anomaly.IssueRow, stri
 		}
 		row := anomaly.IssueRow{Kind: is.Kind, Name: is.Name, Severity: is.Severity, Reason: is.Reason, Message: is.Message, Since: is.Since}
 		if since, err := time.Parse(time.RFC3339, is.Since); err == nil {
-			row.Before = since.Before(win.Start)
+			row.Before = win.WasThereBefore(since)
 		}
 		rows = append(rows, row)
 	}
