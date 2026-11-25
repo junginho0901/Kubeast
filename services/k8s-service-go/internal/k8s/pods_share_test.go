@@ -895,6 +895,73 @@ func TestAPodPageRunStartedBeforeACallerCameDoesNotAnswerIt(t *testing.T) {
 	}
 }
 
+// A build at the revision before a change answers no one who comes after it: the change moves the revision, so they have
+// a key of their own and their answer, with the change in it, while that build is still held. Each answer carries the
+// revision it was asked at; a poll at the one before gets the new answer, and one at the new one is unchanged.
+func TestAMovedRevisionGivesANewPodAnswer(t *testing.T) {
+	grants := map[string][]string{"a@example.com": {""}, "b@example.com": {""}}
+	a, b := wideCaller("a@example.com"), wideCaller("b@example.com")
+	q := PodPageQuery{Limit: 50}
+	// the later caller's build takes a place while the first holds one, on one CPU too
+	places := podRowSlots
+	podRowSlots = make(chan struct{}, 2)
+	t.Cleanup(func() { podRowSlots = places })
+	for _, sc := range podScreens {
+		t.Run(sc.name, func(t *testing.T) {
+			cs := fake.NewSimpleClientset(pagePods()...)
+			ci := newClusterInformers(cs, time.Hour, nil)
+			t.Cleanup(ci.stopNow)
+			if !ci.waitSynced(context.Background(), 5*time.Second) {
+				t.Fatal("informers did not sync")
+			}
+			s, bundle := (&clusterAPI{review: rbac(grants)}).start(t)
+			bundle.inf = ci
+			s.podClock = func() time.Time { return shareNow }
+			_, _, _, before, err := decided(s, a, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			g := watchBuilds(t, s, &buildGate{step: "rows", hold: func(nth, _ int) bool { return nth == 1 }})
+			first := askNow(func() string { return sc.ask(s, a, q) })
+			waitFor(t, "the first build has read its rows", func() bool { return g.held() == 1 })
+			was := ci.podRevision()
+			p1, err := cs.CoreV1().Pods("a").Get(context.Background(), "p1", metav1.GetOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			p1.Status.Phase = corev1.PodFailed
+			if _, err := cs.CoreV1().Pods("a").UpdateStatus(context.Background(), p1, metav1.UpdateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "the change moves the revision", func() bool { return ci.podRevision() != was })
+			_, _, _, after, err := decided(s, b, "")
+			if err != nil || after == before {
+				t.Fatalf("the revision after the change: %q, before it %q, %v", after, before, err)
+			}
+			poll := q
+			poll.Revision = before
+			later := askNow(func() string { return sc.ask(s, b, poll) })
+			waitFor(t, "the later caller has its answer while the build at the revision before is held", later.finished)
+			got := later.wait(t)
+			if want := sc.own(s, b, poll); got != want {
+				t.Errorf("the later caller:\n got %.300s\nwant %.300s", got, want)
+			}
+			g.open()
+			old := first.wait(t)
+			if !strings.Contains(old, `"revision":"`+before+`"`) || !strings.Contains(got, `"revision":"`+after+`"`) {
+				t.Errorf("revisions: the first answer's is not %s or the later one's not %s:\n%.300s\n%.300s", before, after, old, got)
+			}
+			if sc.name == "pods-page" && (strings.Contains(old, `"error":2`) || !strings.Contains(got, `"error":2`)) {
+				t.Errorf("the change: in the first answer %v, in the later one %v", strings.Contains(old, `"error":2`), strings.Contains(got, `"error":2`))
+			}
+			poll.Revision = after
+			if got := sc.ask(s, b, poll); !strings.Contains(got, `"unchanged":true`) {
+				t.Errorf("a poll at the new revision: %.300s", got)
+			}
+		})
+	}
+}
+
 // A poll at the current revision is answered unchanged at once, while a build of the same decision and query is under
 // way: it waits for no build and takes no place.
 func TestAPollerAtTheCurrentRevisionTakesNoPlaceAndNoRun(t *testing.T) {
@@ -1121,19 +1188,23 @@ func listingService(t *testing.T, api *clusterAPI, noInformers bool) *Service {
 	return s
 }
 
-// Rows listed as the caller — no informers, or kubeast:cache refused the pods — are each caller's own: three people at
-// once list the pods once each as themselves, and nothing is built for them together.
+// Rows listed as the caller — no informers, kubeast:cache refused the pods, or a bundle closed (evicted, its kubeconfig
+// replaced) while the requests hold it, which starts no informers — are each caller's own: three people at once list the
+// pods once each as themselves, and nothing is built for them together.
 func TestThePodListFallbackIsNeverShared(t *testing.T) {
 	users := []string{"a@example.com", "b@example.com", "c@example.com"}
 	for _, c := range []struct {
-		name        string
-		noInformers bool
-	}{{"no-informers", true}, {"cache-refused", false}} {
+		name                string
+		noInformers, closed bool
+	}{{name: "no-informers", noInformers: true}, {name: "cache-refused"}, {name: "bundle-closed", closed: true}} {
 		for _, sc := range podScreens {
 			t.Run(c.name+"/"+sc.name, func(t *testing.T) {
 				api := &clusterAPI{pods: podsOnNodes(), review: rbac(map[string][]string{"a@example.com": {""}, "b@example.com": {""}, "c@example.com": {""}})}
-				api.may = func(user, _, _, _, _ string) bool { return user != overviewCacheUser }
+				api.may = func(user, _, _, _, _ string) bool { return c.closed || user != overviewCacheUser }
 				s := listingService(t, api, c.noInformers)
+				if c.closed {
+					_ = s.defaultBundle.Load().Close()
+				}
 				g := watchBuilds(t, s, &buildGate{})
 				going := make([]*asking, len(users))
 				for i, user := range users {
