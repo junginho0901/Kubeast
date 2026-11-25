@@ -1,4 +1,4 @@
-"""The structured result of an investigation (features.alertInvestigation.evidenceCheck or ledger, both off by
+"""The structured result of an investigation (features.alertInvestigation.evidenceCheck or ledger, both on by
 default).
 
 With either on, the report ends with one fenced rca block (investigation/rca.py) — the causes (resource, kind, start,

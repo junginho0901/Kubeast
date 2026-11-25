@@ -1,6 +1,6 @@
 """The rca block at the end of an investigation's report: one mechanism behind two switches,
 features.alertInvestigation.evidenceCheck (the causes held to the run's calls, investigation/evidence.py) and
-features.alertInvestigation.ledger (the hypotheses, investigation/ledger.py), both off by default.
+features.alertInvestigation.ledger (the hypotheses, investigation/ledger.py), both on by default.
 
 With either on, the system prompt ends with one instruction for the block (instruction(): the hypotheses' part only
 with the ledger), the last step's message with FINAL_NOTE, and the answer is split once (split()). check() runs the

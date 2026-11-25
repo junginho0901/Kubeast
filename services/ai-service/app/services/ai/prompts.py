@@ -370,7 +370,7 @@ TIMELINE_CHANGES_MORE_LINES = {
 }
 
 
-# anomaly_rank in the prompt only where it is turned on (ANOMALY_RANK_ENABLED, chart features.anomalyRank.enabled, off by
+# anomaly_rank in the prompt only where it is turned on (ANOMALY_RANK_ENABLED, chart features.anomalyRank.enabled, on by
 # default): the line after which each of its lines goes.
 _ISSUES_GUIDE = _line("- `issues`: ")
 _STATE_RULE = _line("- 클러스터·네임스페이스의 상태를 묻는 질문")

@@ -1,4 +1,4 @@
-"""The hypothesis ledger of an investigation (features.alertInvestigation.ledger, off by default).
+"""The hypothesis ledger of an investigation (features.alertInvestigation.ledger, on by default).
 
 The rca block (investigation/rca.py, the one mechanism this ledger shares with the evidence check) carries the hypotheses the model weighed: each with what it says, the object
 it is about, its state — cause, symptom, ruled_out or blocked — and the calls whose results speak for it and against
