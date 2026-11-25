@@ -370,7 +370,7 @@ multicluster:
 | `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | 돌려 봄: EKS 1.35에서 서비스마다 파드 둘을 두고 노드 하나를 드레인해 바꾸는 동안, 막힌 내보내기 없음 · 로드 밸런서를 거친 요청 중 실패한 것 없음 |
 | `streams.*` | 끔 | alpha | kind 개발 설치에서 한 번도 안 돌림 |
 | `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | 프로바이더를 켠 시험 설치 |
-| `gateway.preStopSeconds` | null: `podShutdown.preStopSeconds`, 파드 IP로 보내는 AWS ALB 뒤에서는 25, Ingress에 등록 해제 지연 20초 | beta | AWS ALB 뒤에서 차트가 스스로 준 25초와 20초. 게이트웨이 파드 교체 18번에 실패가 없던 회차는 모든 파드에 `podShutdown.preStopSeconds: 25`와 주석을 손으로 넣었음(EKS 1.35, AWS Load Balancer Controller v3.6.2) |
+| `gateway.preStopSeconds` | null: `podShutdown.preStopSeconds`, 파드 IP로 보내는 AWS ALB 뒤에서는 25, Ingress에 등록 해제 지연 20초 | beta | 돌려 봄: EKS 1.35(2026-11-25)에서 `alb.ingress.kubernetes.io/target-type: ip`만 두고 차트가 스스로 준 25초와 20초. 게이트웨이 파드 교체 18번(파드 하나와 둘), 서비스마다 파드가 둘인 노드 비우기 한 번, HPA가 게이트웨이를 셋으로 늘리고 줄이는 동안 로드 밸런서를 지난 요청이 하나도 실패하지 않음 |
 | `gateway.accessLog.upstreamTimes` | false | alpha | 돌려 봄: kind 개발 설치에서 켠 상태로 100명이 한꺼번에 화면을 엶(2026-11-17), 접근 로그 줄마다 여섯 칸이 붙음 |
 | `multicluster.breakerConsecutiveFails`(0.7.8부터 `0`이면 차단기 끔), `multicluster.breakerOpenSec`(0.7.8부터 읽음) | 5, 30 | beta | kind 개발 설치에서 클러스터를 끊어 본 경우 |
 | `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | 돌려 봄: kind에서 0.7.7부터 업그레이드 리허설(기본 설치, 기존 Secret, 외부 데이터베이스, AI 끔, 2대 · 3대)과 EKS 1.35. EKS 1.35에서는 노드를 드레인할 때 실시간 목록이 한 번 닫혔다가 1.1초 안에 다시 붙고, HPA를 켜면서 k8s-service가 2대에서 1대로 줄 때 한 번 닫혔다가 1.2초 안에 다시 붙음. HPA가 파드를 늘리고 줄일 때는 닫히지 않음 |
@@ -383,18 +383,18 @@ multicluster:
 | `ai.toolResultDetails` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.redaction.numbered` | false | alpha | `ai.redaction.pii`와 함께 켠 상태로 kind 개발 설치에서 한 채팅, 끄고 켠 AI 평가 |
 | `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, true, false, [], [] | alpha | `chat`과 `investigations`를 하나씩 끄고 켠 AI 평가, 그 옆에서 `symptoms`를 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
-| `ai.toolResultsJSON` | false | alpha | 끄고 켠 심어 둔 지시 문제(`evals/ai-planted/`)와 켠 상태의 AI 평가를 모델로 돌린 경우 |
+| `ai.toolResultsJSON` | false | alpha | 켠 상태의 AI 평가를 모델로 돌린 경우. 돌려 봄: kind에서 끄고 켠 심어 둔 지시 문제를 모델로 돌림(2026-11-25), 따른 답 0 |
 | `ai.timelineChanges` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.timelineChangesMore` | false | alpha | `ai.timelineChanges`와 함께 끄고 켠 AI 평가, 둘 다 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.causeQuestions` | false | alpha | 끄고 켠 AI 평가, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
-| `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | 밖으로 나가는 규칙을 지키는 네트워크 플러그인(Calico나 Cilium을 쓴 kind)에서 `allowListOnly`를 켠 경우: 모델 공급자 주소를 목록에 넣은 채팅과 뺀 채팅 |
+| `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | 돌려 봄: 네트워크 플러그인이 밖으로 나가는 규칙을 지킨 kind에서 `allowListOnly`를 켬(2026-11-24). 모델 공급자 주소를 목록에 넣은 채팅은 답했고, 뺀 채팅은 공급자 오류로 끝남 |
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | 스위치를 하나씩 끄고 켠 AI 평가의 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.ledger`, `evidenceCheck`(켜면 다시 물을 때 `maxSteps`에 모델 호출 하나가 더해짐) | true, true | alpha | 하나씩 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.verdict`(`evidenceCheck`나 `ledger`와 함께, 둘 다 끄면 아무것도 안 함) | true | alpha | `evidenceCheck` 옆에서 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | 이 값만 끄고 켠 AI 평가. 돌려 봄: AI 스위치를 켠 kind 설치의 전체 e2e에서 `ai-anomaly-rank.spec.ts`(2026-11-25), 시험 넷 모두 통과 |
 | `features.nodeNeighbors.enabled` | false | alpha | 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | 값을 정한 채 kind 개발 설치에서 한 `loki_query` |
-| `features.callGraph.enabled` | false | alpha | kind 개발 설치에서 e2e `ai-call-graph.spec.ts`, 끄고 켠 AI 평가 |
+| `features.callGraph.enabled` | false | alpha | 끄고 켠 AI 평가. 돌려 봄: kind의 전체 e2e에서 `ai-call-graph.spec.ts`(2026-11-25) |
 | `gateway.servedByHeader` | false | alpha | 켠 상태로 한 번도 안 돌림 |
 
 ## Redis 사용자

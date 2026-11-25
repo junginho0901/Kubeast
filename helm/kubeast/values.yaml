@@ -480,7 +480,7 @@ ai:
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
-  # Stage: alpha, not run yet: the planted instruction cases against a model (docs/configuration.md "Stages of new values").
+  # Stage: alpha, tested: the planted instruction cases against a model with it off and on (2026-11-25); not run yet: the AI evaluation with it on (docs/configuration.md "Stages of new values").
   toolResultsJSON: false  # true: the model reads each tool result as one JSON object naming its tool, cluster text as JSON strings (docs/ai-alerts.md "Planted instructions")
   # The AI tool timeline's changes view (view: changes — what changed in a
   # window: rollouts compared with the revision before, ConfigMap and Secret
@@ -925,7 +925,7 @@ gateway:
   # 25 s and 20 s, set by hand, no request failed in 18 gateway pod replacements on EKS 1.35; with 5 s and the
   # load balancer's default delay of 300 s, requests failed in 3 of 18, and in none of 12 more with the pod
   # readiness gate on (docs/high-availability.md).
-  # Stage: beta, not run yet: the chart's own 25 s and 20 s behind an AWS ALB (docs/configuration.md "Stages of new
+  # Stage: beta, tested: the chart's own 25 s and 20 s behind an AWS ALB on EKS 1.35 (2026-11-25; docs/configuration.md "Stages of new
   # values").
   preStopSeconds: null
 
@@ -975,7 +975,7 @@ networkPolicy:
   # egress. Ports 443 and 6443 are already open to every address, private and
   # public; set this only for an API server on another port.
   apiserverCIDR: ""
-  # Stage: alpha, not run yet: allowListOnly on a cluster whose network plugin enforces egress rules (docs/configuration.md "Stages of new values").
+  # Stage: alpha, tested: allowListOnly on kind, whose network plugin enforced the egress rules (2026-11-24; docs/configuration.md "Stages of new values").
   aiEgress:
     allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to the lists below and apiserverCIDR (docs/cluster-requirements.md §15)
     clusterAPIs: []       # API servers of the registered clusters, for tool-server, as VPC or subnet CIDRs (EKS endpoint addresses change, never a /32): a CIDR opens 443 and 6443, {cidr, port} another port
@@ -1421,7 +1421,7 @@ features:
   # on the whole cluster (as the Prometheus reads), the Hubble lines
   # resource.networkflow.read. Off: include calls reads nothing and says so,
   # and the AI (the chat, investigations and the MCP tool list) is not offered it.
-  # Stage: alpha, not run yet: the e2e ai-call-graph.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
+  # Stage: alpha, tested: the e2e ai-call-graph.spec.ts in whole e2e runs on kind (2026-11-25); not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   callGraph:
     enabled: false
   # Alert store reads for the AI's alerts_list (off by default): an
