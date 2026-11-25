@@ -86,6 +86,9 @@ const (
 	promMissTTL = time.Minute
 )
 
+// discoveryTime is how long one discovery (Prometheus, OpenCost) may take.
+var discoveryTime = 8 * time.Second
+
 // fresh says whether the remembered discovery still answers at now.
 func (c *promCache) fresh(now time.Time) bool {
 	if !c.probed {
@@ -370,8 +373,16 @@ func (s *Service) getPromService(ctx context.Context) *promServiceInfo {
 		return c.svc
 	}
 
-	c.svc = s.discoverPrometheus(ctx)
-	c.probed, c.probedAt = true, time.Now()
+	// A discovery its caller cut short (its reads held, its context ended) says nothing of the cluster: what it did not
+	// find is not remembered, the next caller looks again, and until then the last one found stands.
+	if readsHeld(ctx, b.id) {
+		return c.svc
+	}
+	svc := s.discoverPrometheus(ctx)
+	if svc == nil && ctx.Err() != nil {
+		return c.svc
+	}
+	c.svc, c.probed, c.probedAt = svc, true, time.Now()
 	return c.svc
 }
 
@@ -390,7 +401,7 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 	if cs == nil {
 		return nil
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, discoveryTime)
 	defer cancel()
 
 	// Labels first, in every namespace (Headlamp's order): a Service marked for
@@ -421,7 +432,9 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 		return info
 	}
 
-	slog.Warn("Prometheus not found in target cluster")
+	if ctx.Err() == nil {
+		slog.Warn("Prometheus not found in target cluster")
+	}
 	return nil
 }
 

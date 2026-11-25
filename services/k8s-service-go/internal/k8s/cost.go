@@ -617,8 +617,15 @@ func (s *Service) getCostService(ctx context.Context) *costServiceInfo {
 	if c.fresh() {
 		return c.svc
 	}
-	c.svc = s.discoverOpenCost(ctx)
-	c.probed, c.probedAt = true, time.Now()
+	// not remembered when its caller cut it short, as getPromService
+	if readsHeld(ctx, b.id) {
+		return c.svc
+	}
+	svc := s.discoverOpenCost(ctx)
+	if svc == nil && ctx.Err() != nil {
+		return c.svc
+	}
+	c.svc, c.probed, c.probedAt = svc, true, time.Now()
 	return c.svc
 }
 
@@ -627,7 +634,7 @@ func (s *Service) discoverOpenCost(ctx context.Context) *costServiceInfo {
 	if cs == nil {
 		return nil
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, discoveryTime)
 	defer cancel()
 
 	hits := make([]*costServiceInfo, len(costNamespaces))
@@ -647,7 +654,9 @@ func (s *Service) discoverOpenCost(ctx context.Context) *costServiceInfo {
 			return info
 		}
 	}
-	slog.Info("OpenCost not found in target cluster")
+	if ctx.Err() == nil {
+		slog.Info("OpenCost not found in target cluster")
+	}
 	return nil
 }
 

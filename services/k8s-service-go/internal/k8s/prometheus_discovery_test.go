@@ -28,12 +28,20 @@ type promServer struct {
 	queries  int
 	// failing: every Service list answers 500, as an API server that cannot list does.
 	failing bool
+	// held: a Service list is answered once its caller has gone (no answer), as an API server slow to list.
+	held bool
 }
 
 func (p *promServer) counts() (lists, queries int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.lists, p.queries
+}
+
+func (p *promServer) hold(on bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.held = on
 }
 
 // become changes what the cluster holds between two calls.
@@ -50,13 +58,20 @@ func newPromServer(t *testing.T, found, healthy403 bool) (*kubernetes.Clientset,
 		w.Header().Set("Content-Type", "application/json")
 		p := r.URL.Path
 		ps.mu.Lock()
-		found, failing := ps.found, ps.failing
+		found, failing, held := ps.found, ps.failing, ps.held
 		ps.mu.Unlock()
 		switch {
 		case strings.HasSuffix(p, "/services"):
 			ps.mu.Lock()
 			ps.lists++
 			ps.mu.Unlock()
+			if held {
+				select {
+				case <-r.Context().Done():
+				case <-time.After(10 * time.Second):
+				}
+				return
+			}
 			if failing {
 				w.WriteHeader(http.StatusInternalServerError)
 				_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"InternalError","code":500}`))
@@ -256,6 +271,96 @@ func TestPrometheusDiscovery_AFailedDiscoveryIsAskedAgainAfterAMinute(t *testing
 	}
 	if lists, _ := srv.counts(); lists != missRound+oneRound {
 		t.Errorf("service lists after the minute = %d, want a second discovery (%d)", lists, missRound+oneRound)
+	}
+}
+
+// A discovery its caller cut short is not remembered as a miss: the next caller looks again and finds it.
+func TestPrometheusDiscovery_OneItsCallerCutShortIsNotRemembered(t *testing.T) {
+	for name, cut := range map[string]func() (context.Context, context.CancelFunc){
+		"its caller left": func() (context.Context, context.CancelFunc) {
+			ctx, cancel := context.WithCancel(context.Background())
+			time.AfterFunc(150*time.Millisecond, cancel)
+			return ctx, cancel
+		},
+		"its caller's own time ended": func() (context.Context, context.CancelFunc) {
+			return context.WithTimeout(context.Background(), 150*time.Millisecond)
+		},
+		"its caller had left": func() (context.Context, context.CancelFunc) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx, cancel
+		},
+		"its request's reads are held": func() (context.Context, context.CancelFunc) {
+			ctx, calls := WithClusterCalls(context.Background(), "", func() {})
+			calls.waitedOut.Store(true)
+			return ctx, func() {}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			promDiscoveryEnv(t)
+			cs, srv := newPromServer(t, true, false)
+			srv.hold(true)
+			s := newPromService(cs, nil)
+			ctx, cancel := cut()
+			defer cancel()
+			if s.PrometheusAvailable(ctx) {
+				t.Fatal("found by a discovery that was cut short")
+			}
+			srv.hold(false)
+			if !promAvailable(s) {
+				t.Error("the cut discovery is remembered: the next caller did not look again")
+			}
+			if lists, _ := srv.counts(); lists > 1+oneRound {
+				t.Errorf("service lists = %d, want the cut one's first at most and one discovery (%d)", lists, oneRound)
+			}
+		})
+	}
+}
+
+// A cut discovery after the last one's ten minutes leaves the Service last found, and what the next whole one says.
+func TestPrometheusDiscovery_TheLastFoundStandsOverACutOne(t *testing.T) {
+	promDiscoveryEnv(t)
+	cs, srv := newPromServer(t, true, false)
+	s := newPromService(cs, nil)
+	if !promAvailable(s) {
+		t.Fatal("not found")
+	}
+	passPromTime(s, 10*time.Minute+time.Second)
+	srv.become(false, false)
+	gone, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !s.PrometheusAvailable(gone) {
+		t.Error("a cut discovery took the last one found away")
+	}
+	if promAvailable(s) {
+		t.Error("the next caller did not look again")
+	}
+}
+
+// A discovery that ran out of its own time is remembered for a minute, as one whose lists failed: a cluster slow to
+// list is not asked by every caller in turn.
+func TestPrometheusDiscovery_OneOutOfItsOwnTimeIsRememberedForAMinute(t *testing.T) {
+	was := discoveryTime
+	discoveryTime = 150 * time.Millisecond
+	t.Cleanup(func() { discoveryTime = was })
+	promDiscoveryEnv(t)
+	cs, srv := newPromServer(t, true, false)
+	srv.hold(true)
+	s := newPromService(cs, nil)
+	if promAvailable(s) {
+		t.Fatal("found though every list was held")
+	}
+	srv.hold(false)
+	lists, _ := srv.counts()
+	if promAvailable(s) {
+		t.Error("asked again within the minute")
+	}
+	if now, _ := srv.counts(); now != lists {
+		t.Errorf("service lists within the minute: %d more", now-lists)
+	}
+	passPromTime(s, 61*time.Second)
+	if !promAvailable(s) {
+		t.Error("not asked again a minute after it ran out of time")
 	}
 }
 

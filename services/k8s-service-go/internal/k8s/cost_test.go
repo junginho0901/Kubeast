@@ -40,6 +40,7 @@ const costControllerSet = `{"code":200,"data":[{
 type costServer struct {
 	found      bool
 	healthz403 bool
+	held       bool // a Service list is answered once its caller has gone, with no answer
 	mu         sync.Mutex
 	lists      int
 	allocs     int
@@ -69,7 +70,15 @@ func newCostServer(t *testing.T, found bool) (*Service, *costServer) {
 		case strings.HasSuffix(p, "/services"):
 			cs.mu.Lock()
 			cs.lists++
+			held := cs.held
 			cs.mu.Unlock()
+			if held {
+				select {
+				case <-r.Context().Done():
+				case <-time.After(10 * time.Second):
+				}
+				return
+			}
 			if cs.found && p == "/api/v1/namespaces/opencost/services" {
 				_, _ = w.Write([]byte(`{"items":[{"metadata":{"name":"opencost-ui","namespace":"opencost"},"spec":{"ports":[{"port":9090}]}},{"metadata":{"name":"opencost","namespace":"opencost"},"spec":{"ports":[{"name":"api","port":9003}]}}]}`))
 				return
@@ -272,6 +281,48 @@ func TestCostAllocation_NotFoundIsRememberedForAWhile(t *testing.T) {
 	}
 	if _, err := s.CostAllocation(ctx, "24h", "pod"); err == nil || errors.Is(err, ErrCostNotFound) {
 		t.Fatalf("aggregate pod: err = %v", err)
+	}
+}
+
+// A discovery its caller cut short (it left, or its request's reads are held) is not remembered as a miss; one that ran
+// out of its own time is.
+func TestCostDiscovery_OneItsCallerCutShortIsNotRemembered(t *testing.T) {
+	was := discoveryTime
+	t.Cleanup(func() { discoveryTime = was })
+	for name, c := range map[string]struct {
+		time       time.Duration
+		ctx        func() context.Context
+		remembered bool
+	}{
+		"its caller left": {time: was, ctx: func() context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			time.AfterFunc(150*time.Millisecond, cancel)
+			return ctx
+		}},
+		"its request's reads are held": {time: was, ctx: func() context.Context {
+			ctx, calls := WithClusterCalls(context.Background(), "", func() {})
+			calls.waitedOut.Store(true)
+			return ctx
+		}},
+		"out of its own time": {time: 150 * time.Millisecond, ctx: context.Background, remembered: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			discoveryTime = c.time
+			s, srv := newCostServer(t, true)
+			hold := func(on bool) {
+				srv.mu.Lock()
+				defer srv.mu.Unlock()
+				srv.held = on
+			}
+			hold(true)
+			if st := s.CostStatus(c.ctx()); st["available"] != false {
+				t.Fatalf("status while the lists are held = %v", st)
+			}
+			hold(false)
+			if st := s.CostStatus(context.Background()); (st["available"] == false) != c.remembered {
+				t.Errorf("the next status = %v, want the miss remembered: %v", st, c.remembered)
+			}
+		})
 	}
 }
 

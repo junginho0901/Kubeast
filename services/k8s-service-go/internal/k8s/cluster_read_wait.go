@@ -157,6 +157,12 @@ func queryTrue(s string) bool {
 	return err == nil && b
 }
 
+// readsHeld says ctx's request sends cluster id no other read, as one of its reads ran out its wait.
+func readsHeld(ctx context.Context, id cluster.ID) bool {
+	calls, ok := ctx.Value(clusterCallsKey{}).(*ClusterCalls)
+	return ok && calls.id == id && calls.waitedOut.Load()
+}
+
 // noteNoAnswer marks ctx's request when err is a read of cluster id that ran out its wait, also one it waited on for
 // another request (an access check asked at the same moment), so its own reads of that cluster are not sent either.
 func noteNoAnswer(ctx context.Context, id cluster.ID, err error) {
