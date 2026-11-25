@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"net/url"
+	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // Limits of the busiest CPU line (features.nodeNeighbors.busiestCPU): the line of get_node_metrics without a node. Nodes
 // with more CPUs than BusiestMaxCPUs together are not read: five modes a CPU of node-exporter are 10 000 series an hour.
+// The query reads the nodes' CPUs alone (BusiestQuery), whatever other hosts Prometheus holds.
 const (
 	BusiestQueries    = 4
 	BusiestMaxCPUs    = 2000
@@ -46,13 +50,61 @@ func BusiestWindow(now time.Time) Window {
 	return Window{Start: end.Add(-half), End: end, Step: MinStep, Steps: FineSteps / 2}
 }
 
-// BusiestQuery is the busy share of the BusiestCandidates busiest CPUs of every node in each step, from node-exporter or
-// the OpenTelemetry hostmetrics receiver. A series names its node by a label (BusiestNode).
-func BusiestQuery(w Window) string {
-	step := stepText(w)
-	return fmt.Sprintf(`topk(%d, sum by (node, instance, cpu) (max by (node, instance, cpu, mode) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[%s])))`+
-		` or sum by (k8s_node_name, cpu) (max by (k8s_node_name, cpu, state) (rate(system_cpu_time_seconds_total{state!~"idle|wait|steal"}[%s]))))`, BusiestCandidates, step, step)
+// BusiestQuery is the busy share of the BusiestCandidates busiest CPUs of nodes in each step, from node-exporter or the
+// OpenTelemetry hostmetrics receiver. It asks for the nodes' series alone (the rule of nodeOf), so that another host in the
+// same Prometheus takes no place among them and BusiestMaxCPUs bounds what is read. fits is false when the names of the
+// nodes do not fit one query (MaxQueryBytes).
+func BusiestQuery(w Window, nodes []Node) (query string, fits bool) {
+	if len(nodes) == 0 {
+		return "", false
+	}
+	var names, addresses []string
+	for _, n := range nodes {
+		names = append(names, n.Name)
+		for _, a := range n.Addresses {
+			if ip := net.ParseIP(a); ip != nil && ip.To4() == nil {
+				a = "[" + a + "]"
+			}
+			addresses = withMember(addresses, a)
+		}
+	}
+	slices.Sort(names)
+	slices.Sort(addresses)
+	named, hosts := oneOf(names), oneOf(names)
+	if len(addresses) > 0 {
+		hosts += "|" + oneOf(addresses)
+	}
+	exporter := either("rate", "node_cpu_seconds_total", `mode!~"idle|iowait|steal"`, []string{
+		"node=~" + strconv.Quote(named), `node="",instance=~` + strconv.Quote("(?:"+hosts+")(?::[0-9]+)?")}, w)
+	receiver := either("rate", "system_cpu_time_seconds_total", `state!~"idle|wait|steal"`, []string{"k8s_node_name=~" + strconv.Quote(named)}, w)
+	query = fmt.Sprintf(`topk(%d, sum by (node, instance, cpu) (max by (node, instance, cpu, mode) (%s))`+
+		` or sum by (k8s_node_name, cpu) (max by (k8s_node_name, cpu, state) (%s)))`, BusiestCandidates, exporter, receiver)
+	return query, len(url.QueryEscape(query)) <= MaxQueryBytes
 }
+
+// oneOf matches one of names, what they all start and end with written once. A dot matches any character: nodeOf keeps a
+// series to its node's name.
+func oneOf(names []string) string {
+	start := names[0]
+	for _, n := range names {
+		for !strings.HasPrefix(n, start) {
+			start = start[:len(start)-1]
+		}
+	}
+	end := names[0][len(start):]
+	for _, n := range names {
+		for !strings.HasSuffix(n[len(start):], end) {
+			end = end[1:]
+		}
+	}
+	middle := make([]string, len(names))
+	for i, n := range names {
+		middle[i] = literal(n[len(start) : len(n)-len(end)])
+	}
+	return literal(start) + "(?:" + strings.Join(middle, "|") + ")" + literal(end)
+}
+
+func literal(s string) string { return strings.ReplaceAll(regexp.QuoteMeta(s), `\.`, ".") }
 
 // busyness is how busy a CPU was: one that was full lately first, then the one that was full the most steps, then the one
 // with the highest step and the highest mean.
@@ -115,8 +167,8 @@ func NodesFromRows(rows []map[string]interface{}) (nodes []Node, cpus float64) {
 	return nodes, cpus
 }
 
-// BusiestNode is the node of the busiest of BusiestQuery's series that is one of nodes: a Prometheus can hold other hosts
-// and other clusters. ok is false when none is.
+// BusiestNode is the node of the busiest of BusiestQuery's series that is one of nodes: the query's names match a little
+// more than the nodes'. ok is false when none is.
 func BusiestNode(w Window, series []Series, nodes []Node) (node Node, ok bool) {
 	var best busyness
 	for _, s := range series {
@@ -259,6 +311,9 @@ func busiestPods(in BusiestInput, cpus cpuGrid, at int) string {
 		if why == "" {
 			why = NoUsage
 		}
+		if in.PodsError != "" {
+			why += "; " + in.PodsError
+		}
 		return "Which pods used it was not read (" + why + ")."
 	}
 	ranked := make([]*pod, 0, len(pods))
@@ -292,7 +347,14 @@ func busiestPods(in BusiestInput, cpus cpuGrid, at int) string {
 	}
 	line := fmt.Sprintf("Most CPU on that node from %s to %s, over every namespace, in cores: %s", rfc3339(in.Window.stepStart(at)), rfc3339(in.Window.stepStart(at+1)), strings.Join(parts, ", "))
 	if len(hiddenPods) > 0 {
-		line += fmt.Sprintf("; %s in %s you may not read used %s together, counted and not named", counted(len(hiddenPods), "pod"), counted(len(hiddenNamespaces), "namespace"), cores(hidden))
+		whose := "you may not read"
+		if in.PodsError != "" {
+			whose = "whose pods you may not list, or it was not asked whether you may,"
+		}
+		line += fmt.Sprintf("; %s in %s %s used %s together, counted and not named", counted(len(hiddenPods), "pod"), counted(len(hiddenNamespaces), "namespace"), whose, cores(hidden))
+	}
+	if in.PodsError != "" {
+		line += "; " + in.PodsError
 	}
 	if other := cpus.avg[at]*float64(cpus.count) - total; !math.IsNaN(other) && other >= GrewCores {
 		line += fmt.Sprintf("; %s outside the containers", cores(other))

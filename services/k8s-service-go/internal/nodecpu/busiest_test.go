@@ -1,9 +1,11 @@
 package nodecpu
 
 import (
+	"fmt"
 	"math"
 	"net/url"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -169,7 +171,7 @@ func TestPodsInNamespacesTheCallerMayNotListAreCountedNotNamed(t *testing.T) {
 	s.in.PodsError = "the pods on the node: forbidden"
 	s.in.Readable = func(ns string) bool { return ns == "shop-03" }
 	line := busiest(s)
-	holds(t, line, "shop-03/search-1", "1 pod in 1 namespace you may not read used 0.97 together, counted and not named")
+	holds(t, line, "shop-03/search-1", "1 pod in 1 namespace whose pods you may not list, or it was not asked whether you may, used 0.97 together, counted and not named", "; the pods on the node: forbidden.")
 	for _, word := range []string{"reports", "monthly"} {
 		if strings.Contains(line, word) {
 			t.Errorf("%q is in %s", word, line)
@@ -178,7 +180,7 @@ func TestPodsInNamespacesTheCallerMayNotListAreCountedNotNamed(t *testing.T) {
 	// nowhere readable: totals only
 	s.in.Pods, s.in.Readable = nil, func(string) bool { return false }
 	line = busiest(s)
-	holds(t, line, "no pod that may be named 0.01 cores or more", "3 pods in 2 namespaces you may not read used 1.02 together")
+	holds(t, line, "no pod that may be named 0.01 cores or more", "3 pods in 2 namespaces whose pods you may not list, or it was not asked whether you may, used 1.02 together")
 	for _, word := range []string{"reports", "shop-03", "search"} {
 		if strings.Contains(line, word) {
 			t.Errorf("%q is in %s", word, line)
@@ -206,6 +208,9 @@ func TestTheBusiestLineSaysWhatWasNotRead(t *testing.T) {
 
 	in.UsageWhy = ""
 	holds(t, Busiest(in).Line, "Which pods used it was not read ("+NoUsage+")")
+
+	in.PodsError = "the pods on the node did not answer in time"
+	holds(t, Busiest(in).Line, "Which pods used it was not read ("+NoUsage+"; the pods on the node did not answer in time)")
 }
 
 func TestLoadOutsideTheContainersIsInTheBusiestLine(t *testing.T) {
@@ -275,22 +280,93 @@ func TestNodesFromRows(t *testing.T) {
 	}
 }
 
-func TestTheBusiestQueryIsValidPromQLOfEveryNode(t *testing.T) {
-	q := BusiestQuery(BusiestWindow(testNow))
+// The query is of the nodes alone: it matches every series nodeOf takes and no other host's, which takes no place among the
+// busiest and is not read.
+func TestTheBusiestQueryIsOfTheNodesAlone(t *testing.T) {
+	nodes := []Node{{Name: "n1.example", Addresses: []string{"10.0.0.1"}}, {Name: "n2.example", Addresses: []string{"10.0.0.2", "fd00::2", "203.0.113.2"}}}
+	q, fits := BusiestQuery(BusiestWindow(testNow), nodes)
+	if !fits {
+		t.Fatal(q)
+	}
 	expr, err := parser.NewParser(parser.Options{}).ParseExpr(q)
 	if err != nil {
 		t.Fatalf("%v: %s", err, q)
 	}
-	for _, vs := range parser.ExtractSelectors(expr) {
-		for _, m := range vs {
-			if m.Name == "node" || m.Name == "instance" {
-				t.Errorf("kept to a node: %s", q)
+	holds(t, q, "topk(20, sum by (node, instance, cpu) (", "or sum by (k8s_node_name, cpu) (", "[120s]")
+	selectors := parser.ExtractSelectors(expr)
+	if len(selectors) != 3 {
+		t.Fatalf("%d selectors: %s", len(selectors), q)
+	}
+	for _, c := range []struct {
+		metric string
+		labels map[string]string
+		want   bool
+	}{
+		{"node_cpu_seconds_total", map[string]string{"node": "n1.example", "instance": "10.9.9.9:9100"}, true},
+		{"node_cpu_seconds_total", map[string]string{"instance": "10.0.0.1:9100"}, true},
+		{"node_cpu_seconds_total", map[string]string{"instance": "10.0.0.2"}, true},
+		{"node_cpu_seconds_total", map[string]string{"instance": "203.0.113.2:9100"}, true},
+		{"node_cpu_seconds_total", map[string]string{"instance": "[fd00::2]:9100"}, true},
+		{"node_cpu_seconds_total", map[string]string{"instance": "n2.example:9100"}, true},
+		{"system_cpu_time_seconds_total", map[string]string{"k8s_node_name": "n2.example"}, true},
+		{"node_cpu_seconds_total", map[string]string{"node": "other-1", "instance": "10.0.0.1:9100"}, false},
+		{"node_cpu_seconds_total", map[string]string{"node": "n1.example.other"}, false},
+		{"node_cpu_seconds_total", map[string]string{"instance": "203.0.113.9:9100"}, false},
+		{"node_cpu_seconds_total", map[string]string{"instance": "10.0.0.11:9100"}, false},
+		{"system_cpu_time_seconds_total", map[string]string{"k8s_node_name": "n3.example"}, false},
+	} {
+		matched := false
+		for _, ms := range selectors {
+			all := true
+			for _, m := range ms {
+				value := c.labels[m.Name]
+				if m.Name == "__name__" {
+					value = c.metric
+				}
+				all = all && m.Matches(value)
 			}
+			matched = matched || all
+		}
+		_, taken := nodeOf(c.labels, nodes)
+		if matched != c.want || taken != c.want {
+			t.Errorf("%s%v: matched %v, taken %v, want %v", c.metric, c.labels, matched, taken, c.want)
 		}
 	}
-	holds(t, q, "topk(20, sum by (node, instance, cpu) (", "or sum by (k8s_node_name, cpu) (", "[120s]")
-	if n := len(url.QueryEscape(q)); n > MaxQueryBytes {
-		t.Fatalf("%d bytes", n)
+}
+
+// A hundred and fifty nodes of a cloud's names fit the query (what they share is written once), and one that does not fit
+// says so.
+func TestTheBusiestQuerysNamesFitOneQuery(t *testing.T) {
+	cloud := func(n int) []Node {
+		var out []Node
+		for i := range n {
+			ip := fmt.Sprintf("10.80.%d.%d", i/200, 10+i%200)
+			out = append(out, Node{Name: "ip-" + strings.ReplaceAll(ip, ".", "-") + ".ap-northeast-2.compute.internal", Addresses: []string{ip}})
+		}
+		return out
+	}
+	for n, want := range map[int]bool{0: false, 1: true, 3: true, 150: true, 1500: false} {
+		q, fits := BusiestQuery(BusiestWindow(testNow), cloud(n))
+		if fits != want || (fits && len(url.QueryEscape(q)) > MaxQueryBytes) {
+			t.Errorf("%d nodes: %v, %d bytes", n, fits, len(url.QueryEscape(q)))
+		}
+		if _, err := parser.NewParser(parser.Options{}).ParseExpr(q); n > 0 && err != nil {
+			t.Errorf("%d nodes: %v", n, err)
+		}
+	}
+	for want, names := range map[string][]string{
+		"n(?:1|2)": {"n1", "n2"}, "a(?:)": {"a"}, "node(?:|-1)": {"node", "node-1"}, "(?:a|b)": {"a", "b"}, "ip-(?:1|2).x": {"ip-1.x", "ip-2.x"},
+		"aa(?:|a)": {"aa", "aaa"}, `\[fd00::(?:1|2)\]`: {"[fd00::1]", "[fd00::2]"},
+	} {
+		if got := oneOf(names); got != want {
+			t.Errorf("%v: %s, want %s", names, got, want)
+		}
+		re := regexp.MustCompile("^(?:" + oneOf(names) + ")$")
+		for _, n := range names {
+			if !re.MatchString(n) {
+				t.Errorf("%s does not match %s", re, n)
+			}
+		}
 	}
 }
 

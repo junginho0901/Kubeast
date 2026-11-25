@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -85,7 +86,10 @@ func TestNodeBusiestNamesTheCPUAndThePodsOfEveryNamespace(t *testing.T) {
 			t.Errorf("%s: %v, want %v", src.queries[i], r, want)
 		}
 	}
-	// the chosen node's own series, and no audit row
+	// the nodes' series alone, then the chosen node's own, and no audit row
+	if q := src.queries[0]; !strings.Contains(q, `node=~"n(?:1|2)"`) || !strings.Contains(q, `instance=~"(?:n(?:1|2)|10.0.0.(?:1|2))(?::[0-9]+)?"`) {
+		t.Errorf("%s", q)
+	}
 	for _, q := range src.queries[1:] {
 		if !strings.Contains(q, `node="n1"`) {
 			t.Errorf("%s", q)
@@ -109,7 +113,7 @@ func TestNodeBusiestRefusedThePodsNamesOnlyNamespacesTheCallerMayList(t *testing
 			t.Errorf("%q is in the answer: %s", word, w.Body)
 		}
 	}
-	if !strings.Contains(res.Line, "shop/search-1") || !strings.Contains(res.Line, "3 pods in 3 namespaces you may not read used 1.48 together, counted and not named") {
+	if !strings.Contains(res.Line, "shop/search-1") || !strings.Contains(res.Line, "3 pods in 3 namespaces whose pods you may not list, or it was not asked whether you may, used 1.48 together, counted and not named") || !strings.Contains(res.Line, "; the pods on the node: ") {
 		t.Fatalf("%s", res.Line)
 	}
 }
@@ -126,6 +130,10 @@ func TestNodeBusiestForAGrantLimitedToNamespacesAsksNoPrometheus(t *testing.T) {
 
 func TestNodeBusiestSaysWhatItCouldNotRead(t *testing.T) {
 	big := []map[string]interface{}{{"name": "n1", "capacity": map[string]string{"cpu": "1900"}}, {"name": "n2", "capacity": map[string]string{"cpu": "128"}}}
+	var many []map[string]interface{}
+	for i := range 1500 {
+		many = append(many, map[string]interface{}{"name": fmt.Sprintf("worker-%04d", i), "capacity": map[string]string{"cpu": "1"}})
+	}
 	outside := []k8s.PrometheusRangeSeries{{Metric: map[string]interface{}{"cpu": "0", "instance": "203.0.113.9:9100"}, Points: []k8s.PrometheusRangePoint{{T: 1, V: 1}}}}
 	for name, c := range map[string]struct {
 		src     *fakeNodeCPU
@@ -134,6 +142,9 @@ func TestNodeBusiestSaysWhatItCouldNotRead(t *testing.T) {
 	}{
 		"no Prometheus":               {&fakeNodeCPU{}, "no Prometheus reaches this cluster", 0},
 		"too many CPUs":               {&fakeNodeCPU{prometheus: true, nodes: big}, "the 2 nodes have 2028 CPUs together, more than the 2000 read at once", 0},
+		"no node":                     {&fakeNodeCPU{prometheus: true, nodes: []map[string]interface{}{}}, "the cluster lists no node", 0},
+		"too many names":              {&fakeNodeCPU{prometheus: true, nodes: many}, "the names of 1500 nodes do not fit one query: get_node_metrics with node reads one", 0},
+		"the pods did not answer":     {&fakeNodeCPU{prometheus: true, podsErr: context.DeadlineExceeded}, "; the pods on the node did not answer in time.", 3},
 		"a failed query":              {&fakeNodeCPU{prometheus: true, queryErr: errors.New("query failed")}, "Prometheus: query failed", 1},
 		"only other hosts' CPUs":      {&fakeNodeCPU{prometheus: true, busiest: outside}, nodecpu.NoCPUsOfNodes, 1},
 		"no CPU at all":               {&fakeNodeCPU{prometheus: true, busiest: []k8s.PrometheusRangeSeries{}}, nodecpu.NoCPUsOfNodes, 1},

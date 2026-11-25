@@ -74,6 +74,8 @@ func (n *NodeNeighbors) readBusiest(ctx context.Context, win nodecpu.Window, sco
 		in.Why = "the cluster's Prometheus covers the whole cluster; your grant on this cluster is limited to namespaces"
 	case !n.src.PrometheusAvailable(ctx):
 		in.Why = "no Prometheus reaches this cluster"
+	case len(nodes) == 0:
+		in.Why = "the cluster lists no node"
 	case cpus > nodecpu.BusiestMaxCPUs:
 		in.Why = fmt.Sprintf("the %d nodes have %.0f CPUs together, more than the %d read at once: get_node_metrics with node reads one", len(nodes), cpus, nodecpu.BusiestMaxCPUs)
 	default:
@@ -86,7 +88,12 @@ func (n *NodeNeighbors) readBusiest(ctx context.Context, win nodecpu.Window, sco
 // readBusiestNode finds the node of the busiest CPU, and reads its CPUs, its containers' cores and its pods.
 func (n *NodeNeighbors) readBusiestNode(ctx context.Context, in *nodecpu.BusiestInput, nodes []nodecpu.Node, budget *readBudget) {
 	w := in.Window
-	top, err := n.series(ctx, budget, nodecpu.BusiestQuery(w), w)
+	query, fits := nodecpu.BusiestQuery(w, nodes)
+	if !fits {
+		in.Why = fmt.Sprintf("the names of %d nodes do not fit one query: get_node_metrics with node reads one", len(nodes))
+		return
+	}
+	top, err := n.series(ctx, budget, query, w)
 	if err != nil {
 		in.Why = readFailure("Prometheus", err)
 		return
