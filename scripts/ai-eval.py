@@ -924,7 +924,8 @@ def namespace_suffix(value: str | None) -> str | None:
 
 def round_counts(api: Api, clusters: list[str]) -> dict:
     """Per cluster, how many alert investigations and alert inbox rows there are (the lists' total, read as the admin),
-    or why not ("HTTP 404" while features.alertInvestigation is off)."""
+    or why not (the inbox answers "HTTP 404" while features.alertInvestigation is off; the investigation list answers
+    either way, its earlier reports staying listed)."""
     out = {}
     for cluster in clusters:
         q = urllib.parse.quote(cluster)
@@ -982,10 +983,9 @@ def listing(cases: list[tuple[Path, dict]]) -> str:
 
 
 def investigation_on(counts: dict) -> list[str]:
-    """The clusters whose alert investigation is on at the round's start: their investigation list or inbox answered
-    a total (off, they answer 404)."""
-    return sorted(c for c, v in counts.items() if any(isinstance(v.get(k), int) and not isinstance(v.get(k), bool)
-                                                     for k in ("investigations", "inbox")))
+    """The clusters whose alert investigation is on at the round's start: the inbox answers a total (off, it answers
+    404); the investigation list answers whether or not the switch is on, so it says nothing of it."""
+    return sorted(c for c, v in counts.items() if isinstance(v.get("inbox"), int) and not isinstance(v.get("inbox"), bool))
 
 
 def save(out: Path, stamp: str, results: list[dict], previous: str | None, round_info: dict | None = None,
@@ -1059,7 +1059,7 @@ def main() -> int:
         on = investigation_on(round_info["before"])
         round_info["alert_investigation_on"] = bool(on)
         if on and not args.alert_investigation_on:
-            print(f"problem: features.alertInvestigation is on in {', '.join(on)} (its investigation list answers): a Read account "
+            print(f"problem: features.alertInvestigation is on in {', '.join(on)} (its alert inbox answers): a Read account "
                   "can open the reports and an investigation takes the model's Claude Code place. Turn it off for a chat round "
                   "(evals/ai/README.md \"Hard cases\"), or pass --alert-investigation-on to run anyway", file=sys.stderr)
             return 2
