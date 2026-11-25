@@ -14,7 +14,7 @@ import { usePrometheusQueries, useServiceBackendUsage } from '@/hooks/usePrometh
 import { PrometheusSection, MetricCard } from './PrometheusMetrics'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { podTableStatus } from '@/pages/workloads/pods/podHelpers'
-import { DescribeFailure, DescribeStale } from './DescribeFailure'
+import { DescribeFailure, DescribeStale, ListReadFailure } from './DescribeFailure'
 import { promString } from '@/utils/promString'
 
 // The API server applies the selector to the whole read: every row it gives is a match.
@@ -85,6 +85,8 @@ type ServiceDescribe = {
   // each address of the slices, ready or not, with the Pod it points at
   endpoints?: Array<{ ip?: string; ready?: boolean; target_ref?: { kind?: string; name?: string; namespace?: string } | null }>
   endpoint_slices?: EndpointSliceSummary[]
+  // why the slices could not be read; the three above are then not there
+  endpoints_error?: string
   events?: Array<Record<string, unknown>>
   events_error?: string
 }
@@ -318,6 +320,8 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
         {/* the endpoints come from the describe answer only: not read is not 0 Ready and no addresses */}
         {describeError && !describe ? (
           <p className="text-xs text-slate-500" data-testid="service-endpoints-unread">—</p>
+        ) : describe?.endpoints_error ? (
+          <ListReadFailure error={describe.endpoints_error} testId="service-endpoints-failed" list="Endpoint Status" />
         ) : (
           <>
             <div className="flex flex-wrap gap-2 mb-3">

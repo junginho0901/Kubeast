@@ -9,10 +9,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/endpointslice"
 	servicerow "github.com/junginho0901/kubeast/services/k8s-service-go/internal/service"
+	"github.com/junginho0901/kubeast/services/pkg/response"
 )
 
 // GetServices lists services in a namespace.
@@ -123,7 +125,7 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 	}
 	result["conditions"] = conditions
 
-	// Endpoint summary and the address list, both from the slices
+	// Endpoint summary, the address list and the slices; not read, the reason and none of them
 	if esErr == nil {
 		ready, notReady := readyAddresses(slices)
 		result["endpoint_summary"] = map[string]interface{}{
@@ -133,19 +135,18 @@ func (s *Service) DescribeService(ctx context.Context, namespace, name string) (
 			"not_ready_addresses": notReady,
 		}
 		result["endpoints"] = sliceAddresses(slices)
-	} else {
-		result["endpoints"] = []map[string]interface{}{}
-	}
-
-	// Endpoint slices
-	if esErr == nil {
 		endpointSlices := make([]map[string]interface{}, 0, len(slices))
 		for i := range slices {
 			endpointSlices = append(endpointSlices, endpointslice.Info(&slices[i]))
 		}
 		result["endpoint_slices"] = endpointSlices
 	} else {
-		result["endpoint_slices"] = []map[string]interface{}{}
+		reason := response.Public(esErr)
+		if reason == "" {
+			// an API error whose Status carries no message
+			reason = "EndpointSlices could not be listed: " + string(apierrors.ReasonForError(esErr))
+		}
+		result["endpoints_error"] = reason
 	}
 
 	// Events
