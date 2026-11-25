@@ -34,8 +34,8 @@ PARTS = [p for p in itertools.product((False, True), repeat=3) if p[0] or p[1]] 
 CHAT_BEFORE = "bcea6b1a6aa84a1706adfd68927a9f396fd7a08125c5094f0d028116373a64d8"
 RCA_BEFORE = "84809f765b2e6512dbb830aac3143e75ad3d4071efe80086f555ff32fa6ce714"
 # What it adds, so a longer text is seen here: every model call of a chat answer or of an investigation sends it.
-CHAT_ADDED = (2054, 3022)  # characters, bytes
-RCA_ADDED = 2511
+CHAT_ADDED = (2311, 3553)  # characters, bytes
+RCA_ADDED = 2987
 
 API, WEB, SETTINGS = "Service/apps/api", "Deployment/apps/web", "ConfigMap/apps/web-settings"
 
@@ -134,7 +134,47 @@ def test_every_kind_the_block_takes_has_one_line_of_meaning_in_both_prompts(monk
         assert [line for line in text.split("\n") if re.match(r"^  - [a-z_]+: ", line)] == lines
 
 
-def test_both_say_the_same_four_rules(monkeypatch):
+# What was changed, as the kinds' lines name it, and the kind it takes.
+CHANGED = {
+    "tag": "image", "registry": "image", "ConfigMap": "config_change", "Secret": "config_change", "env variable": "config_change",
+    "command": "config_change", "argument": "config_change", "probe": "config_change", "revision": "rollout",
+    "NetworkPolicy": "network_policy", "name service": "dns", "request or limit": "resource_limit", "ResourceQuota": "quota",
+    "LimitRange": "quota", "a node is": "node", "volume": "storage", "claim": "storage",
+}
+
+
+def test_what_was_changed_is_named_by_one_kind_only():
+    """The "kind" line sends a change to the kind whose line names it: two lines that name it would leave two."""
+    for changed, kind in CHANGED.items():
+        assert [k for k, meaning in cause_naming.KIND_MEANINGS.items() if changed in meaning] == [kind], changed
+    # what goes wrong with no change, and a call's end shown at fault with nothing that says why, name no change
+    for kind in ("crash", "oom"):
+        assert cause_naming.KIND_MEANINGS[kind].endswith("with no change shown")
+    for kind in ("dependency_down", "dependency_slow"):
+        assert cause_naming.KIND_MEANINGS[kind].endswith("but not why")
+    assert "no other line names" in cause_naming.KIND_MEANINGS["config_change"]
+    assert "its image pulled" in cause_naming.KIND_MEANINGS["rollout"] and "cannot be pulled" in cause_naming.KIND_MEANINGS["image"]
+
+
+def test_that_a_cause_is_one_a_result_shows_wins_and_no_line_asks_for_more(monkeypatch):
+    """The one rule that says so comes first, and agrees with what the rest of each prompt says of a cause no result shows."""
+    chat, block = _prompt(monkeypatch, "AI_CAUSE_QUESTIONS", naming="true"), rca.instruction(evidence=True, hypotheses=True, verdict=True, naming=True)
+    assert block.count("only what a tool result shows to be at fault goes in it, and this wins over every line below.") == 1
+    assert cause_naming.INVESTIGATION.startswith('How to fill "causes": only what a tool result shows to be at fault goes in it')
+    assert 'A cause no result shows is a hypothesis: say so in the report and leave it out of "causes".' in block
+    assert 'cannot_tell otherwise, with "no_fault": false and "causes": []' in block
+    assert chat.count("도구 결과가 잘못됐다고 보여 준 것만 원인이고, 이 규칙이 아래 모든 줄에 앞섭니다.") == 1
+    assert "남은 후보와 그것을 가를 다음 확인" in chat and "둘을 가를 다음 확인" in _section(chat)
+    for text in (chat, block):
+        for more in ("both ends as causes", "둘 다 원인으로", "ends are causes"):
+            assert more not in text, more
+    # the two ends go where a block keeps hypotheses, else in the report; a block without an outcome is asked for none
+    assert 'in "hypotheses" as blocked (the calls that show its side under "for", what would tell the two apart under "blocked")' in block
+    assert 'or, in a block without it, as hypotheses in the report' in block
+    assert '"no_fault" false and "outcome", where the block has it, cannot_tell' in block
+
+
+def test_both_say_the_same_rules(monkeypatch):
     chat, block = _section(_prompt(monkeypatch, naming="true")), cause_naming.INVESTIGATION
     for korean, english in (
         # the object that holds what is wrong, not the one the symptom shows on
@@ -147,11 +187,15 @@ def test_both_say_the_same_four_rules(monkeypatch):
         ("NetworkPolicy가 막는 트래픽이면 그 정책", "traffic a NetworkPolicy stops that policy"),
         # what is wrong with it, not how the symptom looks
         ("증상의 모양이 아니라", "not how the symptom looks"),
-        ("바뀐 설정이 낳은 크래시·OOM·느려짐은 config_change", "that a changed setting brought about are config_change"),
-        # both ends of a call, or the one the results show
-        ("불리는 쪽과 부르는 쪽을 둘 다", "name both ends as causes"),
-        ("불리는 쪽 먼저", "the callee first"),
-        ("한쪽 탓이나 둘 사이의 객체 탓인 것이 보이면 그것만", "one end, or an object between the two, makes it so, name that one only"),
+        # of two kinds that fit, the one that names what was changed, else the first to go wrong
+        ("바뀐 것으로 정하세요", "what was changed decides"),
+        ("바뀐 것을 말하는 줄의 종류이고, 그것이 낳은 것의 종류가 아닙니다", "the kind whose line names it, not the kind of what it led to"),
+        ("바뀐 것이 보이지 않으면 먼저 잘못된 것의 종류", "with no change shown, the kind of what went wrong first"),
+        # the two ends of a call the results do not tell apart are candidates, the one they show is the cause
+        ("어느 쪽 탓인지는 보여 주지 않으면, 둘 다 원인이 아니라 후보", "show both but not which is at fault, neither is a cause: both are candidates"),
+        ("불리는 쪽부터 둘 다 후보로", "the callee first"),
+        ("다른 원인이 없으면 원인은 비우고 알 수 없다고", 'With no other cause "causes" is []'),
+        ("한쪽 탓이나 둘 사이의 객체 탓인 것이 보이면 그것만 원인으로", "one end, or an object between the two, is at fault, name that one only"),
         # every independent cause, the main one first, and none added
         ("하나도 빼지 말고", "List every independent cause the results show"),
         ("증상을 가장 많이 설명하는 것부터", "the one that explains most of the symptom first"),
@@ -218,20 +262,67 @@ def test_more_causes_leave_what_is_read_and_kept_of_the_first_as_it_was(more):
     assert [p.resource for p in checked.cause_problems] == [c["resource"] for c in more if c["evidence"] == [9]]
 
 
+BOTH_ENDS = "web calls api: 4.1 s"  # a result that shows the call and its two ends, and not which is at fault
+SYMPTOM = {"resource": WEB, "evidence": [1]}
+
+
+def _candidates(numbers):
+    return [hypothesis(id=f"h{i}", resource=end, state="blocked", blocked="no result shows how long api itself took", **{"for": numbers})
+            for i, end in enumerate((API, WEB), 1)]
+
+
+@pytest.mark.parametrize("ledger", [False, True], ids=["in the report", "in hypotheses"])
 @pytest.mark.asyncio
-async def test_on_a_run_asks_for_it_once_and_keeps_both_ends_of_a_call(monkeypatch):
-    both = _answer([cause(WEB, [1], kind="dependency_slow"), cause("Pod/apps/web-7d9f4-x2k", [1], kind="dependency_slow")],
-                   outcome="cause_found", symptom={"resource": WEB, "evidence": [1]})
-    service = _service(_reads_pods(), completion(content=both))
+async def test_on_a_run_asks_for_it_once_and_two_ends_not_told_apart_are_candidates(monkeypatch, ledger):
+    answer = _answer([], _candidates([1]) if ledger else (), outcome="cannot_tell", symptom=SYMPTOM)
+    service = _service(_reads_pods(), completion(content=answer), answer=BOTH_ENDS)
     install_loop(monkeypatch, service, [])
-    out = await runner.investigate(cfg(max_steps=5, evidence_check=True, verdict=True, cause_naming=True), row())
+    out = await runner.investigate(cfg(max_steps=5, evidence_check=True, ledger=ledger, verdict=True, cause_naming=True), row())
     (first, second) = service.completions.calls
     system = first["messages"][0]["content"]
     assert system == (inv_prompt.system_prompt(cluster="self", namespace="apps", language="en", verdict=True, go_on=True)
-                      + rca.instruction(evidence=True, hypotheses=False, verdict=True, naming=True))
+                      + rca.instruction(evidence=True, hypotheses=ledger, verdict=True, naming=True))
     assert system.count(cause_naming.INVESTIGATION) == 1 and second["messages"][0]["content"] == system
-    assert [(c["resource"], c["verified"]) for c in out["result"]["causes"]] == [(WEB, True), ("Pod/apps/web-7d9f4-x2k", True)]
-    assert out["result"]["failures"] == [] and out["result"]["verdict"]["outcome"] == "cause_found" and out["iterations"] == 2
+    # no cause, so cannot_tell stands as it was said and nothing is asked again
+    kept = out["result"]
+    assert kept["causes"] == [] and kept["no_fault"] is False and kept["failures"] == [] and out["iterations"] == 2
+    assert (kept["verdict"]["outcome"], kept["verdict"]["said"], kept["verdict"]["why"]) == ("cannot_tell", "cannot_tell", [])
+    # with the ledger both ends are kept as what could not be decided, with the call that shows them
+    assert [(h["resource"], h["state"], h["closed"], [c["call"] for c in h["for"]]) for h in kept["hypotheses"]] == (
+        [(API, "blocked", True, [1]), (WEB, "blocked", True, [1])] if ledger else [])
+
+
+@pytest.mark.parametrize("second", ["the same", "as asked"])
+@pytest.mark.asyncio
+async def test_on_a_block_whose_two_ends_no_result_shows_stays_cannot_tell(monkeypatch, second):
+    """Both ends given as causes by a call that holds neither: the server's check of each cause is what it was."""
+    named = _answer([cause(API, [1], kind="dependency_slow"), cause(WEB, [1], kind="dependency_slow")], outcome="cause_found",
+                    symptom={"resource": "Pod/apps/queue-0", "evidence": [1]})
+    asked = named if second == "the same" else _answer([], outcome="cannot_tell", symptom={"resource": "Pod/apps/queue-0", "evidence": [1]})
+    service = _service(_reads_pods(), completion(content=named), completion(content=asked), answer="NAME READY STATUS\nqueue-0 1/1 Running")
+    install_loop(monkeypatch, service, [])
+    out = await runner.investigate(cfg(max_steps=5, evidence_check=True, verdict=True, cause_naming=True), row())
+    again = service.completions.calls[-1]["messages"][-1]["content"]
+    assert "These causes are not shown by them:" in again and 'leave it out of "causes"' in again and "cannot_tell" in again
+    kept = out["result"]
+    assert kept["verdict"]["outcome"] == "cannot_tell" and kept["asked_again"] is True
+    if second == "the same":
+        assert [(c["resource"], c["verified"], c["reason"]) for c in kept["causes"]] == [
+            (API, False, "name_missing"), (WEB, False, "name_missing")]
+        assert (kept["verdict"]["said"], kept["verdict"]["why"]) == ("cause_found", ["cause_not_shown"])
+    else:
+        assert kept["causes"] == [] and kept["failures"] == [] and kept["verdict"]["why"] == []
+
+
+@pytest.mark.parametrize("candidates,problem", [
+    (_candidates([9]), "bad_calls"),                                          # a call this run did not make
+    ([{**h, "blocked": ""} for h in _candidates([1])], "no_reason"),          # nothing that would tell them apart
+    ([{**h, "state": "candidate"} for h in _candidates([1])], "open"),        # a state the ledger has not
+], ids=["calls", "reason", "state"])
+def test_a_candidate_is_held_to_the_calls_as_every_hypothesis(candidates, problem):
+    checked = rca.check(_answer([], candidates), tool_log=LOG, reads=READS, alert_start=None, evidence=True, ledger=True)
+    assert [f["kind"] for f in checked.failures] == [f"hypothesis_{problem}"] * 2
+    assert [h["closed"] for h in checked.hypotheses] == [False, False]
 
 
 @pytest.mark.parametrize("switches", [{}, {"rules": True}, {"call_paths": True}, {"verdict": True}], ids=lambda s: "+".join(s) or "none")

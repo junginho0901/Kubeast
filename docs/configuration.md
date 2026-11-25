@@ -223,8 +223,9 @@ ai:
   faultOnset: false        # (alpha) the chat and alert investigations say when each failure began and list one that was there before apart from
                            # the cause; issues and anomaly_rank answer since when a failing object's state is known (features.md); off: as before
   causeNaming: false       # (alpha) how an answer names its causes in AI Chat and in an investigation's rca block: the object that holds
-                           # what is wrong and not the one the symptom shows on, its kind with one line of meaning each, both ends of a
-                           # slow or broken call, every independent cause (features.md, ai-alerts.md); off: as before
+                           # what is wrong and not the one the symptom shows on, its kind with one line of meaning each, every independent
+                           # cause, and two ends of a call the results do not tell apart as candidates, not causes (features.md,
+                           # ai-alerts.md); off: as before
   refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
                              # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
   toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty

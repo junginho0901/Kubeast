@@ -532,11 +532,12 @@ ai:
   # question asks for) and in an alert investigation's rca block: the object
   # that holds what is wrong (a changed ConfigMap, Secret, policy, Job, node or
   # workload) and not the one the symptom shows on, what is wrong with it as one
-  # of the block's kinds, each with one line of meaning, both ends of a slow or
-  # broken call when the results do not tell which end it is, and every
-  # independent cause, the main one first. The block keeps its shape. Adds about
-  # 2,000 characters to the chat's instructions and 2,500 to an investigation's
-  # with features.alertInvestigation.evidenceCheck or ledger on (nothing with
+  # of the block's kinds, each with one line of meaning, and every independent
+  # cause, the main one first. Only what a tool result shows to be at fault is a
+  # cause: two ends of a call the results do not tell apart are candidates. The
+  # block keeps its shape. Adds about 2,300 characters to the chat's
+  # instructions and 3,000 to an investigation's with
+  # features.alertInvestigation.evidenceCheck or ledger on (nothing with
   # both off); the floating chat and the MCP server are as before. Off: the
   # instructions are as before.
   # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
