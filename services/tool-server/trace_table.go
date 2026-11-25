@@ -34,6 +34,8 @@ const (
 	traceDepthMark    = "· "
 	traceCallsMark    = " → "
 	traceNoServerSpan = "none"
+	// The longest text of a span that holds personal data, which is not cut: a longer one says its length instead.
+	spanPersonalChars = 240
 
 	traceColumns = "start_ms | ms | self_ms | outside_ms | service | kind | span"
 	traceLegend  = "Spans in call order, one · per call down. start_ms: after the first span here. self_ms: ms that no child span here " +
@@ -209,6 +211,9 @@ func (l *tableLine) words(s string, limit int) string {
 	// cut in the middle, a value the personal-data rules know may no longer be one they know
 	if redactOpts.PII {
 		if _, personal := redact.Text(masked, redactOpts); personal.Count > 0 {
+			if n := utf8.RuneCountInString(masked); n > spanPersonalChars {
+				return fmt.Sprintf("(%d characters, personal data)", n)
+			}
 			return masked
 		}
 	}
@@ -220,7 +225,7 @@ func lineOf(s *traceSpan, first time.Time, manyNamespaces bool) tableLine {
 	var l tableLine
 	service, outside := l.words(s.service, spanNameChars), ""
 	if manyNamespaces && s.namespace != "" {
-		service = s.namespace + "/" + service
+		service = l.words(s.namespace, spanNameChars) + "/" + service
 	}
 	switch {
 	case s.called != "":
@@ -260,7 +265,7 @@ func (l tableLine) chars() int {
 
 // spanTable is the spans that fit the budget, in call order, with their lines. When not all do, the spans that failed and
 // then those that took the most time, their own or outside the server they called, are kept, each with the spans above it
-// where those fit too.
+// where those fit too; a span whose line no longer fits is passed over for the next.
 func spanTable(order []*traceSpan, first time.Time, budget int) (kept []*traceSpan, lines []tableLine) {
 	namespaces := map[string]bool{}
 	for _, s := range order {
@@ -284,7 +289,7 @@ func spanTable(order []*traceSpan, first time.Time, budget int) (kept []*traceSp
 		}
 		path, room := []*traceSpan{s}, made[s].chars()
 		if room > budget {
-			break
+			continue
 		}
 		for up := s.up; up != nil && !in[up]; up = up.up {
 			path = append(path, up)

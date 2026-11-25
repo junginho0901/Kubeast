@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -444,6 +445,137 @@ func TestTraceTable_NoCredentialOfASpanReachesTheModel(t *testing.T) {
 	}
 	if stats == nil || stats.Kinds["key_name"] != 1 || stats.Kinds["aws_key"] != 1 || stats.Kinds["authorization"] != 1 {
 		t.Errorf("masked %+v", stats)
+	}
+}
+
+// With personal data on, a text that holds some is not cut, so a long one says its length instead: the failed spans come
+// first, and one whole line longer than the table would be the only one and not fit.
+func TestTraceTable_ALongTextWithPersonalDataLeavesTheOthersTheirLines(t *testing.T) {
+	statement := "duplicate key value in INSERT INTO accounts VALUES ('ann.planted@example.com', " + strings.Repeat("'x', ", 1000) + "'y')"
+	for _, c := range []struct {
+		name          string
+		pii           bool
+		chars         int // of the failed span's message
+		end           string
+		shown, masked int
+	}{
+		{"past the table", true, 0, fmt.Sprintf(" [ERROR: (%d characters, personal data)]", utf8.RuneCountInString(statement)), 24, 0},
+		{"as long as a whole text gets", true, 240, "가]", 24, 1},
+		{"one more", true, 241, " [ERROR: (241 characters, personal data)]", 24, 0},
+		{"short", true, 60, "가]", 24, 1},
+		{"personal data off: cut as any other", false, 0, "…]", 24, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			withTraceTable(t, "true")
+			redactOpts.PII = c.pii
+			message := statement
+			if c.chars > 0 {
+				message = "no row of ann.planted@example.com "
+				message += strings.Repeat("가", c.chars-utf8.RuneCountInString(message))
+			}
+			spans := slowHopTrace()
+			spans[17].message = message // the call to quote, the only one that failed
+			toolServerForSecrets(t, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(traceReply(t, 0, spans))) })
+			resp := callTool(t, "traces_get", map[string]interface{}{"trace_id": madeTraceID})
+			if resp.Error != "" {
+				t.Fatal(resp.Error)
+			}
+			lines := tableOf(t, resp.Content)
+			if len(lines) != c.shown || decode(t, resp.Content)["truncated"] != nil {
+				t.Fatalf("%d lines: %s", len(lines), resp.Content)
+			}
+			if n := utf8.RuneCountInString(asTheModelReads(t, resp.Content)); n > modelResultChars {
+				t.Errorf("the model reads %d of %d characters", modelResultChars, n)
+			}
+			if line := lineWith(lines, "QuoteService"); !strings.HasSuffix(line, c.end) {
+				t.Errorf("failed span: %q", line)
+			}
+			masked := 0
+			if resp.Redacted != nil {
+				masked = resp.Redacted.Kinds["email"]
+			}
+			if masked != c.masked || (c.pii && strings.Contains(resp.Content, "ann.planted")) {
+				t.Errorf("%d masked: %s", masked, resp.Content)
+			}
+		})
+	}
+}
+
+// Every text of a span that holds much personal data: the line still fits, and says of each how long it is.
+func TestTraceTable_EveryLongTextOfASpanWithPersonalDataSaysItsLength(t *testing.T) {
+	withTraceTable(t, "true")
+	redactOpts.PII = true
+	long := func(what string) string { return what + " ann.planted@example.com " + strings.Repeat("x", 3000) }
+	lines := tableOf(t, openTrace(t, traceReply(t, 0, []made{
+		{id: "a", service: long("web"), kind: "SERVER", name: long("GET"), at: 0, ms: 5, status: "ERROR", message: long("failed"), attrs: map[string]string{"error.type": long("type")}},
+		{id: "b", parent: "a", service: long("web"), kind: "CLIENT", name: "call", at: 1, ms: 2, attrs: map[string]string{"server.address": long("db")}},
+		{id: "c", parent: "a", service: "web", kind: "CLIENT", name: "ask", at: 3, ms: 1},
+		{id: "d", parent: "c", service: long("api"), kind: "SERVER", name: "answer", at: 3, ms: 1},
+	})))
+	n := func(what string) string {
+		return fmt.Sprintf("(%d characters, personal data)", utf8.RuneCountInString(long(what)))
+	}
+	want := []string{
+		"0.0 | 5.0 | 2.0 |  | " + n("web") + " | SERVER | " + n("GET") + " [ERROR " + n("type") + ": " + n("failed") + "]",
+		"1.0 | 2.0 | 2.0 | none | " + n("web") + " → " + n("db") + " | CLIENT | · call",
+		"3.0 | 1.0 | 0.0 | 0.0 | web → " + n("api") + " | CLIENT | · ask",
+		"3.0 | 1.0 | 1.0 |  | " + n("api") + " | SERVER | · · answer",
+	}
+	if !reflect.DeepEqual(lines, want) {
+		t.Errorf("got\n%s\nwant\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A span whose line no longer fits is passed over: the lines after it that do fit are there, of the spans that failed too.
+func TestTraceTable_ALineThatDoesNotFitLeavesRoomForTheNext(t *testing.T) {
+	withTraceTable(t, "true")
+	var spans []made
+	for i := 0; i < 40; i++ {
+		spans = append(spans, made{id: fmt.Sprintf("l%02d", i), service: "web", kind: "INTERNAL", name: fmt.Sprintf("long %02d", i), at: float64(i), ms: 100,
+			status: "ERROR", message: strings.Repeat("m", 108)})
+	}
+	// less time than any of the long ones, so ranked after them
+	spans = append(spans, made{id: "s1", service: "web", kind: "INTERNAL", name: "short failed", at: 50, ms: 3, status: "ERROR"},
+		made{id: "s2", service: "web", kind: "INTERNAL", name: "short", at: 51, ms: 2})
+	out := openTrace(t, traceReply(t, 0, spans))
+	lines := tableOf(t, out)
+	long := 0
+	for _, l := range lines {
+		if strings.Contains(l, "long ") {
+			long++
+		}
+	}
+	if long < 10 || long == 40 || lineWith(lines, "short failed") == "" || lineWith(lines, "| short") == "" {
+		t.Fatalf("%d long of %d lines: %s", long, len(lines), out)
+	}
+	if n := utf8.RuneCountInString(asTheModelReads(t, out)); n > modelResultChars {
+		t.Errorf("the model reads %d of %d characters", modelResultChars, n)
+	}
+	if hint := decode(t, out)["hint"].(string); !strings.Contains(hint, fmt.Sprintf("%d spans are left out of the table, none with more than 100.0 ms", 40-long)) {
+		t.Errorf("hint %q", hint)
+	}
+}
+
+// A namespace is the trace's own word too: on one line, no longer than a name, its credentials masked.
+func TestTraceTable_ANamespaceIsCutAndMaskedAsTheOtherTexts(t *testing.T) {
+	withTraceTable(t, "true")
+	reply := traceReply(t, 0, []made{
+		{id: "a", service: "web", kind: "SERVER", name: "GET /", at: 0, ms: 5, status: "ERROR", message: "boom"},
+		{id: "b", parent: "a", service: "api", kind: "SERVER", name: "answer", at: 1, ms: 2},
+		{id: "c", parent: "a", service: "db", kind: "SERVER", name: "row", at: 2, ms: 2},
+	})
+	for _, ns := range []string{`"other\npassword: planted-db-pass-1"`, `"` + strings.Repeat("n", 6000) + `"`} {
+		reply = strings.Replace(reply, `"namespace":"shop"`, `"namespace":`+ns, 1)
+	}
+	lines := tableOf(t, openTrace(t, reply))
+	if len(lines) != 3 {
+		t.Fatalf("%d lines: %q", len(lines), lines)
+	}
+	for part, want := range map[string]string{"GET /": " | other password: <REDACTED:password>/web | ", "row": " | shop/db | ",
+		"answer": " | " + strings.Repeat("n", 89) + "…/api | "} {
+		if got := lineWith(lines, part); !strings.Contains(got, want) {
+			t.Errorf("%s: %q", part, got)
+		}
 	}
 }
 
