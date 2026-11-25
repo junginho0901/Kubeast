@@ -4,7 +4,7 @@ An answer repeats what was asked: the name in a not_found, the pod in an empty q
 (unread()) or whose answer holds nothing (empty()) shows no symptom, no cause and no object, whatever names are in its
 text. The answer of a raw-text tool (tool_results.RAW_TEXT_TOOLS) is what a container or the cluster wrote: a log line that
 is a JSON object with an `error` or a `status` is a log line, and only an object of the shape tool-server or ai-service
-makes is an answer of theirs (raw_outcome()). Nothing here runs with the verdict off."""
+makes is an answer of theirs (raw_outcome()). Nothing here but no_log() runs with the verdict off."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from app.services.ai.tool_results import RAW_TEXT_TOOLS
 
 # Statuses a tool answers with in place of a read (tool-server; container_required also ai-service's dispatch). A Helm
 # release's own status, as "failed", is none of them.
-UNREAD = frozenset({"unavailable", "not_found", "unknown_kind", "container_required", "no_previous", "too_large", "unknown_field"})
+UNREAD = frozenset({"unavailable", "not_found", "unknown_kind", "container_required", "no_previous", "no_log", "too_large", "unknown_field"})
 
 # The keys beside status that tool-server writes for a raw-text tool (notfound.go, secret_read.go): (always, sometimes).
 _RAW_SHAPES: dict[str, tuple[frozenset[str], frozenset[str]]] = {
@@ -24,6 +24,7 @@ _RAW_SHAPES: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "unknown_kind": (frozenset({"kind", "similar_kinds", "hint"}), frozenset()),
     "container_required": (frozenset({"pod", "namespace", "containers", "hint"}), frozenset()),
     "no_previous": (frozenset({"pod", "namespace", "container", "hint"}), frozenset()),
+    "no_log": (frozenset({"pod", "namespace", "reason", "hint"}), frozenset({"container", "containers"})),
     "unavailable": (frozenset({"feature", "reason", "alternative"}), frozenset()),
     "forbidden": (frozenset({"reason", "hint"}), frozenset({"resource_type"})),
 }
@@ -87,6 +88,12 @@ def raw_outcome(tool: str, raw: Any) -> tuple[Optional[str], Optional[str]]:
     if not always <= keys or keys - always - sometimes:
         return None, None
     return (status if status == "forbidden" else None), status
+
+
+def no_log(tool: str, raw: Any) -> bool:
+    """Whether a read of a pod's log is tool-server's answer that the node had no log to give: the kubelet's own words in
+    place of one. The one function here the runner asks with the verdict off too."""
+    return tool == "k8s_get_pod_logs" and raw_outcome(tool, raw)[1] == "no_log"
 
 
 def unread(tool: str, raw: Any, status: Optional[str]) -> Optional[str]:

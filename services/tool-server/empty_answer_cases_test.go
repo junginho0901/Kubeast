@@ -35,6 +35,7 @@ func emptyAnswerCaseSet(t *testing.T) []emptyAnswerCase {
 	}
 	web := args{"pod_name": "web-1", "namespace": "shop"}
 	grepped := args{"pod_name": "web-1", "namespace": "shop", "grep": "web-1"}
+	every := args{"pod_name": "web-1", "namespace": "shop", "all_containers": true}
 	names := args{"resource_type": "configmaps", "namespace": "shop", "output": "name"}
 	file := args{"namespace": "shop", "pod_name": "web-1", "path": "/var/log/web-1.log"}
 	type given struct {
@@ -59,6 +60,12 @@ func emptyAnswerCaseSet(t *testing.T) []emptyAnswerCase {
 		{name: "a search of a cut log without a match", tool: "k8s_get_pod_logs", args: grepped, kubectl: kubectlSays(long), holds: "nothing"},
 		{name: "a search of a cut log with a match", tool: "k8s_get_pod_logs", args: grepped, kubectl: kubectlSays(long + "web-1 stopped\n"), holds: "something"},
 		{name: "a cut log", tool: "k8s_get_pod_logs", args: web, kubectl: kubectlSays(long), holds: "something"},
+		{name: "a log whose container is gone", tool: "k8s_get_pod_logs", args: args{"pod_name": "web-1", "namespace": "shop", "container": "app", "previous": true}, kubectl: kubectlSays(goneText), holds: "unread"},
+		{name: "a log whose file is gone", tool: "k8s_get_pod_logs", args: web, kubectl: kubectlSays(defaulted + goneFile), holds: "unread"},
+		{name: "a search of a log whose container is gone", tool: "k8s_get_pod_logs", args: grepped, kubectl: kubectlSays(goneText), holds: "unread"},
+		{name: "logs whose containers are gone", tool: "k8s_get_pod_logs", args: every, kubectl: kubectlSays("[pod/web-1/app] " + goneText + "[pod/web-1/side] " + goneFile), holds: "unread"},
+		{name: "a log beside one whose container is gone", tool: "k8s_get_pod_logs", args: every, kubectl: kubectlSays("[pod/web-1/app] " + goneText + "[pod/web-1/side] ready\n"), holds: "something"},
+		{name: "a line of a log with the words of one that is gone", tool: "k8s_get_pod_logs", args: web, kubectl: kubectlSays(goneText + "\n"), holds: "something"},
 		{name: "a list of no name", tool: "k8s_get_resources", args: names, kubectl: kubectlSays(""), holds: "nothing"},
 		{name: "a list of no event's name", tool: "k8s_get_resources", args: args{"resource_type": "events", "all_namespaces": true, "output": "name"}, kubectl: kubectlSays(""), holds: "nothing"},
 		{name: "a list of a name", tool: "k8s_get_resources", args: names, kubectl: kubectlSays("configmap/web\n"), holds: "something"},

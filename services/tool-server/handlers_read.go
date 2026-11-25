@@ -200,6 +200,9 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 	if err != nil {
 		return explainFailure(ctx, headers, err, "pods", podName, namespace)
 	}
+	if containers, words, ok := noLogOf(out, namespace, podName, container, allContainers); ok {
+		return noLogResult(podName, namespace, containers, words, previous, allContainers)
+	}
 	if out == "" && resultDetails() {
 		return logEmpty(scan, since, previous, allContainers), nil
 	}
