@@ -115,6 +115,16 @@ def _is_refusal(result) -> bool:
     return isinstance(result, str) and len(result) <= _REFUSAL_MAX_CHARS and tool_outcome(result)[0] != "success"
 
 
+def _writes(tool_context) -> int:
+    return getattr(tool_context, "writes", 0)
+
+
+def _wrote(tool_context) -> None:
+    """A write ran, or failed part of the way: the answers the conversation keeps may be old."""
+    tool_context.writes = _writes(tool_context) + 1
+    tool_context.cache.clear()
+
+
 async def execute_function_with_context(
     service: "AIService",
     function_name: str,
@@ -147,7 +157,11 @@ async def execute_function_with_context(
         from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
         if function_name in WRITE_TOOL_NAMES:
-            return await service._call_tool_server(function_name, function_args)
+            try:
+                return await service._call_tool_server(function_name, function_args)
+            finally:
+                _wrote(tool_context)
+        began = _writes(tool_context)
 
         # 함수 실행
         if function_name == "get_cluster_overview":
@@ -446,7 +460,9 @@ async def execute_function_with_context(
         if not _is_refusal(result):
             # AI_TOOL_RESULT_DETAILS: the console screens of what the call and its result name (off: the result as it came)
             result = console_links.add(function_name, function_args, result, cluster)
-            tool_context.cache[cache_key] = result
+            # A write that ran meanwhile (Claude Code may call tools at once): this read may hold what was there before it.
+            if _writes(tool_context) == began:
+                tool_context.cache[cache_key] = result
 
         log.debug("[DEBUG] Function result cached: %s", cache_key)
         return result

@@ -237,6 +237,35 @@ async def test_the_same_call_on_the_same_cluster_still_answers_from_the_cache():
 
 
 @pytest.mark.asyncio
+async def test_a_write_that_ran_drops_the_answers_the_conversation_keeps():
+    from app.services.ai_service import ToolContext
+
+    service = _make_service()
+    service._call_tool_server = AsyncMock(side_effect=['{"call": 1}', '{"call": 2}', Exception("timed out"), '{"call": 4}', '{"call": 5}'])
+    ctx, other = ToolContext("s1"), ToolContext("s2")
+    args = {"resource_type": "pods", "namespace": "shop"}
+    read = lambda c: execute_function_with_context(service, "k8s_get_resources", args, c)  # noqa: E731
+    assert await read(ctx) == '{"call": 1}' and await read(other) == '{"call": 2}'
+    await execute_function_with_context(service, "k8s_scale", {"resource_name": "web", "replicas": 2}, ctx)  # failed part of the way
+    assert await read(ctx) == '{"call": 4}' and await read(ctx) == '{"call": 4}'
+    assert await read(other) == '{"call": 2}'  # another conversation's are its own
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["hygiene", "k8s_diff", "alert_investigate", "no_such_tool"])
+async def test_what_is_no_write_leaves_the_answers_the_conversation_keeps(tool):
+    from app.services.ai_service import ToolContext
+
+    service = _make_service()
+    service._call_tool_server = AsyncMock(side_effect=['{"call": 1}', '{"call": 2}', '{"call": 3}'])
+    ctx = ToolContext("s1")
+    args = {"resource_type": "pods", "namespace": "shop"}
+    await execute_function_with_context(service, "k8s_get_resources", args, ctx)
+    await execute_function_with_context(service, tool, {}, ctx)
+    assert await execute_function_with_context(service, "k8s_get_resources", args, ctx) == '{"call": 1}'
+
+
+@pytest.mark.asyncio
 async def test_a_cached_result_is_not_served_outside_the_namespaces_the_caller_holds_now():
     from app.security import TokenPayload
 
