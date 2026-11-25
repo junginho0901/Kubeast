@@ -413,7 +413,7 @@ func TestPodLogs_ALineOfALogThatEndsAsTheErrorOfAContainerThatWaitsIsTheLogs(t *
 		line := `saw error: container "side" in pod "web-1" is waiting to start: Healthy`
 		pod := aPod{names: names, containers: []aContainer{{name: "migrate", log: line + "\npanic"}, side}}
 		pod.inEveryOrder(t, asked, func(out string, _ [][]string) {
-			lines :="[pod/web-1/migrate] " + line + "\n[pod/web-1/migrate] panic"
+			lines := "[pod/web-1/migrate] " + line + "\n[pod/web-1/migrate] panic"
 			if out != lines+"\n"+noLogOfSideYet && out != lines+"error: "+side.fails+"\n" {
 				t.Errorf("%q", out)
 			}
