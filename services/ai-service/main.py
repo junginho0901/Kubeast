@@ -16,6 +16,7 @@ from app.api import router
 from app.api_public import admin_router, public_router
 from app.api_alert_inbox import router as alert_inbox_router
 from app.api_investigations import router as investigations_router
+from app.api_model_uses import router as model_uses_router
 from app.services import approval_runs
 from app.services.investigation import settings as investigation_settings
 from app.services.investigation.webhook import router as alerts_router
@@ -144,6 +145,7 @@ app.include_router(router, prefix="/api/v1/ai", dependencies=[Depends(require_au
 
 # 관리자 전용(모델 연결 테스트) / 공개(health)
 app.include_router(admin_router, prefix="/api/v1/ai")
+app.include_router(model_uses_router, prefix="/api/v1/ai/model-configs")
 app.include_router(public_router, prefix="/api/v1/ai")
 
 # Alert investigation: Alertmanager's webhook (its own Bearer token, not a user),

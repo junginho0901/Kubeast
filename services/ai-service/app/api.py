@@ -105,6 +105,8 @@ _cached_ai_service = None  # Optional[AIService]
 # The economy-tier model (history summaries, the floating assistant), when one is enabled.
 _cached_economy_hash: str = ""
 _cached_economy_service = None  # Optional[AIService]
+# use → (config hash, AIService) of the uses a config was chosen for (app/services/model_uses.py).
+_cached_use_services: dict = {}
 
 
 def _invalidate_caches():
@@ -116,6 +118,7 @@ def _invalidate_caches():
     _cached_ai_service = None
     _cached_economy_hash = ""
     _cached_economy_service = None
+    _cached_use_services.clear()
 
 
 def _config_hash(resolved) -> str:
@@ -142,21 +145,43 @@ def _new_ai_service(resolved):
     )
 
 
-async def _active_model_config():
-    """The active config, or a 503 saying why it cannot run (a refused address, no key in ai-service, provider fields refused), never a bare 500."""
+async def _usable(resolving, what: str):
+    """What `resolving` answers, or a 503 saying why that config cannot run (a refused address, no key in ai-service, provider fields refused), never a bare 500."""
     from app.services.model_config_policy import AddressRefused
-    from app.services.model_config_service import ModelConfigUnusable, NoModelConfigured, resolve_model_config
+    from app.services.model_config_service import ModelConfigUnusable, NoModelConfigured
 
     try:
-        return await resolve_model_config()
+        return await resolving
     except NoModelConfigured as e:
         raise HTTPException(status_code=503, detail=f"{e}.") from e
     except (AddressRefused, ModelConfigUnusable) as e:
-        logger.warning("active model config refused: %s", getattr(e, "detail", e))
+        logger.warning("%s model config refused: %s", what, getattr(e, "detail", e))
         raise HTTPException(status_code=503, detail=f"{e}. An administrator runs Test on this model in Admin → AI Models to see why.") from e
 
 
-async def _build_ai_service(authorization: str, cluster_name: Optional[str] = None, tier: str = "default"):
+async def _active_model_config():
+    """The active config, or a 503 (_usable)."""
+    from app.services.model_config_service import resolve_model_config
+
+    return await _usable(resolve_model_config(), "active")
+
+
+async def _use_service(use: str):
+    """The shared service of the config chosen for this use, or None without a choice; a chosen config that cannot run is a 503 (_usable)."""
+    from app.services.model_config_service import resolve_use_model_config
+
+    resolved = await _usable(resolve_use_model_config(use), use)
+    if resolved is None:
+        _cached_use_services.pop(use, None)
+        return None
+    config_hash = _config_hash(resolved)
+    cached = _cached_use_services.get(use)
+    if cached is None or cached[0] != config_hash:
+        cached = _cached_use_services[use] = (config_hash, _new_ai_service(resolved))
+    return cached[1]
+
+
+async def _build_ai_service(authorization: str, cluster_name: Optional[str] = None, tier: str = "default", use: Optional[str] = None):
     """
     Return an AIService that reuses the LLM client if the active model
     config hasn't changed.  Only *role / authorization / cluster* differ per
@@ -167,18 +192,23 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
     config when there is one; history summaries always use it when there is
     one (``summary_client`` / ``summary_model``). Without one, both are the
     active config.
+
+    use: a use an administrator may choose a config for (model_uses.USES).
+    The service then runs on that config, else as without a use.
     """
     global _cached_ai_config_hash, _cached_ai_service, _cached_economy_hash, _cached_economy_service
 
     from app.services.model_config_service import resolve_economy_model_config
 
-    resolved = await _active_model_config()
-    config_hash = _config_hash(resolved)
-    if _cached_ai_service is None or config_hash != _cached_ai_config_hash:
-        # Config changed or first call — build the LLM client once. The cached
-        # instance carries no user: every request gets its own view below.
-        _cached_ai_service = _new_ai_service(resolved)
-        _cached_ai_config_hash = config_hash
+    chosen = await _use_service(use) if use else None
+    if chosen is None:
+        resolved = await _active_model_config()
+        config_hash = _config_hash(resolved)
+        if _cached_ai_service is None or config_hash != _cached_ai_config_hash:
+            # Config changed or first call — build the LLM client once. The cached
+            # instance carries no user: every request gets its own view below.
+            _cached_ai_service = _new_ai_service(resolved)
+            _cached_ai_config_hash = config_hash
 
     economy = await resolve_economy_model_config()
     if economy is None:
@@ -206,7 +236,7 @@ async def _build_ai_service(authorization: str, cluster_name: Optional[str] = No
             raise HTTPException(status_code=502, detail="k8s-service unavailable") from e
 
     use_economy = tier == "economy" and _cached_economy_service is not None
-    service = copy.copy(_cached_economy_service if use_economy else _cached_ai_service)
+    service = copy.copy(_cached_economy_service if use_economy else chosen or _cached_ai_service)
     service.tier = "economy" if use_economy else "default"
     summary = _cached_economy_service or service
     service.summary_client, service.summary_model = summary.client, summary.model
@@ -647,7 +677,7 @@ async def suggest_optimization_stream(
     x_cluster_name: Optional[str] = Header(None, alias="X-Cluster-Name"),
 ):
     """리소스 최적화 제안 (SSE 스트리밍). lang = 화면 언어(ko/en, 없으면 en)."""
-    ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name)
+    ai_service = await _build_ai_service(authorization, cluster_name=x_cluster_name, use="optimization")
     actor, http = _extract_audit_meta(request, authorization)
 
     try:

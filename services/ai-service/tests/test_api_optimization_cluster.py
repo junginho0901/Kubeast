@@ -26,8 +26,8 @@ class _StubService:
 def builder_calls(monkeypatch):
     calls = []
 
-    async def fake_build(authorization, cluster_name=None):
-        calls.append({"authorization": authorization, "cluster_name": cluster_name})
+    async def fake_build(authorization, cluster_name=None, use=None):
+        calls.append({"authorization": authorization, "cluster_name": cluster_name, "use": use})
         return _StubService()
 
     monkeypatch.setattr(api_module, "_build_ai_service", fake_build)
@@ -42,7 +42,7 @@ def test_stream_builds_service_for_header_cluster(builder_calls):
         headers={"Authorization": "Bearer tok", "X-Cluster-Name": "test2"},
     )
     assert r.status_code == 200
-    assert builder_calls[-1] == {"authorization": "Bearer tok", "cluster_name": "test2"}
+    assert builder_calls[-1] == {"authorization": "Bearer tok", "cluster_name": "test2", "use": "optimization"}
     # The audit meta of the request reaches the stream (ai.chat.complete, phase optimization).
     assert stream_calls[-1]["namespace"] == "web"
     assert stream_calls[-1]["audit_http"]["path"] == "/api/v1/ai/suggest-optimization/stream"
@@ -74,7 +74,7 @@ class _StreamThatCannotStart:
 
 
 def test_a_stream_that_cannot_start_answers_a_fixed_message_and_logs_the_error(monkeypatch, caplog):
-    async def fake_build(authorization, cluster_name=None):
+    async def fake_build(authorization, cluster_name=None, use=None):
         return _StreamThatCannotStart()
 
     monkeypatch.setattr(api_module, "_build_ai_service", fake_build)

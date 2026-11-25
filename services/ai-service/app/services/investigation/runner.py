@@ -46,7 +46,7 @@ from urllib.parse import parse_qsl, urlencode
 import httpx
 
 from app.database import get_db_service, utcnow
-from app.services import rule_cards
+from app.services import model_uses, rule_cards
 from app.services.ai import access as access_mod
 from app.services.ai import limits
 from app.services.ai import tool_replay
@@ -115,7 +115,7 @@ async def build_service(cfg: inv_settings.InvestigationSettings, token: str, clu
         db = await get_db_service()
         config_id = await store.model_config_id(db, cfg.model)
         if config_id is None:
-            raise InvestigationError(f'model config "{cfg.model}" (features.alertInvestigation.model) not found')
+            raise InvestigationError(f'model config "{cfg.model}" ({cfg.model_from}) not found')
     resolved = await resolve_model_config(config_id=config_id) if config_id is not None else await resolve_model_config()
     service = AIService(
         provider=resolved.provider,
@@ -668,7 +668,7 @@ async def worker(stop: asyncio.Event) -> None:
                     await store.skip(db, row.id, reason)
                 else:
                     try:
-                        await run_one(cfg, db, row)
+                        await run_one(await model_uses.run_settings(db, cfg, row), db, row)
                     except asyncio.CancelledError:
                         # ai-service is stopping (lifespan): give the row back instead of leaving it running until fail_stale.
                         await requeue_on_stop(db, row.id)

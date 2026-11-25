@@ -150,7 +150,8 @@ class ModelConfigResponse(BaseModel):
     enabled: bool
     is_default: bool
     tier: str = "default"
-    # what the server runs on this config now (model_config_service.usage): chat, floating, summary, investigation
+    # what the server runs on this config now (model_config_service.usage): chat, floating, summary, investigation, and
+    # investigate_now and optimization on a config chosen for them
     used_for: list[str] = Field(default_factory=list)
 
     created_at: datetime

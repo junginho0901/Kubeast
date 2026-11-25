@@ -23,6 +23,13 @@ def cfg(**kw):
     return InvestigationSettings(**base)
 
 
+class NothingChosen:
+    """A database with no model chosen for a use (app/services/model_uses.py)."""
+
+    async def get_model_uses(self):
+        return {}
+
+
 def am_message(*alerts, status="firing"):
     return webhook.AmWebhook(
         version="4", groupKey="{}:{alertname=\"X\"}", status=status, receiver="kubeast",
@@ -1122,7 +1129,7 @@ async def test_the_worker_logs_a_run_whose_end_could_not_be_stored_and_takes_the
     queued, ran = [row(id="inv-nul"), row(id="inv-next")], []
 
     async def get_db():
-        return object()
+        return NothingChosen()
 
     async def claim_next(db):
         if queued:
@@ -1377,7 +1384,7 @@ async def test_the_worker_requeues_the_row_it_runs_when_it_is_cancelled(monkeypa
         return "queued"
 
     async def db_service():
-        return object()
+        return NothingChosen()
 
     monkeypatch.setattr(runner, "get_db_service", db_service)
     monkeypatch.setattr(runner, "fail_stale", no_stale)
@@ -1419,7 +1426,7 @@ async def test_a_worker_told_to_stop_ends_the_run_it_holds_and_takes_no_other(mo
         return "queued"
 
     async def db_service():
-        return object()
+        return NothingChosen()
 
     monkeypatch.setattr(runner, "get_db_service", db_service)
     monkeypatch.setattr(runner, "fail_stale", no_stale)

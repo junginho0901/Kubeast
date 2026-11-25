@@ -49,6 +49,8 @@ class InvestigationSettings:
     logs_window_minutes: int = 5
     changes_window_hours: int = 4
     model: str = ""
+    # Where `model` was set, for the error of one not found: the chart, or the screen (app/services/model_uses.py).
+    model_from: str = "features.alertInvestigation.model"
     language: str = "en"
     console_url: str = ""
     # The report's causes held to the run's tool calls before it is kept (investigation/evidence.py).

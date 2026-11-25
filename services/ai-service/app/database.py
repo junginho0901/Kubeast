@@ -129,6 +129,14 @@ class ModelConfig(Base):
     updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
 
+class ModelUse(Base):
+    """The model config an administrator chose for a use (00034_model_uses.sql, app/services/model_uses.py)."""
+    __tablename__ = "model_uses"
+
+    use_name = Column(String, primary_key=True)
+    config_id = Column(Integer, ForeignKey("model_configs.id", ondelete="CASCADE"), nullable=False)
+
+
 class AlertInvestigation(Base):
     """Alert → AI investigation (services/pkg/dbmigrate 00014_alert_investigations.sql)."""
     __tablename__ = "alert_investigations"
@@ -215,7 +223,7 @@ class ClaudeCodeSlot(Base):
 
 # Schema version this build needs — the newest file in
 # services/pkg/dbmigrate/migrations (goose records it in goose_db_version).
-REQUIRED_SCHEMA_VERSION = 33
+REQUIRED_SCHEMA_VERSION = 34
 
 
 async def read_schema_version(engine) -> int:
@@ -469,6 +477,36 @@ class DatabaseService:
                 .limit(1)
             )
             return result.scalar_one_or_none()
+
+    async def get_model_uses(self) -> Dict[str, ModelConfig]:
+        """The config an administrator chose for each use that has a choice, a disabled config too (app/services/model_uses.py)."""
+        async with self.async_session() as db:
+            from sqlalchemy import select
+            rows = await db.execute(
+                select(ModelUse.use_name, ModelConfig).join(ModelConfig, ModelConfig.id == ModelUse.config_id)
+            )
+            return {use: config for use, config in rows.all()}
+
+    async def set_model_use(self, use: str, config_id: Optional[int]) -> bool:
+        """Chooses the config of a use, or takes the choice away (None). False when that config is not there (any more)."""
+        async with self.async_session() as db:
+            from sqlalchemy import delete, text
+            from sqlalchemy.exc import IntegrityError
+            if config_id is None:
+                await db.execute(delete(ModelUse).where(ModelUse.use_name == use))
+                await db.commit()
+                return True
+            try:
+                # one statement: two administrators choosing at once leave one row, and a config that is gone none
+                result = await db.execute(
+                    text("INSERT INTO model_uses (use_name, config_id) SELECT :use, id FROM model_configs WHERE id = :config_id "
+                         "ON CONFLICT (use_name) DO UPDATE SET config_id = EXCLUDED.config_id"),
+                    {"use": use, "config_id": config_id},
+                )
+                await db.commit()
+            except IntegrityError:  # deleted between the read and the write
+                return False
+            return result.rowcount == 1
 
     # ---- tool approvals (H2) ----
 
@@ -765,13 +803,15 @@ class DatabaseService:
 
     async def delete_model_config(self, config_id: int) -> bool:
         async with self.async_session() as db:
-            from sqlalchemy import select
+            from sqlalchemy import delete, select
             result = await db.execute(
                 select(ModelConfig).where(ModelConfig.id == config_id)
             )
             config = result.scalar_one_or_none()
             if not config:
                 return False
+            # PostgreSQL's foreign key does this too; sqlite does not enforce it and may give the id to the next config
+            await db.execute(delete(ModelUse).where(ModelUse.config_id == config_id))
             await db.delete(config)
             await db.commit()
             return True
