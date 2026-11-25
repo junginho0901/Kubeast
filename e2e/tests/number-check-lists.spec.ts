@@ -822,8 +822,13 @@ async function readScreen(page: Page): Promise<ScreenRead> {
 const screenUrl = (s: Screen) =>
   `${s.path}${s.path.includes('?') ? '&' : '?'}cluster=${s.cluster ?? 'self'}${s.clusterScoped || s.allNamespaces ? '' : `&namespace=${NS}`}`
 
+// a value the screen holds and the cluster's, where they differ
+type Difference = { what: string; got: unknown; want: unknown }
+
 // one screen read one way: its rows, every column and every card against the cluster, each difference a soft failure
-// (open = false: the screen already on the page, as live updates left it)
+// (open = false: the screen already on the page, as live updates left it). The two reads are a moment apart, so a value that
+// moves (a crashing pod's STATUS goes Error, CrashLoopBackOff, Running) can differ once: what differs is read again, twice at
+// most and 2 s apart, a page whose live updates are held back opened again, and what differs on each of them is a failure
 async function compareScreen(page: Page, s: Screen, way: string, open = true) {
   const { apiTable } = on(s.cluster)
   if (open) {
@@ -851,51 +856,71 @@ async function compareScreen(page: Page, s: Screen, way: string, open = true) {
   expect.soft(await page.locator('main [data-fold]').count(), `${s.path} (${way}): a column folded at 2560 px`).toBe(0)
 
   // the cluster again, then the screen, so a value that moves (RESTARTS) is read close together
-  const fresh = await apiTable(s.api)
-  const objects = Object.fromEntries(items(s.plural, s.clusterScoped, s.allNamespaces, s.cluster).map((o) => [metaKey(o.metadata), o]))
-  const { heads, rows, cards } = await readScreen(page)
-  // a screen with cards and no expectation for them fails, so a card cannot go unchecked
-  if (!s.cards) expect.soft(cards, `${s.path} (${way}): summary cards with nothing to compare against`).toEqual({})
-  const nameAt = heads.findIndex((h) => /^name$/i.test(h))
-  const nsAt = s.allNamespaces ? heads.findIndex((h) => /^namespace$/i.test(h)) : -1
-  const tableCols = fresh.columnDefinitions.map((c) => norm(c.name))
-  const byName = Object.fromEntries(fresh.rows.map((r) => [metaKey(r.object.metadata), r.cells.map((c) => String(c ?? ''))]))
-  const unknown: string[] = []
-  for (const row of rows) {
-    const name = rowKey(heads, row)
-    if (!name || !byName[name]) continue
-    heads.forEach((h, i) => {
-      if (!h || i === nameAt || i === nsAt || s.skip?.[h] !== undefined) return
-      const o = objects[name]
-      const extra = s.extra?.[h]
-      if (extra) {
-        // chips in one cell read with line breaks between them
-        const squash = (v: string) => v.replace(/\s+/g, ' ').trim()
-        expect.soft(squash(row[i]), `${s.path} (${way}) · ${name} · ${h} (from the object)`).toBe(squash(extra(o)))
-        return
-      }
-      const j = tableCols.indexOf(norm(s.alias?.[h] ?? h))
-      if (j < 0) {
-        if (!unknown.includes(h)) unknown.push(h)
-        return
-      }
-      const cluster = s.shape?.[h] ? s.shape[h](byName[name][j], o) : byName[name][j]
-      const same = s.spans?.[h]?.(o) ? sameSpan(row[i], cluster) : sameValue(row[i], cluster)
-      expect.soft(same, `${s.path} (${way}) · ${name} · ${h}: screen "${row[i]}", kubectl "${byName[name][j]}"`).toBe(true)
-    })
-  }
-  expect.soft(unknown, `${s.path} (${way}): columns with nothing to compare against`).toEqual([])
-  if (s.allColumns) {
-    const shownCols = heads.map((h) => norm(s.alias?.[h] ?? h))
-    const missing = fresh.columnDefinitions.map((c) => c.name).filter((c) => !shownCols.includes(norm(c)) && s.skip?.[c] === undefined)
-    expect.soft(missing, `${s.path} (${way}): kubectl's columns (-o wide too) not on the screen`).toEqual([])
-  }
-  if (s.cards) {
-    const expected = s.cards(Object.values(objects))
-    for (const [label, value] of Object.entries(expected)) {
-      expect.soft(cards[label], `${s.path} (${way}) · card "${label}" (cards on screen: ${JSON.stringify(cards)})`).toBe(value)
+  const differences = async (): Promise<Difference[]> => {
+    const found: Difference[] = []
+    const fresh = await apiTable(s.api)
+    const objects = Object.fromEntries(items(s.plural, s.clusterScoped, s.allNamespaces, s.cluster).map((o) => [metaKey(o.metadata), o]))
+    const { heads, rows, cards } = await readScreen(page)
+    // a screen with cards and no expectation for them fails, so a card cannot go unchecked
+    if (!s.cards && Object.keys(cards).length) found.push({ what: `${s.path} (${way}): summary cards with nothing to compare against`, got: cards, want: {} })
+    const nameAt = heads.findIndex((h) => /^name$/i.test(h))
+    const nsAt = s.allNamespaces ? heads.findIndex((h) => /^namespace$/i.test(h)) : -1
+    const tableCols = fresh.columnDefinitions.map((c) => norm(c.name))
+    const byName = Object.fromEntries(fresh.rows.map((r) => [metaKey(r.object.metadata), r.cells.map((c) => String(c ?? ''))]))
+    const unknown: string[] = []
+    for (const row of rows) {
+      const name = rowKey(heads, row)
+      if (!name || !byName[name]) continue
+      heads.forEach((h, i) => {
+        if (!h || i === nameAt || i === nsAt || s.skip?.[h] !== undefined) return
+        const o = objects[name]
+        const extra = s.extra?.[h]
+        if (extra) {
+          // chips in one cell read with line breaks between them
+          const squash = (v: string) => v.replace(/\s+/g, ' ').trim()
+          const [got, wanted] = [squash(row[i]), squash(extra(o))]
+          if (got !== wanted) found.push({ what: `${s.path} (${way}) · ${name} · ${h} (from the object)`, got, want: wanted })
+          return
+        }
+        const j = tableCols.indexOf(norm(s.alias?.[h] ?? h))
+        if (j < 0) {
+          if (!unknown.includes(h)) unknown.push(h)
+          return
+        }
+        const cluster = s.shape?.[h] ? s.shape[h](byName[name][j], o) : byName[name][j]
+        const same = s.spans?.[h]?.(o) ? sameSpan(row[i], cluster) : sameValue(row[i], cluster)
+        if (!same) found.push({ what: `${s.path} (${way}) · ${name} · ${h}: screen "${row[i]}", kubectl "${byName[name][j]}"`, got: row[i], want: byName[name][j] })
+      })
     }
+    if (unknown.length) found.push({ what: `${s.path} (${way}): columns with nothing to compare against`, got: unknown, want: [] })
+    if (s.allColumns) {
+      const shownCols = heads.map((h) => norm(s.alias?.[h] ?? h))
+      const missing = fresh.columnDefinitions.map((c) => c.name).filter((c) => !shownCols.includes(norm(c)) && s.skip?.[c] === undefined)
+      if (missing.length) found.push({ what: `${s.path} (${way}): kubectl's columns (-o wide too) not on the screen`, got: missing, want: [] })
+    }
+    if (s.cards) {
+      const expected = s.cards(Object.values(objects))
+      for (const [label, value] of Object.entries(expected)) {
+        if (cards[label] !== value) found.push({ what: `${s.path} (${way}) · card "${label}" (cards on screen: ${JSON.stringify(cards)})`, got: cards[label], want: value })
+      }
+    }
+    return found
   }
+  let found = await differences()
+  for (let again = 0; found.length > 0 && again < 2; again++) {
+    test.info().annotations.push({ type: 'read again', description: found.map((d) => d.what).join(' | ') })
+    await page.waitForTimeout(2_000)
+    if (open && way === 'list API') {
+      await page.goto(screenUrl(s))
+      await s.prepare?.(page)
+      // the names were compared above: here the list only has to be back before it is read
+      await expect.poll(names, { timeout: 20_000 }).toEqual(want).catch(() => {})
+    }
+    found = await differences()
+  }
+  // each one by name, then none at all, so a screen read three times with a difference each time fails
+  for (const d of found) expect.soft(d.got, d.what).toEqual(d.want)
+  expect.soft(found.map((d) => d.what), `${s.path} (${way}): values that differ from the cluster's`).toEqual([])
 }
 
 test.describe('number check — list screens', () => {
