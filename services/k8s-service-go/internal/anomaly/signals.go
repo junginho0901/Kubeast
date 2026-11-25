@@ -47,9 +47,22 @@ func LogSelector(l LogLabels, wl *Workload) string {
 	return "{" + l.Pod + "=~" + strconv.Quote(wl.PodPattern()) + "}"
 }
 
-// ErrorCountQuery counts the error lines of each container over the last d at each step.
-func ErrorCountQuery(l LogLabels, wl *Workload, d time.Duration) string {
-	return "sum by (" + l.Container + ") (count_over_time(" + LogSelector(l, wl) + " |~ " + strconv.Quote(ErrorLinePattern) + " [" + seconds(d) + "]))"
+// ErrorCountQuery counts the error lines of each container over the d that ends back before each step.
+func ErrorCountQuery(l LogLabels, wl *Workload, d, back time.Duration) string {
+	offset := ""
+	if back > 0 {
+		offset = " offset " + seconds(back)
+	}
+	return "sum by (" + l.Container + ") (count_over_time(" + LogSelector(l, wl) + " |~ " + strconv.Quote(ErrorLinePattern) + " [" + seconds(d) + "]" + offset + "))"
+}
+
+// CountRange is the range the error line count is asked over with a step of w's length, and how far before each of its
+// two points it counts: at end are w's lines, at start those of the window before. The bounds are multiples of the step
+// because Loki moves a range query's bounds out to them and has no point on w's own unless these are such multiples.
+func CountRange(w Window) (start, end time.Time, back time.Duration) {
+	step := int64(w.Length() / time.Second)
+	last := (w.End.Unix() + step - 1) / step * step
+	return time.Unix(last-step, 0), time.Unix(last, 0), time.Duration(last-w.End.Unix()) * time.Second
 }
 
 // PatternSample is one log shape from the store's pattern ingester and its samples, [unix seconds, lines].

@@ -621,8 +621,9 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 	go func() {
 		defer wg.Done()
 		run(func(c context.Context) {
-			res, qerr := h.logSearch.Query(c, logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: anomaly.ErrorCountQuery(labels, wl, win.Length()),
-				Start: win.Start, End: win.End, Limit: cfg.MaxLines, Metric: true, Step: win.Length()})
+			start, end, back := anomaly.CountRange(win)
+			res, qerr := h.logSearch.Query(c, logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: anomaly.ErrorCountQuery(labels, wl, win.Length(), back),
+				Start: start, End: end, Limit: cfg.MaxLines, Metric: true, Step: win.Length()})
 			reads.sent(res.EffectiveQuery, qerr)
 			if qerr != nil {
 				counts = anomaly.CheckResult{Check: anomaly.CheckErrorLogCounts, NotRun: readFailure("the log store", qerr)}
@@ -633,9 +634,9 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 			for _, s := range res.Series {
 				for _, p := range s.Points {
 					switch int64(p.T) {
-					case win.End.Unix():
+					case end.Unix():
 						now[s.Metric[labels.Container]] += p.V
-					case win.Start.Unix():
+					case start.Unix():
 						prev[s.Metric[labels.Container]] += p.V
 					}
 				}

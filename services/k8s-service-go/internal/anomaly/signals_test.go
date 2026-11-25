@@ -20,7 +20,10 @@ func TestLogQueriesKeepToTheWorkloadAndAddNoScopeOfTheirOwn(t *testing.T) {
 		t.Fatalf("selector %s", got)
 	}
 	want := `sum by (k8s_container_name) (count_over_time({} |~ "(?i)(error|exception|fatal|panic)" [3600s]))`
-	if got := ErrorCountQuery(l, nil, time.Hour); got != want {
+	if got := ErrorCountQuery(l, nil, time.Hour, 0); got != want {
+		t.Fatalf("count query %s", got)
+	}
+	if got := ErrorCountQuery(l, nil, time.Hour, 1181*time.Second); got != strings.Replace(want, "[3600s]", "[3600s] offset 1181s", 1) {
 		t.Fatalf("count query %s", got)
 	}
 	qs := TraceQueries(wl)
@@ -33,6 +36,29 @@ func TestLogQueriesKeepToTheWorkloadAndAddNoScopeOfTheirOwn(t *testing.T) {
 		}
 		if !strings.Contains(q.Query, `resource.k8s.pod.name =~ "^(?:api\\.v2-[bcdfghjklmnpqrstvwxz2456789]{1,10}-[bcdfghjklmnpqrstvwxz2456789]{5})$"`) || !strings.HasSuffix(q.Query, "by (resource.service.name)") {
 			t.Errorf("query %s", q.Query)
+		}
+	}
+}
+
+func TestCountRangeIsOneStepOnMultiplesOfIt(t *testing.T) {
+	for _, c := range []struct {
+		w    Window
+		back time.Duration
+	}{
+		{sigWin, 30 * time.Minute},
+		{Window{Start: sigWin.Start.Add(30 * time.Minute), End: sigWin.End.Add(30 * time.Minute)}, 0},
+		{Window{Start: sigWin.Start.Add(-41 * time.Second), End: sigWin.End.Add(-41 * time.Second)}, 30*time.Minute + 41*time.Second},
+		{Window{Start: sigWin.End.Add(-5 * time.Minute), End: sigWin.End}, 0},
+		{Window{Start: sigWin.End.Add(-10*time.Minute - 8*time.Second), End: sigWin.End.Add(-4 * time.Second)}, 76 * time.Second},
+		{Window{Start: sigWin.End.Add(-MaxLength), End: sigWin.End}, 22*time.Hour + 30*time.Minute},
+	} {
+		start, end, back := CountRange(c.w)
+		step := int64(c.w.Length() / time.Second)
+		if back != c.back || start.Unix()%step != 0 || end.Unix()-start.Unix() != step {
+			t.Errorf("%v: %v to %v, back %v, want %v", c.w, start.UTC(), end.UTC(), back, c.back)
+		}
+		if !end.Add(-back).Equal(c.w.End) || !start.Add(-back).Equal(c.w.Start) {
+			t.Errorf("%v: counted at %v and %v", c.w, end.Add(-back).UTC(), start.Add(-back).UTC())
 		}
 	}
 }
