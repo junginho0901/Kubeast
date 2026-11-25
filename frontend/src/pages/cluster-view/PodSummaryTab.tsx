@@ -6,24 +6,8 @@
 
 import { CheckCircle, XCircle, Search, X } from 'lucide-react'
 import { getPodHealth, getHealthIcon } from './podHealth'
+import type { PodDetail } from './types'
 import { formatTime, utcTitle } from '@/utils/time'
-
-interface PodDetail {
-  name: string
-  namespace: string
-  node: string
-  status: string
-  phase: string
-  restart_count: number
-  created_at: string
-  containers: Array<{
-    name: string
-    image: string
-    ready: boolean
-    state: any
-    restart_count: number
-  }>
-}
 
 interface Props {
   pod: PodDetail

@@ -87,3 +87,25 @@ func TestFilesystemSecretStore_RoundTrip(t *testing.T) {
 		t.Errorf("delete missing should be nil, got %v", err)
 	}
 }
+
+// KubeconfigName is the name each store's WriteKubeconfig returns for a cluster: the Secret's name in helm mode, the
+// file in docker mode.
+func TestKubeconfigNameIsTheNameWriteKubeconfigReturns(t *testing.T) {
+	ctx := context.Background()
+	stores := map[string]SecretStore{
+		"secret": NewK8sSecretStore(fake.NewSimpleClientset(), "kubeast"),
+		"file":   NewFilesystemSecretStore(t.TempDir()),
+	}
+	for kind, store := range stores {
+		name, err := store.WriteKubeconfig(ctx, ID("prod"), "apiVersion: v1")
+		if err != nil {
+			t.Fatalf("%s: write: %v", kind, err)
+		}
+		if got := KubeconfigName(store, ID("prod")); got != name {
+			t.Errorf("%s: KubeconfigName = %q, WriteKubeconfig returned %q", kind, got, name)
+		}
+	}
+	if got := KubeconfigName(stores["secret"], ID("prod")); got != SecretName("prod") {
+		t.Errorf("helm mode: KubeconfigName = %q, want %q", got, SecretName("prod"))
+	}
+}

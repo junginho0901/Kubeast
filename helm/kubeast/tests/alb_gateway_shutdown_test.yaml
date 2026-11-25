@@ -1,0 +1,369 @@
+suite: gateway shutdown behind an AWS ALB that sends to pod IPs — the gateway waits 25 s, the target group drains 20 s
+# kubeast.albPodTargets: the chart's Ingress is on and alb.ingress.kubernetes.io/target-type is ip. Then the gateway alone
+# waits podShutdown.preStopSeconds raised to 25 (gateway.preStopSeconds when set), grace = that + 30, and the Ingress asks
+# for deregistration_delay.timeout_seconds=20 unless its target-group-attributes name one. Nothing else changes.
+templates:
+  - gateway.yaml
+  - ingress.yaml
+  - deployments.yaml
+  - configmap.yaml
+  - secret.yaml
+tests:
+  - it: leaves the gateway at podShutdown.preStopSeconds with the chart's defaults (no Ingress)
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 35
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - hasDocuments:
+          count: 0
+        template: ingress.yaml
+
+  - it: leaves the gateway and the annotations as written behind another Ingress controller (nginx)
+    set:
+      ingress.enabled: true
+      ingress.className: nginx
+      ingress.annotations:
+        nginx.ingress.kubernetes.io/proxy-body-size: 8m
+    asserts:
+      - equal:
+          path: metadata.annotations
+          value:
+            nginx.ingress.kubernetes.io/proxy-body-size: 8m
+        template: ingress.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 35
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  - it: leaves both as they are behind an ALB in instance mode (the controller's default target type), named by className alone or by the annotation
+    set:
+      ingress.enabled: true
+      ingress.className: alb
+      ingress.annotations:
+        alb.ingress.kubernetes.io/scheme: internal
+        alb.ingress.kubernetes.io/target-type: instance
+    asserts:
+      - equal:
+          path: metadata.annotations
+          value:
+            alb.ingress.kubernetes.io/scheme: internal
+            alb.ingress.kubernetes.io/target-type: instance
+        template: ingress.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 35
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  - it: leaves both as they are with className alb and no target type
+    set:
+      ingress.enabled: true
+      ingress.className: alb
+    asserts:
+      - notExists:
+          path: metadata.annotations
+        template: ingress.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  # The value is compared as written (the annotation's values are ip and instance).
+  - it: leaves both as they are with the target type written IP in capitals
+    set:
+      ingress.enabled: true
+      ingress.className: alb
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: IP
+    asserts:
+      - equal:
+          path: metadata.annotations
+          value:
+            alb.ingress.kubernetes.io/target-type: IP
+        template: ingress.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 35
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  - it: gives the gateway 25 s inside a 55 s grace period and the target group a 20 s deregistration delay behind an ALB that sends to pod IPs
+    set:
+      ingress.enabled: true
+      ingress.className: alb
+      ingress.annotations:
+        alb.ingress.kubernetes.io/scheme: internal
+        alb.ingress.kubernetes.io/target-type: ip
+    asserts:
+      - equal:
+          path: metadata.annotations
+          value:
+            alb.ingress.kubernetes.io/scheme: internal
+            alb.ingress.kubernetes.io/target-type: ip
+            alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=20
+        template: ingress.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 25 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      # 25 preStop + 25 shutdown + 5 (kubeast.graceSeconds)
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 55
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  - it: leaves the services behind the gateway at podShutdown.preStopSeconds behind that ALB
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+    template: deployments.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        documentSelector: { path: metadata.name, value: auth-service }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 35
+        documentSelector: { path: metadata.name, value: auth-service }
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        documentSelector: { path: metadata.name, value: frontend }
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        documentSelector: { path: metadata.name, value: k8s-service }
+      # 5 preStop + 60 streams.drainSeconds + 5 close wait + 25 shutdown + 5
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 100
+        documentSelector: { path: metadata.name, value: k8s-service }
+
+  - it: leaves k8s-service-stream at streams.preStopSeconds behind that ALB
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+      streams.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle
+          value: { preStop: { sleep: { seconds: 10 } } }
+        template: deployments.yaml
+        documentSelector: { path: metadata.name, value: k8s-service-stream }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 105
+        template: deployments.yaml
+        documentSelector: { path: metadata.name, value: k8s-service-stream }
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 25 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  - it: changes nothing while the chart's Ingress is off, whatever its annotations say
+    set:
+      ingress.enabled: false
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: ingress.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 35
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  - it: adds the delay after the target group attributes already written, keeping them
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/target-group-attributes: "stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=60, "
+    template: ingress.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["alb.ingress.kubernetes.io/target-group-attributes"]
+          value: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=60,deregistration_delay.timeout_seconds=20
+
+  - it: gives an empty target group attributes annotation the delay alone
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/target-group-attributes: ""
+    template: ingress.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["alb.ingress.kubernetes.io/target-group-attributes"]
+          value: deregistration_delay.timeout_seconds=20
+
+  - it: keeps a deregistration delay written in the annotation as it is, and still gives the gateway 25 s
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/target-group-attributes: deregistration_delay.timeout_seconds=300
+    asserts:
+      - equal:
+          path: metadata.annotations["alb.ingress.kubernetes.io/target-group-attributes"]
+          value: deregistration_delay.timeout_seconds=300
+        template: ingress.yaml
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 25 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+
+  - it: keeps a deregistration delay written among other attributes, spaces and all
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/target-group-attributes: "stickiness.enabled=true, deregistration_delay.timeout_seconds = 45"
+    template: ingress.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["alb.ingress.kubernetes.io/target-group-attributes"]
+          value: "stickiness.enabled=true, deregistration_delay.timeout_seconds = 45"
+
+  - it: takes gateway.preStopSeconds behind that ALB, and the delay is still added
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+      gateway.preStopSeconds: 10
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 10 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 40
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: metadata.annotations["alb.ingress.kubernetes.io/target-group-attributes"]
+          value: deregistration_delay.timeout_seconds=20
+        template: ingress.yaml
+
+  - it: takes gateway.preStopSeconds for the gateway alone without an ALB
+    set:
+      gateway.preStopSeconds: 10
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 10 } }
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 40
+        template: gateway.yaml
+        documentSelector: { path: kind, value: Deployment }
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 5 } }
+        template: deployments.yaml
+        documentSelector: { path: metadata.name, value: auth-service }
+
+  - it: turns the gateway's wait off at gateway.preStopSeconds 0 behind that ALB
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+      gateway.preStopSeconds: 0
+    template: gateway.yaml
+    documentSelector: { path: kind, value: Deployment }
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 30
+
+  - it: keeps a longer podShutdown.preStopSeconds for the gateway behind that ALB
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+      podShutdown.preStopSeconds: 40
+    template: gateway.yaml
+    documentSelector: { path: kind, value: Deployment }
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].lifecycle.preStop
+          value: { sleep: { seconds: 40 } }
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 70
+
+  # 0 is the cluster that refuses a preStop sleep (below Kubernetes 1.30): the gateway is not given one either.
+  - it: gives the gateway no wait behind that ALB while podShutdown.preStopSeconds is 0
+    set:
+      ingress.enabled: true
+      ingress.annotations:
+        alb.ingress.kubernetes.io/target-type: ip
+      podShutdown.preStopSeconds: 0
+    template: gateway.yaml
+    documentSelector: { path: kind, value: Deployment }
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 30
+
+  - it: refuses a negative gateway.preStopSeconds
+    set:
+      gateway.preStopSeconds: -1
+    template: gateway.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "gateway.preStopSeconds must be a whole number of seconds, 0 or more"
+
+  - it: refuses a gateway.preStopSeconds that is not a whole number of seconds
+    set:
+      gateway.preStopSeconds: "25s"
+    template: gateway.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "gateway.preStopSeconds must be a whole number of seconds, 0 or more"

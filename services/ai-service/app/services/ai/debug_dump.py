@@ -8,7 +8,8 @@ a ConfigMap a tool returned), and stdout is the cluster's log pipeline. So:
   errors at WARNING/ERROR with ``safe_error`` so exception text is masked too.
 - ``dump`` — the content dumps, written only when ``AI_DEBUG_DUMP=true`` and
   even then after ``redact_text`` (Secret documents stripped, credential-looking
-  values masked) and a length cap.
+  values masked with every credential rule, whatever REDACTION_ENABLED and
+  REDACTION_DISABLE say) and a length cap.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import sys
 from typing import Any, Iterable, Optional
 
 from app.config import settings
-from app.services.redact import Options, redact_text
+from app.services.redact import Options, from_env, redact_text
 
 log = logging.getLogger("kubeast.ai")
 # The service configures no logging of its own and uvicorn only configures its
@@ -37,6 +38,13 @@ def dump_enabled() -> bool:
     return bool(getattr(settings, "AI_DEBUG_DUMP", False))
 
 
+def _dump_rules() -> Options:
+    """REDACTION_ENABLED and REDACTION_DISABLE choose what a model reads; the log gets every credential rule, and the
+    personal data rules when REDACTION_PII is on."""
+    env = from_env()
+    return Options(enabled=True, pii=env.pii, numbered=env.numbered)
+
+
 def dump(label: str, payload: Any = None, limit: int = _LIMIT) -> None:
     """Log ``payload`` under ``label`` when AI_DEBUG_DUMP is on, redacted."""
     if not dump_enabled():
@@ -50,7 +58,7 @@ def dump(label: str, payload: Any = None, limit: int = _LIMIT) -> None:
             text = json.dumps(payload, ensure_ascii=False, default=str)
         except Exception:
             text = str(payload)
-    text, _ = redact_text(text)
+    text, _ = redact_text(text, _dump_rules())
     if len(text) > limit:
         text = text[:limit] + f"… ({len(text)} chars)"
     log.info("%s %s", label, text)

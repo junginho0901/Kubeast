@@ -17,8 +17,11 @@ const MaxEstimatedSelectors = 8
 var ErrTooLarge = errors.New("the read is too large")
 
 // Volume is what the store's index says the streams of a query hold over a range (Loki's
-// GET /loki/api/v1/index/stats): how much a read would go through before it is made. Line filters are not in it, so it
-// is the most the read can go through.
+// GET /loki/api/v1/index/stats), asked before a read is made. Line filters are not in it. It is Loki's estimate, not
+// the most a read can go through: the lines the ingesters hold and have not flushed yet are left out, so a range over
+// the last hours can come out smaller than it is or empty, it is counted by a probabilistic method, and a stream or
+// chunk that spans two schema_config periods may be counted twice. It is meant to stop a long range, whose chunks the
+// index holds, before it is read.
 type Volume struct {
 	Streams int64 `json:"streams"`
 	Chunks  int64 `json:"chunks"`

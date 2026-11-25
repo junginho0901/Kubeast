@@ -24,17 +24,57 @@ CALLS_DESCRIPTION = (
     "and the cause → … → symptom paths between them: a caller of a failing service is more often its victim than its cause."
 )
 
+# get_node_metrics' view of one node, offered only where the cluster has features.nodeNeighbors on (features.PARAM_GATES),
+# and in the MCP server's list only with NODE_NEIGHBORS_ENABLED (offer_node_neighbors).
+NODE_PARAMS = ("node", "since_time", "until_time")
+NODE_DESCRIPTION = (
+    " With node: what used that node's CPU between since_time and until_time (default the last 30 minutes) against the same length "
+    "before it — the containers of every namespace on it ranked by cores, with what each grew by, its request, limit, start, throttling "
+    "and time spent waiting for a CPU; the node's CPUs one by one, since one full CPU does not show in the average of every node's "
+    "usage; and a role: suspected_aggressor, suspected_victim (slowed and not throttled while the node was busy: look at its "
+    "neighbours, not at it), own_limit (stopped by its own CPU limit). Use it when several workloads got slow together and none fails "
+    "or is throttled: find the node they share (k8s_get_resources pods), then call it with that node and a since_time before they "
+    "slowed. A role is a suspicion, not proof; not_run and cannot_say name what was not read, which is not \"normal\". Without "
+    "Prometheus it gives current values only and no role."
+)
+
 # timeline's changes view, offered to the model only with AI_TIMELINE_CHANGES (chart ai.timelineChanges, off by default):
 # off, timeline is offered without the view parameter and without these words (offer_timeline_changes).
 TIMELINE_CHANGES_PARAM = "view"
+# What the view does not read (k8s-service's timelineChangeSources): an answer without a change is not "nothing changed".
+TIMELINE_CHANGES_NOT_LISTED = (
+    " It does not list a replica count set without a new revision (kubectl scale, a scale button: only events say it, while they last — "
+    "a Deployment's ScalingReplicaSet), a deleted object or a change to any other kind (a Service, a NetworkPolicy …), so an answer without "
+    "them is not \"nothing changed\": read the events view too."
+)
+# The view's further sources (k8s-service's timelineMoreChangeSources), said only with AI_TIMELINE_CHANGES_MORE too (chart
+# ai.timelineChangesMore, off by default): in the place of TIMELINE_CHANGES_NOT_LISTED (_timeline_with_more_changes).
+TIMELINE_CHANGES_MORE = (
+    " In a named namespace it also lists the Jobs made (by which CronJob, other controller or field manager), NetworkPolicy writes, Service writes by a manager "
+    "that sets its selector or ports, and replica counts set on a Deployment (kubectl scale or an autoscaler, at the time its ReplicaSet's count was set, or a write; "
+    "to is the count now) or by a write on a StatefulSet — when, by which field manager and the names of the fields it sets, never a value."
+)
+TIMELINE_CHANGES_MORE_NOT_LISTED = (
+    " It does not list a StatefulSet's kubectl scale, a replica count set by the write that made a rollout, a deleted object (a finished Job cleaned up too) or a change to "
+    "any other kind (an Ingress, a PVC …), so an answer without them is not \"nothing changed\": read the events view too."
+)
 TIMELINE_CHANGES_DESCRIPTION = (
     " view \"changes\" answers instead what changed from since_time to until_time (default the 4 hours before now, exact), newest first, at most 50: "
     "rollouts compared with the revision before (images, the names of other pod template fields, the keys of env, labels and annotations that were added, "
     "removed or changed — never a value), ConfigMap and Secret last writes and the field manager that wrote them (metadata only), Helm release revisions, "
     "HPA last scales, node creations and condition changes, Argo CD syncs and container restarts with their reason. Each object keeps only its last write, "
-    "scale or restart. summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
+    "scale or restart." + TIMELINE_CHANGES_NOT_LISTED + " summary.changes_total and by_source count every change of the window; a source in summary.not_read or summary.skipped is null in by_source: not counted, "
     "not zero (without a namespace, every namespace's restarts need listing pods across the cluster: name a namespace). Use it first for \"why did this break?\", then line the changes up with when the symptom started."
 )
+
+# The last words of two tools: as they answer with AI_TOOL_RESULT_DETAILS off, and on (offer_result_details).
+FIND_ONCE = "Call it at most once per name: an empty result means the object is not in this cluster's searched kinds — say so and ask, do not keep guessing."
+FIND_ONCE_DETAILS = (
+    "Namespace names are searched too. Call it once per name: an empty result says the name is not in the searched kinds, not that there is nothing "
+    "to look into — go on with what is known, and ask only when the object itself was asked for."
+)
+ISSUES_EMPTY = "An empty list means nothing is failing in that scope right now."
+ISSUES_EMPTY_DETAILS = ISSUES_EMPTY[:-1] + " unless not_read is there: it names the lists that could not be read, which are not counted."
 
 K8S_READONLY_TOOLS: List[Dict] = [
     {
@@ -215,7 +255,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "or to learn the namespace before calling describe/logs. Searches pods, deployments, statefulsets, daemonsets, services, "
                 "ingresses, configmaps, jobs and cronjobs unless kinds is given; a namespace-scoped grant searches only its namespaces. "
                 "Returns matches (kind, namespace, name), what was searched, and notes for kinds the cluster does not serve. "
-                "Call it at most once per name: an empty result means the object is not in this cluster's searched kinds — say so and ask, do not keep guessing."
+                + FIND_ONCE
             ),
             "parameters": {
                 "type": "object",
@@ -262,7 +302,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "its numbers, each its own: restarts (a pod's), failed (a Job's failed pods), events (how many times its newest Warning event happened), "
                 "plus counts per severity. Call it FIRST when the user asks what is wrong, whether something is failing, or for a health check, and only then "
                 "describe/logs on the objects it names. namespace narrows to one namespace, severity to one level, window_minutes changes the event window. "
-                "An empty list means nothing is failing in that scope right now."
+                + ISSUES_EMPTY
             ),
             "parameters": {
                 "type": "object",
@@ -282,11 +322,13 @@ K8S_READONLY_TOOLS: List[Dict] = [
                 "What differs in one namespace between a window (default the last hour) and the window of the same length right before it, ranked "
                 "by the server before you look around: failing objects now (the issue check), container terminations by reason (OOMKilled, Error), "
                 "restarts, CPU throttling and memory against the limit (Prometheus), error log shapes and error line counts per container (the log "
-                "store), each service's requests, failed share and p90 from its server spans (the trace store), pressure on the nodes its pods run on. "
-                "Each finding has check, "
-                "target, verdict, a one-line summary, before / now / ratio (new: it was not there before) and up to 3 examples; at most 10, the new "
-                "first, then the larger ratio. normal lists the checks that found nothing; not_run the checks that could not run and why (no "
-                "Prometheus, log or trace store, no series, a grant limited to namespaces, no permission to read pod logs, logs too large to read): "
+                "store), each service's requests, failed share and p90 from its server spans (the trace store), the conditions of the nodes its pods run on "
+                "(NotReady, memory, disk or PID pressure, no network; not how busy their CPU is). Each finding has check, "
+                "target, verdict, a one-line summary, before / now / ratio (new: the window before has data and none of it; \"no earlier data\" in the summary: "
+                "that window has none, so whether it is new is not known) and up to 3 examples; at most 10: the new and what is critical now first, then what has "
+                "no earlier data, then the larger ratio, the warnings of the state now last. normal lists the checks that found nothing; not_run the checks that could not run and why (no "
+                "Prometheus, log or trace store, no series, nothing to read in the window, no pod or node to look at, a grant limited to namespaces, no permission "
+                "to read pod logs, logs too large to read): "
                 "not run is not normal, say so. With call_order the call graph has put a failing workload whose callees are all well before "
                 "the workloads that call it (features.callGraph), else the order is by the counts. Read the objects it names: a finding is a "
                 "lead, not a cause, check it."
@@ -1891,8 +1933,12 @@ CLUSTER_METRICS_TOOLS: List[Dict] = [
                     - Check node resource utilization
                     - Identify nodes under heavy load
                     - Monitor cluster capacity
-                    - Diagnose node-level performance issues""",
-                "parameters": {"type": "object", "properties": {}}
+                    - Diagnose node-level performance issues""" + NODE_DESCRIPTION,
+                "parameters": {"type": "object", "properties": {
+                    "node": {"type": "string", "description": "Node name, for that node's neighbours; leave out for every node's current usage."},
+                    "since_time": {"type": "string", "description": "With node: the start, as 30m, 2h or an RFC3339 time (default 30 minutes before until_time)."},
+                    "until_time": {"type": "string", "description": "With node: the end, an RFC3339 time (default now)."},
+                }}
             }
         }
 ]
@@ -1916,6 +1962,12 @@ def get_tools_definition(service) -> List[Dict]:
 def timeline_changes_on() -> bool:
     """AI_TIMELINE_CHANGES (chart ai.timelineChanges, default off): the model is offered timeline's changes view."""
     return switch.env_on("AI_TIMELINE_CHANGES")
+
+
+def timeline_changes_more_on() -> bool:
+    """AI_TIMELINE_CHANGES_MORE (chart ai.timelineChangesMore, default off): k8s-service's changes view has its further
+    sources, and the view, where it is offered, says so."""
+    return switch.env_on("AI_TIMELINE_CHANGES_MORE")
 
 
 def changes_view_on(session_id: object = None) -> bool:
@@ -1958,17 +2010,44 @@ def _timeline_after_anomaly_rank(tool: Dict) -> Dict:
     return {**tool, "function": fn}
 
 
+def _timeline_with_more_changes(tool: Dict) -> Dict:
+    fn = dict(tool.get("function") or {})
+    if isinstance(fn.get("description"), str):
+        fn["description"] = fn["description"].replace(TIMELINE_CHANGES_NOT_LISTED, TIMELINE_CHANGES_MORE + TIMELINE_CHANGES_MORE_NOT_LISTED)
+    return {**tool, "function": fn}
+
+
 def offer_timeline_changes(tools: List[Dict]) -> List[Dict]:
     """tools as the model is offered them: with AI_TIMELINE_CHANGES off, timeline without its changes view; with it and
-    ANOMALY_RANK_ENABLED on, the view's description without "first"."""
+    AI_TIMELINE_CHANGES_MORE on, the view's description with its further sources; with it and ANOMALY_RANK_ENABLED on,
+    the view's description without "first"."""
     def timeline(t: Dict) -> bool:
         return ((t or {}).get("function") or {}).get("name") == "timeline"
 
     if timeline_changes_on():
+        if timeline_changes_more_on():
+            tools = [_timeline_with_more_changes(t) if timeline(t) else t for t in tools]
         if anomaly_rank_on():
             return [_timeline_after_anomaly_rank(t) if timeline(t) else t for t in tools]
         return tools
     return [_timeline_without_changes(t) if timeline(t) else t for t in tools]
+
+
+_RESULT_DETAILS = {"k8s_find_resource": (FIND_ONCE, FIND_ONCE_DETAILS), "issues": (ISSUES_EMPTY, ISSUES_EMPTY_DETAILS)}
+
+
+def offer_result_details(tools: List[Dict]) -> List[Dict]:
+    """tools as the model is offered them: with AI_TOOL_RESULT_DETAILS on (chart ai.toolResultDetails, default off), the
+    tools of _RESULT_DETAILS with the words of the answers they then give (issues names a list it could not read in
+    not_read whatever the switch)."""
+    if not switch.env_on("AI_TOOL_RESULT_DETAILS"):
+        return tools
+    out = []
+    for t in tools:
+        fn = (t or {}).get("function") or {}
+        words = _RESULT_DETAILS.get(fn.get("name"))
+        out.append({**t, "function": {**fn, "description": fn["description"].replace(*words)}} if words else t)
+    return out
 
 
 def without_params(tool: Dict, params: tuple, words: str) -> Dict:
@@ -1986,6 +2065,21 @@ def call_graph_on() -> bool:
     """CALL_GRAPH_ENABLED (chart features.callGraph.enabled, default off; in the ConfigMap every service reads), read with
     the one switch rule (app/services/switch.py)."""
     return switch.env_on("CALL_GRAPH_ENABLED")
+
+
+def node_neighbors_on() -> bool:
+    """NODE_NEIGHBORS_ENABLED (chart features.nodeNeighbors.enabled, default off; in the ConfigMap every service reads), read
+    with the one switch rule (app/services/switch.py)."""
+    return switch.env_on("NODE_NEIGHBORS_ENABLED")
+
+
+def offer_node_neighbors(tools: List[Dict]) -> List[Dict]:
+    """tools for a list that names no cluster (the MCP server's read tools): with NODE_NEIGHBORS_ENABLED off, get_node_metrics
+    without its node parameters and their words, as features.PARAM_GATES gives a cluster without nodeNeighbors."""
+    if node_neighbors_on():
+        return tools
+    return [without_params(t, NODE_PARAMS, NODE_DESCRIPTION) if ((t or {}).get("function") or {}).get("name") == "get_node_metrics" else t
+            for t in tools]
 
 
 def offer_call_graph(tools: List[Dict]) -> List[Dict]:

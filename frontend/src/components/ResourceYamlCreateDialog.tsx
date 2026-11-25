@@ -93,6 +93,7 @@ export default function ResourceYamlCreateDialog({
   return (
     <ModalFrame
       size="lg"
+      body="fill"
       title={title}
       subtitle={clusterScoped
         ? t('yamlCreate.clusterScoped', { defaultValue: 'Cluster-scoped resource: metadata.namespace is not used.' })
@@ -113,32 +114,43 @@ export default function ResourceYamlCreateDialog({
         </>
       }
     >
-      <div className="border border-slate-700 rounded-lg overflow-hidden" style={{ height: yamlEditorHeight(yaml) }}>
-        <Editor
-          height="100%"
-          theme="vs-dark"
-          language="yaml"
-          value={yaml}
-          onChange={(next) => setYaml(next ?? '')}
-          options={editorOptions}
-        />
-      </div>
-      {!yaml.trim() && (
-        <p role="alert" data-testid="yaml-create-empty" className="mt-1 text-[11px] text-red-400">
-          {t('yamlCreate.empty', { defaultValue: 'Nothing to create: enter the YAML of an object.' })}
-        </p>
-      )}
+      {/* on a screen too low for the text the editor gives up height first, then this part scrolls: the buttons stay inside */}
+      <div className="min-h-0 flex flex-col overflow-y-auto">
+        <div className="relative min-h-24 border border-slate-700 rounded-lg overflow-hidden" style={{ height: yamlEditorHeight(yaml) }}>
+          {/* filled by position: a percent height is not resolved in a frame whose own height follows its content */}
+          <div className="absolute inset-0">
+            <Editor
+              height="100%"
+              theme="vs-dark"
+              language="yaml"
+              value={yaml}
+              onChange={(next) => setYaml(next ?? '')}
+              options={editorOptions}
+            />
+          </div>
+        </div>
+        {!yaml.trim() && (
+          <p role="alert" data-testid="yaml-create-empty" className="mt-1 text-[11px] text-red-400">
+            {t('yamlCreate.empty', { defaultValue: 'Nothing to create: enter the YAML of an object.' })}
+          </p>
+        )}
 
-      {error && (
-        <p data-testid="yaml-create-error" className="mt-3 text-sm text-red-400 wrap-break-word whitespace-pre-wrap">
-          {error}
-        </p>
-      )}
-      {error && madeBefore.length > 0 && (
-        <p data-testid="yaml-create-made-before" className="mt-1 text-sm text-emerald-300 wrap-break-word">
-          {t('yamlCreate.madeBefore', { defaultValue: 'Created before it stopped: {{objects}}', objects: madeBefore.map(createdText).join(', ') })}
-        </p>
-      )}
+        {/* a long one (an admission webhook's) scrolls in its own box, so the editor keeps the rest of the height */}
+        {error && (
+          <p
+            data-testid="yaml-create-error"
+            tabIndex={0}
+            className="mt-3 max-h-40 shrink-0 overflow-y-auto text-sm text-red-400 wrap-break-word whitespace-pre-wrap focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-400"
+          >
+            {error}
+          </p>
+        )}
+        {error && madeBefore.length > 0 && (
+          <p data-testid="yaml-create-made-before" className="mt-1 text-sm text-emerald-300 wrap-break-word">
+            {t('yamlCreate.madeBefore', { defaultValue: 'Created before it stopped: {{objects}}', objects: madeBefore.map(createdText).join(', ') })}
+          </p>
+        )}
+      </div>
     </ModalFrame>
   )
 }

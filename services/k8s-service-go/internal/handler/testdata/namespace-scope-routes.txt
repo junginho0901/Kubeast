@@ -261,6 +261,7 @@ GET /api/v1/nodes/{name}/debug-shell/ws whole-cluster
 GET /api/v1/nodes/{name}/describe cluster-object
 GET /api/v1/nodes/{name}/drain/status whole-cluster
 GET /api/v1/nodes/{name}/events cluster-object
+GET /api/v1/nodes/{name}/neighbors narrowed
 GET /api/v1/nodes/{name}/pods narrowed
 GET /api/v1/nodes/{name}/yaml cluster-object
 GET /api/v1/optimization query

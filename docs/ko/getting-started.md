@@ -238,7 +238,7 @@ kubectl -n kubeast exec deploy/auth-service -- /app/server reset-admin
 docker compose exec auth-service /app/server reset-admin
 ```
 
-`admin`이 아닌 계정은 `--email <계정>`으로 지정합니다. 만들어진 비밀번호 대신 새 비밀번호를 쓰려면 먼저 바꾸고(`helm upgrade … --reset-then-reuse-values --set admin.password=<새 비번>`, Docker는 `.env`의 `DEFAULT_ADMIN_PASSWORD`), auth-service를 다시 띄운 뒤(`kubectl -n kubeast rollout restart deploy/auth-service`, Docker는 `docker compose up -d auth-service`) `reset-admin`을 실행하세요.
+`admin`이 아닌 계정은 `--email <계정>`으로 지정합니다. 공급자가 만든 계정은 Admin 역할과 잠금 해제는 받지만 비밀번호는 받지 않고, 비밀번호 로그인이 거부되므로 계속 공급자로 로그인합니다(무엇이 만들었든 비밀번호로 로그인하는 것은 `admin.email` 계정뿐입니다). 이때 명령의 마지막 줄도 비밀번호 안내 대신 이것을 알려 줍니다. `admin.email` 계정을 공급자가 만들었으면 Account 화면에 Change password가 없으므로, 마지막 줄이 비밀번호를 바꾸는 길로 `POST /api/v1/auth/change-password`를 알려 줍니다. 만들어진 비밀번호 대신 새 비밀번호를 쓰려면 먼저 바꾸고(`helm upgrade … --reset-then-reuse-values --set admin.password=<새 비번>`, Docker는 `.env`의 `DEFAULT_ADMIN_PASSWORD`), auth-service를 다시 띄운 뒤(`kubectl -n kubeast rollout restart deploy/auth-service`, Docker는 `docker compose up -d auth-service`) `reset-admin`을 실행하세요.
 
 ### 3. 로그인 후 클러스터 연결 (Connect your cluster)
 
@@ -328,8 +328,7 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - **키**: `KUBEAST_AI_KEY_*` 변수에 두면 `Authorization: Bearer` 헤더와 `api-key` 헤더에 모두 실어 보냅니다.
 - **안 되는 것**: 예전 배포별 주소(`…/openai/deployments/<배포>`)와 날짜 형식의 `api-version`은 저장이나 연결 테스트 때 v1 주소를 안내하며 거절합니다. Entra ID 토큰 인증도 아직 지원하지 않습니다.
 - Private Link로 사설 주소가 나오는 리소스는 그 호스트를 `ai.baseUrlAllowedHosts`에 넣으세요.
-- CRD로 만들 때는 `spec.baseURL`(또는 `azureOpenAI.azureEndpoint`)에 v1 주소를, `spec.model`에 배포 이름을 넣습니다.
-  - `apiVersion`·`azureDeployment`·`azureAdToken`은 kagent 호환을 위해 남아 있지만 쓰지 않습니다.
+- CRD로 만들 때는 `spec.baseURL`에 v1 주소를, `spec.model`에 배포 이름을 넣습니다. CRD에는 `azureOpenAI` 블록이 없어 API 서버가 그 값을 받지 않습니다.
 
 **Claude 구독으로 쓰기 (provider `claude-code`, 개인용)** — API 키 대신 Claude Pro/Max 구독의 `claude setup-token` 값으로 채팅합니다.
 구독 토큰은 Claude Code에서만 쓸 수 있으므로, ai-service는 모델을 호출할 때마다 Claude Agent SDK(`app/services/claude_code.py`)로 Claude Code를 띄웁니다.
@@ -348,6 +347,7 @@ Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 �
   - Claude Code 기본 도구(Bash, 파일, 웹)는 없고, 설정 파일과 CLAUDE.md를 읽지 않습니다.
   - ai-service가 받은 환경변수는 경로, 프록시, CA 변수를 빼고 모두 빈 값으로 덮어쓰므로 모델 키나 DB 주소가 넘어가지 않습니다.
   - 토큰은 `CLAUDE_CODE_OAUTH_TOKEN`으로만 전달합니다.
+  - Claude Code는 모든 프롬프트를 쓴 그대로 받습니다.
 - **규칙**: `CLAUDE_CODE_OAUTH_TOKEN`은 claude-code만 쓸 수 있고, claude-code는 base_url과 다른 공급자의 키 변수를 받지 않습니다. 꺼진 설치에서 새 claude-code 설정을 저장하면 400으로 거절되고, 연결 테스트가 그 이유를 보여 줍니다.
 - **한도**: 채팅 턴은 두 한도 아래의 칸을 이 순서로 잡아야 실행됩니다.
   - `maxConcurrent`(기본 2)는 ai-service 서버 한 대의 한도입니다. 서버 한 대가 동시에 띄우는 Claude Code 프로세스 수이므로 메모리를 정합니다.
@@ -356,10 +356,12 @@ Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 �
   - 칸은 데이터베이스의 `claude_code_slots` 표(lane, slot, owner, heartbeat_at)에 있는 행입니다. 행에는 사람도 대화도 적히지 않습니다. owner는 ai-service 파드 이름 뒤에 무작위 16진수 12자리를 붙인 값이고, 실행마다 새로 만듭니다.
   - DB가 응답하지 않아 서버가 60초 동안 칸을 갱신하지 못하면 그 칸은 다음 차례가 가져가고, 이미 실행 중인 답변은 끝까지 갑니다. 그 답변이 끝날 때까지 설치 전체에서 `maxConcurrentTotal`보다 하나 더 실행될 수 있고, 서버마다의 `maxConcurrent`는 그대로 지켜집니다.
   - 한 턴은 `turnTimeoutSeconds`(기본 300초)와 `maxTurns`(기본 모델 호출 10회)를 넘지 않습니다.
+  - 채팅 턴이 `maxTurns`에서 멈추면 도구 없는 실행 하나가 더 이어져 도구들이 돌려준 것으로 답합니다. 그 실행도 칸을 잡고 `turnTimeoutSeconds`를 따로 씁니다.
   - 턴마다 Claude Code 프로세스(최대 약 300 MB)가 하나씩 뜹니다. 프로바이더가 켜져 있으면 ai-service의 메모리 한도는 `resources.aiService.limits.memory`(기본 1Gi)와 `ai.providers.claudeCode.memoryLimit`(기본 2Gi: 서비스 자체와 채팅 프로세스 2개, 조사 프로세스 1개) 중 큰 값입니다. `maxConcurrent`를 올리면 하나에 300 MB쯤씩 `memoryLimit`도 올리세요. `""`로 두면 `resources.aiService.limits.memory` 그대로 둡니다.
 - **기다림**: 칸이 비지 않은 턴은 `queueWaitSeconds`(기본 60초)까지 기다립니다.
   - 그동안 AI Chat과 플로팅 채팅에 "차례를 기다립니다 — 다른 질문을 처리하고 있습니다."가 보입니다.
   - 그 시간을 넘기면 답변이 "Claude Code가 바쁩니다. 잠시 뒤 다시 질문하세요."로 끝납니다.
+  - `maxTurns` 뒤에 이어지는 실행도 같은 줄에서 기다립니다. 그동안 읽은 것은 화면에 그대로 있고, 차례를 기다린다는 줄은 나오지 않습니다. 시간 안에 칸이 나지 않거나 그 실행이 시작되지 않으면, 답변은 읽은 것을 그대로 두고 Claude Code가 바쁘거나 시작되지 않았으니 다시 질문하라는 말로 끝납니다.
   - 중단을 누르면 바로 줄에서 빠지고 칸을 잡지 않습니다.
 - **알림 → AI 조사**도 이 프로바이더로 실행됩니다.
   - 조사기는 서버마다 한 번에 하나씩 돌며 채팅과 별도의 칸을 쓰고 `maxConcurrentTotal`에 세지 않으므로, 조사 중에도 채팅이 기다리지 않습니다. 서버가 3대면 조사가 3개까지 동시에 돕니다.

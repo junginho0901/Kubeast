@@ -19,8 +19,9 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
-// The v0.7.9 switches k8s-service reads, each unset: what the chart renders by default.
-var v079Switches = []string{"ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED", "AI_TIMELINE_CHANGES", "ALERT_INVESTIGATION_CHANGES_FIRST"}
+// The v0.7.9 switches k8s-service reads, each unset: what the chart renders with them set off.
+var v079Switches = []string{"ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED", "AI_TIMELINE_CHANGES", "AI_TIMELINE_CHANGES_MORE",
+	"ALERT_INVESTIGATION_CHANGES_FIRST", "NODE_NEIGHBORS_ENABLED"}
 
 // With every v0.7.9 switch unset, the configuration k8s-service loads offers the screens and the AI nothing new: the
 // features answer says anomalyRank and callGraph are off (or does not name them, as 0.7.8), and the routes those
@@ -62,7 +63,7 @@ func TestWithEveryV079SwitchOffTheFeaturesAndRoutesAreV078s(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &features); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"anomalyRank", "callGraph"} {
+	for _, name := range []string{"anomalyRank", "callGraph", "nodeNeighbors"} {
 		raw, named := features[name]
 		if !named {
 			continue
@@ -78,6 +79,7 @@ func TestWithEveryV079SwitchOffTheFeaturesAndRoutesAreV078s(t *testing.T) {
 		"/api/v1/timeline/changes?cluster=c",
 		"/api/v1/namespaces/shop/timeline/changes?cluster=c",
 		"/api/v1/namespaces/shop/anomalies?cluster=c",
+		"/api/v1/nodes/n1/neighbors?cluster=c",
 	} {
 		if w := get(path); w.Code != http.StatusNotFound {
 			t.Errorf("GET %s: status %d, want 404: %s", path, w.Code, w.Body.String())

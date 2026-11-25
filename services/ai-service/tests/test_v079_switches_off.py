@@ -17,10 +17,11 @@ from tests.test_chat_turn_edges import parsed, stream, text_chunk
 
 # Every v0.7.9 switch, as the chart's ConfigMap names it; each is off when unset (LOG_SEARCH_QUERY_MAX_BYTES: 0, not asked).
 V079_SWITCHES = (
-    "AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED", "AI_RULE_CARDS_CHAT", "AI_RULE_CARDS_INVESTIGATIONS",
-    "AI_REFUSE_REPEATED_READS", "AI_TOOL_RESULT_DETAILS", "REDACTION_NUMBERED", "LOG_SEARCH_QUERY_MAX_BYTES",
+    "AI_TIMELINE_CHANGES", "AI_TIMELINE_CHANGES_MORE", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED", "AI_RULE_CARDS_CHAT", "AI_RULE_CARDS_INVESTIGATIONS",
+    "AI_RULE_CARDS_SYMPTOMS", "AI_REFUSE_REPEATED_READS", "AI_TOOL_RESULT_DETAILS", "REDACTION_NUMBERED", "LOG_SEARCH_QUERY_MAX_BYTES",
     "ALERT_INVESTIGATION_RULES", "ALERT_INVESTIGATION_CHANGES_FIRST", "ALERT_INVESTIGATION_NARROW_FIRST",
-    "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "AI_TOOL_RESULTS_JSON",
+    "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_VERDICT", "AI_TOOL_RESULTS_JSON",
+    "AI_CAUSE_QUESTIONS", "NODE_NEIGHBORS_ENABLED",
 )
 
 # The cluster's features with every 0.7.8 feature on and none of 0.7.9's (anomalyRank, callGraph): the most tools 0.7.8 offered.
@@ -61,8 +62,11 @@ V078 = {
     "floating tools": "9bcba9d81a94dd1ebf1e506e8cbd3fc16cb1d1b761c776c575041173187681d7",
     "chat second call": "c58e7c62a59a34b888ecf2a60cb33e996641212e3b8ad4c4df185c2cc2b48793",
     "chat tool-server calls": "5d8da759a4d9aa10e638da55a396fda8b9dea31db8206d81ca9947db3e503c85",
-    "investigation first call": "7e132b9533a49709f916eed38eced504a8a62e59bd94b9d43a2f129f9bd58437",
-    "investigation second call": "c0724a074ee83bcaf119e67c050d1d21a895a7fc953cca8920ed71bfaba6e01c",
+    # Not d58cf599's, on purpose with no switch: the alert leaves out its generatorURL, the address of the server that
+    # sent it, and keeps only the rule's expression (none in this alert). With "generatorURL": "" put back in the alert
+    # view they are d58cf599's 7e132b9533a49709… and c0724a074ee83bca….
+    "investigation first call": "bcb5a605f558f79ceea73569bb0ddaa1b4c45f7b766850bade468388435ebaff",
+    "investigation second call": "50f74919d9a129dc3d7ede28102b1590ba9b5cc69a7ab452ff266be9cc39093b",
     "investigation tool-server calls": "5d8da759a4d9aa10e638da55a396fda8b9dea31db8206d81ca9947db3e503c85",
     "mcp tools": "a9102a1ecc66e0eb023b45a2bc01bb57f9346ad1d5894112c1991a9f2de5cc16",
     "masked text": "c86dd3f61d49c68ed59dfa80c31c1c899ee5a57da982c402a989c432dde6d902",
@@ -294,8 +298,8 @@ async def test_with_only_the_investigations_switches_on_a_chat_is_sent_and_asks_
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("REDACTION_PII", "true")
     for name in ("ALERT_INVESTIGATION_ENABLED", "ALERT_INVESTIGATION_CHANGES_FIRST", "ALERT_INVESTIGATION_NARROW_FIRST",
-                 "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_RULES",
-                 "AI_RULE_CARDS_INVESTIGATIONS"):
+                 "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_VERDICT",
+                 "ALERT_INVESTIGATION_RULES", "AI_RULE_CARDS_INVESTIGATIONS"):
         monkeypatch.setenv(name, "true")
     sent, asked = await _chat_calls(monkeypatch, QUESTIONS["en"], False, ROUND)
     got = {"chat tools": _sha(sent[0]["tools"]), "chat second call": _sha(sent[1]["messages"]),

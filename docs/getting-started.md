@@ -239,7 +239,7 @@ kubectl -n kubeast exec deploy/auth-service -- /app/server reset-admin
 docker compose exec auth-service /app/server reset-admin
 ```
 
-`--email <account>` recovers another account than `admin`. To use a new password instead of the generated one, change it first (`helm upgrade … --reset-then-reuse-values --set admin.password=<new>`, or `DEFAULT_ADMIN_PASSWORD` in `.env`), restart auth-service (`kubectl -n kubeast rollout restart deploy/auth-service`, or `docker compose up -d auth-service`), then run `reset-admin`.
+`--email <account>` recovers another account than `admin`; an account the provider made gets the Admin role and its locks cleared but no password, and still signs in through the provider, since the password form refuses it (only the `admin.email` account signs in with a password whatever made it), and the command's last line says so in place of the password line. When the provider made the `admin.email` account, the Account page shows it no Change password, so the last line names `POST /api/v1/auth/change-password` for changing the password. To use a new password instead of the generated one, change it first (`helm upgrade … --reset-then-reuse-values --set admin.password=<new>`, or `DEFAULT_ADMIN_PASSWORD` in `.env`), restart auth-service (`kubectl -n kubeast rollout restart deploy/auth-service`, or `docker compose up -d auth-service`), then run `reset-admin`.
 
 ### 3. Log in and connect a cluster (Connect your cluster)
 
@@ -329,7 +329,7 @@ The code is in `app/services/anthropic_messages.py`, and responses are converted
 - **Key**: kept in a `KUBEAST_AI_KEY_*` variable, it is sent as both the `Authorization: Bearer` header and the `api-key` header.
 - **Not supported**: the old per-deployment address (`…/openai/deployments/<deployment>`) and dated `api-version`. Saving and the connection test reject them and point to the v1 address. Entra ID token authentication is not available yet either.
 - **Private Link**: for resources that resolve to a private address through Private Link, add that host to `ai.baseUrlAllowedHosts`.
-- **CRD**: put the v1 address in `spec.baseURL` (or `azureOpenAI.azureEndpoint`) and the deployment name in `spec.model`. `apiVersion`, `azureDeployment` and `azureAdToken` remain for kagent compatibility but are not used.
+- **CRD**: put the v1 address in `spec.baseURL` and the deployment name in `spec.model`. The CRD has no `azureOpenAI` block, so the API server does not keep one.
 
 **Using a Claude subscription (provider `claude-code`, personal use)** lets you chat with the `claude setup-token` value of a Claude Pro/Max subscription instead of an API key.
 Only Claude Code accepts subscription tokens, so ai-service starts Claude Code for each model call (Claude Agent SDK, `app/services/claude_code.py`).
@@ -347,6 +347,7 @@ So these are the same as on the API key path: the tool list, approval cards for 
   - Each run gets a temporary HOME and config directory and no Claude Code built-in tools (Bash, files, web). It reads no settings files or CLAUDE.md.
   - All environment variables ai-service received are overwritten with empty values, except path, proxy and CA variables. So model keys and DB addresses are not passed on.
   - The token goes only as `CLAUDE_CODE_OAUTH_TOKEN`.
+  - Claude Code receives every prompt as written.
 - **Rules**:
   - Only claude-code can use `CLAUDE_CODE_OAUTH_TOKEN`, and claude-code does not accept base_url or other providers' key variables.
   - On an install where it is off, saving a new claude-code setting is rejected with 400, and the connection test shows the reason.
@@ -357,10 +358,12 @@ So these are the same as on the API key path: the tool list, approval cards for 
   - The slots are rows of the `claude_code_slots` table in the database (lane, slot, owner, heartbeat_at). A row names no person and no conversation: its owner is the ai-service pod's name followed by 12 random hex characters, new for each run.
   - A run whose server could not refresh its slot for 60 seconds (the database did not answer) loses the slot to the next taker and still finishes. Until it ends the install runs one more than `maxConcurrentTotal`; `maxConcurrent` on each server still holds.
   - One turn is capped at `turnTimeoutSeconds` (default 300 seconds) and `maxTurns` (default 10 model calls).
+  - A chat turn that stops at `maxTurns` is followed by one more run without tools, which answers from what the tools returned. That run takes a slot and has `turnTimeoutSeconds` of its own.
   - Each turn starts one Claude Code process (up to about 300 MB). While the provider is on, ai-service's memory limit is the larger of `resources.aiService.limits.memory` (default 1Gi) and `ai.providers.claudeCode.memoryLimit` (default 2Gi: the service and 2 chat processes with the investigator's). Raise `memoryLimit` with `maxConcurrent`, about 300 MB for each more; `""` leaves the limit as `resources.aiService.limits.memory` sets it.
 - **Waiting**: a turn whose slot is not free waits up to `queueWaitSeconds` (default 60).
   - Meanwhile AI Chat and the floating chat show "Waiting for a turn — another question is running".
   - Past that the answer ends with "Claude Code is busy; ask again in a moment."
+  - The run after `maxTurns` waits in the same queue. What was read stays on screen, and no waiting line is drawn for it. When no slot comes in time or it does not start, the answer keeps what was read and ends by saying that Claude Code was busy or did not start and to ask again.
   - Stop leaves the queue at once, and the turn takes no slot.
 - **Alert → AI investigation** also runs on this provider.
   - Investigations use one slot per server separate from chat (the investigator runs one at a time) and outside `maxConcurrentTotal`, so chat does not wait during an investigation. With 3 servers, up to 3 investigations run at once.

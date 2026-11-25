@@ -50,13 +50,29 @@ func jsonBody(t *testing.T, v any) string {
 // noAccountYet makes every lookup by address find nothing.
 func noAccountYet() pgRule { return pgRule{match: "WHERE u.email ="} }
 
-// storedAccount makes every lookup by address find this account.
+// storedAccount makes every lookup by address find this account, a password account an admin made.
 func storedAccount(email, roleName, passwordHash string) pgRule {
 	return pgRule{
 		match: "WHERE u.email =",
-		oids:  []uint32{textOID, textOID, textOID, textOID, integerOID, textOID, textOID, integerOID, textOID, stampOID, stampOID, integerOID, stampOID, stampOID, stampOID, stampOID},
-		rows:  [][]any{{"stored", "Stored", email, nil, roleCustom, roleName, passwordHash, 0, "password", pgNow(), pgNow(), 0, nil, nil, nil, nil}},
+		oids:  []uint32{textOID, textOID, textOID, textOID, integerOID, textOID, textOID, integerOID, textOID, stampOID, stampOID, integerOID, stampOID, stampOID, stampOID, stampOID, booleanOID},
+		rows:  [][]any{{"stored", "Stored", email, nil, roleCustom, roleName, passwordHash, 0, "password", pgNow(), pgNow(), 0, nil, nil, nil, nil, "f"}},
 	}
+}
+
+// storedSelfSignUp is storedAccount made by the sign-up form (self_signed_up).
+func storedSelfSignUp(email, roleName, passwordHash string) pgRule {
+	rule := storedAccount(email, roleName, passwordHash)
+	rule.rows[0][16] = "t"
+	return rule
+}
+
+// movesToSingleSignOn is the statement that takes a self sign-up over (repository.MoveToSingleSignOn).
+const movesToSingleSignOn = "RETURNING u.token_version, o.password_hash"
+
+// takenOver answers movesToSingleSignOn as a database whose row was still a self sign-up: the token_version after it,
+// and whether it held a password.
+func takenOver(version int, removed bool) pgRule {
+	return pgRule{match: movesToSingleSignOn, oids: []uint32{integerOID, booleanOID}, rows: [][]any{{version, removed}}}
 }
 
 func allowRegistration(c *config.Config) { c.AllowRegistration = true }
@@ -364,18 +380,18 @@ func TestProviderStillSignsInAStoredAccountWhateverItsName(t *testing.T) {
 	}
 }
 
-// A self sign-up proves nothing about the address and still waits for approval,
-// so when the address's owner signs in, what its maker holds must end there.
+// A self sign-up proves nothing about the address and still waits for approval, so when the address's owner signs in,
+// what its maker holds must end there: the password goes and the tokens end in the statement that takes it over, and
+// this sign-in's token carries the version that statement left.
 func TestOwnerSigningInEndsWhatASelfSignUpHeld(t *testing.T) {
 	p := startOIDCProvider(t)
-	currentVersion := pgRule{match: "SELECT token_version FROM auth_users WHERE id", oids: []uint32{integerOID}, rows: [][]any{{4}}}
-	api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, p.settings, currentVersion, storedAccount("someone@example.com", "Pending", "stored-hash"))
+	api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, p.settings, takenOver(4, true), storedSelfSignUp("someone@example.com", "Pending", "stored-hash"))
 	_, session := p.signIn(api, map[string]any{"email": "someone@example.com", "email_verified": true})
-	if !api.db.ran(clearedPassword) {
-		t.Error("the password set at sign-up still works")
+	if !api.db.ran(clearedPassword) || !strings.Contains(api.db.statement(movesToSingleSignOn), "token_version = u.token_version + CASE") {
+		t.Errorf("the password set at sign-up and its tokens still work: %q", api.db.statement(movesToSingleSignOn))
 	}
-	if !api.db.ran(bumpStatement) {
-		t.Error("the sign-up's tokens still work")
+	if api.db.ran(bumpStatement) {
+		t.Error("the tokens were ended by a statement of their own")
 	}
 	if session == nil || session["tv"] != float64(4) {
 		t.Errorf("session %v, want the version after the change (4)", session)
@@ -385,22 +401,35 @@ func TestOwnerSigningInEndsWhatASelfSignUpHeld(t *testing.T) {
 	}
 }
 
-// Anyone an admin approved or made keeps the password, the default admin too:
-// it is the way back when the provider is down.
+// Anyone an admin made keeps the password whatever its role, Pending included (an admin's choice, or defaultRole on a
+// role sync), and so does a self sign-up an admin approved: it is the way back when the provider is down. The
+// statement that takes an account over is not even sent.
 func TestApprovedAccountKeepsItsPasswordWhenItsOwnerSignsIn(t *testing.T) {
-	for _, role := range []string{"Member", "Admin", "Auditor"} {
-		t.Run(role, func(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		account pgRule
+	}{
+		{"made Member", storedAccount("someone@example.com", "Member", "stored-hash")},
+		{"made Admin", storedAccount("someone@example.com", "Admin", "stored-hash")},
+		{"made Auditor", storedAccount("someone@example.com", "Auditor", "stored-hash")},
+		{"made Pending", storedAccount("someone@example.com", "Pending", "stored-hash")},
+		{"a self sign-up approved", storedSelfSignUp("someone@example.com", "Member", "stored-hash")},
+	} {
+		t.Run(c.name, func(t *testing.T) {
 			p := startOIDCProvider(t)
-			api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, p.settings, storedAccount("someone@example.com", role, "stored-hash"))
+			api := newAuthAPIWith(t, pendingRequest{owner: "requester"}, p.settings, c.account)
 			_, session := p.signIn(api, map[string]any{"email": "someone@example.com", "email_verified": true})
 			if session == nil {
 				t.Fatal("no session")
 			}
-			if api.db.ran(clearedPassword) {
+			if api.db.ran(movesToSingleSignOn) || api.db.ran(clearedPassword) {
 				t.Error("the password was taken away")
 			}
 			if api.db.ran(bumpStatement) {
 				t.Error("the account's other sessions were ended")
+			}
+			if rows := api.store.successes("user.account.link"); len(rows) != 0 {
+				t.Errorf("user.account.link rows = %+v, want none", rows)
 			}
 		})
 	}

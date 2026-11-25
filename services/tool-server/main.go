@@ -161,8 +161,8 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 	register(ToolDefinition{
 		Name:        "get_node_metrics",
-		Description: "Get node CPU/Memory usage (kubectl top nodes)",
-		Handler:     handleGetNodeMetrics,
+		Description: "Get node CPU/Memory usage (kubectl top nodes), or with node what used that node's CPU and whom to suspect",
+		Handler:     handleNodeMetricsOrNeighbors,
 	})
 	register(ToolDefinition{
 		Name:        "get_pod_metrics",
@@ -306,7 +306,7 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 	register(ToolDefinition{
 		Name:        "anomaly_rank",
-		Description: "What differs in one namespace between a window and the window before it, ranked: failing objects, terminations by reason, restarts, CPU throttling, memory near the limit, node pressure",
+		Description: "What differs in one namespace between a window and the window before it, ranked: failing objects, terminations by reason, restarts, CPU throttling, memory near the limit, the nodes' conditions (not their CPU)",
 		Handler:     handleAnomalyRank,
 	})
 	register(ToolDefinition{

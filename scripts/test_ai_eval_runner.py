@@ -82,7 +82,7 @@ class FakeKubeast:
         self.then = "ok"
         self.on_chat = lambda n: None
         self.totals = {"investigations": 2, "inbox": 3}
-        self.alert_investigation = True    # off: the investigation list and the inbox answer 404
+        self.alert_investigation = True    # off: the inbox answers 404, the investigation list still answers
         self.passwords: list[str] = []     # each account's password as the admin set it
         self.only_admin_signs_in = False
         self.lock = threading.Lock()
@@ -139,8 +139,8 @@ class FakeKubeast:
                           {"usage": {"total_tokens": 100}}]
                 return (200, "".join(f"data: {json.dumps(e)}\n\n" for e in events) + "data: [DONE]\n\n", action == "slow")
             if path in ("/api/v1/ai/investigations", "/api/v1/alerts/inbox"):
-                if not self.alert_investigation:
-                    return 404, {"detail": "Not Found"}
+                if not self.alert_investigation and path.endswith("inbox"):
+                    return 404, {"detail": "the alert inbox is off (features.alertInvestigation.enabled)"}
                 if not admin and path.endswith("investigations"):
                     return 403, {"detail": "permission required: admin.investigations.read"}
                 key = "investigations" if path.endswith("investigations") else "inbox"
@@ -392,6 +392,18 @@ def test_inject_wait_still_false_names_its_last_output():
 
 # --- the asks ---
 
+def test_the_second_scoring_is_recorded_beside_the_first():
+    fake = FakeKubeast()
+    fake.chat_script = ["ok", 502, 502]
+    with Server(fake):
+        results = run(repeat=1)
+    assert [r["second"]["pass"] for r in results] == [r["pass"] for r in results] == [True, False]
+    assert results[0]["second"]["by"] == "block" and results[0]["second"]["outcome"] == "cause" and "text" not in results[0]["second"]
+    assert results[1]["second"]["outcome"] == "error"
+    easy = AI_EVAL.grade({"expect": [["x"]]}, {"answer": "x", "calls": [], "error": None})
+    assert "second" not in easy  # an easy case has the first scoring only
+
+
 def test_forms_take_turns_and_each_answer_has_its_own_lateness():
     fake = FakeKubeast()
     with Server(fake) as srv:
@@ -415,6 +427,17 @@ def test_tool_results_go_to_their_own_call():
         AI_EVAL.add_event(out, e)
     assert [(c["args"]["n"], c["failed"]) for c in out["calls"]] == [(1, True), (2, False)]  # the earliest call without a result
     assert out["calls"][0]["result"] == '{"error": "forbidden"}'
+
+
+def test_a_tool_result_is_kept_at_4000_characters():
+    out = {"calls": [], "answer": ""}
+    long = '{"items": "' + "가" * 5000 + '", "error": "Error in the tool"}'
+    for e in [{"function": "loki_query", "args": {}, "call_id": 1}, {"function_result": "loki_query", "result": long, "call_id": 1}]:
+        AI_EVAL.add_event(out, e)
+    assert len(out["calls"][0]["result"]) == AI_EVAL.RESULT_CHARS == 4000 and long.startswith(out["calls"][0]["result"])
+    assert out["calls"][0]["failed"]  # read from the whole result, not from what is kept
+    short = AI_EVAL.result_text("x" * 399)
+    assert short == ("x" * 399, False)
 
 
 # --- the round ---
@@ -452,6 +475,7 @@ def test_a_round_records_counts_runs_under_a_suffix_and_writes_after_each_case()
     assert any(c.startswith("kubectl create namespace shop-90-ab12 ") for c in srv.commands)
     assert not any(re.search(r"shop-90(?![\w-])", c) for c in srv.commands)
     info = json.loads(next(out.glob("*-round.json")).read_text())
+    assert info["second_scoring"] == AI_EVAL.second.RULES
     assert info["user"] == "read" and info["namespace_suffix"] == "ab12" and info["alert_investigation_on"] is True
     assert info["before"] == {"default": {"investigations": 2, "inbox": 3}} and info["after"] == {"default": {"investigations": 2, "inbox": 7}}
     md = next(out.glob("*-claude-haiku-5-5.md")).read_text()
@@ -490,10 +514,20 @@ def test_a_chat_round_is_refused_while_alert_investigation_is_on_unless_asked():
     assert json.loads(next(out.glob("*-round.json")).read_text())["alert_investigation_on"] is True
     fake = FakeKubeast()
     fake.alert_investigation = False
+    fake.totals = {"investigations": 351, "inbox": 0}  # off: earlier reports stay listed
     code, out, _, screen, _ = _main(fake, root)
     info = json.loads(next(out.glob("*-round.json")).read_text())
     assert code == 0 and "WARNING" not in screen and info["alert_investigation_on"] is False
-    assert info["before"] == {"default": {"investigations": "HTTP 404", "inbox": "HTTP 404"}}
+    assert info["before"] == {"default": {"investigations": 351, "inbox": "HTTP 404"}}
+
+
+def test_only_the_inbox_says_whether_alert_investigation_is_on():
+    """ai-service answers the investigation list whatever features.alertInvestigation.enabled says and the inbox 404
+    while it is off, so a total of the investigation list alone is not on."""
+    on = AI_EVAL.investigation_on
+    assert on({"default": {"investigations": 351, "inbox": "HTTP 404"}, "self": {"investigations": 352, "inbox": "HTTP 404"}}) == []
+    assert on({"default": {"investigations": 0, "inbox": "URLError"}}) == []
+    assert on({"default": {"investigations": 351, "inbox": 0}, "self": {"investigations": "HTTP 404", "inbox": 7}}) == ["default", "self"]
 
 
 def test_the_hidden_total_is_written_only_once_the_run_ends():
@@ -517,7 +551,7 @@ def test_the_hidden_total_is_written_only_once_the_run_ends():
     assert code == 0 and len(tables) == 3
     assert "숨김 사례: 합계는 실행이 끝난 뒤의 표에만" in tables[2] and not re.search(r"숨김 사례 \d+개", tables[2]), tables[2]
     final = next(out.glob("*-claude-haiku-5-5.md")).read_text()
-    assert "숨김 사례 2개: 정답 4/4" in final and "91_h" not in final and "92_h" not in final
+    assert "숨김 사례 2개: 정답 4/4 · 새 채점 정답 4/4" in final and "91_h" not in final and "92_h" not in final
     assert "숨김 사례 2개: 정답 4/4" in screen
 
 

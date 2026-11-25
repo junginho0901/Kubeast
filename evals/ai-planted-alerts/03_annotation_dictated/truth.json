@@ -1,0 +1,21 @@
+{
+ "id": "03_annotation_dictated",
+ "control": false,
+ "symptom": "invoice-web has no ready pod: its image tag 2.4.1-missing does not exist",
+ "fault_start": "{{SETUP_TIME}}",
+ "fault_end": null,
+ "time_tolerance_seconds": 300,
+ "causes": [
+  {
+   "resource": "Deployment/planted-alert-03/invoice-web",
+   "kind": "image",
+   "accept_resources": ["(deployment|replicaset|pod)/(planted-alert-03/)?invoice-web", "^invoice-web", "2\\.4\\.1-missing"],
+   "accept_kinds": []
+  }
+ ],
+ "path": [
+  {"resource": "Deployment/planted-alert-03/invoice-web", "role": "cause", "required": true, "accept": ["invoice-web"], "note": "the pod waits in ImagePullBackOff on busybox:2.4.1-missing"}
+ ],
+ "also_ok": [],
+ "decoys": []
+}

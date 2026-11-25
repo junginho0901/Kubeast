@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Investigation, InvestigationResult } from '@/services/api/investigations'
+import type { Investigation, InvestigationResult, InvestigationVerdict } from '@/services/api/investigations'
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
-import { CHAT_NOTES, CHAT_REPORT_WITH_RESULT, callLabel, ledgerOn, notClosedText, notVerifiedText, orderedHypotheses, reportForChat, reportLayer, resultForChat, resultNotes, stateBadge, stateText } from './investigationResult'
+import { CHAT_NOTES, CHAT_REPORT_WITH_RESULT, callLabel, checkText, cutText, ledgerOn, notClosedText, notLookedAtText, notVerifiedText, orderedHypotheses, outcomeBadge, outcomeText, outcomeWhyText, reportForChat, reportLayer, resultForChat, resultNotes, sourceText, stateBadge, stateText } from './investigationResult'
 
 const tr = (_key: string, fallback: string, opts?: Record<string, unknown>) =>
   fallback.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(opts?.[name] ?? ''))
@@ -22,6 +22,20 @@ const RESULT: InvestigationResult = {
     { id: 'h4', statement: 'Traces show the slow span', resource: '', state: 'blocked', for: [{ call: 4, tool: 'traces_search', failed: true }], against: [], blocked: 'traces_search is not offered', closed: true },
   ],
   asked_again: false,
+}
+
+const VERDICT: InvestigationVerdict = {
+  outcome: 'cannot_tell',
+  said: 'cause_found',
+  why: ['no_symptom'],
+  symptom: { resource: 'Deployment/apps/web', evidence: [] },
+  looked_at: [{ source: 'objects', calls: [{ call: 1, tool: 'k8s_get_resources' }] }],
+  checked_normal: [{ check: 'restarts', call: 2, tool: 'anomaly_rank', namespace: 'apps', since: '2026-10-13T11:35:00Z', until: '2026-10-13T12:00:00Z' }],
+  not_looked_at: [
+    { source: 'traces', reason: 'not_offered' },
+    { check: 'trace_errors', reason: 'not_run', detail: 'no trace store', call: 2, tool: 'anomaly_rank', namespace: 'apps' },
+    { call: 3, tool: 'loki_query', reason: 'failed', detail: 'forbidden' },
+  ],
 }
 
 const BASE: Investigation = {
@@ -75,12 +89,69 @@ describe('an investigation result', () => {
     expect(notVerifiedText({ ...RESULT.causes[0], verified: false, reason: 'name_missing' }, tr))
       .toBe('Not verified: its name does not appear in what the calls returned')
     expect(notVerifiedText({ ...RESULT.causes[0], verified: false }, tr)).toBe('Not verified')
-    for (const reason of ['no_evidence', 'bad_calls', 'name_missing', 'after_alert']) {
+    // [1, 999]: call 1 is drawn beside the mark, so the reason says one call given is not a call that answered
+    expect(notVerifiedText({ ...RESULT.causes[0], raw_evidence: [1, 999], verified: false, reason: 'bad_calls' }, tr))
+      .toBe('Not verified: a call given is not a call of this investigation that answered')
+    expect(en.investigations.result.unverified.bad_calls).toBe('a call given is not a call of this investigation that answered')
+    expect(notVerifiedText({ ...RESULT.causes[0], verified: false, reason: 'empty_answer' }, tr))
+      .toBe('Not verified: the calls given read nothing or their answer holds nothing')
+    for (const reason of ['no_evidence', 'bad_calls', 'empty_answer', 'name_missing', 'after_alert']) {
       expect((en.investigations.result.unverified as Record<string, string>)[reason]).toBeTruthy()
       expect((ko.investigations.result.unverified as Record<string, string>)[reason]).toBeTruthy()
     }
     expect(ledgerOn(RESULT)).toBe(true)
     expect(ledgerOn({ ...RESULT, checks: { evidence: true, ledger: false } })).toBe(false)
+  })
+
+  it('says how many of how many a list the server cut shows, and nothing for one that fits', () => {
+    expect(cutText({ given: 11, kept: 10 }, tr)).toBe('Showing the first 10 of 11: the server did not keep the rest.')
+    expect(cutText(undefined, tr)).toBe('')
+    expect(en.investigations.result.partial).toBe('Showing the first {{shown}} of {{total}}: the server did not keep the rest.')
+    expect(ko.investigations.result.partial).toBe('{{total}}개 중 앞의 {{shown}}개를 보여 줍니다. 나머지는 서버가 저장하지 않았습니다.')
+  })
+})
+
+describe('the outcome of an investigation', () => {
+  it('gives each outcome, reason and source its words in both catalogs', () => {
+    for (const outcome of ['cause_found', 'no_fault', 'cannot_tell'] as const) {
+      expect(outcomeBadge[outcome]).toMatch(/^badge badge-/)
+      expect(en.investigations.result.outcome[outcome]).toBe(outcomeText(outcome, tr))
+      expect(ko.investigations.result.outcome[outcome]).toBeTruthy()
+    }
+    for (const why of Object.keys(en.investigations.result.outcomeWhy)) {
+      expect(outcomeWhyText({ ...VERDICT, said: null, why: [why] }, tr))
+        .toBe(`Kept by the server: ${(en.investigations.result.outcomeWhy as Record<string, string>)[why]}.`)
+      expect((ko.investigations.result.outcomeWhy as Record<string, string>)[why]).toBeTruthy()
+    }
+    for (const source of Object.keys(en.investigations.result.source)) {
+      expect((en.investigations.result.source as Record<string, string>)[source]).toBe(sourceText(source, tr))
+      expect((ko.investigations.result.source as Record<string, string>)[source]).toBeTruthy()
+    }
+    expect(Object.keys(ko.investigations.result.notLooked)).toEqual(Object.keys(en.investigations.result.notLooked))
+  })
+
+  it('says why the server keeps another outcome than the report, and nothing when it keeps it', () => {
+    expect(outcomeWhyText(VERDICT, tr)).toBe('Kept by the server. The report says "Cause found", but no call is given that shows the alert\'s symptom.')
+    expect(outcomeWhyText({ ...VERDICT, outcome: 'cause_found', why: [] }, tr)).toBe('')
+  })
+
+  it('names what was not looked at by its source, its check or its call', () => {
+    expect(VERDICT.not_looked_at.map((n) => notLookedAtText(n, tr))).toEqual([
+      'Traces: the cluster offers no tool for it',
+      'trace_errors (apps): the check did not run (no trace store)',
+      '#3 loki_query: the call failed or was refused (forbidden)',
+    ])
+    expect(checkText({ check: 'restarts', namespace: 'apps', workload: 'Deployment/web' })).toBe('restarts (apps, Deployment/web)')
+  })
+
+  it('reaches the floating chat with the server lists, and a result without one is as it was', () => {
+    const told = resultForChat({ ...RESULT, verdict: VERDICT })
+    expect(told.outcome).toBe('cannot_tell')
+    expect(told.outcome_said).toBe('cause_found')
+    expect(told.checked_normal).toEqual(['restarts (apps) #2 anomaly_rank'])
+    expect(told.not_looked_at).toEqual(['traces: not_offered', 'trace_errors (apps): not_run', '#3 loki_query: failed'])
+    expect('outcome' in resultForChat(RESULT)).toBe(false)
+    expect(Object.keys(resultForChat(RESULT))).toEqual(['status', 'no_fault', 'asked_again', 'causes', 'path', 'ruled_out', 'hypotheses'])
   })
 })
 
@@ -123,6 +194,19 @@ describe("the report window's layer for the floating chat", () => {
     ])
     expect('hypotheses' in told).toBe(false)
     expect('hypotheses' in resultForChat(RESULT)).toBe(true)
+  })
+
+  it('tells the floating chat which lists the server cut and how many were given', () => {
+    const cut = { causes: { given: 11, kept: 10 }, path: { given: 14, kept: 12 } }
+    const told = resultForChat({ ...RESULT, causes: [{ ...RESULT.causes[0], cut: { evidence: { given: 25, kept: 20 } } }], cut })
+    expect(told.cut).toEqual(cut)
+    expect((told.causes as Record<string, unknown>[])[0].cut).toEqual({ evidence: { given: 25, kept: 20 } })
+    expect('cut' in resultForChat(RESULT)).toBe(false)
+    expect('cut' in (resultForChat(RESULT).causes as Record<string, unknown>[])[0]).toBe(false)
+    const side = { for: { given: 21, kept: 20 } }
+    const hypotheses = resultForChat({ ...RESULT, hypotheses: [{ ...RESULT.hypotheses[1], cut: side }] }).hypotheses as Record<string, unknown>[]
+    expect(hypotheses[0].cut).toEqual(side)
+    expect((resultForChat(RESULT).hypotheses as Record<string, unknown>[]).some((h) => 'cut' in h)).toBe(false)
   })
 
   it("keeps the server's notes under a report it cuts", () => {

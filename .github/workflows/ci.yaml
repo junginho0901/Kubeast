@@ -1,6 +1,6 @@
-# PR gate: unit tests, type checks and gofmt for every service. e2e (kind + LLM)
-# stays local — see docs/development.md "E2E tests". eslint is informational until the
-# pre-existing lint debt is cleared.
+# PR gate: unit tests, type checks and gofmt for every service, and eslint for the frontend
+# (npm run lint, --max-warnings 0). e2e (kind + LLM) stays local — see docs/development.md
+# "E2E tests". The main branch ruleset names the jobs a pull request must pass; eslint is one.
 name: ci
 
 on:
@@ -37,10 +37,12 @@ jobs:
           - services/netpol-oracle
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          # each module pins its own Go version in go.mod
-          go-version-file: ${{ matrix.module }}/go.mod
+          # The images' Go (golang:1.27-alpine, its newest patch), not each go.mod's minimum: Go 1.27 builds
+          # encoding/json on encoding/json/v2, which writes bytes that are not UTF-8 otherwise than 1.26 did.
+          go-version: "1.27"
+          check-latest: true
           cache-dependency-path: ${{ matrix.module }}/go.sum
       - name: vet
         working-directory: ${{ matrix.module }}
@@ -57,17 +59,22 @@ jobs:
         run: go test -run 'JQ' .
 
   # The race detector over k8s-service's live lists (internal/ws) and handlers (internal/handler), whose sockets,
-  # terminals and streams run goroutines that can outlive their request, and the heartbeat and sweep goroutines of
-  # the node shell rows and the drains (internal/nodeshells, internal/drains). A job of its own, beside the longer helm job,
+  # terminals and streams run goroutines that can outlive their request, the heartbeat and sweep goroutines of
+  # the node shell rows and the drains (internal/nodeshells, internal/drains), and the client logic's informers,
+  # place queues and reads shared through internal/flight (internal/k8s). A job of its own, beside the longer helm job,
   # since its build with -race is not in the module cache.
   go-race:
     name: go race (k8s-service ws + handler)
     runs-on: ubuntu-latest
+    # time not measured yet: the internal/k8s step's 20 m test limit and the other steps; a hang stops here, not at 6 hours
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version-file: services/k8s-service-go/go.mod
+          # the go job's Go
+          go-version: "1.27"
+          check-latest: true
           cache-dependency-path: services/k8s-service-go/go.sum
       - name: internal/ws
         working-directory: services/k8s-service-go
@@ -81,6 +88,11 @@ jobs:
       - name: internal/nodeshells and internal/drains
         working-directory: services/k8s-service-go
         run: go test -race ./internal/nodeshells/ ./internal/drains/
+      # -short leaves out the three tests that measure a pod row's heap bytes over 50 000 to 100 000 rows
+      # (TestPodRowMemory*), which the go job runs: under -race the runtime turns its tiny allocator off.
+      - name: internal/k8s and internal/flight
+        working-directory: services/k8s-service-go
+        run: go test -race -short -timeout 20m ./internal/k8s/ ./internal/flight/
 
   # Every Go test that needs PostgreSQL, found rather than listed (scripts/postgres-tests.sh):
   # each package whose tests read DBMIGRATE_TEST_DATABASE_URL runs whole against this server —
@@ -107,9 +119,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The modules' go.mod minimums differ; the images build with 1.27 (golang:1.27-alpine).
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: "1.27"
+          check-latest: true
           cache-dependency-path: services/**/go.sum
       - name: every test that needs PostgreSQL
         env:
@@ -164,6 +177,7 @@ jobs:
       - run: python -I scripts/test_ai_eval_cases.py
       - run: python -I scripts/test_ai_eval_runner.py
       - run: python -I scripts/test_ai_eval_alerts.py
+      - run: python -I scripts/test_ai_eval_second.py
 
   frontend:
     name: frontend (tsc + vitest)
@@ -200,6 +214,7 @@ jobs:
       - run: helm lint helm/kubeast
       # Rendered-manifest assertions (helm/kubeast/tests/*_test.yaml): switch
       # defaults, migrations hook Job, PVC retention, replica guards, secrets.
+      # A process for each file, as many at once as the runner has CPUs (scripts/chart-unittest.sh).
       - name: helm unittest
         timeout-minutes: 20
         run: |
@@ -216,7 +231,7 @@ jobs:
             helm plugin uninstall unittest >/dev/null 2>&1 || true
             sleep 10
           done
-          helm unittest helm/kubeast
+          scripts/chart-unittest.sh
       # `helm upgrade --reuse-values` from every release: stops with the upgrade hint or loses nothing.
       - name: upgrade from earlier releases
         run: scripts/chart-upgrade-values.sh
@@ -250,14 +265,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      # Every Dockerfile's golang:X.Y is every go-version "X.Y" in this file; dependabot's base-images PR moves the Dockerfiles alone.
+      - name: the images' Go is CI's Go
+        run: scripts/check-go-version.sh
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: "stable"
       - run: |
           cd services && files=$(gofmt -l pkg auth-service-go k8s-service-go session-service-go tool-server model-config-controller-go deploy-service-go dashboards-service-go ci-controller-go)
           if [ -n "$files" ]; then echo "gofmt needed:"; echo "$files"; exit 1; fi
 
-  # The planted-instruction cases of evals/ai-planted and their scorer: standard library only, no cluster, no model.
+  # The planted-instruction cases of evals/ai-planted and evals/ai-planted-alerts and their scorers: standard library only,
+  # no cluster, no model.
   ai-eval-planted:
     name: planted-instruction cases and scorer (stdlib tests)
     runs-on: ubuntu-latest
@@ -268,6 +287,8 @@ jobs:
           python-version: "3.14"
       - run: python -I scripts/test_ai_eval_planted.py
       - run: python -I scripts/ai_eval_planted.py check
+      - run: python -I scripts/test_ai_eval_planted_alerts.py
+      - run: python -I scripts/ai_eval_planted_alerts.py check
 
   e2e-assertions:
     name: e2e specs assert outcomes
@@ -322,7 +343,7 @@ jobs:
       # govulncheck also reports standard-library advisories for the toolchain
       # it runs under, so scan with the newest 1.27 patch — the one the images
       # are built with (golang:1.27-alpine) — not the go.mod minimum (1.26.0).
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: "1.27"
           check-latest: true
@@ -354,9 +375,11 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
+      # The second run is the -claude-code image, which installs both files (WITH_CLAUDE_CODE=true).
       - run: |
           pip install "pip-audit==${PIP_AUDIT_VERSION}"
           pip-audit -r services/ai-service/requirements.txt
+          pip-audit -r services/ai-service/requirements.txt -r services/ai-service/requirements-claude-code.txt
 
   dependencies:
     name: dev add-on versions agree (zeitgeist)
@@ -373,3 +396,15 @@ jobs:
           echo "${ZEITGEIST_SHA256}  zeitgeist" | sha256sum -c -
           chmod +x zeitgeist
           ./zeitgeist validate --local-only --base-path . --config deploy/dependencies.yaml
+
+  # Every default model is a pinned snapshot ID (scripts/check-model-pins.py): standard library only.
+  model-pins:
+    name: default models are pinned snapshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python -I scripts/test_check_model_pins.py
+      - run: python -I scripts/check-model-pins.py

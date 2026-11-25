@@ -155,11 +155,14 @@ tests:
                 name: kubeast-redis-users
                 key: REDIS_K8S_SERVICE_PASSWORD
                 optional: true
-      - contains:
-          path: spec.template.spec.containers[0].envFrom
+      - notContains:
+          path: spec.template.spec.containers[0].env
           content:
-            secretRef:
-              name: kubeast-secrets
+            valueFrom:
+              secretKeyRef:
+                name: kubeast-secrets
+                key: REDIS_PASSWORD
+          any: true
 
   - it: with streams.enabled both k8s-service roles sign in as k8s-service, the stream server too
     set:
@@ -271,16 +274,15 @@ tests:
           content:
             name: REDIS_USERNAME
           any: true
-      - notContains:
+      - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: REDIS_PASSWORD
-          any: true
-      - contains:
-          path: spec.template.spec.containers[0].envFrom
-          content:
-            secretRef:
-              name: company-kubeast
+            valueFrom:
+              secretKeyRef:
+                name: company-kubeast
+                key: REDIS_PASSWORD
+                optional: true
 
   - it: with secrets.existingSecret and redis.acl.existingSecretHasKeys k8s-service reads its password there
     template: deployments.yaml
@@ -315,11 +317,15 @@ tests:
           content:
             name: REDIS_USERNAME
             value: k8s-service
-      - notContains:
+      - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: REDIS_PASSWORD
-          any: true
+            valueFrom:
+              secretKeyRef:
+                name: kubeast-secrets
+                key: REDIS_PASSWORD
+                optional: true
 
   - it: with redis off, k8s-service gets no Redis user
     template: deployments.yaml
@@ -344,8 +350,7 @@ tests:
           path: metadata.name
           value: kubeast-redis-users
 
-  # Each service takes its own key from the Redis users' Secret; secrets.existingSecret, which they take whole, need
-  # not hold any of them.
+  # Each service takes its own key from the Redis users' Secret; secrets.existingSecret need not hold any of them.
   - it: with redis.acl.existingSecret k8s-service and tool-server each read their own key there, beside secrets.existingSecret
     template: deployments.yaml
     set:
@@ -373,10 +378,13 @@ tests:
                 optional: true
         documentSelector: {path: metadata.name, value: tool-server}
       - contains:
-          path: spec.template.spec.containers[0].envFrom
+          path: spec.template.spec.containers[0].env
           content:
-            secretRef:
-              name: company-kubeast
+            name: DATABASE_URL
+            valueFrom:
+              secretKeyRef:
+                name: company-kubeast
+                key: DATABASE_URL
         documentSelector: {path: metadata.name, value: k8s-service}
       - notContains:
           path: spec.template.spec.containers[0].envFrom

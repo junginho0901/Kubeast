@@ -117,19 +117,32 @@ func TestMapRoleAndClusterGrants(t *testing.T) {
 	}
 }
 
+// admin-only opens the form to the chart's admin account alone, the address as DEFAULT_ADMIN_EMAIL writes it (the one
+// rule of isChartAdmin): an address in other letters is another account.
 func TestPasswordLoginAllowed(t *testing.T) {
-	cfg := config.Config{DefaultAdminEmail: "admin"}
-	cfg.PasswordLogin = "on"
-	if !passwordLoginAllowed(cfg, "x@example.com") {
-		t.Fatal("on allows everyone")
-	}
-	cfg.PasswordLogin = "admin-only"
-	if !passwordLoginAllowed(cfg, "Admin") || passwordLoginAllowed(cfg, "x@example.com") {
-		t.Fatal("admin-only allows only the bootstrap admin")
-	}
-	cfg.PasswordLogin = "off"
-	if passwordLoginAllowed(cfg, "admin") {
-		t.Fatal("off allows nobody")
+	for _, c := range []struct {
+		name, mode, admin, typed string
+		want                     bool
+	}{
+		{"on, any address", "on", "admin", "x@example.com", true},
+		{"on, the admin's address in other letters", "on", "Ops@Example.com", "ops@example.com", true},
+		{"admin-only, the admin's address as written", "admin-only", "Ops@Example.com", "Ops@Example.com", true},
+		{"admin-only, the default name as written", "admin-only", "admin", "admin", true},
+		{"admin-only, the admin's address in small letters", "admin-only", "Ops@Example.com", "ops@example.com", false},
+		{"admin-only, the admin's address in capitals", "admin-only", "Ops@Example.com", "OPS@EXAMPLE.COM", false},
+		{"admin-only, the default name in other letters", "admin-only", "admin", "Admin", false},
+		{"admin-only, another address", "admin-only", "Ops@Example.com", "x@example.com", false},
+		{"off, the admin's address as written", "off", "Ops@Example.com", "Ops@Example.com", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := config.Config{DefaultAdminEmail: c.admin, PasswordLogin: c.mode}
+			if got := passwordLoginAllowed(cfg, c.typed); got != c.want {
+				t.Fatalf("passwordLoginAllowed(%s, admin %q, typed %q) = %v, want %v", c.mode, c.admin, c.typed, got, c.want)
+			}
+			if c.mode == "admin-only" && passwordLoginAllowed(cfg, c.typed) != isChartAdmin(cfg, c.typed) {
+				t.Fatal("admin-only answers otherwise than isChartAdmin")
+			}
+		})
 	}
 }
 

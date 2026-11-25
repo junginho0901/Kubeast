@@ -221,3 +221,9 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: the values have no pdb.maxUnavailable
+  - it: stops values without podStartup, which 0.7.9 added, as v0.7.8's published defaults are
+    set:
+      podStartup: null
+    asserts:
+      - failedTemplate:
+          errorPattern: the values have no podStartup.quickReady

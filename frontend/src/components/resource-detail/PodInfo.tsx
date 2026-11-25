@@ -13,7 +13,7 @@ import { PrometheusSection, MetricBar } from './PrometheusMetrics'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import PodExecTerminal from '@/components/PodExecTerminal'
 import { useAIContext } from '@/hooks/useAIContext'
-import { useCanI } from '@/hooks/useCanCreate'
+import { useCanExecPod, useCanI } from '@/hooks/useCanCreate'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { getVolumeDetail } from './pod-info/podInfoFormatters'
 import ContainerCard from './pod-info/ContainerCard'
@@ -35,6 +35,7 @@ import NetworkDrops from './NetworkDrops'
 import TopTalkers from './TopTalkers'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 import { useDismiss } from '@/hooks/useDismiss'
+import { promString } from '@/utils/promString'
 
 interface Props {
   name: string
@@ -69,7 +70,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const execContainerRef = useRef<HTMLDivElement>(null)
   const execShellRef = useRef<HTMLDivElement>(null)
   // the namespace counts too: the server keeps some to fewer people than the permission alone says
-  const canExec = useCanI('resource.pod.exec', 'create', { group: '', resource: 'pods', subresource: 'exec', namespace, name })
+  const canExec = useCanExecPod(namespace, name)
   const canEditPod = useCanI('resource.pod.edit', 'patch', { group: '', resource: 'pods', namespace, name })
 
   const { data: podDescribe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
@@ -201,8 +202,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
   const promPodMetrics = usePrometheusQueries(
     ['pod-detail', namespace, name],
     [
-      { name: 'cpu', promql: `sum by(container)(rate(container_cpu_usage_seconds_total{namespace="${namespace}",pod="${name}",container!="",container!="POD"}[5m])) * 1000` },
-      { name: 'memory', promql: `sum by(container)(container_memory_working_set_bytes{namespace="${namespace}",pod="${name}",container!="",container!="POD"})` },
+      { name: 'cpu', promql: `sum by(container)(rate(container_cpu_usage_seconds_total{namespace=${promString(namespace)},pod=${promString(name)},container!="",container!="POD"}[5m])) * 1000` },
+      { name: 'memory', promql: `sum by(container)(container_memory_working_set_bytes{namespace=${promString(namespace)},pod=${promString(name)},container!="",container!="POD"})` },
     ],
     { enabled: !!name && !!namespace },
   )

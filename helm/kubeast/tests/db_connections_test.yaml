@@ -2,12 +2,19 @@ suite: database connections — the pods' pools against the chart's PostgreSQL m
 templates:
   - checks/db-connections.yaml
 tests:
-  - it: renders nothing on the defaults (one pod each, 154 connections at most, max_connections 300)
+  - it: renders nothing on the defaults (one pod each, 156 connections at most, max_connections 300)
     asserts:
       - hasDocuments:
           count: 0
 
-  - it: fits three pods of each service in the default 300 (286 with a rollout's extra pod)
+  - it: counts one connection outside the pool on each auth-service pod for the retention lock, as on each k8s-service pod for the health status lock
+    set:
+      postgresql.maxConnections: 155
+    asserts:
+      - failedTemplate:
+          errorPattern: can hold up to 156 database connections
+
+  - it: fits three pods of each service in the default 300 (290 with a rollout's extra pod)
     set:
       replicas.authService: 3
       replicas.sessionService: 3
@@ -17,17 +24,17 @@ tests:
       - hasDocuments:
           count: 0
 
-  - it: stops ten auth-service pods, 11 of them in a rollout at 20 connections each
+  - it: stops ten auth-service pods, 11 of them in a rollout at 20 connections and the retention lock's 1 each
     set:
       replicas.authService: 10
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 334 database connections
+          errorPattern: can hold up to 345 database connections
 
   - it: takes them with max_connections raised to the sum
     set:
       replicas.authService: 10
-      postgresql.maxConnections: 334
+      postgresql.maxConnections: 345
     asserts:
       - hasDocuments:
           count: 0
@@ -38,7 +45,7 @@ tests:
       autoscaling.k8sService.maxReplicas: 30
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 473 database connections
+          errorPattern: can hold up to 475 database connections
 
   - it: counts replicas while the HPA is off
     set:
@@ -61,7 +68,7 @@ tests:
       replicas.authService: 9
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 314 database connections
+          errorPattern: can hold up to 324 database connections
 
   - it: does not check an external database, whose limit it cannot read
     set:
@@ -106,7 +113,7 @@ tests:
       postgresql.maxConnections: 160
     asserts:
       - failedTemplate:
-          errorPattern: can hold up to 174 database connections
+          errorPattern: can hold up to 176 database connections
 
   - it: leaves k8s-service-stream out with streams.enabled false
     set:

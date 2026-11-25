@@ -53,11 +53,19 @@ class InvestigationSettings:
     console_url: str = ""
     # The report's causes held to the run's tool calls before it is kept (investigation/evidence.py).
     evidence_check: bool = False
+    # The report's outcome — a cause found, no fault found or cannot tell — in the rca block of evidence_check or ledger,
+    # with the server's lists of what was and was not looked at (investigation/verdict.py); nothing with both off.
+    verdict: bool = False
     token_url: str = "http://auth-service:8004/api/v1/auth/internal/investigator-token"
     internal_token: str = field(default="", repr=False)
     # A firing inbox alert with no notification for this long shows "status unknown" (Alertmanager resends a
     # firing alert every repeat_interval, 4 h by default, so two missed resends).
     inbox_stale_hours: int = 8
+    # ai.toolResultDetails: the prompt has an empty search end the search for that name, not the investigation.
+    tool_result_details: bool = False
+    # features.nodeNeighbors: the prompt of an alert without a namespace asks for what else used the CPU of the node slow
+    # pods run on (get_node_metrics node; the token of an alert with one is limited to it and refused the tool).
+    node_neighbors: bool = False
     # features.callGraph: the prompt asks for who calls whom (resource_graph include calls) and the cause → … → symptom path.
     call_paths: bool = False
 
@@ -97,10 +105,13 @@ def load() -> InvestigationSettings:
         language=(os.getenv("ALERT_INVESTIGATION_LANGUAGE", "en").strip().lower() or "en"),
         console_url=os.getenv("ALERT_INVESTIGATION_CONSOLE_URL", "").strip().rstrip("/"),
         evidence_check=switch.env_on("ALERT_INVESTIGATION_EVIDENCE_CHECK"),
+        verdict=switch.env_on("ALERT_INVESTIGATION_VERDICT"),
         token_url=os.getenv(
             "AUTH_INVESTIGATOR_TOKEN_URL", "http://auth-service:8004/api/v1/auth/internal/investigator-token"
         ).strip(),
         internal_token=os.getenv("INTERNAL_API_TOKEN", "").strip(),
         inbox_stale_hours=min(24 * 30, max(1, _int("ALERT_INBOX_STALE_HOURS", 8))),
+        tool_result_details=switch.env_on("AI_TOOL_RESULT_DETAILS"),
+        node_neighbors=switch.env_on("NODE_NEIGHBORS_ENABLED"),
         call_paths=switch.env_on("CALL_GRAPH_ENABLED"),  # the one switch rule, as tools.call_graph_on
     )

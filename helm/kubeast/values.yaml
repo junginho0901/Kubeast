@@ -37,6 +37,10 @@ admin:
 # GEMINI_API_KEY (may be empty), CLAUDE_CODE_OAUTH_TOKEN (optional) and, with auth.oidc enabled and no
 # auth.oidc.existingSecret, OIDC_CLIENT_SECRET. Pair it with
 # auth.signingKey.existingSecret for a fully deterministic render.
+# k8s-service and k8s-service-stream read only DATABASE_URL, INTERNAL_API_TOKEN,
+# REDIS_PASSWORD (while the Redis users are off) and, when the Secret holds
+# them, HTTP_PROXY, HTTPS_PROXY and NO_PROXY from it; the other services take
+# it whole as environment.
 secrets:
   existingSecret: ""
 
@@ -66,7 +70,8 @@ auth:
   cookieSecure: true
   # Password sign-in: "on" / "admin-only" (only admin.email, as the break-glass
   # path when the identity provider is down) / "off". Quoted: YAML reads a bare
-  # on/off as a boolean.
+  # on/off as a boolean. An account the provider made never signs in with a
+  # password, admin.email's aside.
   passwordLogin: "on"
   # Single sign-on through one OpenID Connect provider (Keycloak, Google, Okta,
   # Entra ID, ...): authorization code flow with PKCE, ID token verified via
@@ -374,6 +379,7 @@ ai:
   # Its ai.tool.call row has status repeated and repeat_of (that step). An
   # investigation with call numbers names the call instead ([call N]) and the
   # row adds repeat_of_call.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   refuseRepeatedReads: false
   # The metrics, log, trace and timeline tools say why an empty answer may be
   # empty where they did not, "M of N" for a cut answer (or that the total is
@@ -381,6 +387,11 @@ ai:
   # result in the chat and in an alert investigation starts with the console
   # paths of the objects it names (a drawer's ?detail=, an alert, a namespace's
   # Resource Graph). Nothing more is read for them.
+  # An empty answer of the kubectl read tools says why it may be empty too, and
+  # k8s_find_resource also looks among the namespaces' names (one more list).
+  # One line of an investigation's prompt changes with it: an empty search ends
+  # the search for that name, not the investigation.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   toolResultDetails: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
@@ -391,8 +402,9 @@ ai:
   # is not affected. pii adds e-mail / phone / resident-registration / card
   # number masking; disable lists rule names to skip (key_name, private_key,
   # url_credentials, authorization, jwt, aws_key, provider_key, email, phone,
-  # rrn, card). Error messages shown on screen or written to the audit log are
-  # masked with every credential rule, whatever these settings. numbered (with
+  # rrn, card). Error messages shown on screen or written to the audit log, and
+  # the debugDump log lines, are masked with every credential rule, whatever
+  # enabled and disable say. numbered (with
   # pii, off by default) reads each value as its kind and a number (<EMAIL_1>,
   # <PHONE_1>, <RRN_1>, <CARD_1>) that stays the same within one chat answer or
   # alert investigation; a later answer numbers past what the conversation
@@ -405,6 +417,8 @@ ai:
   redaction:
     enabled: true
     pii: false
+    # numbered: stage alpha, not run yet: a chat with it and pii on, and the AI evaluation with it off and on
+    # (docs/configuration.md "Stages of new values").
     numbered: false
     disable: []
   # Chat history sent to the model: the last historyMessages user/assistant
@@ -416,7 +430,15 @@ ai:
   # (userDailyTokens), counted from the ai.chat.complete audit rows like the
   # Admin AI usage view; a turn over a limit is refused before the model is
   # called and audited as ai.chat.budget_exceeded. 0 turns a limit off.
+  # maxSteps: the model calls one chat answer may make (1 to 100; a number
+  # outside is the nearer end). Each may call tools but the last, which answers
+  # from what was read. More steps can cost more tokens: the budgets are checked
+  # when a turn starts, not between its calls. On a Claude subscription Claude
+  # Code stops at providers.claudeCode.maxTurns instead, and one call without
+  # tools then answers.
+  # Stage: beta, not run yet: a chat question that reaches it, on the kind dev install (docs/configuration.md "Stages of new values").
   chat:
+    maxSteps: 20
     historyMessages: 10
     summary:
       enabled: true
@@ -442,16 +464,23 @@ ai:
   #         - check: The database's slow queries over the window
   #           tools: [prometheus_query]
   #   remove: [network_policy]
+  # symptoms (with chat or investigations on): a card is also picked by what is
+  # said to be wrong, in English or Korean, in a question or in an alert's name,
+  # summary and description; adds error_rate, latency and resource_pressure.
   # At most 6 checks a card, 3 tools a check, 200 characters a check.
+  # Stage: alpha, not run yet: the AI evaluation with chat and investigations off and on, then with symptoms off and on beside them
+  # (docs/configuration.md "Stages of new values").
   ruleCards:
     chat: false
-    investigations: false
+    investigations: true
+    symptoms: false
     cards: []
     remove: []
   # Write model responses, tool arguments and tool results to the ai-service
   # log (redacted, length-capped). Debugging only — off keeps them out of the
   # cluster log pipeline.
   debugDump: false
+  # Stage: alpha, not run yet: the planted instruction cases against a model (docs/configuration.md "Stages of new values").
   toolResultsJSON: false  # true: the model reads each tool result as one JSON object naming its tool, cluster text as JSON strings (docs/ai-alerts.md "Planted instructions")
   # The AI tool timeline's changes view (view: changes — what changed in a
   # window: rollouts compared with the revision before, ConfigMap and Secret
@@ -463,7 +492,28 @@ ai:
   # changes routes answer 404 — unless alert investigations are on with
   # features.alertInvestigation.changesFirst, whose step 0 reads them; the chat
   # still sends its calls without the view.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   timelineChanges: false
+  # More of that view in a named namespace: Jobs made (with their CronJob), NetworkPolicy writes, Service writes of the
+  # selector or ports and replica counts set, read as the user and as metadata only: four lists more a call, five where
+  # the namespace may have a StatefulSet, none without a namespace. Adds to the view wherever it is served
+  # (timelineChanges, or alert investigations' changesFirst); alone it opens nothing. Off: the view is as it was.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  timelineChangesMore: false
+  # The chat's rules for a question that asks why something is broken: what to
+  # check before answering (whether the symptom was there, what changed as a
+  # candidate only, the caller's and the callee's logs, a crashing pod's
+  # configuration, the node when unrelated workloads slow together, what could
+  # not be read), and an answer of one of three: cause found, no fault found or
+  # cannot tell. For those questions they take the place of "one to three tool
+  # calls are enough" and of answering at the first source that explains it, so
+  # such an answer reads more and uses more tokens. Best on together with
+  # toolResultDetails, without which the result of a name not found still says
+  # to stop searching and ask. AI Chat only: the floating chat, alert
+  # investigations and the MCP server are as before. Off: the chat's
+  # instructions are as before.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  causeQuestions: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
@@ -645,8 +695,8 @@ postgresql:
   # connection: set 0 there and put the limits in the proxy's initialization query or on the database role. The
   # schema migrations always run without the statement and lock limits, also when the role sets them. Through
   # PgBouncer use session pooling only: transaction pooling hands a server connection to other clients between
-  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's, k8s-service's health
-  # status lock) does not stay with the client that made it.
+  # transactions, so a SET or a session advisory lock (the migrations', the audit dispatcher's, the retention purge's,
+  # k8s-service's health status lock) does not stay with the client that made it.
   # sessionLimits, pool and maxConnections: stage beta, a long database outage has not been tested with them yet
   # (docs/configuration.md "Stages of new values").
   sessionLimits:
@@ -663,9 +713,10 @@ postgresql:
     modelConfigController: { maxConns: 4 }
   # max_connections of the chart's PostgreSQL (postgresql.enabled; PostgreSQL's own default is 100). 300 holds the
   # default pools with 3 pods of each service: one more pod each while a rollout surges, so 4 × (20 + 20 + 10 + 15)
-  # = 260, 4 × 1 for k8s-service's health status lock, the controller's 2 × 4 = 8, the migration pool's 4 and 10 kept
-  # for psql and PostgreSQL's 3 superuser slots: 286. streams.enabled adds (streams.replicas + 1) ×
-  # pool.k8sService.maxConns, 20 by default: 306 with 3 pods of each, so raise maxConnections then.
+  # = 260, 4 × 1 for k8s-service's health status lock and 4 × 1 for auth-service's retention lock, the controller's
+  # 2 × 4 = 8, the migration pool's 4 and 10 kept for psql and PostgreSQL's 3 superuser slots: 290. streams.enabled
+  # adds (streams.replicas + 1) × pool.k8sService.maxConns, 20 by default: 310 with 3 pods of each, so raise
+  # maxConnections then.
   maxConnections: 300
 
 # --- Pod security (Pod Security Standards "restricted") ---
@@ -751,10 +802,14 @@ autoscaling:
 # zone + hostname spread, soft (ScheduleAnyway)
 topologySpread:
   enabled: true
-# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (AWS ALB: 25 with a 20 s deregistration delay).
+# Seconds a pod behind a Service (not the bundled PostgreSQL and Redis, which have no preStop wait and the Kubernetes default grace period of 30 s) keeps answering before SIGTERM (grace period = this + 30, + the drain on a server holding terminals; 0 = no wait); behind a load balancer that sends to pod IPs, longer than it takes to stop sending new requests to a leaving pod (the gateway's own wait is gateway.preStopSeconds: behind an AWS ALB that sends to pod IPs the chart gives it 25 s and the target group a 20 s deregistration delay; 25 here and the delay written by hand, as 0.7.8 asked, can stay, and a delay written is kept as written).
 # Stage: beta, tested: Kubernetes 1.29 refuses the preStop wait, set 0 there (docs/configuration.md "Stages of new values").
 podShutdown:
   preStopSeconds: 5
+# quickReady: Kubeast's servers (not the bundled PostgreSQL and Redis) get a startup probe asked every second and readiness every 3 s with no initial delay, so a pod that replaces the only one (deleted, or evicted by a node drain) is ready about a second after it listens; false keeps 0.7.8's probes (a startup probe every 5 s for auth-service, k8s-service and session-service and none for the others, readiness every 10 s after a delay), which left about 6 s with nothing to answer for ai-service, the frontend and the gateway and about 1 s for those three.
+# Stage: beta, not run yet: the one-pod delete and a node drain on the kind dev install (docs/configuration.md "Stages of new values").
+podStartup:
+  quickReady: true
 
 # --- Resources (requests always; memory limits so a leak is contained) ---
 resources:
@@ -824,8 +879,8 @@ redis:
     existingSecretHasKeys: false
     # A Secret holding only the Redis users' keys (the three above), read key by
     # key: each service then holds its own password only, where
-    # secrets.existingSecret, which every service takes whole as environment,
-    # gives each all of them. Set, the users are on, the chart makes no
+    # secrets.existingSecret, which every service but k8s-service takes whole as
+    # environment, gives each all of them. Set, the users are on, the chart makes no
     # kubeast-redis-users, and an upgrade that can read it stops when a key is
     # missing.
     existingSecret: ""
@@ -848,6 +903,9 @@ gateway:
   # [+ port], no path. Empty = same host and the Ingress host only.
   allowedOrigins: []
   #  - https://console.example.com
+  # true: every answer carries X-Kubeast-Gateway: <pod name>, for rollout tests (off: it shows clients the pod names).
+  # Stage: alpha, not run yet with it on (docs/configuration.md "Stages of new values").
+  servedByHeader: false
   # true: each access log line, after nginx's default "combined" fields, also
   # gives the request's time and the service's connect, header and response
   # times in seconds ($request_time $upstream_connect_time
@@ -857,8 +915,23 @@ gateway:
   # (docs/configuration.md "Stages of new values").
   accessLog:
     upstreamTimes: false
+  # Seconds the gateway pods keep answering before SIGTERM, in place of podShutdown.preStopSeconds (grace period =
+  # this + 30; 0 = no wait; above 0 it is a preStop sleep, which needs Kubernetes 1.30 or later). null:
+  # podShutdown.preStopSeconds, raised to 25 while it is above 0 when an AWS Application Load Balancer sends to the
+  # gateway pods' IPs (ingress.enabled with the annotation alb.ingress.kubernetes.io/target-type: ip). With that
+  # annotation the chart also gives the Ingress alb.ingress.kubernetes.io/target-group-attributes:
+  # deregistration_delay.timeout_seconds=20 whatever the gateway's wait (null, 0 or a number set here), added after
+  # the attributes that annotation already holds, unless it names deregistration_delay.timeout_seconds itself. With
+  # 25 s and 20 s, set by hand, no request failed in 18 gateway pod replacements on EKS 1.35; with 5 s and the
+  # load balancer's default delay of 300 s, requests failed in 3 of 18, and in none of 12 more with the pod
+  # readiness gate on (docs/high-availability.md).
+  # Stage: beta, not run yet: the chart's own 25 s and 20 s behind an AWS ALB (docs/configuration.md "Stages of new
+  # values").
+  preStopSeconds: null
 
 # --- Ingress (optional) ---
+# annotations: the Ingress's annotations as written. With alb.ingress.kubernetes.io/target-type: ip among them the
+# chart adds a 20 s deregistration delay to alb.ingress.kubernetes.io/target-group-attributes (gateway.preStopSeconds).
 ingress:
   enabled: false
   className: ""
@@ -902,6 +975,7 @@ networkPolicy:
   # egress. Ports 443 and 6443 are already open to every address, private and
   # public; set this only for an API server on another port.
   apiserverCIDR: ""
+  # Stage: alpha, not run yet: allowListOnly on a cluster whose network plugin enforces egress rules (docs/configuration.md "Stages of new values").
   aiEgress:
     allowListOnly: false  # true (needs networkPolicy.enabled): ai-service connects out only to allowExternalEgressCIDRs, tool-server only to the lists below and apiserverCIDR (docs/cluster-requirements.md §15)
     clusterAPIs: []       # API servers of the registered clusters, for tool-server, as VPC or subnet CIDRs (EKS endpoint addresses change, never a /32): a CIDR opens 443 and 6443, {cidr, port} another port
@@ -1024,23 +1098,26 @@ features:
     # The time windows below, the scope groups (affected, checked and normal,
     # changed for another reason, not looked at), facts kept apart from
     # hypotheses and the report's six headings, in the prompt.
-    rules: false
+    # rules, changesFirst, narrowFirst, ledger, evidenceCheck, verdict and window: stage alpha, not run yet: the AI
+    # evaluation's alert investigations with each off and on (docs/configuration.md "Stages of new values").
+    rules: true
     # Step 0: before the first model call, the timeline tool's changes view
-    # over the change window goes into the first message (an audited tool call,
-    # no model step). Writes the windows too.
-    changesFirst: false
+    # over the change window, given to the model as that call's tool result
+    # (an audited tool call, no model step; on a Claude subscription in the
+    # first message between markers). Writes the windows too.
+    changesFirst: true
     # Step 0, after the changes: anomaly_rank (features.anomalyRank) over the
-    # metrics window of the alert's namespace goes into the first message (an
-    # audited tool call, no model step; its store queries and seconds are
+    # metrics window of the alert's namespace, given the same way (an audited
+    # tool call, no model step; its store queries and seconds are
     # features.anomalyRank's). Writes the windows too.
-    narrowFirst: false
+    narrowFirst: true
     # The report ends with a block the server takes out and keeps: the causes,
     # the path from cause to symptom, what was ruled out and the hypotheses
     # weighed, each closed as cause, symptom, ruled out or blocked with the
     # calls for and against it (asked once more without tools while one is
     # open). The report window shows them under the report. One block with
     # evidenceCheck: both on, the model is asked again at most once.
-    ledger: false
+    ledger: true
     window:                   # counted from the alert's start; ends are never past now
       metricsMinutes: 15      # metrics this long either side of the start (1–360)
       logsMinutes: 5          # logs from this long before the start (0–1440)
@@ -1055,7 +1132,14 @@ features:
     # for the report again, and what still fails is listed under the report as
     # not verified. The block is taken out of the kept report and kept as the
     # report's result. One block with ledger: both on, one second ask.
-    evidenceCheck: false
+    evidenceCheck: true
+    # With evidenceCheck or ledger on (nothing with both off), the block also
+    # says the outcome: a cause found, no fault found or cannot tell, with the
+    # calls that show the alert's symptom. The server keeps cannot tell when
+    # the calls do not hold what the report says, with why under the report,
+    # and lists what was checked and normal and what was not looked at from
+    # the run's calls.
+    verdict: true
     inbox:
       staleAfterHours: 8      # a firing alert with no notification for this long shows "status unknown"; twice your repeat_interval
     # More read-only rules for the investigator, appended to the
@@ -1075,8 +1159,8 @@ features:
   # differs in one namespace between a window and the window of the same length
   # before it — failing objects, terminations by reason, restarts, CPU
   # throttling, memory against the limit, error log shapes and counts, the
-  # services' requests, failed requests and p90 from their server spans, node
-  # pressure — ranked, at most ten. The metric checks read the cluster's
+  # services' requests, failed requests and p90 from their server spans, the conditions of
+  # the nodes (not their CPU) — ranked, at most ten. The metric checks read the cluster's
   # Prometheus (kube-state-metrics and cAdvisor names), the log checks the log
   # store (features.logSearch) and the trace checks the trace store
   # (features.traceStore), each through the door of its own tools
@@ -1084,9 +1168,10 @@ features:
   # k8s.traces.query); without one, its checks are listed as not run. Off: the
   # route answers 404, reads nothing, the AI is not offered the tool and the
   # chat's system prompt and the MCP tool list do not name it.
+  # Stage: beta, not run yet: the e2e ai-anomaly-rank.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
   anomalyRank:
-    enabled: false
-    maxQueries: 12           # store queries one answer may make
+    enabled: true
+    maxQueries: 12           # store queries one answer may make, every one counted; a metric check is one query over both windows, from 12 up three are kept for the call order (features.callGraph), and the log checks' reads of one line (at most two) come from what is left: 14 makes room for all of them when every store answers
     checkTimeoutSeconds: 5   # each check
     timeoutSeconds: 20       # the whole answer
     concurrency: 4           # checks at once
@@ -1094,6 +1179,19 @@ features:
     # The log checks ask the log store's index first (Loki's index stats) and
     # do not read past this many bytes over both windows (10 GiB).
     logMaxBytes: 10737418240
+  # One node's neighbours for the AI (get_node_metrics with node, GET
+  # /nodes/{name}/neighbors, read as the caller like a list): what used a
+  # node's CPU between a window and the same length before it — the containers
+  # of every namespace on it ranked by cores, with request, limit, start,
+  # throttling and time spent waiting for a CPU, the node's CPUs one by one,
+  # and whom to suspect. It reads the cluster's Prometheus (cAdvisor,
+  # node-exporter or hostmetrics, at most six queries, kept a minute per
+  # caller), else the metrics API's current values; a namespace whose pods the
+  # caller may not list is counted, not named. Off: the route answers 404,
+  # reads nothing, and the AI's tool takes no node.
+  # Stage: alpha, not run yet: the AI evaluation's 03_node_cpu_saturated with it off and on (docs/configuration.md "Stages of new values").
+  nodeNeighbors:
+    enabled: false
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,
@@ -1183,6 +1281,7 @@ features:
     # The AI's loki_query asks the store's index first (Loki's index stats,
     # mcp-grafana's lokiguard way) and is refused, with how to narrow it, past
     # this many bytes. 0 = not asked: the query runs as it always did.
+    # Stage: alpha, not run yet: a loki_query on the kind dev install with it set (docs/configuration.md "Stages of new values").
     queryMaxBytes: 0
     # With networkPolicy on, k8s-service reaches outside the cluster on 443
     # and 6443 only; a store on another port needs {cidr, port} here. A store
@@ -1321,6 +1420,7 @@ features:
   # on the whole cluster (as the Prometheus reads), the Hubble lines
   # resource.networkflow.read. Off: include calls reads nothing and says so,
   # and the AI (the chat, investigations and the MCP tool list) is not offered it.
+  # Stage: alpha, not run yet: the e2e ai-call-graph.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
   callGraph:
     enabled: false
   # Alert store reads for the AI's alerts_list (off by default): an

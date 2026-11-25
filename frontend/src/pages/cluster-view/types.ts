@@ -2,7 +2,10 @@
 // 사이드카(istio/envoy/linkerd/vault)를 제외하고 Pod 이름의 base 와 매칭되는
 // 컨테이너를 메인으로 본다. 매칭 실패 시 첫 비-사이드카 컨테이너 → 첫 컨테이너.
 
-export interface PodDetail {
+import type { PodInfo } from '@/services/api'
+
+// with what getPodHealth reads of the row beside the phase and the containers
+export interface PodDetail extends Pick<PodInfo, 'deletion_timestamp' | 'status_reason' | 'init_containers'> {
   name: string
   namespace: string
   node: string
@@ -64,5 +67,8 @@ export function podToDetail(pod: any): PodDetail {
     created_at: pod.created_at || '',
     containersKnown,
     containers: pod.containers || [],
+    deletion_timestamp: pod.deletion_timestamp,
+    status_reason: pod.status_reason,
+    init_containers: pod.init_containers,
   }
 }

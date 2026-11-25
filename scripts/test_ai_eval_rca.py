@@ -300,6 +300,24 @@ def report(likely: str, checked: str = "- k8s_get_resources: pods of shop-x") ->
     return f"## Summary\nSomething fails.\n\n## What I checked\n{checked}\n\n## Likely cause\n{likely}\n\n## Next steps\n- Look again.\n"
 
 
+def test_a_case_does_not_run_right_after_one_it_names():
+    def entry(cid, *after):
+        return Path(cid), {"id": cid, **({"not_right_after": list(after)} if after else {})}
+
+    def order(*entries):
+        return [c["id"] for _, c in rca.run_order(list(entries))]
+
+    assert order(entry("01_a"), entry("07_b", "01_a"), entry("10_c")) == ["07_b", "01_a", "10_c"]
+    assert order(entry("01_a"), entry("07_b", "01_a")) == ["07_b", "01_a"]
+    assert order(entry("01_a"), entry("03_x"), entry("07_b", "01_a")) == ["01_a", "03_x", "07_b"]  # another case between: as it was
+    assert order(entry("01_a"), entry("02_b", "01_a"), entry("03_c", "02_b")) == ["02_b", "01_a", "03_c"]
+    assert order(entry("07_b", "01_a")) == ["07_b"]
+    case = {"id": "90", "cluster": "default", "namespace": "shop-90", "question": "q"}
+    for value in ("01_a", [1], [""], {"a": 1}):
+        assert any("not_right_after" in p for p in rca.check_case({**case, "not_right_after": value}, False)), value
+    assert rca.check_case({**case, "not_right_after": ["01_a"]}, False) == []
+
+
 def test_text_names_the_cause_and_its_kind():
     s = rca.score_text(report("The new ConfigMap `settings-b` changed a setting the pricing pods read."), TRUTH)
     assert s["section"] == "likely_cause" and s["pass"] and s["score"] == 1.0

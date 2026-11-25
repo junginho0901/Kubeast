@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/anomaly"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/callgraph"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/protectedns"
@@ -40,18 +42,14 @@ func (f *twoRestarting) ProtectedNamespaces(context.Context) protectedns.Namespa
 	return protectedns.Namespaces{NodeShell: "kubeast-node-shell"}
 }
 
-func (f *twoRestarting) PrometheusQueryAt(_ context.Context, q string, at time.Time) ([]k8s.PrometheusQueryResult, error) {
+func (f *twoRestarting) PrometheusQueryAt(_ context.Context, q string, _ time.Time) ([]k8s.PrometheusQueryResult, error) {
 	f.mu.Lock()
 	f.reads++
 	f.mu.Unlock()
 	if !strings.Contains(q, "kube_pod_container_status_restarts_total") {
 		return nil, nil
 	}
-	web, api := 1.0, 1.0
-	if at.Equal(anomalyNow) {
-		web, api = 8, 3
-	}
-	return []k8s.PrometheusQueryResult{{Metric: map[string]interface{}{"pod": "web-1"}, Value: web}, {Metric: map[string]interface{}{"pod": "api-1"}, Value: api}}, nil
+	return append(bothWindows(map[string]interface{}{"pod": "web-1"}, 8, 1), bothWindows(map[string]interface{}{"pod": "api-1"}, 3, 1)...), nil
 }
 
 // orderGraph is callsGraph with api's pod: web's pod is web-1 (selected by web-svc), api's api-1.
@@ -98,7 +96,7 @@ func TestAnomaliesCallOrderOffReadsNothingMore(t *testing.T) {
 	if got := findingOrder(res); got != "restarts:Pod/web-1,restarts:Pod/api-1" {
 		t.Fatalf("2-a order %s", got)
 	}
-	if res.StoreQueries != 6 {
+	if res.StoreQueries != 3 {
 		t.Fatalf("store queries %d", res.StoreQueries)
 	}
 }
@@ -129,7 +127,7 @@ func TestAnomaliesCallOrderPutsTheCauseBeforeItsVictim(t *testing.T) {
 		}
 	}
 	// the 90th percentile ranks nothing and is not read; the queries stay within features.anomalyRank.maxQueries
-	if calls.plain != 0 || calls.count("traces_service_graph_request_server_seconds_bucket") != 0 || res.StoreQueries > 12 || res.StoreQueries != 6+len(calls.at)+len(calls.between) {
+	if calls.plain != 0 || calls.count("traces_service_graph_request_server_seconds_bucket") != 0 || res.StoreQueries > 12 || res.StoreQueries != 3+len(calls.at)+len(calls.between) {
 		t.Fatalf("plain %d queries %v store %d", calls.plain, calls.queries, res.StoreQueries)
 	}
 	if !strings.Contains(w.Body.String(), `"call_order":{"applied":true`) {
@@ -137,9 +135,10 @@ func TestAnomaliesCallOrderPutsTheCauseBeforeItsVictim(t *testing.T) {
 	}
 }
 
-// The checks take their queries first: with none left for the call graph the 2-a order stays and call_order says why.
+// Below the default the call order keeps no query of its own and the checks take theirs first: with too few left for the
+// call graph the 2-a order stays and call_order says why.
 func TestAnomaliesCallOrderWithinTheStoreQueries(t *testing.T) {
-	h, _, calls, _ := callOrderHandler(config.Config{CallGraphEnabled: true, AnomalyRankMaxQueries: 7})
+	h, _, calls, _ := callOrderHandler(config.Config{CallGraphEnabled: true, AnomalyRankMaxQueries: 4})
 	w, res := getAnomalies(h, "/api/v1/namespaces/shop/anomalies", flowReader)
 	if w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body)
@@ -148,7 +147,7 @@ func TestAnomaliesCallOrderWithinTheStoreQueries(t *testing.T) {
 		t.Fatalf("order %s", got)
 	}
 	co := res.CallOrder
-	if co == nil || co.Applied || co.Moved != 0 || !strings.Contains(co.Reason, budgetSpent) || res.StoreQueries != 7 {
+	if co == nil || co.Applied || co.Moved != 0 || !strings.Contains(co.Reason, budgetSpent) || res.StoreQueries != 4 {
 		t.Fatalf("call_order %+v store %d", co, res.StoreQueries)
 	}
 	if len(calls.at)+len(calls.between) > 1 {
@@ -181,5 +180,89 @@ func TestAnomaliesCallOrderGraphFailure(t *testing.T) {
 	b, _ := json.Marshal(res.CallOrder)
 	if !strings.Contains(string(b), `"applied":false`) {
 		t.Fatalf("%s", b)
+	}
+}
+
+// fullRequests is fixedCalls whose requests answer at the window's end comes back with callgraph.MaxSeries series
+// above 0, as a capped query that may have left a call out: its own row first when own, then calls of other namespaces.
+type fullRequests struct {
+	*fixedCalls
+	own bool
+}
+
+func (f *fullRequests) PrometheusQueryAt(ctx context.Context, q string, at time.Time) ([]k8s.PrometheusQueryResult, error) {
+	rows, err := f.fixedCalls.PrometheusQueryAt(ctx, q, at)
+	if err != nil || !strings.Contains(q, callgraph.RequestsMetric) {
+		return rows, err
+	}
+	if !f.own {
+		rows = nil
+	}
+	for i := len(rows); i < callgraph.MaxSeries; i++ {
+		rows = append(rows, k8s.PrometheusQueryResult{Metric: map[string]interface{}{"client": fmt.Sprintf("else%d", i), "server": "other"}, Value: 2000})
+	}
+	return rows, nil
+}
+
+// The call graph's order made from a cut answer still applies, and call_order says the answer was cut; a whole answer
+// leaves truncated out. The reads are the same.
+func TestAnomaliesCallOrderSaysTheCallsWereCut(t *testing.T) {
+	whole, _, _, _ := callOrderHandler(config.Config{CallGraphEnabled: true})
+	ww, wres := getAnomalies(whole, "/api/v1/namespaces/shop/anomalies", flowReader)
+	b, _ := json.Marshal(wres.CallOrder)
+	if ww.Code != http.StatusOK || wres.CallOrder == nil || !wres.CallOrder.Applied || strings.Contains(string(b), "truncated") {
+		t.Fatalf("whole answer: %d %s", ww.Code, b)
+	}
+
+	h, _, calls, _ := callOrderHandler(config.Config{CallGraphEnabled: true})
+	h.netdropsSrc = &fullRequests{fixedCalls: calls, own: true}
+	w, res := getAnomalies(h, "/api/v1/namespaces/shop/anomalies", flowReader)
+	if w.Code != http.StatusOK {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	co := res.CallOrder
+	if co == nil || !co.Applied || !co.Truncated || co.Moved != 2 || len(co.Suspects) != 2 || co.Suspects[0] != "Deployment/shop/api" {
+		t.Fatalf("call_order %+v", co)
+	}
+	if got := findingOrder(res); got != "restarts:Pod/api-1,restarts:Pod/web-1" {
+		t.Fatalf("order %s", got)
+	}
+	if res.StoreQueries != wres.StoreQueries {
+		t.Fatalf("store queries %d, whole %d", res.StoreQueries, wres.StoreQueries)
+	}
+	if !strings.Contains(w.Body.String(), `"truncated":true`) {
+		t.Fatalf("answer %s", w.Body)
+	}
+}
+
+// healthyOrderGraph is orderGraph with web and api well: no workload fails by its health.
+func healthyOrderGraph() map[string]interface{} {
+	var nodes []map[string]interface{}
+	for _, n := range orderGraph["nodes"].([]map[string]interface{}) {
+		c := make(map[string]interface{}, len(n))
+		for k, v := range n {
+			c[k] = v
+		}
+		if _, ok := c["health"]; ok {
+			c["health"] = "ok"
+		}
+		nodes = append(nodes, c)
+	}
+	return map[string]interface{}{"nodes": nodes, "edges": orderGraph["edges"]}
+}
+
+// A cut answer that holds no call of the namespace shows no failing workload: call_order keeps the order by the counts,
+// says why and says the answer was cut, so no failing workload is not read as the whole namespace's.
+func TestAnomaliesCallOrderNoFailingWorkloadInACutAnswer(t *testing.T) {
+	h, _, calls, _ := callOrderHandler(config.Config{CallGraphEnabled: true})
+	h.anomalyGraph = func(context.Context, string) (map[string]interface{}, error) { return healthyOrderGraph(), nil }
+	h.netdropsSrc = &fullRequests{fixedCalls: calls}
+	w, res := getAnomalies(h, "/api/v1/namespaces/shop/anomalies", flowReader)
+	co := res.CallOrder
+	if w.Code != http.StatusOK || co == nil || co.Applied || !co.Truncated || !strings.Contains(co.Reason, "no failing workload") {
+		t.Fatalf("%d call_order %+v", w.Code, co)
+	}
+	if got := findingOrder(res); got != "restarts:Pod/web-1,restarts:Pod/api-1" {
+		t.Fatalf("order %s", got)
 	}
 }

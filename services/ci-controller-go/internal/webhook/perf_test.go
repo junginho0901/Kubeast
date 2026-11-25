@@ -13,8 +13,8 @@ import (
 
 // maxDeliveryAllocs caps the allocations of answering one push delivery
 // (read, check the signature, parse, take the ID, queue), about a fifth
-// above what it takes now: 61 on Go 1.26.0, the version the CI go job reads
-// from go.mod, and 49 on Go 1.27 (the test's own request included in both).
+// above what it takes now: 61 on Go 1.26.0, the go.mod minimum, and 49 on
+// Go 1.27, which the CI go job runs (the test's own request included in both).
 // The CI design's pass line is 200 ms at p95 for the answer; time is
 // measured by the benchmark when nothing else runs.
 const maxDeliveryAllocs = 75

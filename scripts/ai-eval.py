@@ -13,6 +13,9 @@ baseline, the fault injected, each question form asked at each ask time (--repea
 the namespace deleted. Its answer ends in an rca block scored against truth.json, whose filled copy is written
 next to the report.
 
+A hard case's row also carries `second`, the second scoring (scripts/ai_eval_second.py), next to the first; the table gives
+the incidents and the controls of the second one apart.
+
 With --alerts the alert investigation is measured instead of the chat (README "The alert path"): each hard case
 with an `alert` runs in stages as above, but instead of the questions its alert reaches Kubeast's webhook — through
 the second cluster's Prometheus and Alertmanager when the case's test rule is loaded there, or posted by the runner in
@@ -40,11 +43,13 @@ import base64
 import hashlib
 import hmac
 import http.client
+import importlib.util
 import json
 import os
 import random
 import re
 import secrets
+import shlex
 import shutil
 import string
 import subprocess
@@ -59,6 +64,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # python3 -I leaves the script's folder out
 
 import ai_eval_rca as rca  # noqa: E402
+import ai_eval_second as second  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 CASES = ROOT / "evals" / "ai"
@@ -80,6 +86,7 @@ RETRY_STATUSES = (429, 500, 502, 503, 504)
 RETRY_WAIT_SECONDS = 20
 MAX_ERRORS_IN_A_ROW = 3
 REQUEST_ERRORS = (urllib.error.URLError, http.client.HTTPException, OSError)
+RESULT_CHARS = 4000  # of each tool result, in the saved answers
 SUFFIX = re.compile(r"^[a-z0-9]{1,8}$")
 
 
@@ -183,7 +190,7 @@ def read_user(admin: Api, cluster: str, stamp: str) -> tuple[str, Api]:
 
 
 def result_text(result) -> tuple[str, bool]:
-    """A tool result as text (cut to 400 characters) and whether it is an error: the stream's JSON text, or an object."""
+    """A tool result as text (cut to RESULT_CHARS) and whether it is an error: the stream's JSON text, or an object."""
     text = result if isinstance(result, str) else json.dumps(result, ensure_ascii=False, default=str)
     head = text.lstrip()
     try:
@@ -191,7 +198,7 @@ def result_text(result) -> tuple[str, bool]:
     except ValueError:  # cut, or not JSON
         obj = None
     failed = bool(obj.get("error")) if isinstance(obj, dict) else head.startswith('{"error"')
-    return text[:400], failed or '"error": "Error in' in text
+    return text[:RESULT_CHARS], failed or '"error": "Error in' in text
 
 
 def add_event(out: dict, e: dict) -> None:
@@ -395,6 +402,7 @@ class Stage:
         self.case, self.kc, self.ns = case, kc, case["namespace"]
         self.env = {"CASE_DIR": str(case_dir)}
         self.truth = json.loads((case_dir / "truth.json").read_text()) if (case_dir / "truth.json").exists() else None
+        self.rules = second.load_rules(case_dir)
         self.marks: dict[str, tuple[str, float]] = {}
         self.errors: list[str] = []
         self.undone = False
@@ -422,7 +430,8 @@ class Stage:
                 sh(step.replace("$NS", self.ns), self.kc, env=self.env)
         if self.truth is not None and self.marks:
             truth_dir.mkdir(parents=True, exist_ok=True)
-            (truth_dir / f"{self.case['id']}.json").write_text(json.dumps(self.filled_truth(), ensure_ascii=False, indent=1) + "\n")
+            copy = {**self.filled_truth(), **({"scoring": self.rules} if self.rules else {})}
+            (truth_dir / f"{self.case['id']}.json").write_text(json.dumps(copy, ensure_ascii=False, indent=1) + "\n")
         for r in results:
             r["stage"] = {**self.utc_marks(), "errors": self.errors}
         if not keep and not interrupted:
@@ -481,6 +490,7 @@ def run_staged_case(case_dir: Path, case: dict, admin: Api, kcs: dict, args, sta
                     r["rca"] = rca.score_rca(run["answer"], st.filled_truth(), run["calls"])
                     r["pass"] = r["rca"]["pass"] and not run["error"]
                     r["pass_grounded"] = r["pass"] and r["rca"]["ungrounded"] == 0
+                    r["second"] = second.score_answer(run["answer"], st.filled_truth(), run["calls"], run["error"], st.rules)
                 results.append(r)
                 shown = "done" if head["hidden"] else ("pass" if r["pass"] else "FAIL")
                 print(f"{case['id']} {form} {when(at)} run {n}: {shown} — {len(run['calls'])} calls, {run['seconds']} s", flush=True)
@@ -680,12 +690,13 @@ def find_investigation(admin: Api, cluster: str, row: dict, before: set, deadlin
         time.sleep(POLL_SECONDS)
 
 
-def alert_result(case: dict, truth: dict, detail: dict) -> dict:
+def alert_result(case: dict, truth: dict, detail: dict, rules: dict | None = None) -> dict:
     """An investigation's detail as a result row: the report as the answer, its tool calls, tokens, model calls and run
     time; the report's words scored with score_text (pass and score, the same with v0.7.9's switches on or off), its
-    rca block — the stored result, else a block still in the report — with score_block beside it, expect as prose_pass."""
+    rca block — the stored result (kept as stored_result), else a block still in the report — with score_block beside it,
+    expect as prose_pass; the second scoring, with the outcome the server keeps when the result holds one, as second."""
     calls = [{"tool": c.get("tool"), "args": c.get("args"), "failed": bool(c.get("error")),
-              **{k: c[k] for k in ("step", "error", "result_chars", "requests") if k in c}} for c in detail.get("tool_calls") or []]
+              **{k: c[k] for k in ("step", "error", "result_chars", "requests", "repeat_of") if k in c}} for c in detail.get("tool_calls") or []]
     status = detail.get("status")
     error = None if status == "done" else f"investigation {status}: {detail.get('error') or detail.get('skip_reason') or ''}"[:300]
     run = {"model": detail.get("model"), "provider": detail.get("provider"), "calls": calls, "answer": detail.get("report") or "",
@@ -699,11 +710,80 @@ def alert_result(case: dict, truth: dict, detail: dict) -> dict:
         block, block_status = rca.extract_block(run["answer"])
     if detail.get("result") is not None or block_status != "missing":
         r["rca"] = rca.score_block(block, block_status, truth, calls)
+    if detail.get("result") is not None:
+        r["stored_result"] = detail["result"]
+    r["second"] = second.score_report(run["answer"], block, block_status, truth, calls, error, rules, second.kept_outcome(detail.get("result")))
     r["pass"] = r["text"]["pass"] and not error
     r["score"] = r["text"]["score"] if not error else 0.0
     if truth.get("control"):
         r["wrong_suspect"] = not r["text"]["pass"]
     return r
+
+
+# What a pod of ai-service gives of its recorded tool answers: {file name: [the answer's first n characters, its length,
+# recorded_at]} for the names asked that it holds.
+RECORDINGS_READER = """
+import json, os, sys
+out = {}
+for name in sys.argv[3:]:
+    try:
+        with open(os.path.join(sys.argv[1], name), encoding="utf-8") as f:
+            record = json.load(f)
+        text = str(record["result"])
+        out[name] = [text[:int(sys.argv[2])], len(text), record.get("recorded_at")]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+print(json.dumps(out, ensure_ascii=False))
+"""
+
+
+def tool_replay():
+    """ai-service's tool_replay.py, for the key and the file name of a recording (at module level it imports only the
+    standard library)."""
+    name = "ai_eval_tool_replay"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, ROOT / "services" / "ai-service" / "app" / "services" / "ai" / "tool_replay.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+def recordings_dir(kcs: dict) -> str | None:
+    """The directory ai-service records tool answers in, None unless it runs with AI_TOOL_REPLAY_MODE=record."""
+    replay = tool_replay()
+    env = '.spec.template.spec.containers[?(@.name=="ai-service")].env[?(@.name=="%s")].value'
+    path = "{%s}{\"\\n\"}{%s}" % (env % replay.MODE_ENV, env % replay.DIR_ENV)
+    out = sh(f"kubectl -n kubeast get deploy ai-service -o jsonpath={shlex.quote(path)}", kubeconfig("kubeast", kcs)).stdout.splitlines()
+    mode, directory = [*(x.strip() for x in out), "", ""][:2]
+    return directory if mode.lower() == replay.RECORD and directory else None
+
+
+def keep_tool_results(kcs: dict, directory: str, cluster: str, calls: list[dict]) -> dict:
+    """Give each call of an investigation that ran the answer ai-service recorded for it, cut to RESULT_CHARS (result,
+    recorded_chars, recorded_at); a repeat it refused got no answer of its own. Read from the pods right after the
+    investigation, before a later one records the same call again. Returns {kept, of[, error]}; nothing here fails a run."""
+    replay = tool_replay()
+    names = {i: replay.path_for(Path(directory), c["tool"] or "", replay.key(cluster, c["tool"] or "", c.get("args"))).name
+             for i, c in enumerate(calls) if "repeat_of" not in c}
+    kc, held, why = kubeconfig("kubeast", kcs), {}, ""
+    pods = sh("kubectl -n kubeast get pods -l app=ai-service --field-selector=status.phase=Running -o name", kc).stdout.split()
+    if not pods:
+        why = "no ai-service pod"
+    for pod in pods if names else []:
+        args = " ".join(shlex.quote(x) for x in ("python", "-c", RECORDINGS_READER, directory, str(RESULT_CHARS), *sorted(set(names.values()))))
+        r = sh(f"kubectl -n kubeast exec {pod} -c ai-service -- {args}", kc)
+        try:
+            held.update(json.loads(r.stdout) if r.returncode == 0 else {})
+        except ValueError:
+            why = "a pod's answer is not JSON"
+        if r.returncode:
+            why = (r.stderr or f"exit {r.returncode}").strip()[-200:]
+    kept = 0
+    for i, name in names.items():
+        if name in held:
+            calls[i]["result"], calls[i]["recorded_chars"], calls[i]["recorded_at"] = held[name]
+            kept += 1
+    return {"kept": kept, "of": len(names), **({"error": why} if why and kept < len(names) else {})}
 
 
 def run_alert_case(case_dir: Path, case: dict, admin: Api, kcs: dict, args, stamp: str, truth_dir: Path, wtoken: str) -> list[dict]:
@@ -796,7 +876,9 @@ def run_alert_case(case_dir: Path, case: dict, admin: Api, kcs: dict, args, stam
                     results.append({**run_head, **trigger, "setup_error": how})
                     continue
                 before.add(detail["id"])
-                r = {**run_head, **trigger, **alert_result(case, st.filled_truth(), detail)}
+                r = {**run_head, **trigger, **alert_result(case, st.filled_truth(), detail, st.rules)}
+                if getattr(args, "recordings", None):
+                    r["tool_results"] = keep_tool_results(kcs, args.recordings, cluster, r["calls"])
                 results.append(r)
                 shown = "done" if head["hidden"] else ("pass" if r["pass"] else "FAIL")
                 print(f"{case['id']} alert {src} run {n + 1}: {shown} — {len(r['calls'])} calls, {r['seconds']} s", flush=True)
@@ -868,12 +950,15 @@ def table(results: list[dict], round_info: dict | None = None, final: bool = Tru
         if hidden and not final:
             rows.append("\n숨김 사례: 합계는 실행이 끝난 뒤의 표에만 (사례별 결과는 JSON에만)")
         elif len(scored_ids) >= 2:
-            rows.append(f"\n숨김 사례 {len(scored_ids)}개: 정답 {sum(1 for r in hidden_scored if r.get('pass'))}/{len(hidden_scored)} (사례별 결과는 JSON에만)")
+            again = (f" · 새 채점 정답 {sum(1 for r in hidden_scored if r['second']['pass'])}/{len(hidden_scored)}"
+                     if all((r.get("second") or {}).get("by") == "block" for r in hidden_scored) else "")  # never parted into incidents and controls: one kind may hold one case
+            rows.append(f"\n숨김 사례 {len(scored_ids)}개: 정답 {sum(1 for r in hidden_scored if r.get('pass'))}/{len(hidden_scored)}{again} (사례별 결과는 JSON에만)")
         elif hidden:
             rows.append("\n숨김 사례: 채점된 사례가 둘이 안 되어 결과는 JSON에만")
         ok = sum(1 for r in shown if r.get("pass"))
         grounded = sum(1 for r in shown if r.get("pass_grounded"))
         rows.append(f"\n정답 {ok}/{len(shown)}" + (f" (근거 있는 정답 {grounded})" if scored else "") + (" · 숨김 빼고" if hidden else "") + f" · 모델 {model}")
+        rows += second.tables(shown)
     if round_info:
         rows.append(round_line(round_info))
     return "\n".join(rows)
@@ -924,7 +1009,8 @@ def namespace_suffix(value: str | None) -> str | None:
 
 def round_counts(api: Api, clusters: list[str]) -> dict:
     """Per cluster, how many alert investigations and alert inbox rows there are (the lists' total, read as the admin),
-    or why not ("HTTP 404" while features.alertInvestigation is off)."""
+    or why not (the inbox answers "HTTP 404" while features.alertInvestigation is off; the investigation list answers
+    either way, its earlier reports staying listed)."""
     out = {}
     for cluster in clusters:
         q = urllib.parse.quote(cluster)
@@ -942,8 +1028,8 @@ def round_counts(api: Api, clusters: list[str]) -> dict:
 
 
 def load_cases(root: Path, only: list[str], hidden: bool, alerts: bool = False) -> tuple[list[tuple[Path, dict]], list[str]]:
-    """(case dir, case) for each case to run, and the problems that stop the run. With alerts, only the cases with an
-    alert. A hidden case's problem lines name nothing of its truth."""
+    """(case dir, case) for each case to run, in the order they run (rca.run_order), and the problems that stop the run.
+    With alerts, only the cases with an alert. A hidden case's problem lines name nothing of its truth."""
     picked, problems = [], []
     for d in sorted(d for d in root.iterdir() if (d / "case.json").exists() and (not only or any(d.name.startswith(p) for p in only))):
         try:
@@ -962,10 +1048,12 @@ def load_cases(root: Path, only: list[str], hidden: bool, alerts: bool = False) 
             if case.get("hidden") and scope:  # a hidden case's line names none of its truth
                 scope = ["its alert's namespace is not where a cause of its truth is (hidden: the names are in its folder)"]
             problems += [f"{d.name}: {p}" for p in scope]
+        if (d / second.RULES_FILE).exists():
+            problems += [f"{d.name}: {p}" for p in second.case_problems(d, bool(case.get("hidden")))]
         if case.get("cluster") not in KIND:
             problems.append(f"{d.name}: cluster {case.get('cluster')!r} is not one of {sorted(KIND)}")
         picked.append((d, case))
-    return picked, problems
+    return rca.run_order(picked), problems
 
 
 def listing(cases: list[tuple[Path, dict]]) -> str:
@@ -982,10 +1070,9 @@ def listing(cases: list[tuple[Path, dict]]) -> str:
 
 
 def investigation_on(counts: dict) -> list[str]:
-    """The clusters whose alert investigation is on at the round's start: their investigation list or inbox answered
-    a total (off, they answer 404)."""
-    return sorted(c for c, v in counts.items() if any(isinstance(v.get(k), int) and not isinstance(v.get(k), bool)
-                                                     for k in ("investigations", "inbox")))
+    """The clusters whose alert investigation is on at the round's start: the inbox answers a total (off, it answers
+    404); the investigation list answers whether or not the switch is on, so it says nothing of it."""
+    return sorted(c for c, v in counts.items() if isinstance(v.get("inbox"), int) and not isinstance(v.get("inbox"), bool))
 
 
 def save(out: Path, stamp: str, results: list[dict], previous: str | None, round_info: dict | None = None,
@@ -1028,7 +1115,12 @@ def main() -> int:
                     help="ask hard cases while features.alertInvestigation is on (the runner refuses otherwise): a Read account "
                          "can open the investigation reports, and an investigation takes the model's Claude Code place; "
                          "recorded as alert_investigation_on in <stamp>-round.json")
+    ap.add_argument("--alert-tool-results", action="store_true",
+                    help="with --alerts: keep each tool result of an investigation, as ai-service records it; ai-service must run with "
+                         "AI_TOOL_REPLAY_MODE=record (README \"Recorded tool answers\")")
     args = ap.parse_args()
+    if args.alert_tool_results and not args.alerts:
+        ap.error("--alert-tool-results is for --alerts: a chat's tool results are in its stream")
     try:
         suffix = namespace_suffix(args.namespace_suffix)
     except ValueError as e:
@@ -1046,6 +1138,11 @@ def main() -> int:
             print(f"problem: {p}", file=sys.stderr)
         return 2
     kcs: dict = {}
+    args.recordings = recordings_dir(kcs) if args.alert_tool_results else None
+    if args.alert_tool_results and not args.recordings:
+        print("problem: --alert-tool-results: ai-service does not run with AI_TOOL_REPLAY_MODE=record and an AI_TOOL_REPLAY_DIR "
+              "(evals/ai/README.md \"Recorded tool answers\")", file=sys.stderr)
+        return 2
     admin = Api(os.environ.get("E2E_USER_EMAIL", "admin"), os.environ.get("E2E_USER_PASSWORD") or admin_password(kubeconfig("kubeast", kcs)))
     admin.login()
     wtoken = webhook_token(kcs) if args.alerts else ""
@@ -1054,12 +1151,12 @@ def main() -> int:
     truth_dir = out / f"{stamp}-truth"
     clusters = sorted({c["cluster"] for _, c in cases})
     round_info = {"user": "admin" if args.alerts else args.user, "namespace_suffix": suffix, "started": now_utc(),
-                  "before": round_counts(admin, clusters)}
+                  "second_scoring": second.RULES, "before": round_counts(admin, clusters)}
     if not args.alerts and any(rca.is_staged(c) for _, c in cases):
         on = investigation_on(round_info["before"])
         round_info["alert_investigation_on"] = bool(on)
         if on and not args.alert_investigation_on:
-            print(f"problem: features.alertInvestigation is on in {', '.join(on)} (its investigation list answers): a Read account "
+            print(f"problem: features.alertInvestigation is on in {', '.join(on)} (its alert inbox answers): a Read account "
                   "can open the reports and an investigation takes the model's Claude Code place. Turn it off for a chat round "
                   "(evals/ai/README.md \"Hard cases\"), or pass --alert-investigation-on to run anyway", file=sys.stderr)
             return 2

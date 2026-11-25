@@ -66,13 +66,17 @@ func (h refusalHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.P
 }
 
 // note counts err when it is Redis's NOPERM and says so in the log, at most once per refusalLogEvery, with the command
-// and how many were refused since the last line.
+// and how many were refused since the last line. CLIENT is left out: only go-redis sends it, to name itself on each new
+// connection, and it goes on when Redis refuses it (docs/configuration.md "Redis users").
 func (c *refusalCounts) note(command string, err error) {
 	var fromRedis redis.Error
 	if err == nil || !errors.As(err, &fromRedis) || !strings.HasPrefix(fromRedis.Error(), "NOPERM") {
 		return
 	}
 	command = strings.ToLower(command)
+	if command == "client" {
+		return
+	}
 	c.refused.WithLabelValues(command).Inc()
 	c.since.Add(1)
 	now := time.Now().UnixNano()

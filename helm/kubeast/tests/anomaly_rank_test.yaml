@@ -2,11 +2,11 @@ suite: Narrowing for the AI — features.anomalyRank and loki_query's volume lim
 templates:
   - configmap.yaml
 tests:
-  - it: is off with its load bounds and a 10 GiB log estimate limit by default
+  - it: is on with its load bounds and a 10 GiB log estimate limit by default
     asserts:
       - equal:
           path: data.ANOMALY_RANK_ENABLED
-          value: "false"
+          value: "true"
         documentSelector: {path: metadata.name, value: kubeast-config}
       - equal:
           path: data.ANOMALY_RANK_MAX_QUERIES
@@ -19,6 +19,15 @@ tests:
       - equal:
           path: data.ANOMALY_RANK_LOG_MAX_BYTES
           value: "10737418240"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: is off when features.anomalyRank.enabled is false
+    set:
+      features.anomalyRank.enabled: false
+    asserts:
+      - equal:
+          path: data.ANOMALY_RANK_ENABLED
+          value: "false"
         documentSelector: {path: metadata.name, value: kubeast-config}
 
   - it: takes the switch and the log estimate limit from features.anomalyRank
@@ -41,7 +50,7 @@ tests:
     asserts:
       - equal:
           path: data.ANOMALY_RANK_ENABLED
-          value: "false"
+          value: "true"
         documentSelector: {path: metadata.name, value: kubeast-config}
       - equal:
           path: data.ANOMALY_RANK_LOG_MAX_BYTES

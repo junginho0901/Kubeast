@@ -5,15 +5,17 @@ on:
     tags:
       - 'v*'
   # Dry run: build every image for both platforms without pushing anything, scan
-  # the amd64 build with the same trivy gate and start Docker Compose on the
-  # same Dockerfiles (no architecture check, SBOM, attestation, signature, tag or
-  # chart), to check the workflow and the Dockerfiles before a tag.
+  # the amd64 and the arm64 build with the same trivy gate and start Docker
+  # Compose on the same Dockerfiles (no architecture check, SBOM, attestation,
+  # signature, tag or chart), to check the workflow and the Dockerfiles before a
+  # tag.
   workflow_dispatch:
 
-# Each image is pushed by digest, checked (architecture, trivy: fixed
-# CRITICAL/HIGH fail the release), gets an SBOM and a build-provenance
-# attestation (GitHub artifact attestations, Sigstore), is signed keyless with
-# cosign, and only then receives its version tag. Actions are pinned to commit
+# Each image is pushed by digest, checked (architecture, trivy on the amd64 and
+# the arm64 variant: fixed CRITICAL/HIGH fail the release), gets an SBOM of each
+# variant and a build-provenance attestation (GitHub artifact attestations,
+# Sigstore), is signed keyless with cosign, and only then receives its version
+# tag. Actions are pinned to commit
 # SHAs (Dependabot keeps them current). See docs/supply-chain.md for how to
 # verify.
 permissions:
@@ -135,7 +137,7 @@ jobs:
           load: true
           tags: dry-run/kubeast-${{ matrix.image || matrix.name }}:scan
 
-      - name: Vulnerability gate (trivy, dry run)
+      - name: Vulnerability gate (trivy, dry run, amd64)
         if: github.event_name != 'push'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -147,10 +149,38 @@ jobs:
           exit-code: '1'
           format: table
 
+      # The arm64 variant, built again from the builder's cache into a docker save archive
+      # (no attestation manifests), is scanned from that file, not through the runner's docker.
+      - name: Archive for the dry-run scan (arm64)
+        if: github.event_name != 'push'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile != '' && format('{0}/{1}', matrix.context, matrix.dockerfile) || format('{0}/Dockerfile', matrix.context) }}
+          platforms: linux/arm64
+          build-args: ${{ matrix.build_args }}
+          provenance: false
+          sbom: false
+          outputs: type=docker,dest=${{ runner.temp }}/scan-arm64.tar
+
+      - name: Vulnerability gate (trivy, dry run, arm64)
+        if: github.event_name != 'push'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          input: ${{ runner.temp }}/scan-arm64.tar
+          scan-type: image
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
       # Each platform variant must carry a binary of its own architecture: the
       # v0.3.0/v0.4.0 arm64 variants of two images shipped x86-64 binaries and
-      # passed every other gate. Runs before anything is attested or signed.
+      # passed every other gate. Runs before anything is attested or signed, and
+      # gives each variant's digest to the scans and SBOMs below.
       - name: Architecture check
+        id: variants
         if: github.event_name == 'push'
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
@@ -168,15 +198,20 @@ jobs:
             desc=$(file -b "./bin-${arch}")
             echo "${arch} ${variant}: ${desc}"
             case "$desc" in *"$want"*) ;; *) echo "::error::${IMAGE} ${arch} variant: ${BINARY} is ${desc}"; exit 1 ;; esac
+            echo "${arch}=${variant}" >> "$GITHUB_OUTPUT"
           done
 
-      # Supply chain: everything below refers to the pushed manifest list by
-      # digest, so it covers both architectures.
-      - name: Vulnerability gate (trivy)
+      # Supply chain: the attestations and the signature refer to the pushed
+      # manifest list by digest, which names both variants. The trivy gate
+      # reads each variant by its own digest from the registry (trivy's
+      # image source remote), so neither is left to the runner's platform.
+      - name: Vulnerability gate (trivy, amd64)
         if: github.event_name == 'push'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_IMAGE_SRC: remote
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}@${{ steps.build.outputs.digest }}
+          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}@${{ steps.variants.outputs.amd64 }}
           scan-type: image
           scanners: vuln
           severity: CRITICAL,HIGH
@@ -184,7 +219,23 @@ jobs:
           exit-code: '1'
           format: table
 
-      - name: SBOM (syft, SPDX JSON)
+      - name: Vulnerability gate (trivy, arm64)
+        if: github.event_name == 'push'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_IMAGE_SRC: remote
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}@${{ steps.variants.outputs.arm64 }}
+          scan-type: image
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      # The amd64 SBOM reads the manifest list on this amd64 runner, as before;
+      # its image package says arch=amd64.
+      - name: SBOM (syft, SPDX JSON, amd64)
         if: github.event_name == 'push'
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
@@ -193,13 +244,38 @@ jobs:
           output-file: sbom-${{ matrix.name }}.spdx.json
           artifact-name: sbom-${{ matrix.name }}.spdx.json
 
-      - name: Attest SBOM
+      # The arm64 variant by its own digest, read from the registry: the
+      # credentials make syft skip the runner's docker, which would hand it an
+      # image of another platform.
+      - name: SBOM (syft, SPDX JSON, arm64)
+        if: github.event_name == 'push'
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}@${{ steps.variants.outputs.arm64 }}
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.name }}-arm64.spdx.json
+          artifact-name: sbom-${{ matrix.name }}-arm64.spdx.json
+
+      # Both SBOMs are attested on the manifest list, the digest the tag and the
+      # signature name, so one verify of the tag lists the two.
+      - name: Attest SBOM (amd64)
         if: github.event_name == 'push'
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
           subject-digest: ${{ steps.build.outputs.digest }}
           sbom-path: sbom-${{ matrix.name }}.spdx.json
+          push-to-registry: true
+
+      - name: Attest SBOM (arm64)
+        if: github.event_name == 'push'
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ steps.owner.outputs.name }}/kubeast-${{ matrix.image || matrix.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: sbom-${{ matrix.name }}-arm64.spdx.json
           push-to-registry: true
 
       - name: Attest build provenance

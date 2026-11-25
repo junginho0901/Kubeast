@@ -69,7 +69,7 @@ def test_gated_names_by_feature_and_cluster():
     assert features.gated_names(["network_top_flows"], {"networkFlowMonitor": {"enabled": False, "clusters": ["eks"]}}, "eks") == []
     feats = {"cost": {"enabled": True}, "policyReports": {"enabled": False}}
     assert features.gated_names(["cost", "policy_reports", "helm_read"], feats, "self") == ["cost", "helm_read"]
-    # anomaly_rank is offered only where features.anomalyRank is on (off by default), on every cluster alike
+    # anomaly_rank is offered only where features.anomalyRank is on (the default), on every cluster alike
     assert features.gated_names(["anomaly_rank"], {"anomalyRank": {"enabled": True}}, "self") == ["anomaly_rank"]
     assert features.gated_names(["anomaly_rank"], {"anomalyRank": {"enabled": False}}, "self") == []
     assert features.gated_names(["anomaly_rank"], {"prometheus": {"enabled": True}}, "self") == []

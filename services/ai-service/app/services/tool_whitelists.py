@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 
 
 # The same names are the Read role's ai.tool.* permissions
-# (auth-service repository.ReadAIToolPermissions) — keep the two lists the same.
+# (auth-service repository.ReadAIToolPermissions) — tests/test_read_tool_lists.py holds the two lists the same.
 # The Admin-only read tool (hygiene, tools.ADMIN_READ_TOOLS) and the write preview
 # (k8s_diff, tools.WRITE_PREVIEW_TOOLS — needs the write's RBAC) are deliberately not here.
 READONLY_TOOL_NAMES: frozenset[str] = frozenset(

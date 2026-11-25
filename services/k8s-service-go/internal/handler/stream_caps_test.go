@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/config"
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/drain"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/streamcap"
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
@@ -392,4 +394,187 @@ func TestAnEndedNodeShellGivesItsPlaceBackBeforeThePodDeleteAnswers(t *testing.T
 	}
 	unblockOnce.Do(func() { close(unblock) })
 	wantDebugPodDeleted(t, &deleted)
+}
+
+// followToEnd starts an event stream, waits for its first line and returns what reads the whole answer once it ends.
+func followToEnd(t *testing.T, srv *httptest.Server, target, first string) (whole func() string) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+target, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	firstCame := make(chan struct{})
+	body := make(chan string, 1)
+	go func() {
+		var all strings.Builder
+		buf := make([]byte, 4096)
+		for seen := false; ; {
+			n, err := resp.Body.Read(buf)
+			all.Write(buf[:n])
+			if !seen && strings.Contains(all.String(), "data: "+first+"\n") {
+				seen = true
+				close(firstCame)
+			}
+			if err != nil {
+				body <- all.String()
+				return
+			}
+		}
+	}()
+	select {
+	case <-firstCame:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("no line %q", first)
+	}
+	return func() string {
+		t.Helper()
+		select {
+		case s := <-body:
+			return s
+		case <-time.After(5 * time.Second):
+			t.Fatal("the stream did not end")
+			return ""
+		}
+	}
+}
+
+// What ends a followed log on the server's side, and what the stream says last.
+var serverEnds = []struct {
+	name string
+	set  func(h *Handler, version *atomic.Int32) (end func())
+	last string
+}{
+	{"server leaving", func(h *Handler, _ *atomic.Int32) func() {
+		p := probe.New()
+		h.SetLeaving(p)
+		return p.Leave
+	}, fmt.Sprintf("retry: %d\n\n", leavingRetryMillis)},
+	{"server replaced", func(h *Handler, _ *atomic.Int32) func() {
+		d := drain.New()
+		h.SetDrain(d)
+		return func() { go d.Run(time.Hour, 5*time.Second) }
+	}, fmt.Sprintf("retry: %d\nevent: %s\ndata: %s\n\n", serverLeavingRetryMs, serverLeavingEvent, drain.Code)},
+	{"session ended", func(_ *Handler, version *atomic.Int32) func() {
+		return func() { version.Store(1) }
+	}, fmt.Sprintf("event: %s\ndata: %s\n\n", streamEndedEvent, auth.SessionRevoked)},
+}
+
+// A followed log the server ends — its server leaving (SIGTERM), its server replaced (the drain), its session's end —
+// gives its account's place back, as one whose browser went does, while the browser is still there.
+func TestAFollowedLogTheServerEndsGivesItsPlaceBack(t *testing.T) {
+	wantEnd := func(t *testing.T, got, want string) {
+		t.Helper()
+		if !strings.HasSuffix(got, want) {
+			t.Fatalf("the stream ended with %q, want %q", got[max(0, len(got)-120):], want)
+		}
+	}
+	for _, end := range serverEnds {
+		t.Run("pod logs, "+end.name, func(t *testing.T) {
+			var ended atomic.Bool
+			var version atomic.Int32
+			h, _ := liveHandler(t, logAPI(&ended), &version)
+			h.streamCaps = streamcap.New(0, 1)
+			stop := end.set(h, &version)
+			srv := streamServer(t, func(w http.ResponseWriter, r *http.Request) {
+				h.PodLogsSSE(w, asAccount(r, "apps", "resource.pod.read"))
+			})
+			whole := followToEnd(t, srv, "/x?container=app&as=u1", "line 0")
+			waitOpen(t, h.streamCaps, "u1", streamcap.FollowedLog, 1)
+			stop()
+			wantEnd(t, whole(), end.last)
+			waitOpen(t, h.streamCaps, "u1", streamcap.FollowedLog, 0)
+		})
+		t.Run("log file, "+end.name, func(t *testing.T) {
+			orig := logFilePollInterval
+			logFilePollInterval = 5 * time.Millisecond
+			t.Cleanup(func() { logFilePollInterval = orig })
+			file := &fakeFile{inode: "11", data: "l1\n"}
+			h, _, _ := logFileHandler(t, true, file.run)
+			h.auditStore = &lockedAudit{}
+			var version atomic.Int32
+			h.SetLiveSessions(sessionsAt(&version))
+			h.streamCaps = streamcap.New(0, 1)
+			stop := end.set(h, &version)
+			srv := streamServer(t, func(w http.ResponseWriter, r *http.Request) {
+				h.LogFileStream(w, asAccount(r, "apps", "resource.pod.logfile"))
+			})
+			whole := followToEnd(t, srv, "/x?container=app&path=/var/log/app/app.log&lines=2&as=u1", "l1")
+			waitOpen(t, h.streamCaps, "u1", streamcap.FollowedLog, 1)
+			stop()
+			wantEnd(t, whole(), end.last)
+			waitOpen(t, h.streamCaps, "u1", streamcap.FollowedLog, 0)
+		})
+	}
+}
+
+// A terminal past its account's cap asked from another site gets the 403 any terminal from another site gets, not a
+// socket closed with the cap's code. Its failed row is written before the Origin is read, as a terminal let in has its
+// row before the upgrade; no place, shell or debug pod is taken.
+func TestATerminalPastItsAccountsCapFromAnotherSiteGets403AndAFailedRow(t *testing.T) {
+	var version, deleted, made, shells atomic.Int32
+	api := nodeShellAPI("Running", &deleted)
+	h, store := liveHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			made.Add(1)
+		}
+		api(w, r)
+	}, &version)
+	h.cfg = config.Config{NodeShellEnabled: true, NodeShellNamespace: nodeShellTestNamespace, NodeShellImages: []string{"example.test/shell:1"}, NodeShellTimeoutSec: 60}
+	orig := newShellExecutor
+	newShellExecutor = func(*rest.Config, *url.URL) (remotecommand.Executor, error) {
+		shells.Add(1)
+		return &fakeExecutor{endOnEOT: true}, nil
+	}
+	t.Cleanup(func() { newShellExecutor = orig })
+	h.streamCaps = streamcap.New(1, 0)
+	// The account's one terminal, open on another tab.
+	held, ok := h.streamCaps.Take("u1", streamcap.Terminal)
+	if !ok {
+		t.Fatal("the first place was refused")
+	}
+	defer held()
+	otherSite := http.Header{"Origin": {"https://other.example"}}
+	for _, tc := range []struct {
+		name, action, query string
+		serve               http.HandlerFunc
+	}{
+		{"exec", "k8s.pod.exec", "container=app", func(w http.ResponseWriter, r *http.Request) {
+			h.PodExecWS(w, asAccount(r, "apps", "resource.pod.exec"))
+		}},
+		{"node shell", "k8s.node.shell", "", func(w http.ResponseWriter, r *http.Request) {
+			h.NodeDebugShellWS(w, asAccount(r, "apps", "resource.node.shell"))
+		}},
+	} {
+		srv := streamServer(t, tc.serve)
+		c, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"?"+tc.query, otherSite)
+		if err == nil {
+			c.Close()
+			t.Fatalf("%s: a socket opened for another site", tc.name)
+		}
+		if resp == nil || resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("%s: %v, answer %v, want 403", tc.name, err, resp)
+		}
+		rows := store.failedRows(tc.action)
+		if len(rows) != 1 || !strings.Contains(rows[0].Error, "multicluster.maxTerminalsPerAccount") || rows[0].ActorUserID != "u1" {
+			t.Fatalf("%s: failed rows = %+v, want one saying the cap", tc.name, rows)
+		}
+		// The console's own site is refused with the cap's close: the 403 was the Origin's.
+		wantCapClose(t, dialTerminal(t, srv, tc.query))
+		if rows := store.failedRows(tc.action); len(rows) != 2 {
+			t.Fatalf("%s: failed rows = %d, want 2", tc.name, len(rows))
+		}
+	}
+	if got := h.streamCaps.Open("u1", streamcap.Terminal); got != 1 {
+		t.Fatalf("u1 holds %d, want the 1 held before", got)
+	}
+	if made.Load() != 0 || shells.Load() != 0 {
+		t.Fatalf("debug pods made %d, shells %d, want none", made.Load(), shells.Load())
+	}
 }

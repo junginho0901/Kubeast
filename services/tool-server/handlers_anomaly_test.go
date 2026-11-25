@@ -20,7 +20,7 @@ func anomalyFinding(i int, examples bool) string {
 func anomalyReply(findings []string) string {
 	return `{"namespace":"shop","window":{"start":"2026-11-15T00:30:00Z","end":"2026-11-15T01:30:00Z"},"compared_with":{"start":"2026-11-14T23:30:00Z","end":"2026-11-15T00:30:00Z"},` +
 		`"findings":[` + strings.Join(findings, ",") + `],"findings_total":` + fmt.Sprint(len(findings)) + `,"normal":["memory_near_limit"],` +
-		`"not_run":[{"check":"node_pressure","reason":"the nodes could not be listed: forbidden"}],"store_queries":6}`
+		`"not_run":[{"check":"node_conditions_not_cpu","reason":"the nodes could not be listed: forbidden"}],"store_queries":6}`
 }
 
 func TestAnomalyRank_AsksTheNamespacesWindowAndWorkload(t *testing.T) {
@@ -109,6 +109,33 @@ func TestAnomalyRank_KeepsTheAnswerShortAndSaysWhatWasCut(t *testing.T) {
 	}
 	if len(listed) < 10 && !strings.Contains(fmt.Sprint(m["findings_note"]), fmt.Sprintf("first %d of the 10", len(listed))) {
 		t.Fatalf("cut without saying so: %v", m["findings_note"])
+	}
+}
+
+// Every check that could not run, or ran on part of what it reads, keeps its name and reason however long the answer is:
+// only examples and the last findings are cut.
+func TestAnomalyRank_KeepsEveryReasonACheckDidNotRun(t *testing.T) {
+	findings := make([]string, 10)
+	for i := range findings {
+		findings[i] = anomalyFinding(i, true)
+	}
+	reply := strings.Replace(anomalyReply(findings), `"not_run":[`,
+		`"partial":[{"check":"trace_latency","reason":"not compared, no server spans in the window before: service pay"}],`+
+			`"not_run":[{"check":"error_log_patterns","reason":"`+strings.Repeat("the log store does not serve log shapes ", 8)+`"},`, 1)
+	fakeK8sService(t, func(r *http.Request) (int, string) { return 200, reply })
+	out, err := handleAnomalyRank(ctxFor("c1"), map[string]interface{}{"namespace": "shop"}, bearer())
+	if err != nil || len(out) > anomalyRankChars {
+		t.Fatalf("%d characters, %v", len(out), err)
+	}
+	m := decode(t, out)
+	for _, want := range []string{"node_conditions_not_cpu", "the nodes could not be listed: forbidden", "error_log_patterns", strings.Repeat("the log store does not serve log shapes ", 8),
+		"not compared, no server spans in the window before: service pay", "memory_near_limit"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q was cut: %s", want, out)
+		}
+	}
+	if m["findings_note"] == nil {
+		t.Fatalf("not cut: %s", out)
 	}
 }
 

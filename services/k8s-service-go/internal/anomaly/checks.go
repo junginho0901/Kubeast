@@ -17,8 +17,10 @@ type IssueRow struct {
 	Message  string
 }
 
-// FromIssues is the "failing now" check: each critical or warning issue of an object in the namespace. Nodes are the
-// node pressure check's and a list that failed (kind Collector) makes the answer partial, so neither is a finding here.
+// FromIssues is the "failing now" check: each critical or warning issue of an object in the namespace. It reads the
+// objects as they are and nothing of the window before, so no finding is new. Nodes are the node check's and a list that
+// failed (kind Collector) makes the answer partial, so neither is a finding here: with no finding the check did not run,
+// else its findings come with the lists it could not read.
 func FromIssues(rows []IssueRow, pods []map[string]interface{}, wl *Workload) CheckResult {
 	names := podNames(pods, wl)
 	r := CheckResult{Check: CheckIssues}
@@ -34,14 +36,29 @@ func FromIssues(rows []IssueRow, pods []map[string]interface{}, wl *Workload) Ch
 			continue
 		}
 		f := Finding{Check: CheckIssues, Target: row.Kind + "/" + row.Name, Verdict: VerdictAnomalous,
-			Summary: shorten(row.Severity + ": " + strings.TrimSpace(row.Reason+" "+row.Message)), New: row.Severity == "critical"}
+			Summary: stateNow(row), critical: row.Severity == "critical"}
 		r.Findings = append(r.Findings, f)
 	}
 	sort.Strings(unread)
-	if len(r.Findings) == 0 && len(unread) > 0 {
-		r.NotRun = "these lists could not be read: " + strings.Join(unread, ", ")
+	if len(unread) > 0 {
+		why := "these lists could not be read: " + strings.Join(unread, ", ")
+		if len(r.Findings) == 0 {
+			r.NotRun = why
+		} else {
+			r.Partial = why + "; the findings are from the other lists"
+		}
 	}
 	return r
+}
+
+// stateNow is a state's summary. A critical one, which ranks beside what is new, says that nothing is known of the window
+// before; a warning ranks last and claims nothing of it.
+func stateNow(row IssueRow) string {
+	now := row.Severity + " now: "
+	if row.Severity == "critical" {
+		now = row.Severity + " now (" + NoEarlier + "): "
+	}
+	return shorten(now + strings.TrimSpace(row.Reason+" "+row.Message))
 }
 
 func issueOfWorkload(row IssueRow, wl *Workload, pods map[string]bool) bool {
@@ -62,10 +79,11 @@ func podNames(pods []map[string]interface{}, wl *Workload) map[string]bool {
 	return names
 }
 
-// FromNodePressure is the node check: the node issues (NotReady, a pressure) of the nodes the namespace's pods run on.
+// FromNodeConditions is the node check: the conditions (NotReady, memory, disk or PID pressure, no network) of the nodes
+// the namespace's pods run on, as they are now. It reads no CPU: a node whose CPU is full keeps its conditions.
 // nodesError is why the nodes could not be listed (a grant limited to namespaces cannot list them).
-func FromNodePressure(rows []IssueRow, pods []map[string]interface{}, wl *Workload, nodesError string) CheckResult {
-	r := CheckResult{Check: CheckNodePressure}
+func FromNodeConditions(rows []IssueRow, pods []map[string]interface{}, wl *Workload, nodesError string) CheckResult {
+	r := CheckResult{Check: CheckNodeConditions}
 	if nodesError != "" {
 		r.NotRun = "the nodes could not be listed: " + nodesError
 		return r
@@ -76,40 +94,87 @@ func FromNodePressure(rows []IssueRow, pods []map[string]interface{}, wl *Worklo
 			onNodes[node] = true
 		}
 	}
+	if len(onNodes) == 0 {
+		r.NotRun = NoNodes
+		return r
+	}
 	for _, row := range rows {
 		if row.Kind != "Node" || !onNodes[row.Name] {
 			continue
 		}
-		r.Findings = append(r.Findings, Finding{Check: CheckNodePressure, Target: "Node/" + row.Name, Verdict: VerdictAnomalous,
-			Summary: shorten(strings.TrimSpace(row.Reason + " " + row.Message)), New: row.Severity == "critical"})
+		r.Findings = append(r.Findings, Finding{Check: CheckNodeConditions, Target: "Node/" + row.Name, Verdict: VerdictAnomalous,
+			Summary: stateNow(row), critical: row.Severity == "critical"})
 	}
 	return r
 }
+
+// NoNodes and NoPods are why a check that reads the pods there are now did not run: nothing to read is not a normal value.
+const (
+	NoNodes = "no pod of the namespace (or workload) is on a node now, so no node was looked at"
+	NoPods  = "the namespace (or workload) has no pods now, and a pod that is gone keeps no terminations"
+)
 
 type termination struct {
 	at       time.Time
 	pod      string
 	ctr      string
 	exitCode int
+	// made: its pod was made in the window, so nothing is known of the pods it took the place of
+	made bool
+}
+
+// madeIn reports whether a pod was made in the window or after it.
+func madeIn(p map[string]interface{}, w Window) bool {
+	created, err := time.Parse(time.RFC3339, mapStr(p, "created_at"))
+	return err == nil && !created.Before(w.Start)
+}
+
+// hidesEarlier reports whether a container of a pod that was there before the window may have ended in the window before
+// without its status showing it: the status keeps fewer ends (kept: the last, and the current one while it is terminated)
+// than the container had, and the earliest it keeps is not from before that window, since one it lost came before those.
+func hidesEarlier(c map[string]interface{}, kept []map[string]interface{}, w Window) bool {
+	state := mapMap(c, "state")
+	ended := mapInt(c, "restart_count")
+	// a container that is not running ended once more than it was started again, unless it was never started
+	if mapMap(state, "running") == nil && (len(kept) > 0 || ended > 0 || mapStr(mapMap(state, "waiting"), "reason") == "CrashLoopBackOff") {
+		ended++
+	}
+	if ended <= len(kept) {
+		return false
+	}
+	for _, t := range kept {
+		if at, err := time.Parse(time.RFC3339, mapStr(t, "finished_at")); err == nil && at.Before(w.Before().Start) {
+			return false
+		}
+	}
+	return true
 }
 
 // FromCrashReasons counts the containers' terminations by reason (OOMKilled, Error …) in the window and in the window
 // before it. A container shows its last termination only (and the current one while it is terminated), so a container
-// that ended in both windows counts in the later one; the summary says so.
+// that ended in both windows counts in the later one; the summary says so. A reason with no termination in the window
+// before is new only when no container hides what it did there (hidesEarlier) and the pods that ended for it were there
+// before the window; else the window before has no data for it.
 func FromCrashReasons(pods []map[string]interface{}, wl *Workload, w Window) CheckResult {
 	before := w.Before()
 	now := map[string][]termination{}
 	prev := map[string]float64{}
+	read, hidden := 0, false
 	for _, p := range pods {
 		if !wl.OwnsPod(mapList(p, "owner_references")) {
 			continue
 		}
-		pod := mapStr(p, "name")
+		read++
+		pod, made := mapStr(p, "name"), madeIn(p, w)
 		for _, c := range append(mapList(p, "containers"), mapList(p, "init_containers")...) {
+			kept := []map[string]interface{}{}
 			for _, t := range []map[string]interface{}{mapMap(mapMap(c, "state"), "terminated"), mapMap(mapMap(c, "last_state"), "terminated")} {
-				if t == nil {
-					continue
+				if t != nil {
+					kept = append(kept, t)
 				}
+			}
+			hidden = hidden || (!made && hidesEarlier(c, kept, w))
+			for _, t := range kept {
 				reason := mapStr(t, "reason")
 				at, err := time.Parse(time.RFC3339, mapStr(t, "finished_at"))
 				if reason == "" || reason == "Completed" || err != nil {
@@ -117,7 +182,7 @@ func FromCrashReasons(pods []map[string]interface{}, wl *Workload, w Window) Che
 				}
 				switch {
 				case !at.Before(w.Start) && at.Before(w.End):
-					now[reason] = append(now[reason], termination{at: at, pod: pod, ctr: mapStr(c, "name"), exitCode: mapInt(t, "exit_code")})
+					now[reason] = append(now[reason], termination{at: at, pod: pod, ctr: mapStr(c, "name"), exitCode: mapInt(t, "exit_code"), made: made})
 				case !at.Before(before.Start) && at.Before(before.End):
 					prev[reason]++
 				}
@@ -125,6 +190,10 @@ func FromCrashReasons(pods []map[string]interface{}, wl *Workload, w Window) Che
 		}
 	}
 	r := CheckResult{Check: CheckCrashReasons}
+	if read == 0 {
+		r.NotRun = NoPods
+		return r
+	}
 	reasons := make([]string, 0, len(now))
 	for reason := range now {
 		reasons = append(reasons, reason)
@@ -134,15 +203,16 @@ func FromCrashReasons(pods []map[string]interface{}, wl *Workload, w Window) Che
 		list := now[reason]
 		sort.Slice(list, func(i, j int) bool { return list[i].at.After(list[j].at) })
 		count := float64(len(list))
+		v, known := prev[reason], !hidden
+		for _, t := range list {
+			known = known && !t.made
+		}
 		var b *float64
-		if v, ok := prev[reason]; ok {
+		if v > 0 || known {
 			b = &v
-		} else {
-			zero := 0.0
-			b = &zero
 		}
 		f := Finding{Check: CheckCrashReasons, Target: reason, Verdict: VerdictNormal,
-			Summary: shorten(fmt.Sprintf("%d container terminations with reason %s in the window, %d in the window before (the last termination of each container)", len(list), reason, int(*b)))}
+			Summary: shorten(fmt.Sprintf("%d container terminations with reason %s in the window, %s (the last termination of each container)", len(list), reason, earlierText(b, "%g in the window before")))}
 		if countAnomalous(b, count) {
 			f.Verdict = VerdictAnomalous
 		}
@@ -164,10 +234,41 @@ type Sample struct {
 	Value  float64
 }
 
-// Query is one PromQL expression of a check, run at the end of the window and at the end of the window before it.
+// Query is one PromQL expression of a check, run at the end of the window: its values over the window and, offset by the
+// window's length, over the window before, told apart by WindowLabel (SplitWindows). One query reads both windows, so a
+// metric check is one store query.
 type Query struct {
 	Check string
 	Expr  string
+}
+
+// WindowLabel is the label a Query puts on its series: windowNow or windowBefore.
+const (
+	WindowLabel  = "kubeast_window"
+	windowNow    = "now"
+	windowBefore = "before"
+)
+
+// bothWindows is the query of expr (of an offset modifier, "" for none) over the window and the one of the same length,
+// d, before it.
+func bothWindows(expr func(offset string) string, d time.Duration) string {
+	labelled := func(e, window string) string {
+		return `label_replace(` + e + `, "` + WindowLabel + `", "` + window + `", "pod", ".*")`
+	}
+	return labelled(expr(""), windowNow) + " or " + labelled(expr(" offset "+seconds(d)), windowBefore)
+}
+
+// SplitWindows parts a Query's series into those of the window and those of the window before.
+func SplitWindows(samples []Sample) (now, before []Sample) {
+	for _, s := range samples {
+		switch s.Labels[WindowLabel] {
+		case windowNow:
+			now = append(now, s)
+		case windowBefore:
+			before = append(before, s)
+		}
+	}
+	return now, before
 }
 
 func seconds(d time.Duration) string { return fmt.Sprintf("%ds", int(d.Seconds())) }
@@ -181,13 +282,27 @@ func Queries(namespace string, wl *Workload, d time.Duration) []Query {
 	ns := `namespace=` + promString(namespace) + wl.podMatcher()
 	ctr := ns + `,container!=""`
 	r := seconds(d)
-	return []Query{
-		{Check: CheckRestarts, Expr: `sum by (pod) (increase(kube_pod_container_status_restarts_total{` + ns + `}[` + r + `]))`},
-		{Check: CheckMemoryNearLimit, Expr: `max by (pod, container) (max_over_time(container_memory_working_set_bytes{` + ctr + `}[` + r + `])) / ` +
-			`max by (pod, container) (kube_pod_container_resource_limits{` + ns + `,resource="memory"} > 0)`},
-		{Check: CheckCPUThrottling, Expr: `sum by (pod) (increase(container_cpu_cfs_throttled_periods_total{` + ctr + `}[` + r + `])) / ` +
-			`sum by (pod) (increase(container_cpu_cfs_periods_total{` + ctr + `}[` + r + `]) > 0)`},
+	exprs := []struct {
+		check string
+		expr  func(offset string) string
+	}{
+		{CheckRestarts, func(offset string) string {
+			return `sum by (pod) (increase(kube_pod_container_status_restarts_total{` + ns + `}[` + r + `]` + offset + `))`
+		}},
+		{CheckMemoryNearLimit, func(offset string) string {
+			return `max by (pod, container) (max_over_time(container_memory_working_set_bytes{` + ctr + `}[` + r + `]` + offset + `)) / ` +
+				`max by (pod, container) (kube_pod_container_resource_limits{` + ns + `,resource="memory"}` + offset + ` > 0)`
+		}},
+		{CheckCPUThrottling, func(offset string) string {
+			return `sum by (pod) (increase(container_cpu_cfs_throttled_periods_total{` + ctr + `}[` + r + `]` + offset + `)) / ` +
+				`sum by (pod) (increase(container_cpu_cfs_periods_total{` + ctr + `}[` + r + `]` + offset + `) > 0)`
+		}},
 	}
+	out := make([]Query, 0, len(exprs))
+	for _, e := range exprs {
+		out = append(out, Query{Check: e.check, Expr: bothWindows(e.expr, d)})
+	}
+	return out
 }
 
 func sampleKey(check string, labels map[string]string) string {
@@ -204,25 +319,34 @@ func sampleTarget(check string, labels map[string]string) string {
 	return "Pod/" + labels["pod"]
 }
 
-// NoSeries is why a metric check with no series in either window did not run: no series is not a normal value.
-const NoSeries = "Prometheus holds no series for this check in the namespace (its metric is not scraped there, or no pod ran)"
+// NoSeries and NoSeriesNow are why a metric check with no series in the window did not run: no series is not a normal value.
+const (
+	NoSeries    = "Prometheus holds no series for this check in the namespace (its metric is not scraped there, or no pod ran)"
+	NoSeriesNow = "Prometheus holds series for this check in the window before and none in the window (its pods are gone, or its metric is not scraped any more)"
+)
 
-// FromMetric compares one metric check's series at the end of the window (now) and of the window before (before).
+// FromMetric compares one metric check's series over the window (now) with those over the window before (before).
 func FromMetric(check string, now, before []Sample) CheckResult {
-	if len(now) == 0 && len(before) == 0 {
-		return CheckResult{Check: check, NotRun: NoSeries}
-	}
 	prev := map[string]float64{}
 	for _, s := range before {
 		if usable(s.Value) {
 			prev[sampleKey(check, s.Labels)] = s.Value
 		}
 	}
-	r := CheckResult{Check: check}
+	read := make([]Sample, 0, len(now))
 	for _, s := range now {
-		if !usable(s.Value) {
-			continue
+		if usable(s.Value) {
+			read = append(read, s)
 		}
+	}
+	switch {
+	case len(read) == 0 && len(prev) == 0:
+		return CheckResult{Check: check, NotRun: NoSeries}
+	case len(read) == 0:
+		return CheckResult{Check: check, NotRun: NoSeriesNow}
+	}
+	r := CheckResult{Check: check}
+	for _, s := range read {
 		var b *float64
 		if v, ok := prev[sampleKey(check, s.Labels)]; ok {
 			b = &v
@@ -230,24 +354,29 @@ func FromMetric(check string, now, before []Sample) CheckResult {
 		f := Finding{Check: check, Target: sampleTarget(check, s.Labels), Verdict: VerdictNormal}
 		switch check {
 		case CheckRestarts:
+			// increase() extrapolates, 1.0020 for one restart: both windows count whole restarts
 			v := math.Round(s.Value)
+			if b != nil {
+				whole := math.Round(*b)
+				b = &whole
+			}
 			if countAnomalous(b, v) {
 				f.Verdict = VerdictAnomalous
 			}
 			compare(&f, b, v)
-			f.Summary = fmt.Sprintf("%g restarts in the window, %s in the window before", v, beforeText(b, "%g"))
+			f.Summary = fmt.Sprintf("%g restarts in the window, %s", v, earlierText(b, "%g in the window before"))
 		case CheckMemoryNearLimit:
 			if shareAnomalous(b, s.Value, MemoryShare) {
 				f.Verdict = VerdictAnomalous
 			}
 			compare(&f, b, s.Value)
-			f.Summary = fmt.Sprintf("working set peaked at %.0f%% of the memory limit, %s before", s.Value*100, beforeText(percent(b), "%.0f%%"))
+			f.Summary = fmt.Sprintf("working set peaked at %.0f%% of the memory limit, %s", s.Value*100, earlierText(percent(b), "%.0f%% before"))
 		case CheckCPUThrottling:
 			if shareAnomalous(b, s.Value, ThrottleShare) {
 				f.Verdict = VerdictAnomalous
 			}
 			compare(&f, b, s.Value)
-			f.Summary = fmt.Sprintf("%.0f%% of CPU periods throttled, %s before", s.Value*100, beforeText(percent(b), "%.0f%%"))
+			f.Summary = fmt.Sprintf("%.0f%% of CPU periods throttled, %s", s.Value*100, earlierText(percent(b), "%.0f%% before"))
 		}
 		r.Findings = append(r.Findings, f)
 	}
@@ -262,13 +391,6 @@ func percent(b *float64) *float64 {
 	}
 	v := *b * 100
 	return &v
-}
-
-func beforeText(b *float64, format string) string {
-	if b == nil {
-		return "no series"
-	}
-	return fmt.Sprintf(format, *b)
 }
 
 func mapStr(m map[string]interface{}, key string) string {

@@ -191,7 +191,22 @@ def check_case(case: dict, has_truth: bool) -> list[str]:
     for key in ("setup_cmds", "inject_cmds", "undo_cmds", "cleanup_cmds"):
         if not isinstance(case.get(key, []), list):
             problems.append(f"{key} is not a list")
+    before = case.get("not_right_after", [])
+    if not isinstance(before, list) or not all(isinstance(x, str) and x for x in before):
+        problems.append(f"not_right_after {before!r} is not a list of case ids")
     return problems + check_alert(case, has_truth)
+
+
+def run_order(cases: list[tuple]) -> list[tuple]:
+    """(case dir, case) in the order they run: as given, but a case goes before a case its not_right_after names where it
+    would come right after it (the traces, logs and metrics one leaves behind are still in the other's window)."""
+    out: list[tuple] = []
+    for entry in cases:
+        at = len(out)
+        while at and out[at - 1][1].get("id") in (entry[1].get("not_right_after") or []):
+            at -= 1
+        out.insert(at, entry)
+    return out
 
 
 def check_alert(case: dict, has_truth: bool) -> list[str]:

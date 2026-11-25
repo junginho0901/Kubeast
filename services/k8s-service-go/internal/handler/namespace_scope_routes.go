@@ -38,6 +38,7 @@ var namespaceRoutes = map[string]scopeRule{
 	"GET /api/v1/nodes/{name}/yaml":           scopeClusterObject,
 	"GET /api/v1/nodes/{name}/pods":           scopeNarrowed,
 	"GET /api/v1/nodes/{name}/events":         scopeClusterObject,
+	"GET /api/v1/nodes/{name}/neighbors":      scopeNarrowed,
 	"DELETE /api/v1/nodes/{name}":             scopeClusterObject,
 	"POST /api/v1/nodes/{name}/yaml/apply":    scopeClusterObject,
 	"POST /api/v1/nodes/{name}/cordon":        scopeClusterObject,

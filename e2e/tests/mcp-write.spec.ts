@@ -96,10 +96,10 @@ async function auditRows(request: APIRequestContext, admin: string, actorEmail: 
 }
 
 // A namespace with a Deployment to scale and a ConfigMap to delete; replicas changes need no running pods.
-function fixture(s: string) {
+function fixture(s: string, deployment = 'web') {
   const ns = withUndo(`e2e-mcpw-${s}`, (n) => tryKubectl(`delete namespace ${n} --wait=false`))
   kubectl(`create namespace ${ns}`)
-  kubectl(`-n ${ns} create deployment web --image=registry.k8s.io/pause:3.10 --replicas=1`)
+  kubectl(`-n ${ns} create deployment ${deployment} --image=registry.k8s.io/pause:3.10 --replicas=1`)
   kubectl(`-n ${ns} create configmap scratch --from-literal=a=b`)
   return ns
 }
@@ -350,6 +350,30 @@ test.describe('MCP write tools', () => {
     } finally {
       if (readerId) await request.delete(`/api/v1/auth/admin/users/${readerId}`, { headers: bearer(admin), failOnStatusCode: false })
       if (ns) tryKubectl(`delete namespace ${ns} --wait=false`)
+    }
+  })
+
+  test('a fixture that fails after making its namespace has registered the namespace, and its undo removes it', async () => {
+    const s = stamp()
+    const ns = `e2e-mcpw-${s}`
+    const mark = undos.length
+    try {
+      // the API server refuses this Deployment name, so the fixture throws once the namespace is made
+      expect(() => fixture(s, 'Not_A_Name')).toThrow()
+      expect(tryKubectl(`get namespace ${ns} -o name`), 'the namespace was made').toBe(`namespace/${ns}`)
+      expect(tryKubectl(`-n ${ns} get deployments -o name`), 'nothing after it').toBe('')
+
+      // the undos the hook below runs after a test that did not pass
+      const registered = undos.splice(mark).reverse()
+      expect(registered, 'the namespace is registered before its first write').toHaveLength(1)
+      for (const undo of registered) await undo()
+      const state = () => {
+        const at = tryKubectl(`get namespace ${ns} -o jsonpath='{.metadata.deletionTimestamp}'`)
+        return at === null ? 'gone' : at ? 'being removed' : 'there'
+      }
+      await expect.poll(state, { timeout: 10_000 }).not.toBe('there')
+    } finally {
+      tryKubectl(`delete namespace ${ns} --wait=false`)
     }
   })
 })

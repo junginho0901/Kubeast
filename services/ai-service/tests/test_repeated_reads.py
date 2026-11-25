@@ -82,7 +82,7 @@ def test_the_refusal_says_where_the_result_is_and_asks_for_other_arguments():
     assert "at step 2 of this answer, 12 seconds ago" in told["message"]
     assert "It was not run again" in told["message"] and "other arguments" in told["message"]
     step_zero = json.loads(repeats.refusal(repeats.Seen(step=0, call=1, at=0.0), 3, scope="investigation"))
-    assert "step 0" in step_zero["message"] and "first message" in step_zero["message"]
+    assert "step 0" in step_zero["message"] and "before your first call" in step_zero["message"]
 
 
 ASK = ("It was not run again. Use that result, or call with other arguments (another name, namespace, time range or "
@@ -97,7 +97,7 @@ def test_without_call_numbers_the_refusal_reads_as_it_did_to_the_byte():
             f'already made at step 2 of this investigation, 12 seconds ago; its result is above. {ASK}"}}')
     assert repeats.refusal(repeats.Seen(step=0, call=1, at=0.0), 3, scope="investigation") == (
         '{"status": "repeated", "repeat_of": 0, "message": "This read, the same tool with the same arguments, was '
-        f'already made by the server before the investigation started (step 0); its answer is in the first message. {ASK}"}}')
+        f'already made by the server before the investigation started (step 0); its answer is above, before your first call. {ASK}"}}')
     assert repeats.refusal(repeats.Seen(step=1, call=0, at=0.0), 5, scope="answer") == (
         '{"status": "repeated", "repeat_of": 1, "message": "This read, the same tool with the same arguments, was '
         f'already made at step 1 of this answer, 5 seconds ago; its result is above. {ASK}"}}')
@@ -110,7 +110,7 @@ def test_with_call_numbers_the_refusal_names_the_call_the_model_read():
                                f"investigation, 12 seconds ago; its result is the one under [call 2] above. {ASK}"}
     step_zero = json.loads(repeats.refusal(repeats.Seen(step=0, call=1, at=0.0), 3, scope="investigation", numbered=True))
     assert step_zero["repeat_of_call"] == 1 and "repeat_of" not in step_zero
-    assert "before the investigation started (call 1); its answer is in the first message" in step_zero["message"]
+    assert "before the investigation started (call 1); its answer is the one under [call 1] above" in step_zero["message"]
     assert "step" not in told["message"] and "step" not in step_zero["message"]  # one numbering for the model
 
 
@@ -473,5 +473,8 @@ async def test_a_repeat_of_step_zero_is_a_repeat_of_call_one(monkeypatch, refuse
     assert service.executed == [("timeline", STEP_ZERO_ARGS)]  # read once, by step 0
     assert out["tool_calls"][1]["repeat_of"] == 0 and out["tool_calls"][1]["repeat_of_call"] == 1
     told = json.loads(service.completions.calls[1]["messages"][-1]["content"].removeprefix("[call 2]\n"))
-    assert told["repeat_of_call"] == 1 and "(call 1); its answer is in the first message" in told["message"]
+    assert told["repeat_of_call"] == 1 and "(call 1); its answer is the one under [call 1] above" in told["message"]
+    # the answer it points at: step 0's tool message, under [call 1]
+    step_zero = service.completions.calls[0]["messages"][3]
+    assert step_zero["role"] == "tool" and step_zero["content"].startswith("[call 1]\n")
     assert audits[1]["after"]["repeat_of"] == 0 and audits[1]["after"]["repeat_of_call"] == 1

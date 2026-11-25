@@ -3,6 +3,7 @@ suite: startup probes — the services that wait for the database at boot
 # database (and the schema) answered, which can take longer than their liveness
 # probes allow (about 65–90 s); the startup probe holds liveness off for 180 s.
 # Liveness then asks /livez, which reads nothing else, and readiness /readyz.
+# These are podStartup.quickReady's (the default); 0.7.8's are in pod_startup_test.yaml.
 templates:
   - deployments.yaml
   - configmap.yaml
@@ -23,8 +24,8 @@ tests:
             httpGet:
               path: /health
               port: 8004
-            periodSeconds: 5
-            failureThreshold: 36
+            periodSeconds: 1
+            failureThreshold: 180
       - equal:
           path: spec.template.spec.containers[0].livenessProbe
           value:
@@ -39,8 +40,7 @@ tests:
             httpGet:
               path: /readyz
               port: 8004
-            initialDelaySeconds: 3
-            periodSeconds: 10
+            periodSeconds: 3
 
   - it: gives k8s-service 180 s on its liveness path before liveness starts
     template: deployments.yaml
@@ -54,8 +54,8 @@ tests:
             httpGet:
               path: /health
               port: 8002
-            periodSeconds: 5
-            failureThreshold: 36
+            periodSeconds: 1
+            failureThreshold: 180
       - equal:
           path: spec.template.spec.containers[0].livenessProbe
           value:
@@ -70,8 +70,7 @@ tests:
             httpGet:
               path: /readyz
               port: 8002
-            initialDelaySeconds: 3
-            periodSeconds: 10
+            periodSeconds: 3
 
   - it: gives session-service 180 s on its liveness path before liveness starts
     template: deployments.yaml
@@ -85,8 +84,8 @@ tests:
             httpGet:
               path: /health
               port: 8003
-            periodSeconds: 5
-            failureThreshold: 36
+            periodSeconds: 1
+            failureThreshold: 180
       - equal:
           path: spec.template.spec.containers[0].livenessProbe
           value:
@@ -101,8 +100,7 @@ tests:
             httpGet:
               path: /readyz
               port: 8003
-            initialDelaySeconds: 3
-            periodSeconds: 10
+            periodSeconds: 3
 
   - it: keeps the startup probes with pod security off and migrations in a Job
     template: deployments.yaml
@@ -126,38 +124,11 @@ tests:
           path: metadata.name
           value: session-service
 
-  - it: leaves the services that answer without waiting for the database as they were
-    template: deployments.yaml
-    asserts:
-      - notExists:
-          path: spec.template.spec.containers[0].startupProbe
-        documentSelector:
-          path: metadata.name
-          value: ai-service
-      - notExists:
-          path: spec.template.spec.containers[0].startupProbe
-        documentSelector:
-          path: metadata.name
-          value: tool-server
-      - notExists:
-          path: spec.template.spec.containers[0].startupProbe
-        documentSelector:
-          path: metadata.name
-          value: model-config-controller-go
-      - notExists:
-          path: spec.template.spec.containers[0].startupProbe
-        documentSelector:
-          path: metadata.name
-          value: frontend
-
-  - it: leaves gateway, postgres and redis without a startup probe
+  - it: leaves postgres and redis without a startup probe (the other Deployments in pod_startup_test.yaml)
     documentSelector:
       path: kind
       value: Deployment
     asserts:
-      - notExists:
-          path: spec.template.spec.containers[0].startupProbe
-        template: gateway.yaml
       - notExists:
           path: spec.template.spec.containers[0].startupProbe
         template: postgres.yaml

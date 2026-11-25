@@ -123,25 +123,32 @@ test.describe('Chat answers', () => {
 
     const input = page.getByTestId('floating-chat-input')
     await input.fill('Kubeast 가 뭔지 한 문장으로 말해줘')
+    // the floating chat makes the conversation for its first question; it is removed after, as the tests above remove theirs
+    const created = page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
     await input.press('Enter')
-    // the dots stand in the answer's place until its first letter
-    await expect(page.getByTestId('floating-waiting')).toBeVisible({ timeout: 15_000 })
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => dropSession(page, i))
+    try {
+      // the dots stand in the answer's place until its first letter
+      await expect(page.getByTestId('floating-waiting')).toBeVisible({ timeout: 15_000 })
 
-    const answer = page.getByTestId('floating-answer').last()
-    const copy = answer.getByTestId('floating-copy')
-    await expect(copy).toBeVisible({ timeout: 90_000 })
-    await expect(answer.getByTestId('floating-assistant-avatar')).toHaveAttribute('src', '/icon.svg')
-    await expect(page.getByTestId('floating-waiting')).toHaveCount(0)
-    await copy.click()
-    await expect(copy).toHaveAttribute('aria-label', /Copied|복사됨/)
-    // what is copied is the answer as written (markdown, as AI Chat's copy), which is also what was saved
-    const id = await page.evaluate(() => sessionStorage.getItem('kubest.floatingChat.sessionId'))
-    const copied = (await page.evaluate(() => navigator.clipboard.readText())).trim()
-    await expect.poll(async () => {
-      const detail = await (await page.request.get(`/api/v1/sessions/${id}?cluster=self`, { headers: XRW })).json()
-      const last = detail.messages?.[detail.messages.length - 1]
-      return last?.role === 'assistant' ? last.content.trim() : null
-    }).toBe(copied)
+      const answer = page.getByTestId('floating-answer').last()
+      const copy = answer.getByTestId('floating-copy')
+      await expect(copy).toBeVisible({ timeout: 90_000 })
+      await expect(answer.getByTestId('floating-assistant-avatar')).toHaveAttribute('src', '/icon.svg')
+      await expect(page.getByTestId('floating-waiting')).toHaveCount(0)
+      await copy.click()
+      await expect(copy).toHaveAttribute('aria-label', /Copied|복사됨/)
+      // what is copied is the answer as written (markdown, as AI Chat's copy), which is also what was saved
+      const id = await page.evaluate(() => sessionStorage.getItem('kubest.floatingChat.sessionId'))
+      const copied = (await page.evaluate(() => navigator.clipboard.readText())).trim()
+      await expect.poll(async () => {
+        const detail = await (await page.request.get(`/api/v1/sessions/${id}?cluster=self`, { headers: XRW })).json()
+        const last = detail.messages?.[detail.messages.length - 1]
+        return last?.role === 'assistant' ? last.content.trim() : null
+      }).toBe(copied)
+    } finally {
+      await dropSession(page, sessionId)
+    }
   })
 })
 

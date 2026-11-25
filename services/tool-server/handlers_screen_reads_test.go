@@ -541,7 +541,7 @@ const (
 	inboxReadRow   = `{"id":"a1","cluster":"c1","fingerprint":"f1","alertname":"HighLoad","severity":"page","namespace":"shop","labels":{"pod":"web-1"},"summary":"load is high","status":"firing","starts_at":"2026-11-07T00:00:00Z","resolved_at":null,"first_received_at":"2026-11-07T00:00:00Z","last_received_at":"2026-11-07T00:10:00Z","received_count":2,"acknowledged":true,"acked_by":"ops@example.com","acked_at":"2026-11-07T00:05:00Z","assignee":"ops@example.com","done":false,"done_by":"","done_at":null,"investigation":null}`
 	inboxListRoute = `{"items":[` + inboxReadRow + `],"total":41,"counts":{"firing":3,"stale":1,"resolved":37},"limit":20,"offset":40,"stale_hours":24,"severities":["critical","page"]}`
 	inboxOneRoute  = `{"id":"a1","cluster":"c1","fingerprint":"f1","alertname":"HighLoad","severity":"page","namespace":"shop","labels":{"pod":"web-1"},"summary":"load is high","status":"firing","acknowledged":true,"acked_by":"ops@example.com","assignee":"ops@example.com","done":false,"done_by":"","investigation":null,
- "annotations":{"summary":"load is high","runbook":"https://runbook.example/load"},"generator_url":"http://prom/graph","alertmanager_url":"http://am","receiver":"kubeast","note":"looking at the node","note_by":"ops@example.com","note_at":"2026-11-07T00:06:00Z",
+ "annotations":{"summary":"load is high","runbook":"https://runbook.example/load"},"generator_url":"http://prom.monitoring.svc:9090/graph?g0.expr=node_load1+%3E+4&g0.tab=1","alertmanager_url":"http://am.monitoring.svc:9093","receiver":"kubeast","note":"looking at the node","note_by":"ops@example.com","note_at":"2026-11-07T00:06:00Z",
  "investigate_now":{"permission":"resource.alert.investigate","allowed":false,"reason":"forbidden","until":null,"automatic":false,"budget":0,"used":0}}`
 )
 
@@ -595,7 +595,17 @@ func TestAlertsInbox_OneAlertReadsTheWindowWithItsMarksAndNote(t *testing.T) {
 		t.Fatalf("%d requests, first %s %s", len(*seen), req.Method, req.URL.Path)
 	}
 	got := decode(t, out)
-	sameValues(t, got, inboxOneRoute)
+	var shown []string
+	for key := range decode(t, inboxOneRoute) {
+		if key != "generator_url" && key != "alertmanager_url" {
+			shown = append(shown, key)
+		}
+	}
+	sameValues(t, got, inboxOneRoute, shown...)
+	// The two links are the install's addresses: the model reads the rule's expression only.
+	if got["expr"] != "node_load1 > 4" || strings.Contains(out, "monitoring.svc") || strings.Contains(out, "_url") {
+		t.Errorf("links: %.400s", out)
+	}
 	if !strings.Contains(fmt.Sprint(got["alert_link"]), "alert=a1") {
 		t.Errorf("alert_link: %v", got["alert_link"])
 	}

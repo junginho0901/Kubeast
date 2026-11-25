@@ -18,7 +18,8 @@ import {
 //
 // W6-1 is test 5 with a kill no shutdown sees (SIGKILL from the container runtime, no SIGTERM: the drain is found stale,
 // "stopped answering") while the same server also holds a terminal and the page's live list, read through the gateway.
-// Q-52 freezes PostgreSQL 20 s and 30 s mid-drain (connections open, no answers): the drain goes on.
+// Q-52 freezes PostgreSQL 20 s and 30 s mid-drain (connections open, no answers; E2E_FAULT_FREEZE_SECONDS sets other
+// seconds): the drain goes on.
 //
 // The drain runs on the kind cluster test2 (one node, as the action suite drains it): a namespace of the run holds one
 // pod under a PodDisruptionBudget that refuses its eviction, so the drain keeps retrying (5 min) and stays open while a
@@ -45,9 +46,21 @@ const LIST_READS = [
   `/api/v1/cluster/nodes?cluster=${CLUSTER}`,
   `/api/v1/cluster/namespaces?cluster=${CLUSTER}`,
 ]
-// Q-52: frozen 20 s, then 30 s; every read 200 within 30 s of the thaw; no request still waiting 10 s after it (a first
+// Q-52: frozen 20 s, then 30 s, or the seconds of E2E_FAULT_FREEZE_SECONDS (comma-separated, e.g. `45` for a freeze past
+// the 30 s statement_timeout); every read 200 within 30 s of the thaw; no request still waiting 10 s after it (a first
 // line, to be set again from the first run).
-const FREEZE_SECONDS = [20, 30]
+// The drain gives up 5 min after it starts (node_drain.go) and the case removes its PDB only after the freeze, 30 s and
+// the health check's write, so a freeze longer than FREEZE_MAX_SECONDS would end the drain before that.
+const FREEZE_MAX_SECONDS = 180
+const FREEZE_SECONDS = freezeSecondsOf(process.env.E2E_FAULT_FREEZE_SECONDS)
+
+function freezeSecondsOf(value: string | undefined): number[] {
+  if (!value?.trim()) return [20, 30]
+  const listed = value.split(',').map((s) => s.trim())
+  const wrong = listed.filter((s) => !/^\d+$/.test(s) || Number(s) < 1 || Number(s) > FREEZE_MAX_SECONDS)
+  if (wrong.length > 0) throw new Error(`E2E_FAULT_FREEZE_SECONDS takes whole seconds from 1 to ${FREEZE_MAX_SECONDS}, comma-separated; not ${wrong.map((s) => JSON.stringify(s)).join(', ')}`)
+  return [...new Set(listed.map(Number))]
+}
 const PG_DOCKER = process.env.E2E_FAULT_PG_DOCKER || ''
 const READS_BACK_MS = 30_000
 const HUNG_AFTER_THAW_MS = 10_000
@@ -434,7 +447,7 @@ test.describe('drain progress in the database (PR #858)', () => {
     try {
       probe = new Probe(request, reads, headers, 100, 10_000)
       await sleep(5_000)
-      // 60 s from the moment the PostgreSQL pod is gone; each delete's wait ends by then, so the outage stays 60 s
+      // 60 s from the moment the PostgreSQL pod is gone, up to about 63 s with the 3 s pause after the last delete; a delete starts only while its whole 15 s wait fits
       outage = await stopFor('postgres', 60, async (offAt) => {
         await sleep(10_000)
         const drain = await request.post(`/api/v1/cluster/nodes/${node}/drain?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: 15_000 }).catch(() => null)
@@ -442,9 +455,9 @@ test.describe('drain progress in the database (PR #858)', () => {
         // a ConfigMap delete on test2 every 3 s while it is off: refused (the ConfigMap stays), or done with its row
         for (const name of maps) {
           const left = 60_000 - (Date.now() - offAt)
-          if (left < 1_000) break
+          if (left < 15_000) break
           const at = Date.now()
-          const res = await request.delete(`/api/v1/cluster/namespaces/${ns}/configmaps/${name}?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: Math.min(15_000, left) }).catch(() => null)
+          const res = await request.delete(`/api/v1/cluster/namespaces/${ns}/configmaps/${name}?cluster=${DRAIN_CLUSTER}`, { headers, failOnStatusCode: false, timeout: 15_000 }).catch(() => null)
           writes.push({ name, status: res?.status() ?? 0, at })
           await sleep(3_000)
         }
@@ -471,6 +484,7 @@ test.describe('drain progress in the database (PR #858)', () => {
     expect(drainDuring, 'a drain start while PostgreSQL was off is refused with 503 (its progress cannot be saved)').toBe(503)
     const accepted = writes.filter((w) => w.status >= 200 && w.status < 300).map((w) => w.name)
     test.info().annotations.push({ type: 'writes during the outage', description: writes.map((w) => `${w.name}=${w.status}`).join(' ') })
+    expect(writes.length, 'deletes sent during the outage').toBeGreaterThan(0)
     const rows = await auditRows(request, token, 'k8s.configmap.delete', since)
     const recorded = rows.filter((r) => r.Result === 'success').map((r) => r.TargetID)
     expect(accepted.filter((n) => !recorded.includes(n)), 'deletes accepted during the outage with no audit row').toEqual([])
@@ -489,7 +503,7 @@ test.describe('drain progress in the database (PR #858)', () => {
           : 'the install runs no postgres Deployment and E2E_FAULT_PG_DOCKER names no container of the external database'
       test.skip(typeof target === 'string', typeof target === 'string' ? target : '')
       const t = target as FreezeTarget
-      test.setTimeout(600_000)
+      test.setTimeout(Math.max(600_000, (seconds + 570) * 1000))
       const token = await login(request)
       const headers = bearer(token)
       const ns = `e2e-w6-pgfreeze${seconds}-${STAMP}`

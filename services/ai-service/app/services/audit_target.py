@@ -14,7 +14,7 @@ from typing import Any, NamedTuple, Optional
 
 import yaml
 
-from app.services import redact
+from app.services import redact, switch
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
 MAX_OBJECTS = 50
@@ -70,6 +70,9 @@ def tool_target(tool: str, args: dict) -> ToolTarget:
         return ToolTarget("session_recording", args["recording_id"], None, None)
     if tool == "k8s_cordon_node":
         return ToolTarget("node", args.get("resource_name") or tool, None, None)
+    # with the switch off the call is every node's, whatever node the model wrote (tool_dispatch drops it)
+    if tool == "get_node_metrics" and isinstance(args.get("node"), str) and args["node"].strip() and switch.env_on("NODE_NEIGHBORS_ENABLED"):
+        return ToolTarget("node", args["node"].strip(), None, None)
     if tool in ("k8s_cronjob_suspend", "k8s_cronjob_trigger"):
         return ToolTarget("cronjob", args.get("resource_name") or tool, namespace, None)
     named =args.get("resource_name") or args.get("name") or args.get("pod_name")

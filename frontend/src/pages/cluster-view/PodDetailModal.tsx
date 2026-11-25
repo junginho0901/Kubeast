@@ -1,17 +1,19 @@
+import { useMemo } from 'react'
 import { Box, X } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
 import { useAIContext } from '@/hooks/useAIContext'
-import { buildResourceLink } from '@/utils/resourceLink'
 import { PodDetailTabs } from './PodDetailTabs'
 import { PodDetailTabBody } from './PodDetailTabBody'
 import { useClusterView } from './ClusterViewContext'
+import { podWindowLayer } from './podWindowLayer'
 import type { PodReadShown } from './podDetailRead'
 
 // Pod 상세 모달 — 헤더 / 탭 바 / 탭 본문 3 영역.
 // selectedPod 가 없으면 mount 안 함.
 
 interface Props {
-  isAdmin: boolean
+  /** the pod's terminal would open (useCanExecPod): the Exec tab shows */
+  canExec: boolean
   manifest: string | undefined
   describeData: any
   describeError?: unknown
@@ -19,28 +21,15 @@ interface Props {
   podRead?: PodReadShown
 }
 
-export function PodDetailModal({ isAdmin, manifest, describeData, describeError, podRead = 'none' }: Props) {
+export function PodDetailModal({ canExec, manifest, describeData, describeError, podRead = 'none' }: Props) {
   const { selectedPod, closeDetailModal, activeTab, tr } = useClusterView()
 
-  // containers not read yet are no containers: the layer says they are being read, and a failed read says itself
-  // (DescribeFailure)
   const reading = podRead === 'reading'
-  useAIContext(selectedPod ? {
-    source: 'PodDetailModal',
-    summary: `Pod ${selectedPod.name} (${selectedPod.namespace}) 상세 — ${activeTab} 탭`,
-    data: {
-      kind: 'Pod', name: selectedPod.name, namespace: selectedPod.namespace,
-      _link: buildResourceLink('Pod', selectedPod.namespace, selectedPod.name),
-      node: selectedPod.node, status: selectedPod.status, phase: selectedPod.phase, restart_count: selectedPod.restart_count,
-      created_at: selectedPod.created_at,
-      containers: selectedPod.containersKnown
-        ? selectedPod.containers.map((c) => ({ name: c.name, image: c.image, ready: c.ready, state: c.state, restart_count: c.restart_count }))
-        : undefined,
-      containers_loading: reading || undefined,
-      describe: activeTab === 'describe' ? describeData : undefined,
-      manifest: activeTab === 'manifest' && manifest ? manifest.slice(0, 4096) : undefined,
-    },
-  } : null, [selectedPod, activeTab, describeData, manifest, reading])
+  const layer = useMemo(
+    () => (selectedPod ? podWindowLayer(selectedPod, activeTab, { describe: describeData, manifest, reading }) : null),
+    [selectedPod, activeTab, describeData, manifest, reading],
+  )
+  useAIContext(layer, [layer])
 
   if (!selectedPod) return null
 
@@ -67,7 +56,7 @@ export function PodDetailModal({ isAdmin, manifest, describeData, describeError,
           </button>
         </div>
 
-        <PodDetailTabs isAdmin={isAdmin} />
+        <PodDetailTabs canExec={canExec} />
         <PodDetailTabBody manifest={manifest} describeData={describeData} describeError={describeError} podRead={podRead} />
       </div>
     </ModalOverlay>

@@ -622,11 +622,16 @@ function second(): ((args: string, input?: string) => string) | null {
   return kubectlB
 }
 
+// A value as a PromQL double-quoted string, the backslash first, then the quote, and a name a regular expression matches
+// as itself: the drawer's and the server's rule (frontend utils/promString.ts, k8s-service promString)
+const promString = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 // The pods' matcher as the drawer writes it (serviceBackend.ts podNamesPattern) and the server for each of its matchers
-// (backendPodPatterns): each name escaped, a PromQL string doubling the backslash, and the names that share the part
-// before their last "-" (a workload's pods) written once with their ends grouped
+// (backendPodPatterns): each name escaped, and the names that share the part before their last "-" (a workload's pods)
+// written once with their ends grouped. The query writes it with promString.
 function drawerPodPattern(names: string[]): string {
-  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\\\${c}`)
+  const esc = escapeRegex
   const groups = new Map<string, string[]>()
   for (const name of [...new Set(names)].sort()) {
     const cut = name.lastIndexOf('-')
@@ -806,7 +811,7 @@ test.describe('number check — drawers', () => {
     const want = endpointPods(true)
     expect(want.length, 'kubectl lists the ready pods of bku-web').toBe(3)
     // a rate needs two samples: every pod's container has two in Prometheus, the not-ready one's too
-    const every = `{namespace="${ns}",pod=~"${drawerPodPattern([...want, 'bku-unready'])}",container!="",container!="POD"}`
+    const every = `{namespace=${promString(ns)},pod=~${promString(drawerPodPattern([...want, 'bku-unready']))},container!="",container!="POD"}`
     await expect.poll(async () => [
       await direct(`count(count by(pod)(rate(container_cpu_usage_seconds_total${every}[5m])))`),
       await direct(`count(count by(pod)(container_memory_working_set_bytes${every}))`),
@@ -821,7 +826,7 @@ test.describe('number check — drawers', () => {
     expect(first.pods).toBe(want.length)
     expect(first.queries).toBe(3)
     const pods = drawerPodPattern(want)
-    const sel = `{namespace="${ns}",pod=~"${pods}",container!="",container!="POD"}`
+    const sel = `{namespace=${promString(ns)},pod=~${promString(pods)},container!="",container!="POD"}`
     const queries = [
       `sum(rate(container_cpu_usage_seconds_total${sel}[5m])) * 1000`,
       `sum(container_memory_working_set_bytes${sel})`,

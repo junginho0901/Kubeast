@@ -41,6 +41,7 @@
   "kubectl -n chaos-mesh delete -f $CASE_DIR/inject.yaml --ignore-not-found --timeout=120s"
  ],
  "cooldown_seconds": 60,
+ "not_right_after": ["01_cache_down_chain"],
  "timeout_seconds": 420,
  "alert": {
   "labels": {"alertname": "ServiceSlow", "namespace": "otel-demo", "job": "uptime-check"},

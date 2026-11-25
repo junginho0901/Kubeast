@@ -8,7 +8,9 @@
 import json
 import re
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from app.services.ai import console_links
 
 
 LLM_RESULT_CHARS = 6000
@@ -205,6 +207,18 @@ def _format_table(headers: List[str], rows: List[List[str]]) -> str:
     for row in rows:
         lines.append("  ".join(row[i].ljust(widths[i]) for i in range(len(headers))))
     return "\n".join(lines)
+
+def _empty_reason(data: Any) -> str:
+    """Why an answer that holds nothing may be empty, as tool-server says it with AI_TOOL_RESULT_DETAILS (off: "")."""
+    if not console_links.enabled() or not isinstance(data, dict):
+        return ""
+    reason = data.get("empty_reason")
+    return reason.strip() if isinstance(reason, str) else ""
+
+
+def _with_reason(table: str, reason: str) -> str:
+    return f"{table}\n{reason}" if reason else table
+
 
 def _pod_list_view(pod: Dict) -> Tuple[str, str, int]:
     """STATUS, READY and RESTARTS as kubectl's printPod (v1.37) prints them and k8s-service's podrow.ListView writes them
@@ -418,6 +432,9 @@ def _format_k8s_get_resources_display(
     if not isinstance(items, list) or any(not isinstance(item, dict) or not isinstance(item.get("metadata"), dict) for item in items):
         return None
 
+    if not items and (reason := _empty_reason(data)):
+        return _with_reason(_format_table([], []), reason)
+
     if key in {"po", "pod", "pods"}:
         headers = ["NAME", "READY", "STATUS", "RESTARTS", "AGE"]
         if include_namespace:
@@ -543,8 +560,8 @@ def _format_k8s_get_events_display(raw_text: str) -> Optional[str]:
         return None
     note = ""
     if isinstance(data, dict) and isinstance(data.get("events"), list):
-        # more events matched than were listed: the newest, with the total
-        note = str(data.get("note") or "")
+        # more events matched than were listed: the newest, with the total; or none did, with why
+        note = str(data.get("note") or "") or _empty_reason(data)
         data = data["events"]
     if not isinstance(data, list):
         return None
@@ -630,7 +647,7 @@ def _format_service_connectivity_display(raw_text: str) -> Optional[str]:
         f"{ready}/{total}",
         str(data.get("status", "")),
     ]]
-    return _format_table(headers, rows)
+    return _with_reason(_format_table(headers, rows), _empty_reason(data))
 
 def _format_api_resources_display(raw_text: str) -> Optional[str]:
     try:
@@ -657,6 +674,9 @@ def _format_pod_metrics_display(raw_text: str) -> Optional[str]:
         data = json.loads(raw_text)
     except Exception:
         return None
+    reason = _empty_reason(data)
+    if reason and data.get("pods") == []:
+        return _with_reason(_format_table([], []), reason)
     if not isinstance(data, list):
         return None
     include_namespace = len({str(p.get("namespace", "")) for p in data}) > 1

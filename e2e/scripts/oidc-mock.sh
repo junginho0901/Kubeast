@@ -2,7 +2,7 @@
 # Point the kind cluster's auth-service at a local mock OpenID Connect provider
 # so oidc-login.spec.ts can exercise the whole sign-in flow in a browser.
 #
-#   e2e/scripts/oidc-mock.sh up      # start mock-oauth2-server on :8080, enable OIDC on auth-service
+#   e2e/scripts/oidc-mock.sh up      # start mock-oauth2-server on :8080, enable OIDC and self sign-up on auth-service
 #   e2e/scripts/oidc-mock.sh down    # remove the env again, stop the container
 #
 # The provider runs as a Docker container on the host. auth-service (in kind)
@@ -53,13 +53,14 @@ EOF
       OIDC_REDIRECT_URL="$BASE_URL/api/v1/auth/oidc/callback" \
       OIDC_DISPLAY_NAME="Mock IdP" \
       OIDC_ALLOWED_DOMAINS=example.com \
-      OIDC_ROLE_MAPPING="kubeast-admins=Admin,kubeast-users=Member"
+      OIDC_ROLE_MAPPING="kubeast-admins=Admin,kubeast-users=Member" \
+      ALLOW_REGISTRATION=true
     kubectl -n "$NS" rollout status deployment/auth-service --timeout=120s
     ;;
   down)
     kubectl -n "$NS" set env deployment/auth-service \
       OIDC_ENABLED- OIDC_ISSUER_URL- OIDC_CLIENT_ID- OIDC_CLIENT_SECRET- OIDC_REDIRECT_URL- \
-      OIDC_DISPLAY_NAME- OIDC_ALLOWED_DOMAINS- OIDC_ROLE_MAPPING-
+      OIDC_DISPLAY_NAME- OIDC_ALLOWED_DOMAINS- OIDC_ROLE_MAPPING- ALLOW_REGISTRATION-
     kubectl -n "$NS" rollout status deployment/auth-service --timeout=120s
     kubectl -n "$NS" delete networkpolicy "$EGRESS_NP" --ignore-not-found
     docker rm -f "$MOCK_NAME" >/dev/null 2>&1 || true

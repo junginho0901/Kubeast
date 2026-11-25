@@ -1,8 +1,8 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 
 import {
-  CLUSTER, NS, Probe, ROTATION_NEEDS, STAMP, bearer, deploymentExists, items, kubectl, kubectlOk, login, podLog, readyPods, restartCounts,
-  podsOf, restartsSince, rolledOut, rotationCluster, show, sleep, stopFor, takeDown, undoPending, type Answer,
+  CLUSTER, NS, Probe, ROTATION_NEEDS, STAMP, bearer, deploymentExists, forwardTo, items, kubectl, kubectlOk, login, onPod, podLog, readyPods,
+  restartCounts, podsOf, restartsSince, rolledOut, rotationCluster, show, sleep, stopFor, takeDown, undoPending, type Answer, type Forward,
 } from './shared'
 // kubectl while a Probe sends, and the probe held to sending all through
 import { expectProbeKeptSending, kubectlAsync, podLogAsync, readyPodsAsync, rolledOutAsync } from './shared'
@@ -18,7 +18,8 @@ import { expectProbeKeptSending, kubectlAsync, podLogAsync, readyPodsAsync, roll
 // The passwords are read from the Secret the redis pod reads them from and go to valkey-cli on stdin, never on a command
 // line. Each case skips with the reason: no Redis, the users off (redis.acl.enabled false or an existingSecret without
 // the keys), MCP off for the tool-server case, no cluster for the credential change (E2E_FAULT_ROTATE_*: the change is
-// a cluster's admin kubeconfig replaced with the same cluster's ServiceAccount, which may not list nodes).
+// a cluster's admin kubeconfig replaced with the same cluster's ServiceAccount, which may not list nodes), fewer than two
+// tool-server pods for the case of the keep per replica (shape s2).
 
 const REDIS = 'redis'
 const K8S = 'k8s-service'
@@ -91,10 +92,52 @@ async function nodesByTool(request: APIRequestContext, token: string, cluster: s
   return result?.isError ? `error ${result?.content?.[0]?.text ?? ''}` : String(result?.content?.[0]?.text ?? '')
 }
 
+// The same tool call on one tool-server pod through its port-forward, as ai-service sends it to /tools/call: the nodes,
+// or the status and error it answered (a broken port-forward is an answer too, so one hiccup does not end the follow).
+const TOOL_PORT = 8086
+async function nodesByToolOn(api: APIRequestContext, cluster: string): Promise<string> {
+  try {
+    const res = await api.post('/tools/call', {
+      data: { name: 'k8s_get_resources', arguments: { cluster, resource_type: 'nodes', output: 'jsonpath={.items[*].metadata.name}' } },
+      failOnStatusCode: false, timeout: 20_000,
+    })
+    const body = (await res.json().catch(() => ({}))) as { content?: string; error?: string }
+    return res.ok() ? String(body.content ?? '') : `http ${res.status()} ${body.error ?? ''}`
+  } catch (e) {
+    return `no answer: ${String(e).split('\n')[0]}`
+  }
+}
+
 async function listedNodes(request: APIRequestContext, token: string, cluster: string): Promise<string[]> {
   const res = await request.get(`/api/v1/nodes?cluster=${encodeURIComponent(cluster)}`, { headers: bearer(token), failOnStatusCode: false, timeout: 20_000 })
   return res.ok() ? items<{ name?: string }>(await res.json()).map((n) => n.name ?? '').filter(Boolean) : []
 }
+
+// One call's answer; `at` is ms from the PATCH's answer (below zero: sent while the PATCH was on its way).
+type Call = { target: string; at: number; text: string }
+type Change = { sentAt: number; answeredAt: number; calls: Call[] }
+
+// Sends the cluster's new kubeconfig and calls each target every 200 ms from the moment the PATCH is sent until 15 s
+// after its answer, so an answer that changed while the PATCH was on its way is seen too.
+async function changeAndCall(request: APIRequestContext, headers: Record<string, string>, id: string, kubeconfig: string,
+  targets: Record<string, () => Promise<string>>): Promise<Change> {
+  const asked: Call[] = []
+  const sentAt = Date.now()
+  let answeredAt = 0
+  const answered = request.patch(`/api/v1/clusters/${id}`, { headers, data: { kubeconfig }, timeout: 60_000 })
+    .finally(() => { answeredAt = Date.now() })
+  const [patch] = await Promise.all([answered, ...Object.entries(targets).map(async ([target, call]) => {
+    while (!answeredAt || Date.now() - answeredAt < 15_000) {
+      const at = Date.now()
+      asked.push({ target, at, text: await call() })
+      await sleep(200)
+    }
+  })])
+  expect(patch.status(), await patch.text()).toBe(200)
+  return { sentAt, answeredAt, calls: asked.map((c) => ({ ...c, at: c.at - answeredAt })) }
+}
+
+const iso = (ms: number) => new Date(ms).toISOString()
 
 test.afterEach(() => undoPending())
 
@@ -146,7 +189,7 @@ test.describe('Redis users per service (PR #866)', () => {
   })
 
   for (const redisDown of [false, true]) {
-    test(`tool-server reads a changed cluster within 10 s on every replica${redisDown ? ', Redis stopped (the 10 s keep alone)' : ' (the change notice)'}`, async ({ request }) => {
+    test(`tool-server reads a changed cluster within 10 s on every replica${redisDown ? ', Redis stopped (no notice)' : ' (the change notice)'}`, async ({ request }) => {
       test.setTimeout(300_000)
       const token = await login(request)
       test.skip(!deploymentExists('tool-server'), 'the install runs no tool-server (ai.enabled false)')
@@ -160,8 +203,7 @@ test.describe('Redis users per service (PR #866)', () => {
       expect(reg.status(), await reg.text()).toBe(201)
       const id = (await reg.json()).id as string
       const replicas = readyPods('tool-server').length
-      const seen: { at: number; text: string }[] = []
-      let patchedAt = 0
+      const got: { change?: Change } = {}
       let outage: { offAt: number; onAt: number } | null = null
       let redisAtPatch: { pods: number; endpoints: number } | null = null
       try {
@@ -172,13 +214,7 @@ test.describe('Redis users per service (PR #866)', () => {
         const follow = async () => {
           // what could answer as Redis right before the change: its pods (terminating ones too) and ready endpoints
           if (redisDown) redisAtPatch = { pods: podsOf(REDIS).length, endpoints: readyEndpoints(REDIS) }
-          const patch = await request.patch(`/api/v1/clusters/${id}`, { headers: admin, data: { kubeconfig: limited }, timeout: 60_000 })
-          patchedAt = Date.now()
-          expect(patch.status(), await patch.text()).toBe(200)
-          while (Date.now() - patchedAt < 15_000) {
-            seen.push({ at: Date.now() - patchedAt, text: await nodesByTool(request, token, id) })
-            await sleep(200)
-          }
+          got.change = await changeAndCall(request, admin, id, limited, { service: () => nodesByTool(request, token, id) })
         }
         // with Redis stopped the change is made only once every Redis pod is gone (a terminating one still answers)
         if (redisDown) outage = await stopFor(REDIS, 0, async () => { await sleep(3_000); await follow() })
@@ -186,14 +222,84 @@ test.describe('Redis users per service (PR #866)', () => {
       } finally {
         await request.delete(`/api/v1/clusters/${id}`, { headers: admin, failOnStatusCode: false })
       }
-      test.info().attach('tool-answers.json', { body: JSON.stringify(seen), contentType: 'application/json' })
-      if (outage) test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: new Date(outage.offAt).toISOString(), patched: new Date(patchedAt).toISOString(), redisBack: new Date(outage.onAt).toISOString(), redisAtPatch }, null, 2), contentType: 'application/json' })
+      const change = got.change!
+      const seen = change.calls
+      test.info().attach('tool-answers.json', { body: JSON.stringify({ patchSent: iso(change.sentAt), patched: iso(change.answeredAt), patchMs: change.answeredAt - change.sentAt, calls: seen }), contentType: 'application/json' })
+      if (outage) test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: iso(outage.offAt), patchSent: iso(change.sentAt), patched: iso(change.answeredAt), redisBack: iso(outage.onAt), redisAtPatch }, null, 2), contentType: 'application/json' })
       if (redisDown) expect(redisAtPatch, 'Redis pods and ready endpoints right before the change').toEqual({ pods: 0, endpoints: 0 })
       const late = seen.filter((s) => s.at > 10_000 && !asLimited(s.text))
       expect(seen.filter((s) => s.at > 10_000).length, 'calls after the first 10 s').toBeGreaterThan(replicas * 4)
       expect(late.map((s) => `+${s.at}ms ${s.text.slice(0, 80)}`), `answers not refused as ${limitedUser} later than 10 s after the change`).toEqual([])
     })
   }
+
+  // auth-service tells one tool-server replica of the change (the one the Service gives it) and the others hear it from
+  // Redis, so with one replica, or through the Service (ai-service keeps its connection), the 10 s keep is not what the
+  // case above sees. Here each replica is called through a port-forward of its own, its first call made right before the
+  // change so its keep holds the admin kubeconfig, and Redis is stopped: every replica but the one auth-service called
+  // must answer from the admin kubeconfig after the PATCH's answer, then as the ServiceAccount within 10 s of it.
+  test('tool-server keep alone, per replica: with Redis stopped, each replica auth-service did not call answers from the old kubeconfig after the change and from the new one within 10 s', async ({ request }) => {
+    test.setTimeout(300_000)
+    test.skip(!deploymentExists('tool-server'), 'the install runs no tool-server (ai.enabled false)')
+    test.skip(readyPods('tool-server').length < 2, 'needs two ready tool-server pods (shape s2): with one, auth-service\'s call reaches it and no keep is left to run out')
+    test.skip(!deploymentExists(REDIS), 'the install runs no Redis')
+    test.skip(!rotation, ROTATION_NEEDS)
+    const token = await login(request)
+    const { admin: adminKc, limited, limitedUser } = rotation!
+    const asLimited = (text: string) => /forbidden/i.test(text) && text.includes(limitedUser)
+    const admin = bearer(token)
+    const reg = await request.post('/api/v1/clusters', { headers: admin, data: { mode: 'external', display_name: `e2e-w6-keep-${STAMP}`, kubeconfig: adminKc }, timeout: 60_000 })
+    expect(reg.status(), await reg.text()).toBe(201)
+    const id = (await reg.json()).id as string
+    const pods = readyPods('tool-server').map((p) => p.name)
+    const forwards: Forward[] = []
+    const got: { change?: Change; first?: Record<string, string>; redisAtPatch?: { pods: number; endpoints: number } } = {}
+    let nodes: string[] = []
+    let outage: { offAt: number; onAt: number } | null = null
+    try {
+      await expect.poll(async () => (nodes = await listedNodes(request, token, id)).length, { message: 'the API lists the nodes with the admin credential', timeout: 30_000 }).toBeGreaterThan(0)
+      const apis = new Map<string, APIRequestContext>()
+      for (const pod of pods) {
+        const f = await forwardTo(pod, TOOL_PORT)
+        forwards.push(f)
+        apis.set(pod, await onPod(f, token))
+      }
+      outage = await stopFor(REDIS, 0, async () => {
+        await sleep(3_000)
+        got.redisAtPatch = { pods: podsOf(REDIS).length, endpoints: readyEndpoints(REDIS) }
+        // the cluster is new to every replica: this call fetches its kubeconfig, which the replica then keeps 10 s
+        got.first = Object.fromEntries(await Promise.all(pods.map(async (pod) => [pod, await nodesByToolOn(apis.get(pod)!, id)] as const)))
+        expect(pods.filter((pod) => !got.first![pod].includes(nodes[0])), 'replicas whose first call did not list the nodes with the admin kubeconfig').toEqual([])
+        got.change = await changeAndCall(request, admin, id, limited, Object.fromEntries(pods.map((pod) => [pod, () => nodesByToolOn(apis.get(pod)!, id)])))
+      })
+    } finally {
+      forwards.forEach((f) => f.close())
+      await request.delete(`/api/v1/clusters/${id}`, { headers: admin, failOnStatusCode: false })
+    }
+    const change = got.change!
+    const fromOld = (text: string) => !asLimited(text) && text.includes(nodes[0])
+    const callsOf = (pod: string) => change.calls.filter((c) => c.target === pod)
+    const firstNew = Object.fromEntries(pods.map((pod) => [pod, callsOf(pod).find((c) => asLimited(c.text))?.at ?? null]))
+    const lastOld = Object.fromEntries(pods.map((pod) => [pod, callsOf(pod).filter((c) => fromOld(c.text)).pop()?.at ?? null]))
+    const keptOld = pods.filter((pod) => callsOf(pod).some((c) => c.at > 0 && fromOld(c.text)))
+    const oldAfter = change.calls.filter((c) => firstNew[c.target] !== null && c.at > firstNew[c.target]! && fromOld(c.text))
+    const late = change.calls.filter((c) => c.at > 10_000 && !asLimited(c.text))
+    test.info().attach('tool-answers-per-replica.json', {
+      body: JSON.stringify({ patchSent: iso(change.sentAt), patched: iso(change.answeredAt), patchMs: change.answeredAt - change.sentAt, firstNew, lastOld, keptOld, first: got.first, calls: change.calls }),
+      contentType: 'application/json',
+    })
+    test.info().attach('timeline.json', { body: JSON.stringify({ redisGone: iso(outage!.offAt), patchSent: iso(change.sentAt), patched: iso(change.answeredAt), redisBack: iso(outage!.onAt), redisAtPatch: got.redisAtPatch }, null, 2), contentType: 'application/json' })
+    expect(got.redisAtPatch, 'Redis pods and ready endpoints right before the change').toEqual({ pods: 0, endpoints: 0 })
+    for (const pod of pods) {
+      expect(firstNew[pod], `${pod} answered as ${limitedUser} (ms after the PATCH's answer)`).not.toBeNull()
+      expect(firstNew[pod]!, `${pod}: ms from the PATCH's answer to its first answer as ${limitedUser}`).toBeLessThanOrEqual(10_000)
+      expect(callsOf(pod).filter((c) => c.at > 10_000).length, `${pod}: calls after the first 10 s`).toBeGreaterThan(4)
+    }
+    expect(oldAfter.map((c) => `${c.target} +${c.at}ms`), 'answers from the admin kubeconfig on a replica after it had answered as the ServiceAccount').toEqual([])
+    expect(late.map((c) => `${c.target} +${c.at}ms ${c.text.slice(0, 80)}`), `answers not refused as ${limitedUser} later than 10 s after the change`).toEqual([])
+    // what this case is for: auth-service's call drops one replica's keep, and no notice reaches the others
+    expect(keptOld.length, `replicas that answered from the admin kubeconfig after the PATCH's answer (${keptOld.join(', ')}): all but the one auth-service called`).toBe(pods.length - 1)
+  })
 
   test('F-8: Redis off for 60 s, then on — screen reads answer 200 throughout, no server restarts, the cache is in Redis again', async ({ request }) => {
     test.skip(!deploymentExists(REDIS), 'the install runs no Redis (redis.enabled false)')

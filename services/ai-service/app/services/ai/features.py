@@ -15,7 +15,7 @@ import time
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from app.services.ai import screen_permissions
-from app.services.ai.tools import CALLS_DESCRIPTION, CALLS_PARAMS, offer_timeline_changes, without_params
+from app.services.ai.tools import CALLS_DESCRIPTION, CALLS_PARAMS, NODE_DESCRIPTION, NODE_PARAMS, offer_result_details, offer_timeline_changes, without_params
 from app.services.investigation import settings as investigation_settings
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
@@ -92,6 +92,10 @@ def _call_graph_on(features: Dict[str, Any], cluster: str) -> bool:
     return bool((features.get("callGraph") or {}).get("enabled"))
 
 
+def _node_neighbors_on(features: Dict[str, Any], cluster: str) -> bool:
+    return bool((features.get("nodeNeighbors") or {}).get("enabled"))
+
+
 # tool name → does this cluster serve it. Tools not listed are always offered.
 GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
     "prometheus_query": _prometheus_on,
@@ -124,6 +128,7 @@ GATES: Dict[str, Callable[[Dict[str, Any], str], bool]] = {
 # does not, or features unknown, gets the definition without them — the model is not handed what can only answer "off".
 PARAM_GATES: Dict[str, tuple[tuple[str, ...], str, Callable[[Dict[str, Any], str], bool]]] = {
     "resource_graph": (CALLS_PARAMS, CALLS_DESCRIPTION, _call_graph_on),
+    "get_node_metrics": (NODE_PARAMS, NODE_DESCRIPTION, _node_neighbors_on),
 }
 
 # tool name → (scope, the permission that names it) of the screen's route. Without what the route asks the call could
@@ -227,8 +232,9 @@ def _names(tools: List[Dict]) -> List[str]:
 
 
 async def gate_tools(tools: List[Dict], service) -> List[Dict]:
-    """The chat's tool list for the service's active cluster and token, timeline's changes view only with its switch."""
-    tools = offer_timeline_changes(tools)
+    """The chat's tool list for the service's active cluster and token, timeline's changes view and the words of
+    AI_TOOL_RESULT_DETAILS only with their switches."""
+    tools = offer_result_details(offer_timeline_changes(tools))
     names = _names(tools)
     if not any(gated(n) or n in PARAM_GATES for n in names):
         return tools

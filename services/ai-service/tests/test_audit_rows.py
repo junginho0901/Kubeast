@@ -24,6 +24,14 @@ class Reader(Admin):
         return False
 
 
+async def fake_end_tool_run(db, approval_id, from_status, record, **fields):
+    """DatabaseService.end_tool_run on a stand-in database: its transition, then the outcome row (one transaction there)."""
+    moved = await db.transition_tool_approval(approval_id, from_status, **fields)
+    if moved is not None:
+        await audit_writer.write_audit(**record)
+    return moved
+
+
 @pytest.fixture
 def rows(monkeypatch):
     out = []
@@ -208,6 +216,8 @@ async def test_an_approved_write_runs_as_ai_tool_execute(monkeypatch):
                                session_id="s1", result="", status="pending", created_at=None, expires_at=None, decided_at=None)
 
     class DB:
+        end_tool_run = fake_end_tool_run
+
         async def transition_tool_approval(self, *a, **k):
             for key, value in k.items():
                 setattr(approval, key, value)
@@ -277,6 +287,8 @@ async def test_an_approved_write_refused_before_tool_server_is_failed(monkeypatc
     messages = []
 
     class DB:
+        end_tool_run = fake_end_tool_run
+
         async def transition_tool_approval(self, *a, **k):
             for key, value in k.items():
                 setattr(approval, key, value)
@@ -333,6 +345,8 @@ async def test_an_approved_write_that_fails_keeps_its_output_masked_and_short(mo
     messages = []
 
     class DB:
+        end_tool_run = fake_end_tool_run
+
         async def transition_tool_approval(self, *a, **k):
             for key, value in k.items():
                 setattr(approval, key, value)
@@ -395,12 +409,17 @@ async def test_a_run_keeps_its_rows_when_its_conversation_was_deleted_during_it(
                                status="pending", created_at=None, expires_at=None, decided_at=None)
 
     class DB:
+        end_tool_run = fake_end_tool_run
+
         async def transition_tool_approval(self, approval_id, from_status, **k):
             if from_status == "approved":
                 return None  # the conversation and its approvals were deleted while the call ran
             for key, value in k.items():
                 setattr(approval, key, value)
             return approval
+
+        async def get_tool_approval(self, approval_id):
+            return None  # deleted with its conversation
 
         async def add_message(self, session_id, *a, **k):
             raise ConversationGone(session_id)

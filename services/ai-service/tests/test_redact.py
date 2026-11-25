@@ -166,6 +166,35 @@ def test_debug_dump_off_by_default_and_redacted_when_on(monkeypatch, caplog):
     assert "abcdefghijklmnopqrstuvwxyz0123456789" not in err and "abc123-xyz" not in err and "request rejected" in err, err
 
 
+def test_debug_dump_masks_credentials_whatever_the_model_redaction_says(monkeypatch, caplog):
+    """REDACTION_ENABLED and REDACTION_DISABLE choose what a model reads; the dump goes to the log with every credential
+    rule, and with the personal data rules when REDACTION_PII is on."""
+    import logging
+    from app.config import settings
+    from app.services.ai import debug_dump
+
+    monkeypatch.setattr(settings, "AI_DEBUG_DUMP", True)
+    payload = {"password": "hunter2-dump", "model": "m", "header": "authorization: Bearer abcdefghijklmnopqrstuvwxyz0123456789"}
+    for env in ({"REDACTION_ENABLED": "false"}, {"REDACTION_DISABLE": "key_name,authorization"}, {}):
+        for name in ("REDACTION_ENABLED", "REDACTION_DISABLE", "REDACTION_PII"):
+            monkeypatch.delenv(name, raising=False)
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        caplog.clear()
+        with caplog.at_level(logging.DEBUG, logger="kubeast.ai"):
+            debug_dump.dump("[args]", payload)
+        assert "[args]" in caplog.text and '"model": "m"' in caplog.text, (env, caplog.text)
+        assert "hunter2-dump" not in caplog.text, (env, caplog.text)
+        assert "abcdefghijklmnopqrstuvwxyz0123456789" not in caplog.text, (env, caplog.text)
+
+    for pii, kept in (("false", True), ("true", False)):
+        monkeypatch.setenv("REDACTION_PII", pii)
+        caplog.clear()
+        with caplog.at_level(logging.DEBUG, logger="kubeast.ai"):
+            debug_dump.dump("[pii]", "reply to alice@example.com")
+        assert ("alice@example.com" in caplog.text) is kept, (pii, caplog.text)
+
+
 def test_pii_off_by_default_on_when_asked():
     text = "user alice@example.com (010-1234-5678, 900101-1234567) paid with 4111 1111 1111 1111; again alice@example.com and bob@example.com"
     out, _ = redact_text(text, on())

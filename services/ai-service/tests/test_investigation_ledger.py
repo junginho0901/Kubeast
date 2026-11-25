@@ -23,7 +23,7 @@ from tests.test_alert_investigation import (
     row,
     tool_call,
 )
-from tests.test_investigation_window import STARTED, ChangesService, at_now, first_message
+from tests.test_investigation_window import STARTED, ChangesService, at_now, step_zero_reads
 
 LOG = [
     {"tool": "timeline", "args": {"view": "changes"}, "step": 0, "result_chars": 40},
@@ -136,6 +136,28 @@ def test_the_ledger_reads_states_loosely_and_keeps_at_most_twelve():
     assert hyps[0]["state"] == "ruled_out" and hyps[0]["id"] == "h1" and hyps[0]["closed"]
     assert len(hyps) == inv_ledger.MAX_HYPOTHESES - 1  # twelve read, one of them not an object
     assert inv_ledger.check(None, LOG) == [] and inv_ledger.check({"hypotheses": "h1"}, LOG) == []
+
+
+def test_a_ledger_list_past_its_cap_says_how_many_were_given():
+    # thirteen hypotheses: twelve kept, and the result says thirteen were given
+    hyps = [hypothesis(id=f"h{i}") for i in range(13)]
+    kept = inv_ledger.check({"hypotheses": hyps}, LOG)
+    assert len(kept) == inv_ledger.MAX_HYPOTHESES == 12 and all("cut" not in h for h in kept)
+    ledger_on = {"evidence": False, "ledger": True}
+    out = inv_result.shape({"causes": [], "hypotheses": hyps}, "ok", LOG, kept, checks=ledger_on)
+    assert out["cut"] == {"hypotheses": {"given": 13, "kept": 12}}
+    twelve = hyps[:12]
+    assert "cut" not in inv_result.shape({"causes": [], "hypotheses": twelve}, "ok", LOG, inv_ledger.check({"hypotheses": twelve}, LOG),
+                                         checks=ledger_on)
+    # with the ledger off its hypotheses are not read, so none are said to be cut
+    assert "cut" not in inv_result.shape({"causes": [], "hypotheses": hyps}, "ok", LOG, [], checks={"evidence": True, "ledger": False})
+    # a side's numbers: the first twenty read, twenty-one given
+    (wide,) = inv_ledger.check({"hypotheses": [hypothesis(state="ruled_out", **{"for": [1] * 21, "against": [2] * 21})]}, LOG)
+    assert wide["cut"] == {"for": {"given": 21, "kept": 20}, "against": {"given": 21, "kept": 20}}
+    (fits,) = inv_ledger.check({"hypotheses": [hypothesis(state="ruled_out", **{"for": [1] * 20, "against": [2] * 20})]}, LOG)
+    assert "cut" not in fits
+    (one,) = inv_ledger.check({"hypotheses": [hypothesis(**{"for": [1] * 21})]}, LOG)
+    assert one["cut"] == {"for": {"given": 21, "kept": 20}} and one["closed"] is True
 
 
 def test_asking_again_follows_the_block():
@@ -278,7 +300,7 @@ async def test_step_zero_is_call_one_of_the_ledger(monkeypatch):
     install_loop(monkeypatch, service, [])
     at_now(monkeypatch)
     out = await runner.investigate(cfg(max_steps=5, changes_first=True, ledger=True), row(starts_at=STARTED))
-    assert "<<<CHANGES\n[call 1]\n" in first_message(service)
+    assert step_zero_reads(service)[1][0].startswith("[call 1]\n")
     assert out["result"]["causes"][0]["evidence"] == [{"call": 1, "tool": "timeline"}]
     assert out["result"]["hypotheses"][0]["for"] == [{"call": 1, "tool": "timeline"}] and out["result"]["asked_again"] is False
     assert out["tool_calls"][0]["step"] == 0 and len(service.completions.calls) == 1

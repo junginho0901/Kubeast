@@ -8,9 +8,9 @@ metadata:
   name: {{ .Release.Name }}-gateway
   labels:
     {{- include "kubeast.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
+  {{- with include "kubeast.ingressAnnotations" . }}
   annotations:
-    {{- toYaml . | nindent 4 }}
+    {{- . | nindent 4 }}
   {{- end }}
 spec:
   {{- with .Values.ingress.className }}

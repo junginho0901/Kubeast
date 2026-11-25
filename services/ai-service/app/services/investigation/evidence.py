@@ -43,12 +43,19 @@ class Read:
     text: str = ""
     failed: bool = False
     same_as: Optional[int] = None
+    # with the verdict on (investigation/answers.py): "unread" an answer that read nothing, "empty" one that holds nothing
+    nothing: str = ""
+
+    @property
+    def shows(self) -> bool:
+        """Whether its answer holds more than what was asked."""
+        return not self.nothing
 
 
 @dataclass
 class Problem:
     resource: str
-    reason: str                  # no_evidence | bad_calls | name_missing | after_alert
+    reason: str                  # no_evidence | bad_calls | empty_answer (the verdict on) | name_missing | after_alert
     values: dict[str, Any] = field(default_factory=dict)
     index: int = -1              # the cause's place in the block's causes, from 0
 
@@ -85,14 +92,32 @@ def _number(n: Any) -> Optional[int]:
         return None
     if isinstance(n, int):
         return n
-    if isinstance(n, str) and n.strip().isdigit():
-        return int(n.strip())
+    if isinstance(n, str) and n.strip().isdecimal():
+        try:
+            return int(n.strip())
+        except ValueError:  # more digits than int() takes
+            return None
     return None
 
 
+def answered(numbers: list, reads: list[Read]) -> tuple[list[tuple[Any, Read]], list[tuple[Any, Optional[Read]]]]:
+    """The call numbers given, as (those of calls of this run that answered, the rest), each with its call; a refused
+    repeat stands for the call it repeated."""
+    good, bad = [], []
+    for n in numbers:
+        k = _number(n)
+        read = reads[k - 1] if k is not None and 1 <= k <= len(reads) else None
+        if read is not None and read.same_as is not None and 1 <= read.same_as <= len(reads):
+            read = reads[read.same_as - 1]
+        (good if read is not None and not read.failed else bad).append((n, read))
+    return good, bad
+
+
 def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tuple[int, list[Problem]]:
-    """(the causes checked, what is wrong with them). An entry of kind "none" is not a cause (rca.is_cause); one
-    whose kind is missing or null is. The rows keep UTC without a zone, as `alert_start` does."""
+    """(the causes checked, what is wrong with them), one problem per cause, the first found. A cause whose other
+    checks pass but that also gives a number naming no call that answered is bad_calls too. An entry of kind "none"
+    is not a cause (rca.is_cause); one whose kind is missing or null is. The rows keep UTC without a zone, as
+    `alert_start` does."""
     given = block.get("causes")
     causes = [(i, c) for i, c in enumerate(given if isinstance(given, list) else [])
               if isinstance(c, dict) and rca.is_cause(c)]
@@ -103,23 +128,24 @@ def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tu
         if not numbers:
             problems.append(Problem(resource, "no_evidence", index=index))
             continue
-        good, bad = [], []
-        for n in numbers:
-            k = _number(n)
-            read = reads[k - 1] if k is not None and 1 <= k <= len(reads) else None
-            if read is not None and read.same_as is not None and 1 <= read.same_as <= len(reads):
-                read = reads[read.same_as - 1]
-            (good if read is not None and not read.failed else bad).append((n, read))
+        good, bad = answered(numbers, reads)
         if not good:
             problems.append(Problem(resource, "bad_calls", {"calls": [n for n, _ in bad]}, index))
             continue
-        if not any(_names(read.text, resource_name(resource)) for _, read in good):
-            problems.append(Problem(resource, "name_missing", {"name": resource_name(resource), "calls": [n for n, _ in good]},
+        held = [(n, read) for n, read in good if read.shows]
+        if not held:
+            problems.append(Problem(resource, "empty_answer", {"calls": [n for n, _ in good]}, index))
+            continue
+        if not any(_names(read.text, resource_name(resource)) for _, read in held):
+            problems.append(Problem(resource, "name_missing", {"name": resource_name(resource), "calls": [n for n, _ in held]},
                                     index))
             continue
         started = _time(c.get("started_at"))
         if alert_start is not None and started is not None and started > alert_start + START_TOLERANCE:
             problems.append(Problem(resource, "after_alert", {"at": _stamp(started), "start": _stamp(alert_start)}, index))
+            continue
+        if bad:  # a call that shows the cause does not make the other numbers right: each must name a call that answered
+            problems.append(Problem(resource, "bad_calls", {"calls": [n for n, _ in bad]}, index))
     return len(causes), problems
 
 
@@ -135,12 +161,14 @@ _REASONS = {
     "en": {
         "no_evidence": "no call is given for it",
         "bad_calls": "calls {calls} are not calls of this investigation that answered",
+        "empty_answer": "calls {calls} read nothing or their answer holds nothing",
         "name_missing": "{name} does not appear in what calls {calls} returned",
         "after_alert": "it starts at {at}, after the alert's start at {start}",
     },
     "ko": {
         "no_evidence": "근거로 댄 호출이 없음",
         "bad_calls": "{calls}번 호출은 이 조사에서 답을 받은 호출이 아님",
+        "empty_answer": "{calls}번 호출은 읽은 것이 없거나 답에 담긴 것이 없음",
         "name_missing": "{calls}번 호출이 돌려준 결과에 {name}이(가) 나오지 않음",
         "after_alert": "시작 시각 {at}이(가) 알림 시작 {start}보다 늦음",
     },

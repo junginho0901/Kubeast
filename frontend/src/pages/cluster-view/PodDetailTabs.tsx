@@ -4,13 +4,13 @@ import { pickMainContainer } from './types'
 import type { DetailTab } from './types'
 
 // 6 탭 버튼 (Summary / Logs / Describe / RBAC / Manifest / Exec).
-// Logs / Exec 클릭 시 메인 컨테이너 자동 선택. Exec 은 admin 권한 있을 때만 노출.
+// Logs / Exec 클릭 시 메인 컨테이너 자동 선택. Exec 은 그 pod 의 터미널이 열릴 때만 노출 (useCanExecPod).
 
 interface Props {
-  isAdmin: boolean
+  canExec: boolean
 }
 
-export function PodDetailTabs({ isAdmin }: Props) {
+export function PodDetailTabs({ canExec }: Props) {
   const {
     tr,
     selectedPod,
@@ -62,7 +62,7 @@ export function PodDetailTabs({ isAdmin }: Props) {
         <FileCode className="w-4 h-4" />
         {tr('clusterView.tabs.manifest', 'Manifest')}
       </button>
-      {isAdmin && (
+      {canExec && (
         <button onClick={handleClickExec} className={tabClass('exec')}>
           <Terminal className="w-4 h-4" />
           {tr('clusterView.tabs.exec', 'Exec')}

@@ -7,9 +7,9 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 
 // The Admin reads of Kubeast's own records (investigations, ai_models, session_recordings) and an alert window's report
 // (alerts_inbox with with_report), called over MCP with no model and held to the API the same screen reads, value by
-// value. What the screens keep to themselves stays out: a recording's content is never read, and no model's key or
-// address is in an answer. Who gets them is held to the permission each screen asks. clusters_list's time of the last
-// check is held to the periodic check it describes.
+// value. What the screens keep to themselves stays out: a recording's content is never read, no model's key or address
+// is in an answer, and of an alert's two links only the rule's expression is. Who gets them is held to the permission
+// each screen asks. clusters_list's time of the last check is held to the periodic check it describes.
 
 const EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const PASSWORD = process.env.E2E_USER_PASSWORD || ''
@@ -19,6 +19,10 @@ const MCP = '/api/v1/ai/mcp'
 const RPC = { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json' }
 const TOOLS = ['investigations', 'ai_models', 'session_recordings']
 const MODEL_STUB = 'http://model-stub.kubeast-devtools.svc.cluster.local:8090/ok'
+// An alert's two links as Alertmanager sends them, and the rule's expression the first one holds
+const RULE = 'up == 0'
+const RULE_LINK = `http://prometheus.e2e:9090/graph?g0.expr=${encodeURIComponent(RULE)}&g0.tab=1`
+const SENDER_LINK = 'http://alertmanager.e2e:9093'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = any
@@ -35,6 +39,16 @@ const field = (row: Obj, go: string, json: string) => row[go] ?? row[json]
 const without = (row: Obj, ...names: string[]) => Object.fromEntries(Object.entries(row).filter(([name]) => !names.includes(name)))
 // A recording as the tool gives it: the route's row with the size the screen shows (SessionRecordings.tsx keptBytes).
 const sizedAsShown = (row: Obj) => ({ ...without(row, 'user_id'), kept_bytes: row.status === 'interrupted' ? row.uploaded_bytes : row.bytes || row.uploaded_bytes })
+// A report as the tool gives it: the route's row without the screen's wording of a skip, its two links as the rule's expression.
+const reportAsGiven = (row: Obj) => ({ ...without(row, 'skip_reason_key', 'skip_reason_args', 'generator_url', 'alertmanager_url'), expr: RULE })
+// The route gives both links, for the screen; the tool's answer holds neither key and neither address, only the expression.
+function expectLinksAsExpression(answer: Obj, route: Obj) {
+  expect([route.generator_url, route.alertmanager_url], 'the links the route gives').toEqual([RULE_LINK, SENDER_LINK])
+  expect(answer).not.toHaveProperty('generator_url')
+  expect(answer).not.toHaveProperty('alertmanager_url')
+  expect(JSON.stringify(answer)).not.toMatch(/prometheus\.e2e|alertmanager\.e2e/)
+  expect(answer.expr).toBe(RULE)
+}
 
 async function login(request: APIRequestContext, email = EMAIL, password = PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
@@ -171,11 +185,11 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
     const since = rfc3339(Date.now() - 2_000)
     try {
       // Two hours old and without tokens, in a cluster of the run: outside the investigator's caps and the other reports' pages.
-      psql(`INSERT INTO alert_investigations (id, cluster, fingerprint, alertname, severity, namespace, status, skip_reason, labels, annotations, received_at, last_seen_at, iterations, tool_calls, report, error, provider, model, requested_by) VALUES
+      psql(`INSERT INTO alert_investigations (id, cluster, fingerprint, alertname, severity, namespace, status, skip_reason, labels, annotations, received_at, last_seen_at, iterations, tool_calls, report, error, provider, model, requested_by, generator_url, alertmanager_url) VALUES
         ('${ids[0]}', '${cluster}', 'fp-1', 'E2eP5Done', 'warning', 'shop', 'done', '', '{"pod":"web-1"}', '{"summary":"load"}', now() at time zone 'utc' - interval '2 hours', now() at time zone 'utc' - interval '2 hours', 2,
-         '[{"tool":"k8s_get_resources","args":{"resource_type":"pods"},"step":1,"result_chars":10}]', 'The load comes from web-1 ${run}.', '', 'stub', 'small', ''),
+         '[{"tool":"k8s_get_resources","args":{"resource_type":"pods"},"step":1,"result_chars":10}]', 'The load comes from web-1 ${run}.', '', 'stub', 'small', '', '${RULE_LINK}', '${SENDER_LINK}'),
         ('${ids[1]}', '${cluster}', 'fp-2', 'E2eP5Skipped', 'info', '', 'skipped', 'hourly cap (6 per hour)', '{}', '{}', now() at time zone 'utc' - interval '3 hours', now() at time zone 'utc' - interval '3 hours', 0,
-         '[]', '', '', '', '', '')`)
+         '[]', '', '', '', '', '', '', '')`)
 
       const route = (params: Record<string, string>) => api(request, admin, '/api/v1/ai/investigations', { cluster: '', ...params })
       const page = await answer(request, admin, 'investigations', { cluster_id: cluster })
@@ -203,7 +217,8 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
       const opened = await answer(request, admin, 'investigations', { investigation_id: ids[0] })
       const stored = await api(request, admin, `/api/v1/ai/investigations/${ids[0]}`, { cluster: '' })
       expect(stored.report).toContain(run)
-      expect(opened).toEqual(without(stored, 'skip_reason_key', 'skip_reason_args'))
+      expectLinksAsExpression(opened, stored)
+      expect(opened).toEqual(reportAsGiven(stored))
       expect((await answer(request, admin, 'investigations', { investigation_id: `inv-e2e-p5-gone-${run}` })).status).toBe('not_found')
 
       // The route's own row, marked as read by a tool, beside the tool's.
@@ -237,8 +252,8 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
     const post = (status: string) => request.post(`/api/v1/alerts/webhook?cluster=${CLUSTER}`, {
       headers: { Authorization: `Bearer ${token}` },
       data: {
-        version: '4', groupKey: `{}:{alertname="${labels.alertname}"}`, status, receiver: 'kubeast', externalURL: 'http://alertmanager.e2e:9093',
-        alerts: [{ status, labels, annotations: { summary: 'p5 report' }, startsAt: new Date(Date.now() - 3 * 60_000).toISOString(), fingerprint }],
+        version: '4', groupKey: `{}:{alertname="${labels.alertname}"}`, status, receiver: 'kubeast', externalURL: SENDER_LINK,
+        alerts: [{ status, labels, annotations: { summary: 'p5 report' }, startsAt: new Date(Date.now() - 3 * 60_000).toISOString(), generatorURL: RULE_LINK, fingerprint }],
       },
     })
     let userId = ''
@@ -252,9 +267,9 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
       expect(none.report_error).toContain('no investigation')
       expect(none.investigation_report).toBeUndefined()
 
-      psql(`INSERT INTO alert_investigations (id, cluster, fingerprint, alertname, severity, namespace, status, labels, annotations, received_at, last_seen_at, iterations, tool_calls, report, error, provider, model, requested_by)
+      psql(`INSERT INTO alert_investigations (id, cluster, fingerprint, alertname, severity, namespace, status, labels, annotations, received_at, last_seen_at, iterations, tool_calls, report, error, provider, model, requested_by, generator_url, alertmanager_url)
             VALUES ('${invId}', '${CLUSTER}', '${fingerprint}', '${labels.alertname}', 'info', '${labels.namespace}', 'done', '{}', '{}', now() at time zone 'utc', now() at time zone 'utc', 1,
-                    '[{"tool":"k8s_get_events","args":{},"step":1}]', 'What it found ${run}.', '', 'stub', 'small', '')`)
+                    '[{"tool":"k8s_get_events","args":{},"step":1}]', 'What it found ${run}.', '', 'stub', 'small', '', '${RULE_LINK}', '${SENDER_LINK}')`)
 
       // A Read grant reads the inbox, as on the screen, and holds neither admin.investigations.read nor the button's permission.
       userId = await makeUser(request, admin, email, await roleId(request, admin, 'Member'), 'Read')
@@ -269,7 +284,9 @@ test.describe('the AI reads what the Admin screens read of Kubeast\'s own record
       const read = await answer(request, reader, 'alerts_inbox', { alert_id: item.id, with_report: true })
       const route = await api(request, reader, `/api/v1/alerts/inbox/${item.id}/investigation`)
       expect(route.report).toContain(run)
-      expect(read.investigation_report).toEqual(without(route, 'skip_reason_key', 'skip_reason_args'))
+      expectLinksAsExpression(read, await api(request, reader, `/api/v1/alerts/inbox/${item.id}`))
+      expectLinksAsExpression(read.investigation_report, route)
+      expect(read.investigation_report).toEqual(reportAsGiven(route))
 
       await expect.poll(async () => {
         const rows = await auditRows(request, admin, 'ai.investigation.view', since)

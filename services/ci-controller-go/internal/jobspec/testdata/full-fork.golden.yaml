@@ -40,7 +40,7 @@ spec:
           done > /tmp/result
           cat /tmp/result
           cat /tmp/result 2>/dev/null >/dev/termination-log || echo "kubeast: the termination log is not writable; the result is in the log above" >&2
-        image: docker.io/alpine/git:v2.54.0
+        image: docker.io/alpine/git:v2.54.1@sha256:2306e2b05ee0ef99f5d25b0779f645b24ae9f91ba187107503592fcdfe78da3a
         name: report
         resources:
           limits:
@@ -93,7 +93,7 @@ spec:
           value: 0123456789abcdef0123456789abcdef01234567
         - name: KUBEAST_REPO_URL
           value: https://github.com/example/web.git
-        image: docker.io/alpine/git:v2.54.0
+        image: docker.io/alpine/git:v2.54.1@sha256:2306e2b05ee0ef99f5d25b0779f645b24ae9f91ba187107503592fcdfe78da3a
         name: checkout
         resources:
           limits:
@@ -183,7 +183,7 @@ spec:
         env:
         - name: BUILDKITD_FLAGS
           value: --oci-worker-no-process-sandbox
-        image: docker.io/moby/buildkit:v0.34.1-rootless
+        image: docker.io/moby/buildkit:v0.35.0-rootless@sha256:5987568f92dafbfb679879de59c1cd8d26597f5f6635c314e166164e2615870c
         name: image
         resources:
           limits:

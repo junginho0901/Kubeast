@@ -64,6 +64,17 @@ def test_named_arguments_are_the_target():
     assert tool_target("k8s_get_resources", {"resource_type": "pods"}) == ToolTarget("pods", "k8s_get_resources", None, None)
 
 
+def test_one_nodes_neighbours_are_about_that_node_and_every_nodes_usage_is_as_before(monkeypatch):
+    monkeypatch.setenv("NODE_NEIGHBORS_ENABLED", "true")
+    assert tool_target("get_node_metrics", {"node": " n1 ", "since_time": "1h"}) == ToolTarget("node", "n1", None, None)
+    for args in ({}, {"node": ""}, {"node": " "}, {"node": None}, {"node": ["n1"]}, {"since_time": "1h"}):
+        assert tool_target("get_node_metrics", args) == ToolTarget("tool", "get_node_metrics", None, None)
+    assert tool_target("nodes_stats_summary", {"node": "n1"}) == ToolTarget("tool", "nodes_stats_summary", None, None)
+    for off in ("", "false", "0"):  # tool_dispatch drops the node then, so the call is every node's
+        monkeypatch.setenv("NODE_NEIGHBORS_ENABLED", off)
+        assert tool_target("get_node_metrics", {"node": "n1"}) == ToolTarget("tool", "get_node_metrics", None, None)
+
+
 def test_a_read_of_a_kubeast_record_names_that_record():
     assert tool_target("investigations", {"investigation_id": "inv-1"}) == ToolTarget("investigation", "inv-1", None, None)
     assert tool_target("investigations", {"status": "done"}) == ToolTarget("tool", "investigations", None, None)

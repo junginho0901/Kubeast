@@ -121,10 +121,17 @@ func parseTopNodes(output string) []map[string]interface{} {
 	return results
 }
 
+// noResourcesFound starts the sentence kubectl writes in place of a table without a row ("No resources found in shop
+// namespace."); no object's name starts with it, since a name has no capital letter.
+const noResourcesFound = "No resources found"
+
 func parseTopPods(output string, allNamespaces bool) []map[string]interface{} {
 	lines := strings.Split(output, "\n")
 	results := make([]map[string]interface{}, 0)
 	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), noResourcesFound) {
+			continue
+		}
 		fields := strings.Fields(line)
 		if len(fields) < 3 {
 			continue

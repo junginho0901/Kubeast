@@ -167,8 +167,9 @@ func (h *Handler) callsIn(r *http.Request, namespace string, graph map[string]in
 }
 
 // callGraphTraces reads the service graph metrics: the label names, then requests, failed requests and (p90) the 90th
-// percentile. A grant limited to namespaces reads none of them, as the Prometheus screens refuse it: a metric without
-// namespace labels names every namespace's services.
+// percentile; one capped at callgraph.MaxSeries that came back full marks the source truncated. A grant limited to
+// namespaces reads none of them, as the Prometheus screens refuse it: a metric without namespace labels names every
+// namespace's services.
 func (h *Handler) callGraphTraces(ctx context.Context, r *http.Request, src netdropsSource, namespace string, w promWindow, p90 bool) (*callgraph.Traces, callgraph.SourceState) {
 	state := callgraph.SourceState{Source: callgraph.SourceTraces}
 	if len(promScope(r)) > 0 {
@@ -209,7 +210,7 @@ func (h *Handler) callGraphTraces(ctx context.Context, r *http.Request, src netd
 		}
 		*read.into = callGraphSamples(answer)
 	}
-	state.Read, state.Series = true, len(tr.Requests)
+	state.Read, state.Series, state.Truncated = true, len(tr.Requests), tr.Cut()
 	if shape.Namespace == "" {
 		state.Detail = callgraph.DetailUnscoped
 	}

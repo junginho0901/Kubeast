@@ -1,0 +1,303 @@
+suite: pod startup — every Kubeast Deployment is ready about a second after its server listens
+# A pod deleted or evicted is not replaced first, so with one pod nothing answers from the end of its preStop wait until
+# the new pod is ready. podStartup.quickReady gives each a startup probe every second: the kubelet runs readiness the
+# moment it passes, and readiness has no initial delay that would skip that run. Off, they keep 0.7.8's probes.
+templates:
+  - deployments.yaml
+  - gateway.yaml
+  - configmap.yaml
+  - secret.yaml
+tests:
+  - it: gives ai-service a startup probe every second, readiness every 3 s and liveness as before
+    template: deployments.yaml
+    documentSelector: { path: metadata.name, value: ai-service }
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /api/v1/ai/health, port: 8001 }
+            periodSeconds: 1
+            failureThreshold: 180
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /api/v1/ai/health, port: 8001 }
+            periodSeconds: 3
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe
+          value:
+            httpGet: { path: /api/v1/ai/health, port: 8001 }
+            initialDelaySeconds: 15
+            periodSeconds: 30
+
+  - it: gives the frontend a startup probe every second, readiness every 3 s and liveness as before
+    template: deployments.yaml
+    documentSelector: { path: metadata.name, value: frontend }
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /, port: 5173 }
+            periodSeconds: 1
+            failureThreshold: 180
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /, port: 5173 }
+            periodSeconds: 3
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe
+          value:
+            httpGet: { path: /, port: 5173 }
+            initialDelaySeconds: 5
+            periodSeconds: 30
+
+  - it: gives the gateway a startup probe every second, readiness every 3 s and liveness as before
+    template: gateway.yaml
+    documentSelector: { path: kind, value: Deployment }
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /healthz, port: 8000 }
+            periodSeconds: 1
+            failureThreshold: 180
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /healthz, port: 8000 }
+            periodSeconds: 3
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe
+          value:
+            httpGet: { path: /healthz, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 30
+
+  - it: asks the Go services' startup probe every second for 180 s and their readiness every 3 s with no initial delay
+    template: deployments.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /health, port: 8004 }
+            periodSeconds: 1
+            failureThreshold: 180
+        documentSelector: { path: metadata.name, value: auth-service }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8004 }
+            periodSeconds: 3
+        documentSelector: { path: metadata.name, value: auth-service }
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe.periodSeconds
+          value: 1
+        documentSelector: { path: metadata.name, value: k8s-service }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8002 }
+            periodSeconds: 3
+        documentSelector: { path: metadata.name, value: k8s-service }
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe.periodSeconds
+          value: 1
+        documentSelector: { path: metadata.name, value: session-service }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8003 }
+            periodSeconds: 3
+        documentSelector: { path: metadata.name, value: session-service }
+
+  - it: gives the stream server the same probes as k8s-service
+    template: deployments.yaml
+    set:
+      streams.enabled: true
+    documentSelector: { path: metadata.name, value: k8s-service-stream }
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /health, port: 8002 }
+            periodSeconds: 1
+            failureThreshold: 180
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8002 }
+            periodSeconds: 3
+
+  - it: gives tool-server a startup probe every second, readiness every 3 s and liveness as before
+    template: deployments.yaml
+    documentSelector: { path: metadata.name, value: tool-server }
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /readyz, port: 8086 }
+            periodSeconds: 1
+            failureThreshold: 180
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8086 }
+            periodSeconds: 3
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe
+          value:
+            httpGet: { path: /livez, port: 8086 }
+            initialDelaySeconds: 5
+            periodSeconds: 30
+
+  - it: gives the ModelConfig controller a startup probe every second, readiness every 3 s and liveness as before
+    template: deployments.yaml
+    documentSelector: { path: metadata.name, value: model-config-controller-go }
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /readyz, port: 8081 }
+            periodSeconds: 1
+            failureThreshold: 180
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8081 }
+            periodSeconds: 3
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe
+          value:
+            httpGet: { path: /healthz, port: 8081 }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+
+  - it: with quickReady false gives the Go services 0.7.8's probes, a startup probe every 5 s for 180 s
+    template: deployments.yaml
+    set:
+      podStartup.quickReady: false
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /health, port: 8004 }
+            periodSeconds: 5
+            failureThreshold: 36
+        documentSelector: { path: metadata.name, value: auth-service }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8004 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+        documentSelector: { path: metadata.name, value: auth-service }
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /health, port: 8002 }
+            periodSeconds: 5
+            failureThreshold: 36
+        documentSelector: { path: metadata.name, value: k8s-service }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8002 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+        documentSelector: { path: metadata.name, value: k8s-service }
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet: { path: /health, port: 8003 }
+            periodSeconds: 5
+            failureThreshold: 36
+        documentSelector: { path: metadata.name, value: session-service }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8003 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+        documentSelector: { path: metadata.name, value: session-service }
+
+  - it: with quickReady false gives tool-server and the ModelConfig controller 0.7.8's probes
+    template: deployments.yaml
+    set:
+      podStartup.quickReady: false
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+        documentSelector: { path: metadata.name, value: tool-server }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8086 }
+            initialDelaySeconds: 2
+            periodSeconds: 10
+        documentSelector: { path: metadata.name, value: tool-server }
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+        documentSelector: { path: metadata.name, value: model-config-controller-go }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /readyz, port: 8081 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+        documentSelector: { path: metadata.name, value: model-config-controller-go }
+
+  - it: with quickReady false gives ai-service 0.7.8's probes
+    template: deployments.yaml
+    set:
+      podStartup.quickReady: false
+    documentSelector: { path: metadata.name, value: ai-service }
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /api/v1/ai/health, port: 8001 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+  - it: with quickReady false gives the frontend 0.7.8's probes
+    template: deployments.yaml
+    set:
+      podStartup.quickReady: false
+    documentSelector: { path: metadata.name, value: frontend }
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /, port: 5173 }
+            initialDelaySeconds: 2
+            periodSeconds: 10
+
+  - it: with quickReady false gives the gateway 0.7.8's probes
+    template: gateway.yaml
+    set:
+      podStartup.quickReady: false
+    documentSelector: { path: kind, value: Deployment }
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].startupProbe
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet: { path: /healthz, port: 8000 }
+            initialDelaySeconds: 2
+            periodSeconds: 10
+
+  - it: keeps the frontend's startup probe with AI off
+    template: deployments.yaml
+    set:
+      ai.enabled: false
+    documentSelector: { path: metadata.name, value: frontend }
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe.periodSeconds
+          value: 1

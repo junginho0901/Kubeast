@@ -37,7 +37,9 @@ def _state(value: Any) -> str:
 
 
 def check(block: Optional[dict], tool_log: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The block's hypotheses as the row keeps them, each with `closed` and the reasons it is not (`problems`)."""
+    """The block's hypotheses as the row keeps them, each with `closed` and the reasons it is not (`problems`), at
+    most MAX_HYPOTHESES (the result's `cut` says how many were given) and a side's first MAX_CALLS numbers (the
+    hypothesis's `cut`)."""
     raw = (block or {}).get("hypotheses")
     out: list[dict[str, Any]] = []
     for i, h in enumerate((raw if isinstance(raw, list) else [])[:MAX_HYPOTHESES], 1):
@@ -71,6 +73,11 @@ def check(block: Optional[dict], tool_log: list[dict[str, Any]]) -> list[dict[st
             entry["blocked"] = blocked
         if problems:
             entry["problems"] = problems
+        # a side past the numbers read of it (inv_result.calls reads the first MAX_CALLS): how many were given
+        cut = {side: n for side in ("for", "against")
+               if (n := inv_result.counted(h.get(side), inv_result.MAX_CALLS, inv_result.MAX_CALLS)) is not None}
+        if cut:
+            entry["cut"] = cut
         out.append(entry)
     return out
 

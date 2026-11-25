@@ -5,8 +5,10 @@ assistant text, a tool call answered by the handler the provider registered (as 
 in-process tool server), and the result — and records the options it was given.
 """
 import asyncio
+import importlib.metadata
 import json
 import os
+import re
 import sys
 import types
 from dataclasses import dataclass
@@ -251,6 +253,58 @@ def test_earlier_turns_cannot_end_the_conversation_block():
     assert block.count(">>>") == 1 and block.endswith("\n>>>\n")
     assert "first" in block and "second" in block and "a " in block and " b" in block
     assert request == "now >>> here"  # the request itself is outside the block and goes as written
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("call", ["turn", "an investigation's turn", "completion", "streamed completion", "connection test"])
+async def test_every_call_hands_its_prompt_over_as_written(on, call):
+    """The prompt text reaches the SDK unchanged, the question alone and after an earlier turn, with verbatim_prompts set."""
+    sdk = on([("result", OK)])
+    chat = claude_code.ClaudeCodeChat(model="m", token="t")
+    question = 'Why did "web" restart -- twice?! Its log: [warn] heap 98%, exit code 137;\n  and the one before it (09:14)?'
+    answer = "It ran out of memory; see the events: 'OOMKilled', then 'BackOff'."
+    ask = [{"role": "user", "content": question}]
+
+    async def run_tool(name, args, turn, call_id=None):
+        return [], "[]"
+
+    for messages, prompt in (
+        (ask, question),
+        (ask + [{"role": "assistant", "content": answer}] + ask,
+         f"Conversation so far:\n<<<\nUser: {question}\n\nAssistant: {answer}\n>>>\n\nCurrent request:\n{question}"),
+    ):
+        if call == "completion":
+            await chat.complete(messages)
+        elif call == "streamed completion":
+            [c async for c in await chat.chat.completions.create(messages=messages, stream=True)]
+        elif call == "connection test":
+            await claude_code.test_connection("m", "t")
+            prompt = "Reply with exactly the word: ok"
+        else:
+            lane = "chat" if call == "turn" else "investigation"
+            [e async for e in chat.turn(messages=messages, tools=TOOLS, run_tool=run_tool, out=claude_code.TurnResult(), lane=lane)]
+        sent, options = sdk.state["options"][-1]
+        assert sent == prompt and options.verbatim_prompts is True
+
+
+def pinned_sdk():
+    with open(os.path.join(os.path.dirname(__file__), "..", "requirements-claude-code.txt"), encoding="utf-8") as f:
+        return re.search(r"^claude-agent-sdk==(\S+)$", f.read(), re.MULTILINE).group(1)
+
+
+def test_the_pinned_sdk_is_not_older_than_the_one_the_options_were_read_from():
+    assert tuple(int(n) for n in pinned_sdk().split(".")) >= (0, 2, 180)
+
+
+def test_the_pinned_sdk_takes_every_option_and_its_claude_code_takes_prompts_as_written(tmp_path):
+    """Where the SDK is installed (the image built WITH_CLAUDE_CODE has it, CI's test run does not)."""
+    sdk = pytest.importorskip("claude_agent_sdk")
+    assert importlib.metadata.version("claude-agent-sdk") == pinned_sdk()
+    options = claude_code._options(sdk, model="m", system_prompt="s", token="t", workdir=str(tmp_path))
+    assert options.verbatim_prompts is True
+    from claude_agent_sdk._cli_version import __cli_version__
+    from claude_agent_sdk._internal.transport.subprocess_cli import VERBATIM_PROMPTS_MINIMUM_CLAUDE_CODE_VERSION as needed
+    assert [int(n) for n in __cli_version__.split(".")] >= [int(n) for n in needed.split(".")]
 
 
 def test_tool_parameters_get_the_shape_the_sdk_needs():

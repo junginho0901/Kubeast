@@ -26,6 +26,7 @@ import { failureText } from '@/utils/failureText'
 import { copyText } from '@/utils/clipboard'
 import { allPendingSelected, toggleAllFound, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
 import { ownLevelChangeAsksSignIn } from './admin-users/ownLevel'
+import { passwordResetOffered } from './admin-users/passwordReset'
 import { usersMatching } from './admin/adminListSearch'
 import { useDismiss } from '@/hooks/useDismiss'
 import { announceCreated } from '@/services/createdNoticeStore'
@@ -619,6 +620,7 @@ export default function AdminUsers() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
+                    {passwordResetOffered(u) ? (
                     <button
                       type="button"
                       disabled={isResetting || isBlocked}
@@ -643,6 +645,15 @@ export default function AdminUsers() {
                           : tr('adminUsers.reset', 'Reset PW')}
                       </span>
                     </button>
+                    ) : (
+                      <span
+                        className="text-xs text-slate-500"
+                        title={tr('adminUsers.resetPasswordSso', 'This account signs in with single sign-on and has no password to reset.')}
+                        data-testid="user-reset-password-sso"
+                      >
+                        {tr('adminUsers.ssoAccount', 'SSO account')}
+                      </span>
+                    )}
                     {isLocked(u) && (
                       <button
                         type="button"

@@ -193,8 +193,9 @@ test('a session that ends without signing out is told on the sign-in page; signi
   await page.goto('/workloads/pods?cluster=default')
   // an admin changes the account's access: its tokens end
   expect((await request.delete(`/api/v1/auth/admin/users/${u.id}/cluster-roles/default`, { headers: admin })).status()).toBe(204)
-  // the page's own next request may get the 401 first and go to the sign-in page itself: either way is the case
-  await page.reload().catch(() => undefined)
+  // A page that asks auth-service after that (its /auth/me, its cluster list) goes to the sign-in page itself and is told
+  // there, once: reloaded then, it would be told nothing. One that had asked before stays, and a reload meets the 401.
+  await page.waitForURL(/\/login/, { timeout: 3000 }).catch(() => page.reload().catch(() => undefined))
   await expect(page).toHaveURL(/\/login/, { timeout: 15000 })
   await expect(page.getByTestId('login-session-ended')).toHaveCount(1)
   // shown once

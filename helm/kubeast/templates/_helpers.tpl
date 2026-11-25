@@ -313,7 +313,7 @@ topologySpreadConstraints:
 {{- end -}}
 
 {{/*
-Pods that read kubeast-config / kubeast-secrets through envFrom roll when either
+Pods that read kubeast-config / kubeast-secrets (envFrom, or keys by name) roll when either
 changes (Helm "automatically roll deployments" pattern). The Secret template's
 generated values (admin password, signing key) are reused across upgrades, so
 the checksum only moves when a value really changed.
@@ -366,21 +366,54 @@ resources:
 {{- end -}}
 
 {{/*
-startupProbe of a service that opens its port only after waiting for the
-database at boot; liveness and readiness start once it passes. 180 s covers the
-longest wait (auth-service and session-service: 60 s for the database, at most
-5 s a ping, then 60 s for the schema; k8s-service: AUDIT_DB_WAIT_SEC 90 s, then up to 10 s in
-k8s.NewService) and 60 s of migrations. Usage, with the liveness path and port:
-  {{ include "kubeast.startupProbe" (dict "path" "/health" "port" 8004) }}
+startupProbe: liveness and readiness start once it passes, and the kubelet runs readiness the moment it does. 180 s
+covers the longest wait of a service that opens its port only after the database (auth-service and session-service:
+60 s for the database, at most 5 s a ping, then 60 s for the schema; k8s-service: AUDIT_DB_WAIT_SEC 90 s, then up to
+10 s in k8s.NewService) and 60 s of migrations. It asks every second with podStartup.quickReady, every 5 s without.
+Usage:
+  {{ include "kubeast.startupProbe" (dict "root" $ "path" "/health" "port" 8004) }}
 */}}
 {{- define "kubeast.startupProbe" -}}
 {{- $period := 5 -}}
+{{- if .root.Values.podStartup.quickReady }}{{ $period = 1 }}{{ end -}}
 startupProbe:
   httpGet:
     path: {{ .path }}
     port: {{ .port }}
   periodSeconds: {{ $period }}
   failureThreshold: {{ div 180 $period }}
+{{- end -}}
+
+{{/*
+readinessProbe. With podStartup.quickReady it has no initial delay, which the kubelet counts from the container's
+start: a delay longer than the startup probe took would skip the readiness run made the moment that probe passes, and
+the pod would wait a whole period. It then asks every 3 s. Off, it is 0.7.8's: after "delay" s and every 10 s. Usage:
+  {{ include "kubeast.readinessProbe" (dict "root" $ "path" "/readyz" "port" 8004 "delay" 3) }}
+*/}}
+{{- define "kubeast.readinessProbe" -}}
+readinessProbe:
+  httpGet:
+    path: {{ .path }}
+    port: {{ .port }}
+  {{- if .root.Values.podStartup.quickReady }}
+  periodSeconds: 3
+  {{- else }}
+  initialDelaySeconds: {{ .delay }}
+  periodSeconds: 10
+  {{- end }}
+{{- end -}}
+
+{{/*
+Startup and readiness probes of a service that answers as soon as it listens and had no startup probe in 0.7.8
+(ai-service, the frontend, the gateway, tool-server, the ModelConfig controller): with podStartup.quickReady a startup
+probe on the readiness path, then kubeast.readinessProbe. Usage:
+  {{ include "kubeast.quickReadiness" (dict "root" $ "path" "/" "port" 5173 "delay" 2) }}
+*/}}
+{{- define "kubeast.quickReadiness" -}}
+{{- if .root.Values.podStartup.quickReady -}}
+{{ include "kubeast.startupProbe" . }}
+{{ end -}}
+{{ include "kubeast.readinessProbe" . }}
 {{- end -}}
 
 {{/* A pod behind a Service answers podShutdown.preStopSeconds more while its endpoint leaves, then gets SIGTERM with the 30 s its shutdown fits in. */}}
@@ -393,12 +426,77 @@ startupProbe:
 {{- end -}}
 
 {{- define "kubeast.preStop" -}}
-{{- $s := int (include "kubeast.preStopSeconds" .) -}}
-{{- if gt $s 0 -}}
+{{- include "kubeast.preStopSleep" (int (include "kubeast.preStopSeconds" .)) -}}
+{{- end -}}
+
+{{/* A preStop sleep of the seconds given as the context, none at 0. */}}
+{{- define "kubeast.preStopSleep" -}}
+{{- if gt (int .) 0 -}}
 lifecycle:
   preStop:
     sleep:
-      seconds: {{ $s }}
+      seconds: {{ int . }}
+{{- end -}}
+{{- end -}}
+
+{{/* "true" when the AWS Load Balancer Controller sends to the gateway pods' IPs: the chart's Ingress is on and its
+     annotation alb.ingress.kubernetes.io/target-type is ip. The controller's default, instance, sends to the nodes'
+     ports, and a gateway pod that leaves is then taken out by kube-proxy as behind any Service. Not read here: a
+     targetType in an IngressClassParams, the controller's --default-target-type flag, annotations on the gateway
+     Service, a TargetGroupBinding of your own. */}}
+{{- define "kubeast.albPodTargets" -}}
+{{- if and .Values.ingress.enabled (eq (toString (index (.Values.ingress.annotations | default dict) "alb.ingress.kubernetes.io/target-type")) "ip") -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/* The gateway's preStop wait: gateway.preStopSeconds when set; unset (null), podShutdown.preStopSeconds, raised to
+     25 s behind an AWS ALB that sends to pod IPs (kubeast.albPodTargets) while that wait is on. There the load balancer
+     still sent new requests to a leaving gateway pod for up to about 8 s after the pod was deleted, its target already
+     draining; with 25 s and a 20 s deregistration delay (kubeast.ingressAnnotations) none of 18 replacements failed
+     (EKS 1.35, AWS Load Balancer Controller v3.6.2). The other services are reached through the gateway and a Service. */}}
+{{- define "kubeast.gatewayPreStopSeconds" -}}
+{{- $s := .Values.gateway.preStopSeconds -}}
+{{- if kindIs "invalid" $s -}}
+{{- $all := int (include "kubeast.preStopSeconds" .) -}}
+{{- if and (gt $all 0) (include "kubeast.albPodTargets" .) -}}
+{{- max $all 25 -}}
+{{- else -}}
+{{- $all -}}
+{{- end -}}
+{{- else -}}
+{{- if or (not (or (kindIs "float64" $s) (kindIs "int64" $s) (kindIs "int" $s))) (lt (float64 $s) 0.0) (ne (float64 $s) (float64 (int $s))) -}}
+{{- fail (printf "gateway.preStopSeconds must be a whole number of seconds, 0 or more (0 = no wait), or null for podShutdown.preStopSeconds (25 at least behind an AWS ALB that sends to pod IPs): %v" $s) -}}
+{{- end -}}
+{{- int $s -}}
+{{- end -}}
+{{- end -}}
+
+{{/* The Ingress's annotations as YAML, empty when there are none: ingress.annotations, and behind an AWS ALB that sends
+     to pod IPs (kubeast.albPodTargets) a target group deregistration delay of 20 s, under the gateway's 25 s wait, so the
+     load balancer is done with a leaving pod before the pod closes its connections. A deregistration_delay.timeout_seconds
+     already in alb.ingress.kubernetes.io/target-group-attributes is left as written; other attributes there stay, and the
+     delay goes after them. */}}
+{{- define "kubeast.ingressAnnotations" -}}
+{{- $a := .Values.ingress.annotations | default dict -}}
+{{- if include "kubeast.albPodTargets" . -}}
+{{- $key := "alb.ingress.kubernetes.io/target-group-attributes" -}}
+{{- $set := trimAll ", " (toString (index $a $key | default "")) -}}
+{{- if not (regexMatch "(^|,)\\s*deregistration_delay\\.timeout_seconds\\s*=" $set) -}}
+{{- $a = set (deepCopy $a) $key (trimPrefix "," (printf "%s,deregistration_delay.timeout_seconds=20" $set)) -}}
+{{- end -}}
+{{- end -}}
+{{- if $a -}}
+{{- toYaml $a -}}
+{{- end -}}
+{{- end -}}
+
+{{/* "true" when the chart itself set both behind an AWS ALB that sends to pod IPs: gateway.preStopSeconds is unset and
+     the gateway's wait was raised to 25 s, and kubeast.ingressAnnotations added the 20 s deregistration delay (its YAML
+     differs from ingress.annotations). NOTES.txt says so then; values you set yourself print nothing. */}}
+{{- define "kubeast.albShutdownSetByChart" -}}
+{{- if and (include "kubeast.albPodTargets" .) (kindIs "invalid" .Values.gateway.preStopSeconds) (ne (include "kubeast.gatewayPreStopSeconds" .) (include "kubeast.preStopSeconds" .)) (ne (include "kubeast.ingressAnnotations" .) (toYaml (.Values.ingress.annotations | default dict))) -}}
+true
 {{- end -}}
 {{- end -}}
 
@@ -518,7 +616,8 @@ The gateway's nginx.conf: files/nginx.conf as written, or with streams.enabled t
 locations (the ones holding exec/ws, logs/stream, logfiles/stream and debug-shell/ws, each with its 3600 s timeouts)
 sent to k8s-service-stream, plus a location for a node shell as API clients open it. The upstream is in
 conf.d/kubeast/streams.conf. tests/streams_test.yaml counts the locations that changed, so an edit of the file that
-this no longer matches fails there.
+this no longer matches fails there. gateway.servedByHeader adds X-Kubeast-Gateway: $hostname (the pod's name) after
+the server's Content-Security-Policy line; tests/gateway_test.yaml fails on a location with an add_header of its own.
 */}}
 {{- define "kubeast.gatewayNginxConf" -}}
 {{- $conf := .Files.Get "files/nginx.conf" -}}
@@ -541,6 +640,12 @@ this no longer matches fails there.
 
 ` -}}
 {{- $conf = replace "        location /api/v1/nodes {\n" (print $nodeShell "        location /api/v1/nodes {\n") $conf -}}
+{{- end -}}
+{{- if eq (toString (dig "servedByHeader" false .Values.gateway)) "true" -}}
+{{- $conf = regexReplaceAll `(?m)^([ \t]*)(add_header Content-Security-Policy "[^"\n]*"[^\n]*\n)` $conf "${1}${2}${1}add_header X-Kubeast-Gateway $$hostname always;\n" -}}
+{{- if not (contains "add_header X-Kubeast-Gateway" $conf) -}}
+{{- fail "gateway.servedByHeader: files/nginx.conf has no one-line add_header Content-Security-Policy to put X-Kubeast-Gateway after" -}}
+{{- end -}}
 {{- end -}}
 {{- $conf -}}
 {{- end -}}
@@ -580,8 +685,9 @@ true
 The most database connections the pods can hold at once: for each service its pool (postgresql.pool.<key>.maxConns)
 times its pods while a rollout runs — replicas.<key>, or autoscaling.<key>.maxReplicas while its HPA is on, plus one
 (every Deployment's maxSurge 1, kubeast.rollingUpdate) — then the migration pool
-(4, dbsession.MigrationPoolMaxConns) and 10 kept for psql and PostgreSQL's 3 superuser slots. Each k8s-service pod
-adds one: the health status lock (internal/pglock) holds a connection of its own outside the pool. ai-service and the
+(4, dbsession.MigrationPoolMaxConns) and 10 kept for psql and PostgreSQL's 3 superuser slots. Each k8s-service and
+auth-service pod adds one: k8s-service's health status lock (internal/pglock) and auth-service's retention lock
+(internal/retention, while a purge runs) hold a connection of their own outside the pool. ai-service and the
 ModelConfig controller (one pod, two while it rolls) count with ai.enabled. With streams.enabled (read with dig, so
 values without streams render), k8s-service-stream runs the k8s-service image with its pool: streams.replicas pods
 plus one while it rolls (its strategy's maxSurge 1). templates/checks/db-connections.yaml, NOTES.txt.
@@ -601,7 +707,7 @@ plus one while it rolls (its strategy's maxSurge 1). templates/checks/db-connect
 {{- end -}}
 {{- $pods = add $pods 1 -}}
 {{- $perPod := int (dig $key "maxConns" 0 $pool) -}}
-{{- if eq $key "k8sService" -}}
+{{- if has $key (list "k8sService" "authService") -}}
 {{- $perPod = add $perPod 1 -}}
 {{- end -}}
 {{- $total = add $total (mul $pods $perPod) -}}

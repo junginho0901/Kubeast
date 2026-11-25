@@ -15,8 +15,10 @@ import {
 // How: a cluster of the run is registered with the admin kubeconfig of a cluster the install has not registered
 // (E2E_FAULT_ROTATE_*) and its nodes are read on every k8s-service pod through a port-forward to that pod, so each
 // replica builds its bundle. Its kubeconfig is then replaced with the same cluster's ServiceAccount, which may not list
-// nodes, and each pod is asked for the nodes every 250 ms: each must answer with that ServiceAccount's 403 within 10 s
-// of the PATCH's answer, and none may list nodes after it did. The cluster is deleted after.
+// nodes, and each pod is asked for the nodes every 250 ms from the moment the PATCH is sent: each must answer with that
+// ServiceAccount's 403 within 10 s of the PATCH's answer, and none may list nodes after it did. seen.json has when the
+// PATCH was sent and answered, so the time each pod took is read from either (with Redis stopped the answer comes
+// seconds late: the k8s-service auth-service calls tries to publish its notice first). The cluster is deleted after.
 // Skips without two ready k8s-service pods or without the two kubeconfigs.
 
 const WITHIN_MS = 10_000
@@ -61,34 +63,39 @@ async function changeAndFollow(request: APIRequestContext, during?: (follow: () 
     }
 
     const seen: Seen[] = []
+    let patchSentAt = 0
     let patchedAt = 0
     const follow = async () => {
-      const patch = await request.patch(`/api/v1/clusters/${id}`, { headers: admin, data: { kubeconfig: rotation!.limited }, timeout: 60_000 })
-      patchedAt = Date.now()
-      expect(patch.status(), await patch.text()).toBe(200)
-      const until = patchedAt + WITHIN_MS + 5_000
-      await Promise.all([...apis].map(async ([pod, api]) => {
-        while (Date.now() < until) {
+      patchSentAt = Date.now()
+      const answered = request.patch(`/api/v1/clusters/${id}`, { headers: admin, data: { kubeconfig: rotation!.limited }, timeout: 60_000 })
+        .finally(() => { patchedAt = Date.now() })
+      const [patch] = await Promise.all([answered, ...[...apis].map(async ([pod, api]) => {
+        while (!patchedAt || Date.now() < patchedAt + WITHIN_MS + 5_000) {
           const at = Date.now()
           const { status, nodes, refusal } = await nodesOn(api, id).catch(() => ({ status: 0, nodes: [] as string[], refusal: '' }))
           seen.push({ pod, at, nodes, status, refusal })
           await sleep(250)
         }
-      }))
+      })])
+      expect(patch.status(), await patch.text()).toBe(200)
     }
     if (during) await during(follow)
     else await follow()
 
-    const firstNew = Object.fromEntries(pods.map((pod) => {
-      const hit = seen.find((s) => s.pod === pod && fromNew(s))
-      return [pod, hit ? hit.at - patchedAt : null]
-    }))
+    // ms from the PATCH's answer (below zero: the pod had switched before it came) and from its sending
+    const firstAt = new Map(pods.map((pod) => [pod, seen.find((s) => s.pod === pod && fromNew(s))?.at ?? null]))
+    const since = (from: number) => Object.fromEntries(pods.map((pod) => [pod, firstAt.get(pod) == null ? null : firstAt.get(pod)! - from]))
+    const firstNew = since(patchedAt)
+    const firstNewFromSent = since(patchSentAt)
     const oldAfter = seen.filter((s) => {
       const switched = firstNew[s.pod]
       return switched !== null && s.at - patchedAt > switched && fromOld(s)
     })
     const lateOld = seen.filter((s) => s.at - patchedAt > WITHIN_MS && fromOld(s))
-    test.info().attach('seen.json', { body: JSON.stringify({ patchedAt, firstNew, seen }), contentType: 'application/json' })
+    test.info().attach('seen.json', {
+      body: JSON.stringify({ patchSentAt, patchedAt, patchMs: patchedAt - patchSentAt, firstNew, firstNewFromSent, seen }),
+      contentType: 'application/json',
+    })
     return { pods, firstNew, oldAfter, lateOld }
   } finally {
     forwards.forEach((f) => f.close())

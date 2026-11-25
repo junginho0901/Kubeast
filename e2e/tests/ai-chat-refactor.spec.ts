@@ -27,6 +27,12 @@ function assertNoCriticalErrors(errors: string[]) {
   expect(critical, `unexpected critical errors:\n${critical.join('\n')}`).toEqual([])
 }
 
+// The conversation the chat screen makes for its first question, and its removal after the test, passed or not.
+const conversationMade = (page: Page) =>
+  page.waitForResponse((r) => /\/api\/v1\/sessions(\?|$)/.test(r.url()) && r.request().method() === 'POST', { timeout: 15_000 })
+const deleteConversation = (page: Page, id: string) =>
+  page.request.delete(`/api/v1/sessions/${id}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, failOnStatusCode: false })
+
 test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
 
   test('Provider mount — page error 0 + 모든 핵심 element 존재', async ({ page }) => {
@@ -62,30 +68,36 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     // 한 세션 만들기 (짧은 질의)
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await input.fill('hi')
+    const created = conversationMade(page)
     await page.getByRole('button', { name: SEND_RE }).click()
-    await expect(input).toBeDisabled({ timeout: 15_000 })
-    await expect(input).toBeEnabled({ timeout: 30_000 })
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      await expect(input).toBeDisabled({ timeout: 15_000 })
+      await expect(input).toBeEnabled({ timeout: 30_000 })
 
-    // 다중 선택 토글 버튼 — i18n: "채팅 내역 선택 삭제" / "Delete selected chats"
-    await page.getByRole('button', { name: /^(채팅 내역 선택 삭제|Delete selected chats)$/ }).click()
-    // selection mode: a checkbox per session row, and Select all picks every one of them (nothing is deleted here)
-    // (the session list is virtualised: only the rows on screen have a checkbox, the count is in the delete button)
-    const boxes = page.locator('input[type="checkbox"]')
-    await expect(boxes.first()).toBeVisible({ timeout: 3000 })
-    const del = page.getByRole('button', { name: /^(삭제|Delete) \(\d+\)$/ })
-    await expect(del).toHaveText(/\(0\)$/)
-    await page.getByRole('button', { name: /^(전체 선택|Select all)$/ }).click()
-    expect(Number((await del.innerText()).match(/\d+/)![0])).toBeGreaterThan(0)
-    expect(await page.locator('input[type="checkbox"]:checked').count()).toBeGreaterThan(0)
-    await page.getByRole('button', { name: /^(선택 해제|Clear selection)$/ }).click()
-    await expect(del).toHaveText(/\(0\)$/)
-    await expect(page.locator('input[type="checkbox"]:checked')).toHaveCount(0)
+      // 다중 선택 토글 버튼 — i18n: "채팅 내역 선택 삭제" / "Delete selected chats"
+      await page.getByRole('button', { name: /^(채팅 내역 선택 삭제|Delete selected chats)$/ }).click()
+      // selection mode: a checkbox per session row, and Select all picks every one of them (nothing is deleted here)
+      // (the session list is virtualised: only the rows on screen have a checkbox, the count is in the delete button)
+      const boxes = page.locator('input[type="checkbox"]')
+      await expect(boxes.first()).toBeVisible({ timeout: 3000 })
+      const del = page.getByRole('button', { name: /^(삭제|Delete) \(\d+\)$/ })
+      await expect(del).toHaveText(/\(0\)$/)
+      await page.getByRole('button', { name: /^(전체 선택|Select all)$/ }).click()
+      expect(Number((await del.innerText()).match(/\d+/)![0])).toBeGreaterThan(0)
+      expect(await page.locator('input[type="checkbox"]:checked').count()).toBeGreaterThan(0)
+      await page.getByRole('button', { name: /^(선택 해제|Clear selection)$/ }).click()
+      await expect(del).toHaveText(/\(0\)$/)
+      await expect(page.locator('input[type="checkbox"]:checked')).toHaveCount(0)
 
-    // 다시 토글 해제 — 모드 OFF
-    await page.getByRole('button', { name: /^(취소|Cancel)$/ }).first().click()
-    await expect(boxes).toHaveCount(0)
+      // 다시 토글 해제 — 모드 OFF
+      await page.getByRole('button', { name: /^(취소|Cancel)$/ }).first().click()
+      await expect(boxes).toHaveCount(0)
 
-    assertNoCriticalErrors(errors)
+      assertNoCriticalErrors(errors)
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
 
   test('new chat 버튼 → 세션 reset + welcome 화면 복귀', async ({ page }) => {
@@ -94,21 +106,27 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     // 세션 만들기
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await input.fill('hi')
+    const created = conversationMade(page)
     await page.getByRole('button', { name: SEND_RE }).click()
-    await expect(input).toBeDisabled({ timeout: 15_000 })
-    await expect(input).toBeEnabled({ timeout: 30_000 })
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      await expect(input).toBeDisabled({ timeout: 15_000 })
+      await expect(input).toBeEnabled({ timeout: 30_000 })
 
-    const messages = page.locator('div.flex.gap-3.p-6')
-    await expect(messages.first()).toBeVisible()
+      const messages = page.locator('div.flex.gap-3.p-6')
+      await expect(messages.first()).toBeVisible()
 
-    // New chat 버튼 — i18n: "새 대화" / "New Chat"
-    await page.getByRole('button', { name: /^(새 대화|New Chat)$/i }).first().click()
+      // New chat 버튼 — i18n: "새 대화" / "New Chat"
+      await page.getByRole('button', { name: /^(새 대화|New Chat)$/i }).first().click()
 
-    // the session is reset: no message on screen, an empty input
-    await expect(messages).toHaveCount(0, { timeout: 3000 })
-    await expect(input).toHaveValue('')
+      // the session is reset: no message on screen, an empty input
+      await expect(messages).toHaveCount(0, { timeout: 3000 })
+      await expect(input).toHaveValue('')
 
-    assertNoCriticalErrors(errors)
+      assertNoCriticalErrors(errors)
+    } finally {
+      await deleteConversation(page, sessionId)
+    }
   })
 
   test('라우트 이동 후 돌아와도 chatStreamManager 구독 정상 (useChatStreamState 회귀)', async ({ page }) => {
@@ -138,24 +156,43 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
     // 세션 만들기
     const input = page.getByPlaceholder(PLACEHOLDER_RE)
     await input.fill('hi')
+    const created = conversationMade(page)
     await page.getByRole('button', { name: SEND_RE }).click()
-    await expect(input).toBeDisabled({ timeout: 15_000 })
-    await expect(input).toBeEnabled({ timeout: 30_000 })
+    const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
+    try {
+      await expect(input).toBeDisabled({ timeout: 15_000 })
+      await expect(input).toBeEnabled({ timeout: 30_000 })
 
-    // 첫 세션 행 우클릭
-    const firstSession = page.locator('[class*="cursor-pointer"]').filter({ hasText: /hi|새 채팅|new chat/i }).first()
-    if ((await firstSession.count()) === 0) {
-      test.skip(true, 'session 행 못 찾음')
-      return
+      // 첫 세션 행 우클릭
+      const firstSession = page.locator('[class*="cursor-pointer"]').filter({ hasText: /hi|새 채팅|new chat/i }).first()
+      if ((await firstSession.count()) === 0) {
+        test.skip(true, 'session 행 못 찾음')
+        return
+      }
+      await firstSession.click({ button: 'right' })
+      const rename = page.getByRole('button', { name: /^(제목 바꾸기|Rename)$/ })
+      await expect(rename).toHaveCount(1, { timeout: 3000 })
+
+      // ESC → context menu dismiss (useContextMenuDismiss 의 ESC 처리)
+      await page.keyboard.press('Escape')
+      await expect(rename).toHaveCount(0)
+
+      assertNoCriticalErrors(errors)
+    } finally {
+      await deleteConversation(page, sessionId)
     }
-    await firstSession.click({ button: 'right' })
-    const rename = page.getByRole('button', { name: /^(제목 바꾸기|Rename)$/ })
-    await expect(rename).toHaveCount(1, { timeout: 3000 })
-
-    // ESC → context menu dismiss (useContextMenuDismiss 의 ESC 처리)
-    await page.keyboard.press('Escape')
-    await expect(rename).toHaveCount(0)
-
-    assertNoCriticalErrors(errors)
   })
+})
+
+// After a test that did not pass, the undos it registered with withUndo run as well: a test that times out has its
+// request context and browser ended before its own finally runs, if it runs at all. Each undo is safe to run twice.
+const undos: (() => unknown)[] = []
+function withUndo<T>(value: T, undo: (value: T) => unknown): T {
+  undos.push(() => undo(value))
+  return value
+}
+test.afterEach(async ({}, testInfo) => {
+  const registered = undos.splice(0).reverse()
+  if (testInfo.status === 'passed' || testInfo.status === 'skipped') return
+  for (const undo of registered) await (async () => undo())().catch(() => undefined)
 })

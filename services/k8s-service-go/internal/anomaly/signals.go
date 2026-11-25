@@ -44,7 +44,7 @@ func LogSelector(l LogLabels, wl *Workload) string {
 	if wl == nil {
 		return "{}"
 	}
-	return "{" + l.Pod + "=~" + strconv.Quote(regexp.QuoteMeta(wl.Name)+"-.*") + "}"
+	return "{" + l.Pod + "=~" + strconv.Quote(wl.PodPattern()) + "}"
 }
 
 // ErrorCountQuery counts the error lines of each container over the last d at each step.
@@ -59,10 +59,11 @@ type PatternSample struct {
 	Samples [][2]int64
 }
 
-// NoPatterns and NoPatternsBefore are why the shape check did not run: no shape at all is not a normal value, and
-// shapes the store no longer holds for the window before would all read as new.
+// NoPatterns, NoPatternsNow and NoPatternsBefore are why the shape check did not run: no shape at all is not a normal
+// value, and shapes the store no longer holds for the window before would all read as new.
 const (
 	NoPatterns       = "the log store's pattern ingester holds no log shape for this namespace in the window or the one before (no logs sent there, or Loki runs without pattern_ingester)"
+	NoPatternsNow    = "the log store's pattern ingester holds log shapes for this namespace in the window before and none in the window"
 	NoPatternsBefore = "the log store's pattern ingester holds nothing for the window before (it keeps the last few hours), so the shapes are not compared"
 )
 
@@ -85,22 +86,44 @@ func cutRunes(s string, n int) (string, bool) {
 	return s, false
 }
 
+// LinesIn reports whether patterns hold a line of w, of any shape and level: the store then has data for it.
+func LinesIn(patterns []PatternSample, w Window) bool {
+	for _, p := range patterns {
+		for _, s := range p.Samples {
+			if within(time.Unix(s[0], 0), w) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// HasLines reports whether a container has a line among counts.
+func HasLines(counts map[string]float64) bool {
+	for _, v := range counts {
+		if math.Round(v) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// NoLinesSeen is why the count check did not run when nothing showed a line: no error line among no lines is not a normal
+// value.
+const NoLinesSeen = "the log store's index counts no line for this namespace (or workload) in the window or the one before, and no store query was left to read one (features.anomalyRank.maxQueries)"
+
 // FromPatterns is the error shape check: the shapes Loki's pattern ingester found with an error level (or, with no
 // level, an error word) and at least MinLogLines lines in the window, compared with the window before.
 func FromPatterns(patterns []PatternSample, w Window) CheckResult {
 	r := CheckResult{Check: CheckErrorLogShapes}
 	before := w.Before()
-	seen, seenBefore := false, false
-	for _, p := range patterns {
-		for _, s := range p.Samples {
-			t := time.Unix(s[0], 0)
-			seen = seen || within(t, w) || within(t, before)
-			seenBefore = seenBefore || within(t, before)
-		}
-	}
+	seen, seenBefore := LinesIn(patterns, w), LinesIn(patterns, before)
 	switch {
-	case !seen:
+	case !seen && !seenBefore:
 		r.NotRun = NoPatterns
+		return r
+	case !seen:
+		r.NotRun = NoPatternsNow
 		return r
 	case !seenBefore:
 		r.NotRun = NoPatternsBefore
@@ -141,10 +164,37 @@ func FromPatterns(patterns []PatternSample, w Window) CheckResult {
 	return r
 }
 
+// Earlier is what is known of the lines the log store holds for the window before.
+type Earlier int
+
+const (
+	EarlierUnknown Earlier = iota
+	EarlierNone
+	EarlierSome
+)
+
+// LogCountsNeedEarlier reports whether FromLogCounts has a container to list and no container with lines in the window
+// before, so that whether the store holds any line of that window decides whether it is new.
+func LogCountsNeedEarlier(now, before map[string]float64) bool {
+	if HasLines(before) {
+		return false
+	}
+	for _, v := range now {
+		if math.Round(v) >= MinLogLines {
+			return true
+		}
+	}
+	return false
+}
+
 // FromLogCounts is the error line count check: each container's lines matching ErrorLinePattern in the window (now) and
-// in the window before. It catches what is too rare for a shape (Loki gives shapes past 30 lines).
-func FromLogCounts(now, before map[string]float64) CheckResult {
+// in the window before. It catches what is too rare for a shape (Loki gives shapes past 30 lines). A container with none
+// in the window before is new when the store holds lines of that window (earlier, or an error line of any container).
+func FromLogCounts(now, before map[string]float64, earlier Earlier) CheckResult {
 	r := CheckResult{Check: CheckErrorLogCounts}
+	if HasLines(before) {
+		earlier = EarlierSome
+	}
 	containers := make([]string, 0, len(now))
 	for c := range now {
 		containers = append(containers, c)
@@ -155,17 +205,23 @@ func FromLogCounts(now, before map[string]float64) CheckResult {
 		if v < MinLogLines {
 			continue
 		}
-		prev := math.Round(before[c])
 		target := "container " + c
 		if c == "" {
 			target = "containers without a name label"
 		}
+		var prev *float64
+		if v := math.Round(before[c]); earlier == EarlierSome {
+			prev = &v
+		}
 		f := Finding{Check: CheckErrorLogCounts, Target: target, Verdict: VerdictNormal,
-			Summary: fmt.Sprintf("%g lines matching %s in the window, %g in the window before", v, ErrorLinePattern, prev)}
-		if countAnomalous(&prev, v) {
+			Summary: fmt.Sprintf("%g lines matching %s in the window, %s", v, ErrorLinePattern, earlierText(prev, "%g in the window before"))}
+		if earlier == EarlierUnknown {
+			f.Summary = fmt.Sprintf("%g lines matching %s in the window, 0 in the window before (whether the log store holds earlier lines was not checked)", v, ErrorLinePattern)
+		}
+		if countAnomalous(prev, v) {
 			f.Verdict = VerdictAnomalous
 		}
-		compare(&f, &prev, v)
+		compare(&f, prev, v)
 		r.Findings = append(r.Findings, f)
 	}
 	return r
@@ -185,11 +241,12 @@ type TraceQuery struct {
 }
 
 // TraceQueries count each service's server spans and failed server spans and take their p90 duration at each step.
-// The store adds the cluster and namespace; a workload narrows to its pods by k8s.pod.name.
+// The store adds the cluster and namespace; a workload narrows to its pods by k8s.pod.name, anchored for a Tempo that
+// does not anchor a regular expression itself.
 func TraceQueries(wl *Workload) []TraceQuery {
 	pod := ""
 	if wl != nil {
-		pod = " && resource.k8s.pod.name =~ " + strconv.Quote(regexp.QuoteMeta(wl.Name)+"-.*")
+		pod = " && resource.k8s.pod.name =~ " + strconv.Quote("^(?:"+wl.PodPattern()+")$")
 	}
 	return []TraceQuery{
 		{Signal: SignalRequests, Query: "{ kind = server" + pod + " } | count_over_time() by (resource.service.name)"},
@@ -222,8 +279,20 @@ type TraceSeries struct {
 	Points  [][2]float64
 }
 
-// NoSpans is why a trace check did not run: no span is not a normal value.
-const NoSpans = "the trace store holds no server spans for this namespace in the window or the one before (no traces sent, or spans without k8s.namespace.name or span kind)"
+// NoSpans, NoSpansNow and NoSpansBefore are why a trace check did not run: no span is not a normal value.
+const (
+	NoSpans       = "the trace store holds no server spans for this namespace in the window or the one before (no traces sent, or spans without k8s.namespace.name or span kind)"
+	NoSpansNow    = "the trace store holds server spans for this namespace in the window before and none in the window"
+	NoSpansBefore = "the trace store holds no server spans for this namespace in the window before, so there is nothing to compare with"
+)
+
+// spansIn reports whether a service has a value above zero in the window and in the window before.
+func spansIn(m map[string]*traceWindows) (now, before bool) {
+	for _, tw := range m {
+		now, before = now || tw.now > 0, before || tw.before > 0
+	}
+	return now, before
+}
 
 type traceWindows struct {
 	now, before float64
@@ -283,14 +352,18 @@ func serviceTarget(name string) string {
 }
 
 // FromTraceRequests compares each service's server spans in the window with the window before: appeared, doubled or
-// halved, or gone.
+// halved, or gone. With no span of any service in the window before there is nothing to compare a count with.
 func FromTraceRequests(requests []TraceSeries, w Window) CheckResult {
 	r := CheckResult{Check: CheckTraceRequests}
-	if len(requests) == 0 {
+	m := split(requests, w, false)
+	switch nowSeen, beforeSeen := spansIn(m); {
+	case !nowSeen && !beforeSeen:
 		r.NotRun = NoSpans
 		return r
+	case !beforeSeen:
+		r.NotRun = NoSpansBefore
+		return r
 	}
-	m := split(requests, w, false)
 	for _, svc := range services(m) {
 		tw := m[svc]
 		now, prev := math.Round(tw.now), math.Round(tw.before)
@@ -316,11 +389,15 @@ func FromTraceRequests(requests []TraceSeries, w Window) CheckResult {
 // before: past ErrorShare with at least MinLogLines failed spans, and under it before, or grown by half.
 func FromTraceErrors(requests, errs []TraceSeries, w Window) CheckResult {
 	r := CheckResult{Check: CheckTraceErrors}
-	if len(requests) == 0 {
+	all, failed := split(requests, w, false), split(errs, w, false)
+	switch nowSeen, beforeSeen := spansIn(all); {
+	case !nowSeen && !beforeSeen:
 		r.NotRun = NoSpans
 		return r
+	case !nowSeen:
+		r.NotRun = NoSpansNow
+		return r
 	}
-	all, failed := split(requests, w, false), split(errs, w, false)
 	for _, svc := range services(failed) {
 		e, total := failed[svc], all[svc]
 		if total == nil || total.now == 0 || e.now < MinLogLines {
@@ -333,7 +410,7 @@ func FromTraceErrors(requests, errs []TraceSeries, w Window) CheckResult {
 			prev = &v
 		}
 		f := Finding{Check: CheckTraceErrors, Target: serviceTarget(svc), Verdict: VerdictNormal,
-			Summary: fmt.Sprintf("%.1f%% of server spans failed (%g of %g) in the window, %s before", share*100, math.Round(e.now), math.Round(total.now), beforeText(percent(prev), "%.1f%%"))}
+			Summary: fmt.Sprintf("%.1f%% of server spans failed (%g of %g) in the window, %s", share*100, math.Round(e.now), math.Round(total.now), earlierText(percent(prev), "%.1f%% before"))}
 		if shareAnomalous(prev, share, ErrorShare) {
 			f.Verdict = VerdictAnomalous
 		}
@@ -344,14 +421,23 @@ func FromTraceErrors(requests, errs []TraceSeries, w Window) CheckResult {
 }
 
 // FromTraceLatency compares each service's slowest step p90 of its server spans in the window with the window before:
-// doubled to LatencyFloor or more.
+// doubled to LatencyFloor or more. A service with no span in the window before is not compared: the check is partial and
+// names it, and did not run when that is every service.
 func FromTraceLatency(p90 []TraceSeries, w Window) CheckResult {
 	r := CheckResult{Check: CheckTraceLatency}
-	if len(p90) == 0 {
+	m := split(p90, w, true)
+	switch nowSeen, beforeSeen := spansIn(m); {
+	case !nowSeen && !beforeSeen:
 		r.NotRun = NoSpans
 		return r
+	case !nowSeen:
+		r.NotRun = NoSpansNow
+		return r
+	case !beforeSeen:
+		r.NotRun = NoSpansBefore
+		return r
 	}
-	m := split(p90, w, true)
+	compared, alone := 0, []string{}
 	for _, svc := range services(m) {
 		tw := m[svc]
 		if !tw.nowSeen || tw.now <= 0 {
@@ -363,18 +449,36 @@ func FromTraceLatency(p90 []TraceSeries, w Window) CheckResult {
 			prev = &v
 		}
 		f := Finding{Check: CheckTraceLatency, Target: serviceTarget(svc), Verdict: VerdictNormal,
-			Summary: fmt.Sprintf("p90 of server spans up to %.0f ms in the window, %s before", tw.now*1000, beforeText(millis(prev), "%.0f ms"))}
+			Summary: fmt.Sprintf("p90 of server spans up to %.0f ms in the window, %s", tw.now*1000, earlierText(millis(prev), "%.0f ms before"))}
 		if prev != nil && tw.now >= LatencyFloor && tw.now / *prev >= LatencyRatio {
 			f.Verdict = VerdictAnomalous
 		}
 		if prev != nil {
 			compare(&f, prev, tw.now)
+			compared++
 		} else {
 			f.Now = num(tw.now)
+			alone = append(alone, serviceTarget(svc))
 		}
 		r.Findings = append(r.Findings, f)
 	}
+	if len(alone) > 0 {
+		why := "not compared, no server spans in the window before: " + firstOf(alone, MaxExamples)
+		if compared == 0 {
+			r.NotRun = why
+		} else {
+			r.Partial = why
+		}
+	}
 	return r
+}
+
+// firstOf lists the first n names and how many more there are.
+func firstOf(names []string, n int) string {
+	if len(names) <= n {
+		return strings.Join(names, ", ")
+	}
+	return fmt.Sprintf("%s and %d more", strings.Join(names[:n], ", "), len(names)-n)
 }
 
 func millis(b *float64) *float64 {

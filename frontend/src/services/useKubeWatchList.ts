@@ -318,10 +318,11 @@ export function followQuery(queryClient: QueryClient, queryKey: readonly unknown
 // A read's answer replaces the rows, and it may have been made before a frame that came while the read was on its way: the
 // frames applied during a read are applied again to its answer, in the order they came, within the notification that
 // brings it. Rows carry no version, so a frame older than the answer is applied too; the watch has gone on since before
-// the read (the server sends RESYNC once the new watch is on), so the frame of what changed after it follows.
-function framesDuringReads(queryClient: QueryClient, queryKey: readonly unknown[], applyAgain: (events: WatchEvent[]) => void) {
+// the read (the server sends RESYNC once the new watch is on), so the frame of what changed after it follows. The Helm
+// releases stream keeps its frames here too (followHelmReleases).
+export function framesDuringReads<E = WatchEvent>(queryClient: QueryClient, queryKey: readonly unknown[], applyAgain: (events: E[]) => void) {
   const queryHash = hashKey(queryKey)
-  let held: WatchEvent[] = []
+  let held: E[] = []
   const stopCache = queryClient.getQueryCache().subscribe((event) => {
     if (event.type !== 'updated' || event.query.queryHash !== queryHash) return
     // setQueryData writes are manual: only a read's answer replaces what the frames wrote
@@ -335,7 +336,7 @@ function framesDuringReads(queryClient: QueryClient, queryKey: readonly unknown[
   })
   return {
     // the frames of one delivery, as they are applied
-    delivered(events: WatchEvent[]) {
+    delivered(events: E[]) {
       const status = queryClient.getQueryCache().get(queryHash)?.state.fetchStatus
       if (status === undefined || status === 'idle') {
         held = []

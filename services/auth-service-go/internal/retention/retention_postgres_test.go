@@ -138,6 +138,60 @@ func TestPostgresPurgeDeletesOnlyExpiredRows(t *testing.T) {
 	}
 }
 
+// An install whose chat tables the ai-service ORM created before the migrations has no ON DELETE CASCADE on
+// messages and session_contexts (the baseline's CREATE TABLE IF NOT EXISTS left them as they were).
+func TestPostgresPurgeDeletesConversationsWhoseTablesDoNotCascade(t *testing.T) {
+	pool := freshMigratedDatabase(t)
+	ctx := context.Background()
+	for _, table := range []string{"messages", "session_contexts"} {
+		var name string
+		if err := pool.QueryRow(ctx, `SELECT conname FROM pg_constraint WHERE conrelid = $1::regclass AND confrelid = 'sessions'::regclass AND contype = 'f'`, table).Scan(&name); err != nil {
+			t.Fatalf("%s: foreign key: %v", table, err)
+		}
+		if _, err := pool.Exec(ctx, `ALTER TABLE `+table+` DROP CONSTRAINT `+pgx.Identifier{name}.Sanitize()+`, ADD FOREIGN KEY (session_id) REFERENCES sessions (id)`); err != nil {
+			t.Fatalf("%s: foreign key as the ORM made it: %v", table, err)
+		}
+		var onDelete string
+		if err := pool.QueryRow(ctx, `SELECT confdeltype FROM pg_constraint WHERE conrelid = $1::regclass AND confrelid = 'sessions'::regclass AND contype = 'f'`, table).Scan(&onDelete); err != nil || onDelete != "a" {
+			t.Fatalf("%s: on delete %q (%v), want no action", table, onDelete, err)
+		}
+	}
+	now := time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	old, recent := now.AddDate(0, 0, -200), now.AddDate(0, 0, -10)
+	seed := []string{
+		`INSERT INTO sessions (id, user_id, title, created_at, updated_at) VALUES ('s-old', 'u1', 'old', $1, $1), ('s-new', 'u1', 'new', $2, $2)`,
+		`INSERT INTO messages (session_id, role, content, created_at) VALUES ('s-old', 'user', 'a', $1), ('s-old', 'assistant', 'b', $1), ('s-new', 'user', 'c', $2)`,
+		`INSERT INTO session_contexts (session_id, state, cache, updated_at) VALUES ('s-old', '{}', '{}', $1), ('s-new', '{}', '{}', $2)`,
+	}
+	for _, stmt := range seed {
+		if _, err := pool.Exec(ctx, stmt, old, recent); err != nil {
+			t.Fatalf("seed %q: %v", stmt[:40], err)
+		}
+	}
+	// a recent approval in the old conversation: it goes with the conversation, not by its age
+	if _, err := pool.Exec(ctx, `INSERT INTO tool_approvals (id, session_id, user_id, user_email, cluster, tool, args, status, created_at, expires_at)
+		VALUES ('t-recent-in-old', 's-old', 'u1', 'u1@example.com', 'self', 'k8s_scale', '{}', 'rejected', $1, $1)`, recent); err != nil {
+		t.Fatalf("seed approval: %v", err)
+	}
+
+	res, err := Purger{Pool: pool, Cfg: Config{ChatDays: 180}}.Purge(ctx, now)
+	if err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	if res.Sessions != 1 || res.ToolApprovals != 1 {
+		t.Fatalf("result = %+v, want sessions 1, tool_approvals 1", res)
+	}
+	for table, want := range map[string]int64{"sessions": 1, "messages": 1, "session_contexts": 1, "tool_approvals": 0} {
+		if n := count(t, pool, table); n != want {
+			t.Errorf("%s left = %d, want %d", table, n, want)
+		}
+	}
+	var left string
+	if err := pool.QueryRow(ctx, "SELECT session_id FROM messages").Scan(&left); err != nil || left != "s-new" {
+		t.Fatalf("remaining message is of %q, %v", left, err)
+	}
+}
+
 // The tool approvals a purge deletes while approved, by age or with their idle conversation, are named in the run's
 // record by ids and names, without the call's arguments; one deleted in another state is only counted.
 func TestPostgresPurgeNamesTheApprovalsItDeletedWhileApproved(t *testing.T) {
@@ -212,12 +266,22 @@ func TestPostgresPurgeBatches(t *testing.T) {
 		now.AddDate(0, 0, -400), total); err != nil {
 		t.Fatal(err)
 	}
-	res, err := Purger{Pool: pool, Cfg: Config{AuditDays: 365}}.Purge(ctx, now)
-	if err != nil || res.AuditRows != int64(total) {
-		t.Fatalf("batched purge = %+v, %v; want %d rows", res, err, total)
+	for _, stmt := range []string{
+		`INSERT INTO sessions (id, user_id, title, created_at, updated_at) SELECT 's-' || g, 'u1', 't', $1, $1 FROM generate_series(1, $2) g`,
+		`INSERT INTO messages (session_id, role, content, created_at) SELECT 's-' || g, 'user', 'x', $1 FROM generate_series(1, $2) g`,
+	} {
+		if _, err := pool.Exec(ctx, stmt, now.AddDate(0, 0, -400), total); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if n := count(t, pool, "auth_audit_logs"); n != 0 {
-		t.Fatalf("rows left = %d", n)
+	res, err := Purger{Pool: pool, Cfg: Config{AuditDays: 365, ChatDays: 365}}.Purge(ctx, now)
+	if err != nil || res.AuditRows != int64(total) || res.Sessions != int64(total) {
+		t.Fatalf("batched purge = %+v, %v; want %d rows and %d sessions", res, err, total, total)
+	}
+	for _, table := range []string{"auth_audit_logs", "sessions", "messages"} {
+		if n := count(t, pool, table); n != 0 {
+			t.Fatalf("%s rows left = %d", table, n)
+		}
 	}
 }
 

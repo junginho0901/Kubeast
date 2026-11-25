@@ -9,7 +9,8 @@ export const modalButton = {
 // Height of the YAML editor in a create window: as tall as the text (12px
 // font ≈ 18px a line, plus padding), between a floor that keeps it usable
 // and a cap that keeps the window on a 900px screen (re-QA #53 / #58 — the
-// fixed 460px left most of it empty for a short example).
+// fixed 460px left most of it empty for a short example). On a lower screen
+// the window shortens it (ResourceYamlCreateDialog).
 export const YAML_EDITOR_MIN = 240
 export const YAML_EDITOR_MAX = 560
 
