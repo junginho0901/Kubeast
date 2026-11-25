@@ -514,7 +514,7 @@ func TestPodLogs_ALineOfALogThatEndsAsTheErrorIsTheLogs(t *testing.T) {
 	}
 	// a line of its own that is of another pod is no word of this one's
 	another := `error: previous terminated container "side" in pod "web-2" not found` + "\n"
-	if rest, names := takeNoPrevious(another, "shop", "web-1", []string{"side"}); rest != another || len(names) != 0 {
+	if rest, names, _ := takePast(another, "shop", "web-1", reNoPreviousLine, []string{"side"}); rest != another || len(names) != 0 {
 		t.Errorf("%q %v", rest, names)
 	}
 	// one container's line twice: kubectl says it once
@@ -602,10 +602,8 @@ func TestPodLogs_OnlyAContainerWithoutAPreviousRunIsReadPast(t *testing.T) {
 		return out, err, len(*calls)
 	}
 	two := aPod{names: "side app", containers: []aContainer{{name: "side", fails: waiting}, {name: "app", log: "ready\n"}}}
-	for _, with := range []args{{"all_containers": true}, {"all_containers": true, "previous": true}} {
-		if out, err, n := fails(t, two, with); err == nil || out != "" || n != 1 || err.Error() != "kubectl failed: Error from server (BadRequest): "+waiting {
-			t.Errorf("%v: %q %v, kubectl ran %d times", with, out, err, n)
-		}
+	if out, err, n := fails(t, two, args{"all_containers": true, "previous": true}); err == nil || out != "" || n != 1 || err.Error() != "kubectl failed: Error from server (BadRequest): "+waiting {
+		t.Errorf("%q %v, kubectl ran %d times", out, err, n)
 	}
 	one := aPod{containers: []aContainer{{name: "side", never: true}}}
 	out, err, n := fails(t, one, args{"container": "side", "previous": true})

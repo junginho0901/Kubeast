@@ -364,6 +364,62 @@
   "holds": "unread"
  },
  {
+  "name": "logs past a container that has not started",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "[pod/web-1/app] stopped\n# No log of side (waiting to start: PodInitializing).\n",
+  "holds": "something"
+ },
+ {
+  "name": "logs past a container that has not started",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "[pod/web-1/app] stopped\n# No log of side (waiting to start: PodInitializing).\n",
+  "holds": "something"
+ },
+ {
+  "name": "a search of logs past a container that has not started",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# grep \"refused\": 0 of 1 lines matched\n# No log of side (waiting to start: PodInitializing).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of logs past a container that has not started",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# grep \"refused\": 0 of 1 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; previous=true reads the run before a restart, a log store's tools (where offered) older lines and pods that are gone.\n# No log of side (waiting to start: PodInitializing).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a log without a line past a container that has not started",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# No line was read: the log of app was read and holds no line. No log of side (waiting to start: PodInitializing).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a log without a line past a container that has not started",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# No line was read: the log of app was read and holds no line. No log of side (waiting to start: PodInitializing). An empty log does not say that nothing failed: previous=true reads the run before a restart, a log store's tools (where offered) older lines and pods that are gone.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a log that is gone past a container that has not started",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "{\"containers\":[\"app\"],\"hint\":\"The log of each container listed is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines. No log of side (waiting to start: PodInitializing).\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a log that is gone past a container that has not started",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "{\"containers\":[\"app\"],\"hint\":\"The log of each container listed is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines. No log of side (waiting to start: PodInitializing).\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
   "name": "a list of no name",
   "tool": "k8s_get_resources",
   "details": false,

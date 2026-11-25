@@ -55,7 +55,7 @@ _NO_ROWS = re.compile(r"# .+: 0 rows \(none\)")
 # the line that says the front of the log was cut off.
 _NO_LINE = re.compile(r"# (grep .*: 0 of \d+ lines matched|No line was read:)")
 _SAYS_NO_LINE = re.compile(r"# No line was read: .+\n?")
-_NO_PREVIOUS = re.compile(r"\n# No previous log of [^\n]+ \(not restarted\)\.\n?\Z")
+_NO_LOG_OF = re.compile(r"\n# No (?:previous log of [^\n]+ \(not restarted\)|log of [^\n]+ \((?:waiting to start|not available|terminated)[^\n]*\))\.\n?\Z")
 _LOG_CUT = re.compile(r"… \[older lines cut by tool-server: .+\]")
 
 
@@ -103,7 +103,7 @@ def log_text(tool: str, text: str) -> str:
     containers, and the file in the kubelet's words, that it names are not in a log."""
     if tool != "k8s_get_pod_logs":
         return text
-    return "" if _SAYS_NO_LINE.fullmatch(text) else _NO_PREVIOUS.sub("", text)
+    return "" if _SAYS_NO_LINE.fullmatch(text) else _NO_LOG_OF.sub("", text)
 
 
 def unread(tool: str, raw: Any, status: Optional[str]) -> Optional[str]:

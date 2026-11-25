@@ -42,7 +42,11 @@ var (
 	reEndsNoPrevious  = regexp.MustCompile(`previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found$`)
 	reNoPreviousLine  = regexp.MustCompile(`error: previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found\n$`)
 	reNoPreviousAfter = regexp.MustCompile(`[^\n]error: previous terminated container "[^"\n]+" in pod "[^"\n]+" not found\n`)
-	reLineTime        = regexp.MustCompile(`(^|\n|\[pod/[^/\]\s]+/[^\]\s]+\] )\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+(?:Z|[+-]\d\d:\d\d) `)
+	// The same of a container the kubelet has no log of yet.
+	reEndsNoLogYet  = regexp.MustCompile(noLogYet + `$`)
+	reNoLogYetLine  = regexp.MustCompile(`error: ` + noLogYet + `\n$`)
+	reNoLogYetAfter = regexp.MustCompile(`[^\n]error: ` + noLogYet + `\n`)
+	reLineTime      = regexp.MustCompile(`(^|\n|\[pod/[^/\]\s]+/[^\]\s]+\] )\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+(?:Z|[+-]\d\d:\d\d) `)
 	// A line of podContainers' output.
 	rePodContainer = regexp.MustCompile(`(?m)^container/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$`)
 	// A ReplicaSet pod template hash or a pod's random suffix: 5–10 characters
@@ -50,6 +54,10 @@ var (
 	// are not stripped).
 	reHashSuffix = regexp.MustCompile(`-[bcdfghjklmnpqrstvwxz2456789]{5,10}$`)
 )
+
+// noLogYet is what the kubelet says of a container it has no log of yet (kubelet_pods.go validateContainerLogStatus): the
+// container, the pod, and why, whose reason is one word but for the two it spells out.
+const noLogYet = `container "([^"\n]+)" in pod "([^"\n]+)" is (waiting to start(?:: ?(?:image can't be pulled|trying and failing to pull image|\S*)| - no logs yet)|not available|terminated)`
 
 // candidateListCap bounds the names scanned for suggestions.
 const candidateListCap = 5000
@@ -443,8 +451,8 @@ func (l *podLogRead) noLogResult(containers []string, words string, known bool) 
 		result["container"] = containers[0]
 	}
 	hint := log + " or cannot be read: the kubelet answered with reason in its place, so no line was read. " + l.goneElsewhere()
-	if len(l.never) > 0 {
-		hint += " " + noPreviousLog(l.never)
+	if len(l.past) > 0 {
+		hint += " " + l.noLogOfPast()
 	}
 	if !known {
 		hint += " Any other container of the pod gave no line."
@@ -462,9 +470,16 @@ func (l *podLogRead) goneElsewhere() string {
 	return "Read " + instead + "; a log store's tools (where offered) may still hold its lines."
 }
 
-// noPreviousLog names the containers without a previous run.
-func noPreviousLog(containers []string) string {
-	return "No previous log of " + strings.Join(containers, ", ") + " (not restarted)."
+// noLogOfPast names the containers kubectl was run past.
+func (l *podLogRead) noLogOfPast() string {
+	if l.previous {
+		return "No previous log of " + strings.Join(l.past, ", ") + " (not restarted)."
+	}
+	each := make([]string, len(l.past))
+	for i, name := range l.past {
+		each[i] = name + " (" + l.why[name] + ")"
+	}
+	return "No log of " + strings.Join(each, ", ") + "."
 }
 
 func notFoundHint(kind string, similar []map[string]string) string {

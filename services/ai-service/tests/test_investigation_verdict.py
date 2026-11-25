@@ -1305,19 +1305,21 @@ async def test_a_log_without_a_line_was_read_and_what_is_said_of_it_shows_nothin
 
 
 NO_PREVIOUS = "# No previous log of cart, side (not restarted).\n"
+NOT_STARTED = "# No log of cart (waiting to start: PodInitializing), side (waiting to start - no logs yet).\n"
 
 
 @pytest.mark.parametrize("log", ["[pod/web-1/web] panic: out of memory\n", '# grep "panic": 1 of 4 lines matched\n[pod/web-1/web] panic: out of memory\n'])
+@pytest.mark.parametrize("past", [NO_PREVIOUS, NOT_STARTED])
 @pytest.mark.asyncio
-async def test_a_container_that_has_not_restarted_is_shown_by_no_line_of_the_others_logs(monkeypatch, log):
+async def test_a_container_that_has_not_restarted_or_started_is_shown_by_no_line_of_the_others_logs(monkeypatch, log, past):
     for switches in ({}, {"verdict": False}):
         for resource, verified in (("Deployment/apps/cart", False), ("Deployment/apps/side", False), (POD, True), ("Deployment/apps/web", True)):
             given = answer("A cause was found.", "cause_found", [cause(resource, [1])], shown(POD, 1))
-            out, service = await run_of(monkeypatch, [(*GONE, log + NO_PREVIOUS)], given, {"pod": "web-1"}, **switches)
+            out, service = await run_of(monkeypatch, [(*GONE, log + past)], given, {"pod": "web-1"}, **switches)
             assert out["result"]["causes"][0]["verified"] is verified, (resource, switches)
-            assert log + NO_PREVIOUS in service.completions.calls[1]["messages"][-1]["content"]  # the model reads it
+            assert log + past in service.completions.calls[1]["messages"][-1]["content"]  # the model reads it
     # of a line that says so and is not the last one, or not tool-server's to the letter, the names are the log's
-    for line in (NO_PREVIOUS + "[pod/web-1/web] stopped\n", "# No previous log of cart.\n", "[pod/web-1/web] " + NO_PREVIOUS):
+    for line in (past + "[pod/web-1/web] stopped\n", "# No previous log of cart.\n", "# No log of cart.\n", "# No log of cart (retried).\n", "[pod/web-1/web] " + past):
         given = answer("A cause was found.", "cause_found", [cause("Deployment/apps/cart", [1])], shown(POD, 1))
         out, _ = await run_of(monkeypatch, [(*GONE, log + line)], given, {"pod": "web-1"})
         assert out["result"]["causes"][0]["verified"] is True, line
@@ -1325,6 +1327,7 @@ async def test_a_container_that_has_not_restarted_is_shown_by_no_line_of_the_oth
 
 @pytest.mark.parametrize("tool, text, shown_text", [
     ("k8s_get_pod_logs", "", ""), ("k8s_get_pod_logs", "ready\n", "ready\n"), ("k8s_get_pod_logs", "ready\n" + NO_PREVIOUS, "ready"),
+    ("k8s_get_pod_logs", "ready\n" + NOT_STARTED, "ready"), ("logsearch", "ready\n" + NOT_STARTED, "ready\n" + NOT_STARTED),
     ("k8s_get_pod_logs", "... (earlier lines truncated for LLM) ...\nready\n" + NO_PREVIOUS, "... (earlier lines truncated for LLM) ...\nready"),
     ("k8s_get_pod_logs", NO_LINES[1], ""), ("k8s_get_pod_logs", NO_LINES[1].rstrip("\n"), ""), ("k8s_get_pod_logs", NO_LINES[1] + "ready\n", NO_LINES[1] + "ready\n"),
     ("k8s_get_pod_logs", "ready\n" + NO_LINES[1], "ready\n" + NO_LINES[1]), ("k8s_get_pod_logs", '# grep "x": 0 of 4 lines matched', '# grep "x": 0 of 4 lines matched'),

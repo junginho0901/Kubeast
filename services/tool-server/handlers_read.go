@@ -219,8 +219,8 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 	} else {
 		out = logs.said + out
 	}
-	if len(logs.never) > 0 { // last, where the model's cut of a long log keeps it
-		out = strings.TrimSuffix(out, "\n") + "\n# " + noPreviousLog(logs.never) + "\n"
+	if len(logs.past) > 0 { // last, where the model's cut of a long log keeps it
+		out = strings.TrimSuffix(out, "\n") + "\n# " + logs.noLogOfPast() + "\n"
 	}
 	if logs.cut {
 		return fmt.Sprintf(logsCutNotice, outputMaxBytes) + out, nil
