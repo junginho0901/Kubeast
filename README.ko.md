@@ -24,7 +24,7 @@
 ## 빠른 시작
 
 ```bash
-helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
+helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 \
   --namespace kubeast --create-namespace
 ```
 
