@@ -375,6 +375,89 @@ def test_the_symptoms_object_or_one_the_alert_names_is_in_what_its_calls_returne
     assert reasons(checked(block("cause_found", [cause(WEB, [1])], shown(WEB, 1, 2)), reads=reads)) == ["symptom_name_missing"]
 
 
+WEB_POD = "web-7d9f4c6b8-x2kzp"
+LINES = "GET /pay 500 upstream timed out"  # a container's lines, without the pod's name
+
+
+def log_of(pod, namespace="apps", tool="k8s_get_pod_logs", **args):
+    return evidence.Read(tool, {"pod_name": pod, "namespace": namespace, **args}, text=LINES)
+
+
+def symptom_reasons(resource, read, names=(), namespace="apps", workload=False):
+    """The reasons of a block that names a cause another call shows and gives `read` for the symptom at `resource`."""
+    reads = [evidence.Read("k8s_get_resources", PODS, text=POD_TABLE), read]
+    got = verdict.check(block("cause_found", [cause(WEB, [1])], shown(resource, 2) if resource else [2]), reads=reads,
+                        alert=verdict.Alert(tuple(names), namespace, workload), tool_log=[{"tool": r.tool, "args": r.args} for r in reads],
+                        unverified=set())
+    return got.outcome, reasons(got)
+
+
+@pytest.mark.parametrize("resource, pod, alert", [
+    (f"Pod/apps/{WEB_POD}", WEB_POD, {}), (f"Pod/apps/{WEB_POD}", WEB_POD, {"names": ["web"]}),
+    ("Deployment/apps/web", WEB_POD, {}), ("ReplicaSet/apps/web-7d9f4c6b8", WEB_POD, {}), ("Service/apps/web", WEB_POD, {"names": ["web"]}),
+    ("StatefulSet/apps/db", "db-0", {}), ("DaemonSet/apps/agent", "agent-x2kzp", {}),
+    ("Job/apps/backup-28712340", "backup-28712340-x2kzp", {}), ("CronJob/apps/backup", "backup-28712340-x2kzp", {}),
+    ("Job/apps/backup-29457654", "backup-29457654-x2kzp", {}),  # a run's minute that also reads as a ReplicaSet's hash
+    ("web", WEB_POD, {}), ("", WEB_POD, {"names": ["web"]}),  # the alert's namespace where the block gives none
+    ("Deployment/apps/web", WEB_POD, {"namespace": ""}), ("Service/shop/edge", WEB_POD, {"names": ["web"]}),
+    (DB, WEB_POD, {"names": ["web"], "workload": True}), ("Deployment/apps/web", WEB_POD, {"namespace": "monitoring"}),
+])
+def test_a_pods_log_shows_the_symptom_of_the_pod_it_was_read_of_though_no_line_names_it(resource, pod, alert):
+    for read in (log_of(pod), log_of("pod/" + pod), log_of(pod, tail_lines=50, grep="pay")):
+        assert symptom_reasons(resource, read, **alert) == ("cause_found", []), read.args
+
+
+@pytest.mark.parametrize("resource, read, alert", [
+    # another pod, whose workload's name only begins with the one wanted, or in another namespace
+    ("Deployment/apps/web", log_of("cache-5c8d7f9b6f-k4x2z"), {}), ("Deployment/apps/web", log_of("web-db-7d9f4c6b8-x2kzp"), {"names": ["web"]}),
+    ("StatefulSet/apps/web", log_of("web-db-0"), {}), (f"Pod/apps/{WEB_POD}", log_of("web-7d9f4c6b8-k4x2z"), {}),
+    ("Deployment/apps/web", log_of(WEB_POD, "shop"), {"names": ["web"]}), ("Deployment/apps/web", log_of(WEB_POD, "shop"), {"namespace": ""}),
+    ("Deployment/apps/web", log_of(WEB_POD, "shop"), {"names": ["web"], "namespace": ""}),
+    # the workload the alert's labels name, in its namespace: not the pod beside it, nor the block's object
+    (DB, log_of("db-0"), {"names": ["web"], "workload": True}), ("Deployment/shop/web", log_of(WEB_POD, "shop"), {"names": ["web"], "workload": True}),
+    # no pod, or no namespace: a search then picks the pod
+    ("Deployment/apps/web", evidence.Read("k8s_get_pod_logs", {}, text=LINES), {}),
+    ("Deployment/apps/web", evidence.Read("k8s_get_pod_logs", {"namespace": "apps"}, text=LINES), {}),
+    ("Deployment/apps/web", evidence.Read("k8s_get_pod_logs", {"pod_name": WEB_POD}, text=LINES), {}),
+    ("Deployment/apps/web", log_of(WEB_POD, " "), {"namespace": ""}), ("Deployment/apps/web", log_of(""), {}),
+    ("Deployment/apps/web", log_of(None), {}), ("Deployment/apps/web", log_of(["web"]), {}), ("Deployment/apps/web", log_of(WEB_POD, ["apps"]), {}),
+    # the name in what narrows the read, another tool's answer, and a namespace's read
+    ("Deployment/apps/web", log_of("cache-5c8d7f9b6f-k4x2z", grep="web", container="web"), {}),
+    ("Deployment/apps/web", log_of(WEB_POD, tool="network_flows"), {}),
+    ("Deployment/apps/web", evidence.Read("loki_query", {"logql": '{app="web"}', "namespace": "apps"}, text=LINES), {"names": ["web"]}),
+    ("Deployment/apps/web", evidence.Read("k8s_get_events", {"namespace": "apps"}, text="Warning BackOff"), {"names": ["web"]}),
+    # an answer that names its object: what it names counts, not what was asked for (a name not found is searched for)
+    ("Deployment/apps/web", evidence.Read("k8s_get_resource_yaml", {"resource_type": "deployment", "resource_name": "web", "namespace": "apps"},
+                                          text="kind: Deployment\nmetadata:\n  name: cache"), {"names": ["web"]}),
+    ("Deployment/apps/web", evidence.Read("k8s_describe_resource", {"pod_name": WEB_POD, "namespace": "apps"}, text="Name: cache"), {}),
+])
+def test_a_read_of_another_object_shows_no_symptom_whatever_its_arguments_name(resource, read, alert):
+    assert symptom_reasons(resource, read, **alert) == ("cannot_tell", ["symptom_name_missing"])
+
+
+def test_a_pods_log_that_failed_or_holds_nothing_shows_no_symptom_of_that_pod():
+    failed, empty = log_of(WEB_POD), log_of(WEB_POD)
+    failed.failed, empty.nothing = True, "empty"
+    assert symptom_reasons(WEB, failed) == ("cannot_tell", ["symptom_bad_calls"])
+    assert symptom_reasons(WEB, empty) == ("cannot_tell", ["symptom_not_shown"])
+    # no_fault needs an answer that names the alert's object, as before
+    assert reasons(checked(block("no_fault", [], None, True), reads=[log_of(WEB_POD)])) == ["not_read"]
+
+
+@pytest.mark.asyncio
+async def test_a_run_keeps_a_cause_whose_symptom_a_pods_log_shows_and_is_not_asked_again(monkeypatch):
+    calls = [("k8s_get_resource_yaml", {"resource_type": "configmap", "resource_name": "pay-settings", "namespace": "apps"}, "kind: ConfigMap\nname: pay-settings"),
+             ("k8s_get_pod_logs", {"pod_name": WEB_POD, "namespace": "apps"}, LINES)]
+    given = answer("A cause was found.", "cause_found", [cause("ConfigMap/apps/pay-settings", [1], kind="config_change")], shown(f"Pod/apps/{WEB_POD}", 2))
+    out, service = await run_of(monkeypatch, calls, given, {"service": "web"})
+    assert (out["result"]["verdict"]["outcome"], out["result"]["verdict"]["why"]) == ("cause_found", [])
+    assert len(service.completions.calls) == 2 and "Outcome kept by the server" not in out["report"]
+    other = [calls[0], ("k8s_get_pod_logs", {"pod_name": "cache-5c8d7f9b6f-k4x2z", "namespace": "apps"}, LINES)]
+    out, service = await run_of(monkeypatch, other, given, {"service": "web"})
+    assert (out["result"]["verdict"]["outcome"], out["result"]["verdict"]["why"]) == ("cannot_tell", ["symptom_name_missing"])
+    assert len(service.completions.calls) == 3 and "Outcome kept by the server: cannot tell" in out["report"]
+
+
 def test_a_number_that_names_no_call_beside_one_that_shows_the_symptom_is_asked_about_and_lowers_nothing():
     got = checked(block("cause_found", [cause(WEB, [1])], shown(WEB, 1, 99)))
     assert (reasons(got), got.why, got.outcome) == (["symptom_bad_calls"], [], "cause_found")

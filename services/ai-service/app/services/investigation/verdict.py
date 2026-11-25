@@ -6,8 +6,8 @@ fault found, or that the results cannot tell — and the calls that show the sym
 the block to this run's calls (check()):
 
 - a report that names a cause needs a call that answered and shows the symptom: the workload the alert's labels name, or
-  without one the symptom's object or another the alert names, is in what the call returned, and the call is no read of
-  what changed, of an alert or its rule or of names;
+  without one the symptom's object or another the alert names, is in what the call returned or made the pod whose log the
+  call read (_read_its_log), and the call is no read of what changed, of an alert or its rule or of names;
 - cause_found also needs a cause the calls show (with evidenceCheck its checks, without it a call that answered);
 - no_fault needs such a call that names the alert's object (any of them, when the alert names nothing);
 - an answer that read or holds nothing shows none of these, whatever names it repeats (investigation/answers.py), and an
@@ -64,6 +64,9 @@ NO_SYMPTOM = frozenset({
     "alerts_list", "alerts_inbox", "prometheus_rules", "prometheus_metrics", "prometheus_labels", "loki_labels",
     "traces_tags", "k8s_find_resource", "k8s_explain", "k8s_get_available_api_resources", "can_i", "clusters_list",
 })
+
+# The read of what a pod's container wrote, which need not hold the pod's name.
+POD_LOG = "k8s_get_pod_logs"
 
 # What an investigation can look at, each with the tools that read it. A tool in none of them reads no source of its own
 # (names, rules, what the investigator may do); a timeline reads events too unless it is the changes view.
@@ -141,6 +144,8 @@ _POD_END = re.compile(r"-[bcdfghjklmnpqrstvwxz2456789]{5}$")
 _HASH_END = re.compile(r"-[bcdfghjklmnpqrstvwxz2456789]{6,10}$")
 # The end of a CronJob's Job: the schedule's minute, or Kubeast's manual run's second.
 _RUN_END = re.compile(r"-(manual-)?\d{6,}$")
+# The end of a StatefulSet's pod name.
+_ORDINAL_END = re.compile(r"-\d+$")
 
 
 def _pod_names(pod: str) -> list[str]:
@@ -222,6 +227,28 @@ def _is_about(read: evidence.Read, names: Iterable[str], namespace: str) -> bool
     return bool(namespace) and (read.args.get("namespace") == namespace or evidence._names(read.text, namespace))
 
 
+def _pod_is_of(pod: str) -> set[str]:
+    """The names a pod's name gives: its own and those of what made it (a ReplicaSet and its Deployment, a DaemonSet, a
+    StatefulSet, a Job and its CronJob), the ends they add taken off."""
+    run = _POD_END.sub("", pod)
+    return {pod, run, *_pod_names(pod), _RUN_END.sub("", run), _ORDINAL_END.sub("", pod)}
+
+
+def _read_its_log(read: evidence.Read, names: Iterable[str], resource: str, alert: Alert) -> bool:
+    """Whether a call read the log of a pod of one of the names, by its arguments: in the alert's namespace, the symptom's
+    own object in the one the block gives it, each in the other's where it has none. A call without a namespace read the
+    pod a search found, which may be another."""
+    pod, namespace = read.args.get("pod_name"), read.args.get("namespace")
+    if read.tool != POD_LOG or not all(isinstance(value, str) and value.strip() for value in (pod, namespace)):
+        return False
+    parts = [p.strip() for p in resource.split("/") if p.strip()]
+    given = parts[1] if len(parts) >= 3 else ""
+    places = {name: {alert.namespace or given} for name in alert.names}
+    if not alert.workload:
+        places.setdefault(evidence.resource_name(resource), set()).add(given or alert.namespace)
+    return any({namespace, ""} & places.get(name, set()) for name in _pod_is_of(pod.rsplit("/", 1)[-1]).intersection(names))
+
+
 def _wanted(resource: str, alert: Alert) -> tuple[list[str], str]:
     """What a symptom's call must be about: one of the names, or the namespace where one is given. The workload the alert
     is about; without one the symptom's object or one the alert names, and the alert's namespace only where no object is
@@ -244,7 +271,8 @@ def _symptom_problem(block: dict, reads: list[evidence.Read], alert: Alert) -> O
     if not shows:
         return Problem("symptom_not_shown", {"calls": [n for n, _ in good]})
     names, namespace = _wanted(resource, alert)
-    if (names or namespace) and not any(_is_about(read, names, namespace) for _, read in shows):
+    if (names or namespace) and not any(_is_about(read, names, namespace) or _read_its_log(read, names, resource, alert)
+                                        for _, read in shows):
         # the block's own name for it: an alert's label is another system's text and goes in no message outside its fence
         return Problem("symptom_name_missing", {"name": "" if alert.workload else evidence.resource_name(resource),
                                                 "workload": alert.workload, "calls": [n for n, _ in shows]})
