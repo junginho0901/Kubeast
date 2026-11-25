@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -76,12 +77,21 @@ func MaskSensitive(raw json.RawMessage) json.RawMessage {
 	}
 	var v any
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return raw // leave non-JSON payloads untouched
+		if !json.Valid(raw) {
+			return raw // leave non-JSON payloads untouched
+		}
+		// a number past a float64, which JSONB takes: every number is read as it is written
+		v = nil
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		if err := dec.Decode(&v); err != nil {
+			return nil
+		}
 	}
 	v = maskValue(v)
 	out, err := json.Marshal(v)
 	if err != nil {
-		return raw
+		return nil
 	}
 	return out
 }

@@ -131,3 +131,31 @@ func TestMaskSensitive_KeepsOrdinaryNames(t *testing.T) {
 		}
 	}
 }
+
+// A number past a float64 is JSON, and PostgreSQL's JSONB takes it: the fields beside it are masked as any, and the
+// number stays as it was written. What a float64 holds reads as it did.
+func TestMaskSensitive_MasksBesideANumberNoFloatHolds(t *testing.T) {
+	for raw, want := range map[string]string{
+		`{"password":"fake-value","n":1e400}`:                         `{"n":1e400,"password":"***"}`,
+		`{"n":-1E+999,"outer":[{"api_key":{"a":"fake-value"}}]}`:      `{"n":-1E+999,"outer":[{"api_key":"***"}]}`,
+		`[1e400,{"token":["fake-value"]},{"kept":"plain","m":1.50}]`:  `[1e400,{"token":"***"},{"kept":"plain","m":1.50}]`,
+		`{"secret":1e400,"kept":{"dbPwd":"fake-value","deep":1e400}}`: `{"kept":{"dbPwd":"***","deep":1e400},"secret":"***"}`,
+		" {\"n\" : 1e400,\n\"credential\" : \"fake-value\"}\n":        `{"credential":"***","n":1e400}`,
+		`1e400`: `1e400`,
+		`{"password":"fake-value","n":1.50,"m":12345678901234567890}`: `{"m":12345678901234567000,"n":1.5,"password":"***"}`,
+		`{"password":"fake-value","n":1e308,"m":-0.0}`:                `{"m":-0,"n":1e+308,"password":"***"}`,
+	} {
+		if out := string(MaskSensitive(json.RawMessage(raw))); out != want {
+			t.Errorf("%s: %s, want %s", raw, out, want)
+		}
+	}
+	// what is not JSON is left as it is: the table keeps its length in its place (storableJSON)
+	for _, raw := range []string{`{"password":"fake-value","n":1e400`, `{"password":"fake-value"} {"n":1e400}`, `password: fake-value`} {
+		if out := string(MaskSensitive(json.RawMessage(raw))); out != raw {
+			t.Errorf("%s: %s", raw, out)
+		}
+		if out := string(storableJSON(MaskSensitive(json.RawMessage(raw)))); strings.Contains(out, "fake-value") {
+			t.Errorf("%s is kept as %s", raw, out)
+		}
+	}
+}
