@@ -2958,7 +2958,32 @@
         "chat": "채팅",
         "floating": "플로팅 어시스턴트",
         "summary": "이력 요약",
-        "investigation": "알림 조사"
+        "investigation": "알림 조사",
+        "investigate_now": "지금 조사",
+        "optimization": "Optimization 설명"
+      },
+      "perUse": {
+        "title": "어느 모델이 답하는지",
+        "intro": "채팅은 활성 모델을, 플로팅 어시스턴트와 이력 요약은 경제형 모델이 있으면 그 모델을 씁니다. 나머지에 쓸 모델은 여기서 고릅니다.",
+        "stronger": "어려운 문제의 원인을 찾는 일은 더 강한 모델이 더 잘합니다. 더 강한 모델은 더 느리고 더 비쌉니다.",
+        "asBefore": {
+          "investigation": "활성 모델",
+          "investigate_now": "알림 조사와 같은 모델",
+          "optimization": "활성 모델"
+        },
+        "fromChart": "차트에서 정함: {{name}}",
+        "answers": "지금 답하는 모델: {{name}}",
+        "answersChart": "지금 답하는 모델: 차트의 ai.* 값",
+        "choiceDisabled": "\"{{name}}\" 모델은 꺼져 있어 답하지 않습니다.",
+        "problem": "지금은 실행되지 않습니다: {{reason}}",
+        "off": "이 설치에서는 꺼짐",
+        "budget": "하루 한도: {{tokens}} 토큰(UTC). 어느 모델이 답하든 돈이 아니라 토큰을 셉니다.",
+        "noBudget": "하루 한도가 없습니다.",
+        "readFailed": "어느 모델이 답하는지 읽지 못했습니다: {{reason}}",
+        "confirmTitle": "모델 바꾸기",
+        "confirmChoose": "{{use}}에 \"{{name}}\" 모델을 쓸까요? 읽은 내용이 그 모델로 가고 비용도 그 모델의 값대로 나옵니다.",
+        "confirmClear": "{{use}}에 고른 모델을 없앨까요? 그 뒤에는 다음을 씁니다: {{name}}.",
+        "confirm": "바꾸기"
       },
       "options": "생성 옵션 (JSON)",
       "optionsHint": "표준 파라미터(temperature, top_p, seed, max_tokens)는 모든 프로바이더에 전달됩니다. 프로바이더 전용 키(예: num_ctx)는 best-effort이며 OpenAI 호환 Endpoints에서는 무시될 수 있습니다.",

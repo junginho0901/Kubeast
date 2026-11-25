@@ -1,0 +1,106 @@
+import { useTranslation } from 'react-i18next'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import CustomDropdown, { type DropdownOption } from '@/components/CustomDropdown'
+import { ActionFailure } from '@/components/ActionFailure'
+import { getModelLabel } from '@/constants/modelCatalog'
+import { api, type ChosenUse, type ModelConfigResponse, type ModelUseState } from '@/services/api'
+import { useConfirm } from '@/services/confirm'
+import { failureText } from '@/utils/failureText'
+import { linesOf, type Tr } from './perUse'
+
+const LABEL: Record<ChosenUse, string> = {
+  investigation: 'Alert investigations',
+  investigate_now: 'Investigate now',
+  optimization: 'Optimization explanation',
+}
+
+// Which model answers the uses that have none of their own until one is chosen here. The chat's is Activate on a card
+// below, the floating assistant's and the history summaries' is the economy tier in a model's form.
+export default function ModelUses({ configs }: { configs: ModelConfigResponse[] }) {
+  const { t } = useTranslation()
+  const tr: Tr = (key, fb, o) => t(key, { defaultValue: fb, ...o })
+  const qc = useQueryClient()
+  const confirm = useConfirm()
+  const uses = useQuery({ queryKey: ['model-configs', 'uses'], queryFn: () => api.listModelUses() })
+  const choose = useMutation({
+    mutationFn: ({ use, configId }: { use: ChosenUse; configId: number | null }) => api.setModelUse(use, configId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['model-configs'] }), // the cards' "Used for" too
+  })
+  if (uses.isPending) return null
+
+  const label = (use: ChosenUse) => tr(`admin.aiModels.use.${use}`, LABEL[use])
+  const asBefore = (use: ChosenUse) =>
+    tr(`admin.aiModels.perUse.asBefore.${use}`, use === 'investigate_now' ? 'Same as alert investigations' : 'Active model')
+
+  const options = (u: ModelUseState): DropdownOption[] => [
+    { value: '', label: asBefore(u.use), testId: `model-use-${u.use}-none` },
+    ...configs
+      .filter((c) => c.enabled || c.id === u.choice?.id)
+      .map((c) => ({ value: String(c.id), label: c.name, listHint: getModelLabel(c.provider, c.model), disabled: !c.enabled, testId: `model-use-${u.use}-${c.id}` })),
+  ]
+
+  const pick = async (u: ModelUseState, value: string) => {
+    const configId = value ? Number(value) : null
+    if (configId === (u.choice?.id ?? null)) return
+    const name = configId === null ? asBefore(u.use) : configs.find((c) => c.id === configId)?.name
+    // it changes where the use's data goes and what it costs: say so before it runs
+    const ok = await confirm({
+      title: tr('admin.aiModels.perUse.confirmTitle', 'Change the model'),
+      message: configId === null
+        ? tr('admin.aiModels.perUse.confirmClear', 'Take away the choice for {{use}}? After that it runs on: {{name}}.', { use: label(u.use), name })
+        : tr('admin.aiModels.perUse.confirmChoose', 'Use "{{name}}" for {{use}}? What it reads then goes to that model, at that model\'s price.', { use: label(u.use), name }),
+      confirmLabel: tr('admin.aiModels.perUse.confirm', 'Change'),
+    })
+    if (ok) choose.mutate({ use: u.use, configId })
+  }
+
+  return (
+    <div className="card space-y-4" data-testid="model-uses">
+      <div>
+        <h2 className="text-lg font-semibold text-ink">{tr('admin.aiModels.perUse.title', 'Which model answers')}</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          {tr('admin.aiModels.perUse.intro', 'The chat runs on the active model, and the floating assistant and history summaries on an economy one when there is one. Choose a model for the rest here.')}
+        </p>
+        <p className="mt-1 text-sm text-slate-400" data-testid="model-uses-stronger">
+          {tr('admin.aiModels.perUse.stronger', 'Finding the cause of a hard problem goes better with a stronger model. It is slower and more expensive.')}
+        </p>
+      </div>
+      {uses.isError && !uses.data ? (
+        <p role="alert" className="text-sm text-red-400 break-words" data-testid="model-uses-error">
+          {tr('admin.aiModels.perUse.readFailed', 'Could not read which model answers: {{reason}}', { reason: failureText(uses.error) })}
+        </p>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-3">
+          {uses.data?.map((u) => (
+            <div key={u.use} data-testid={`model-use-${u.use}`}>
+              {u.chart_model ? (
+                <CustomDropdown
+                  label={label(u.use)}
+                  options={[{ value: 'chart', label: tr('admin.aiModels.perUse.fromChart', 'Set in the chart: {{name}}', { name: u.chart_model }) }]}
+                  value="chart"
+                  onChange={() => {}}
+                  disabled
+                  testId={`model-use-${u.use}-select`}
+                />
+              ) : (
+                <CustomDropdown
+                  label={label(u.use)}
+                  options={options(u)}
+                  value={u.choice ? String(u.choice.id) : ''}
+                  onChange={(value) => void pick(u, value)}
+                  placeholder={u.choice?.name}
+                  disabled={choose.isPending}
+                  testId={`model-use-${u.use}-select`}
+                />
+              )}
+              {linesOf(u, tr).map((line) => (
+                <p key={line.text} className={`mt-1 text-xs break-words ${line.problem ? 'text-amber-300' : 'text-slate-400'}`}>{line.text}</p>
+              ))}
+              {choose.variables?.use === u.use && <ActionFailure error={choose.error} action="change" testId={`model-use-${u.use}-error`} className="mt-1" />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
