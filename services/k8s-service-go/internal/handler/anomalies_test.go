@@ -284,3 +284,56 @@ func TestAnomaliesOfOneWorkloadAskForItsPods(t *testing.T) {
 		}
 	}
 }
+
+// sinceAnomalies is fakeAnomalies whose issue check says since when, when it is asked to.
+type sinceAnomalies struct{ fakeAnomalies }
+
+func (f *sinceAnomalies) CollectIssues(ctx context.Context, opts k8s.IssuesOptions) ([]k8s.Issue, error) {
+	issues, err := f.fakeAnomalies.CollectIssues(ctx, opts)
+	issues = append(issues, k8s.Issue{Kind: "Pod", Namespace: "shop", Name: "web-1-b", Severity: "critical", Reason: "ImagePullBackOff"})
+	if opts.Since {
+		issues[0].Since = "2026-11-14T22:00:00Z"
+		issues[3].Since = "2026-11-15T01:10:00Z"
+	}
+	return issues, err
+}
+
+// with_since: the issue check is asked for it, a state from before the window says so, and the answer is kept apart from
+// the one without. Without it nothing is asked and nothing is said.
+func TestAnomaliesSayWhatWasThereBeforeOnlyWhenAsked(t *testing.T) {
+	f := &sinceAnomalies{}
+	h := anomalyHandler(&f.fakeAnomalies, config.Config{})
+	h.anomalySrc = f
+	const target = "/api/v1/namespaces/shop/anomalies?start=2026-11-15T00:30:00Z&end=2026-11-15T01:30:00Z"
+	plain, _ := getAnomalies(h, target, flowReader)
+	if plain.Code != http.StatusOK || strings.Contains(plain.Body.String(), `"since"`) || strings.Contains(plain.Body.String(), "already_there") {
+		t.Fatalf("%d %s", plain.Code, plain.Body)
+	}
+	_, res := getAnomalies(h, target+"&with_since=true", flowReader)
+	var old, fresh anomaly.Finding
+	for _, fd := range res.Findings {
+		switch fd.Target {
+		case "Pod/web-1-a":
+			old = fd
+		case "Pod/web-1-b":
+			fresh = fd
+		}
+	}
+	if !old.AlreadyThere || old.Since != "2026-11-14T22:00:00Z" || !strings.HasPrefix(old.Summary, "critical now (already there before the window): CrashLoopBackOff") {
+		t.Fatalf("%+v", old)
+	}
+	if fresh.AlreadyThere || fresh.Since != "2026-11-15T01:10:00Z" || !strings.HasPrefix(fresh.Summary, "critical now (no earlier data): ImagePullBackOff") {
+		t.Fatalf("%+v", fresh)
+	}
+	again, _ := getAnomalies(h, target, flowReader)
+	if again.Body.String() != plain.Body.String() {
+		t.Fatalf("the answer without it changed: %s", again.Body)
+	}
+	var asked []bool
+	for _, o := range f.issueOpts {
+		asked = append(asked, o.Since)
+	}
+	if len(asked) < 2 || asked[0] || !asked[1] {
+		t.Fatalf("asked %v", asked)
+	}
+}

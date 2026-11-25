@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -318,8 +319,13 @@ func (w *Workload) podMatcher() string {
 // whether it is new is then not known.
 const NoEarlier = "no earlier data"
 
+// ThereBefore is said in NoEarlier's place of a state that began before the window (Finding.AlreadyThere).
+const ThereBefore = "already there before the window"
+
 // Finding is one thing a check found, or one target it compared. New: the window before has data and none of it there;
-// with no data in the window before it is not set, before is left out and the summary says NoEarlier.
+// with no data in the window before it is not set, before is left out and the summary says NoEarlier. Since, where it was
+// asked for, is from when the record shows a state, AlreadyThere that this is before the window, and Worse that another
+// check found its object grown in the window all the same.
 type Finding struct {
 	Check    string   `json:"check"`
 	Target   string   `json:"target"`
@@ -331,10 +337,15 @@ type Finding struct {
 	New      bool     `json:"new,omitempty"`
 	Examples []string `json:"examples,omitempty"`
 
+	Since        string `json:"since,omitempty"`
+	AlreadyThere bool   `json:"already_there,omitempty"`
+	Worse        bool   `json:"worse,omitempty"`
+
 	// For Rank, not in the answer: critical is a critical state now, which no window before is compared with; noEarlier a
-	// value past its threshold with nothing known of the window before.
+	// value past its threshold with nothing known of the window before; pods are those the terminations are of.
 	critical  bool
 	noEarlier bool
+	pods      []string
 }
 
 // CheckResult is what one check gives: findings, or the reason it did not run. Partial says what part of its reads it
@@ -488,6 +499,7 @@ func AssembleWith(namespace string, wl *Workload, w Window, results []CheckResul
 			out.Partial = append(out.Partial, Partial{Check: check, Reason: r.Partial})
 		}
 	}
+	markBefore(found)
 	Rank(found)
 	if order != nil {
 		note := order.Note
@@ -521,11 +533,59 @@ func value(p *float64) float64 {
 	return *p
 }
 
+// markBefore settles what the states that began before the window (AlreadyThere) say of the other findings: the
+// terminations of such pods alone were there before too, and a pod another check found new or grown is Worse. With no
+// such state (none is asked for without with_since) it changes nothing.
+func markBefore(found []Finding) {
+	before, grew := map[string]bool{}, map[string]bool{}
+	for _, f := range found {
+		pod, isPod := targetPod(f.Target)
+		switch {
+		case f.Check == CheckIssues:
+			if isPod && f.AlreadyThere {
+				before[pod] = true
+			}
+		case f.New || value(f.Ratio) > 1:
+			for _, p := range f.pods {
+				grew[p] = true
+			}
+			if isPod {
+				grew[pod] = true
+			}
+		}
+	}
+	if len(before) == 0 {
+		return
+	}
+	for i := range found {
+		f := &found[i]
+		switch f.Check {
+		case CheckIssues:
+			if pod, ok := targetPod(f.Target); ok {
+				f.Worse = before[pod] && grew[pod]
+			}
+		case CheckCrashReasons:
+			if f.noEarlier && !slices.ContainsFunc(f.pods, func(p string) bool { return !before[p] }) {
+				f.AlreadyThere, f.noEarlier = true, false
+				f.Summary = strings.Replace(f.Summary, NoEarlier, ThereBefore, 1)
+			}
+		}
+	}
+}
+
+// targetPod is the pod a finding's target names: "Pod/<name>", alone or with a container after it.
+func targetPod(target string) (string, bool) {
+	name, ok := strings.CutPrefix(target, "Pod/")
+	name, _, _ = strings.Cut(name, " ")
+	return name, ok
+}
+
 // tier is where Rank starts: what is new or critical now, then what has no earlier data, then the rest (what grew, and
-// the warnings, which have no value to rank by, last).
+// the warnings, which have no value to rank by, last). A state that was there before the window is one of the rest, unless
+// it got worse in it.
 func (f Finding) tier() int {
 	switch {
-	case f.New || f.critical:
+	case f.New || (f.critical && (!f.AlreadyThere || f.Worse)):
 		return 0
 	case f.noEarlier:
 		return 1

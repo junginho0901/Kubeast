@@ -4,14 +4,14 @@
 # 없음 (self / instance 의존 X). 호출처에서 SYSTEM_MESSAGE 를 직접 import 해서
 # 사용하거나 system_prompt_override 로 덮어쓸 수 있다. 채팅은 system_message() 로
 # 받는다 (timeline 의 changes 보기 스위치 AI_TIMELINE_CHANGES 와 그 더 많은 출처 AI_TIMELINE_CHANGES_MORE, anomaly_rank 스위치
-# ANOMALY_RANK_ENABLED, 노드 이웃 스위치 NODE_NEIGHBORS_ENABLED, 원인을 묻는 질문의 규칙 스위치 AI_CAUSE_QUESTIONS).
+# ANOMALY_RANK_ENABLED, 노드 이웃 스위치 NODE_NEIGHBORS_ENABLED, 원인을 묻는 질문의 규칙 스위치 AI_CAUSE_QUESTIONS, 고장이 시작된 때의 규칙 스위치 AI_FAULT_ONSET).
 #
 # 변경 시 주의: AI 응답의 형식·언어·도구 호출 정책이 모두 이 프롬프트에 의존.
 # 키워드 ("Kubeast", "도구 호출", "Critical Rules" 등) 가 사라지면 행동이
 # 바뀐다 — tests/test_prompts.py 의 회귀 테스트로 보호.
 
 from app.services import switch
-from app.services.ai.tools import anomaly_rank_on, call_graph_on, node_neighbors_on, timeline_changes_more_on, timeline_changes_on
+from app.services.ai.tools import anomaly_rank_on, call_graph_on, fault_onset_on, node_neighbors_on, timeline_changes_more_on, timeline_changes_on
 
 SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 
@@ -504,10 +504,21 @@ CAUSE_QUESTION_LINES = {
 }
 
 
+# When a failure began (AI_FAULT_ONSET, chart ai.faultOnset, off by default): a section right before the naming rules
+# (_NAMESPACE_HEADING), after the rules for why questions where they are on. It names no tool to call first and no outcome.
+ONSET_SECTION = """### 전부터 있던 고장과 물은 고장
+왜 고장 났는지·왜 느린지 묻거나 증상을 말하며 봐 달라는 질문에서, 먼저 눈에 띄는 고장이 물은 고장이라고 여기지 마세요(호출 수를 줄이라는 규칙과 `issues`에 나온 객체만 보라는 규칙보다 먼저입니다).
+- **시작한 때를 적으세요**: 찾은 것마다 언제 시작됐는지 말하세요 — `issues`의 since, 이벤트의 처음·마지막 시각과 횟수, 재시작 횟수와 마지막 종료 시각, 바뀐 것의 시각, 로그·지표가 달라진 시각. 시작한 때가 안 나온 것은 모르는 것이지 새것이 아닙니다.
+- **물은 때 가까이에서 시작된 것부터**: 질문이 말한 때(없으면 호출로 본 증상이 시작된 때) 가까이에서 시작된 것을 먼저 보세요.
+- **무엇이 안 되는지 말하지 않은 질문**이면 먼저 보인 고장을 증상으로 삼지 말고, 그 범위에서 요청을 먼저 받는 워크로드부터(Ready여도) 최근 로그에서 지금 나는 오류와 그것이 시작된 때를 찾으세요.
+- **전부터 있던 것은 따로**: 그보다 뚜렷이 먼저 시작됐거나 앞 구간에도 같았던 것은 원인으로 대지 말고 "전부터 있던 것"으로 시작한 때와 함께 따로 적으세요. 원인으로 대도 되는 때는 질문이 그것을 물었을 때, 물은 증상이 그것에서 온다는 호출이 있을 때, 그 무렵 더 나빠졌을 때(재시작·오류가 늘거나 준비된 파드가 줆 — 나빠진 때가 시작한 때)입니다.
+- **새로 시작된 것을 못 찾았으면** 어디까지 보았는지와 함께 그렇게 말하고, 전부터 있던 것은 가능성으로만 적으세요."""
+
+
 def system_message() -> str:
     """The chat's system prompt: SYSTEM_MESSAGE, with the lines of each switch that is on (timeline's changes view and its
-    further sources, anomaly_rank, resource_graph's calls, get_node_metrics with a node, the rules for why questions); with
-    every one off, SYSTEM_MESSAGE as it is."""
+    further sources, anomaly_rank, resource_graph's calls, get_node_metrics with a node, the rules for why questions, when a
+    failure began); with every one off, SYSTEM_MESSAGE as it is."""
     lines: dict = {}
     changes, anomaly, calls = timeline_changes_on(), anomaly_rank_on(), call_graph_on()
     state_rule = _STATE_RULE
@@ -520,6 +531,9 @@ def system_message() -> str:
             lines.update(TIMELINE_CHANGES_MORE_LINES)
     if node_neighbors_on():
         lines.update(NODE_NEIGHBORS_LINES)
+    if fault_onset_on():
+        heading = lines.get(_NAMESPACE_HEADING, _NAMESPACE_HEADING)
+        lines[_NAMESPACE_HEADING] = _swapped(heading, _NAMESPACE_HEADING, ONSET_SECTION + "\n\n" + _NAMESPACE_HEADING)
     rule = None
     if anomaly:
         lines.update(ANOMALY_RANK_LINES)

@@ -66,7 +66,9 @@ func countOr(n, fallback int) int {
 // what differs in the namespace between the window and the window of the same length before it, ranked (internal/anomaly).
 // Its lists and metrics are read like the issues and the drawers' graphs, not audited; its log and trace reads pass the
 // log tools' door and leave the rows those tools leave (k8s.pod.logs.logql, k8s.traces.query). The same caller asking
-// the same window within features.anomalyRank.cacheSeconds gets the answer it got, its store rows written again.
+// the same window within features.anomalyRank.cacheSeconds gets the answer it got, its store rows written again. with_since
+// adds from when each failing object's state is known and ranks what was there before the window after what is new, for
+// the AI tool (AI_FAULT_ONSET in tool-server).
 func (h *Handler) GetNamespaceAnomalies(w http.ResponseWriter, r *http.Request) {
 	if !h.cfg.AnomalyRankEnabled {
 		response.Error(w, http.StatusNotFound, "anomaly ranking is off (features.anomalyRank.enabled)")
@@ -95,13 +97,17 @@ func (h *Handler) GetNamespaceAnomalies(w http.ResponseWriter, r *http.Request) 
 	claims := payload.ClaimsKey()
 	key := strings.Join([]string{string(id), claims, namespace, win.Start.UTC().Format(time.RFC3339), win.End.UTC().Format(time.RFC3339),
 		q.Get("workload_kind"), q.Get("workload_name")}, "|")
+	withSince := queryParamBool(r, "with_since", false)
+	if withSince {
+		key += "|with_since"
+	}
 	ttl := secondsOr(h.cfg.AnomalyRankCacheSec, 60)
 	if e, ok := h.anomalyAnswers.get(key, now, ttl); ok && claims != "" && h.recordStoreReads(r, namespace, e.rows, true) == nil {
 		accesstrail.Cached(ctx, "the same narrowing a moment ago")
 		response.JSON(w, http.StatusOK, e.result)
 		return
 	}
-	res, rows, recorded := h.rankAnomalies(r, namespace, wl, win, len(payload.Namespaces[string(id)]) > 0)
+	res, rows, recorded := h.rankAnomalies(r, namespace, wl, win, len(payload.Namespaces[string(id)]) > 0, withSince)
 	if claims != "" && recorded {
 		h.anomalyAnswers.put(key, now, ttl, anomalyEntry{result: res, rows: rows})
 	}
@@ -115,7 +121,7 @@ func (h *Handler) GetNamespaceAnomalies(w http.ResponseWriter, r *http.Request) 
 // call order keeps (callOrderShare); the log checks' reads of one line (logSpare) come last, from what is left.
 // It returns the store rows it wrote and whether they were all written (a check whose row could not be written is not
 // run, and the answer is not kept).
-func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.Workload, win anomaly.Window, namespaceLimited bool) (anomaly.Result, []storeRow, bool) {
+func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.Workload, win anomaly.Window, namespaceLimited, withSince bool) (anomaly.Result, []storeRow, bool) {
 	src := h.anomalySource()
 	ctx, cancel := context.WithTimeout(r.Context(), secondsOr(h.cfg.AnomalyRankTimeoutSec, 20))
 	defer cancel()
@@ -157,7 +163,7 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 	go func() {
 		defer wg.Done()
 		run(func(c context.Context) {
-			issues, issuesErr = src.CollectIssues(c, k8s.IssuesOptions{Window: win.Length(), Now: win.End, Namespace: namespace})
+			issues, issuesErr = src.CollectIssues(c, k8s.IssuesOptions{Window: win.Length(), Now: win.End, Namespace: namespace, Since: withSince})
 		})
 	}()
 	go func() {
@@ -243,7 +249,7 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 		add(anomaly.CheckResult{Check: anomaly.CheckIssues, NotRun: readFailure("the pods", podsErr)})
 		add(anomaly.CheckResult{Check: anomaly.CheckNodeConditions, NotRun: readFailure("the pods (they say which nodes to look at)", podsErr)})
 	default:
-		rows, nodesErr := issueRows(issues)
+		rows, nodesErr := issueRows(issues, win)
 		add(anomaly.FromIssues(rows, pods, wl))
 		add(anomaly.FromNodeConditions(rows, pods, wl, nodesErr))
 	}
@@ -831,7 +837,7 @@ func (h *Handler) recordStoreReads(r *http.Request, namespace string, rows []sto
 }
 
 // issueRows are the issue check's rows for internal/anomaly, with the nodes' list failure apart.
-func issueRows(issues []k8s.Issue) ([]anomaly.IssueRow, string) {
+func issueRows(issues []k8s.Issue, win anomaly.Window) ([]anomaly.IssueRow, string) {
 	rows := make([]anomaly.IssueRow, 0, len(issues))
 	nodesErr := ""
 	for _, is := range issues {
@@ -839,7 +845,11 @@ func issueRows(issues []k8s.Issue) ([]anomaly.IssueRow, string) {
 			nodesErr = is.Message
 			continue
 		}
-		rows = append(rows, anomaly.IssueRow{Kind: is.Kind, Name: is.Name, Severity: is.Severity, Reason: is.Reason, Message: is.Message})
+		row := anomaly.IssueRow{Kind: is.Kind, Name: is.Name, Severity: is.Severity, Reason: is.Reason, Message: is.Message, Since: is.Since}
+		if since, err := time.Parse(time.RFC3339, is.Since); err == nil {
+			row.Before = since.Before(win.Start)
+		}
+		rows = append(rows, row)
 	}
 	return rows, nodesErr
 }

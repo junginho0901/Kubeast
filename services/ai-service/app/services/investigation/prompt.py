@@ -24,7 +24,7 @@ def report_headings(rules: bool) -> tuple[str, ...]:
 
 
 def system_prompt(*, cluster: str, namespace: str, language: str, rules: bool = False, call_paths: bool = False,
-                  verdict: bool = False, go_on: bool = False, node_neighbors: bool = False) -> str:
+                  verdict: bool = False, go_on: bool = False, node_neighbors: bool = False, fault_onset: bool = False) -> str:
     """`go_on`: an empty search ends the search for that name, not the investigation (ai.toolResultDetails, whose tool
     results say so too, or the verdict, which tells the model to use the calls it has left)."""
     lang = LANGUAGES.get(language, language or "English")
@@ -58,6 +58,7 @@ def system_prompt(*, cluster: str, namespace: str, language: str, rules: bool = 
         + ("go on without that name" if go_on else "stop looking") + " and report what was searched. "
         "Status unavailable means the cluster lacks that feature (for example metrics-server): say so and use the alternative named in the result.\n"
         + (_RULES if rules else "- When something is a guess, say it is a guess.\n")
+        + (onset_rules(rules) if fault_onset else "")
         + (_VERDICT if verdict else "")
         + "- When you know enough, stop calling tools and write the report.\n\n"
         f"Write the report in {lang}, in Markdown, under exactly these {_COUNT[len(names)]} headings (keep them in English):\n"
@@ -114,6 +115,22 @@ _RULES = (
     "- Keep facts apart from hypotheses: a fact is what a tool result showed, with the call that showed it; whatever you infer "
     "beyond that is a hypothesis and is marked as one.\n"
 )
+
+def onset_rules(rules: bool) -> str:
+    """ai.faultOnset: when each finding began, beside the alert's start. What was there before is listed under "Ruled out"
+    with the rules and under "What I checked" without them."""
+    heading = RULES_HEADINGS[4] if rules else REPORT_HEADINGS[1]
+    return (
+        "- Say when each thing you found began and set it beside the alert's start (a rule waits before it fires, so the minutes "
+        "before the start count as near it): since where a result has it, an event's first and last time and count, a pod's restarts "
+        "with its last termination, the time of a change, the window before. A beginning no result shows is not known, which is not "
+        "new.\n"
+        "- Look first at what began near the alert's start. What began well before it, or was the same in the window before "
+        "(already_there), was already there: do not name it as the cause unless the alert is about it, a result shows the alert's "
+        "symptom coming from it, or it got worse near the alert's start (more restarts or errors, fewer ready pods; it then began when "
+        f"it got worse). List it under \"{heading}\" as \"Already there before\" with its time.\n"
+    )
+
 
 # features.alertInvestigation.verdict: the symptom first, then one of three answers (investigation/verdict.py).
 _VERDICT = (

@@ -393,6 +393,7 @@ func handleIssues(ctx context.Context, args map[string]interface{}, headers http
 	if w := argInt(args, "window_minutes", 0); w > 0 {
 		q.Set("window", strconv.Itoa(w))
 	}
+	askSince(q)
 	status, body, err := k8sServiceGet(ctx, headers, "/issues", q)
 	if err != nil {
 		return "", err

@@ -894,6 +894,25 @@ tests:
       - equal:
           path: data.AI_CAUSE_QUESTIONS
           value: "false"
+  - it: keeps when a failure began off by default
+    asserts:
+      - equal:
+          path: data.AI_FAULT_ONSET
+          value: "false"
+  - it: turns when a failure began on from ai.faultOnset
+    set:
+      ai.faultOnset: true
+    asserts:
+      - equal:
+          path: data.AI_FAULT_ONSET
+          value: "true"
+  - it: values without ai.faultOnset, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.faultOnset: null
+    asserts:
+      - equal:
+          path: data.AI_FAULT_ONSET
+          value: "false"
 
   - it: values without ai.redaction.numbered, as an earlier chart's --reuse-values keeps them, render it off
     set:

@@ -514,6 +514,20 @@ ai:
   # instructions are as before.
   # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   causeQuestions: false
+  # When each failure began. The chat's and alert investigations' instructions
+  # ask for it: say when each finding began, look first at what began near the
+  # time asked about or the alert's start, and list what was there before apart
+  # instead of naming it as the cause, unless the question or the alert is about
+  # it, a call shows the symptom coming from it or it got worse at that time. A
+  # question that says nothing of what fails has the chat look for the symptom
+  # first, also in the logs of workloads that are Ready, so it reads more. The
+  # results of issues and anomaly_rank say from when the record shows a failing
+  # object failing (since), out of the lists they read anyway, and anomaly_rank
+  # puts a state from before its window after the rest unless another check found
+  # it grown. The floating chat and the MCP server get those results, not the
+  # instructions. Off: the instructions and the results are as before.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  faultOnset: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).

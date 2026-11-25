@@ -15,7 +15,7 @@ import time
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from app.services.ai import screen_permissions
-from app.services.ai.tools import CALLS_DESCRIPTION, CALLS_PARAMS, NODE_DESCRIPTION, NODE_PARAMS, offer_result_details, offer_timeline_changes, without_params
+from app.services.ai.tools import CALLS_DESCRIPTION, CALLS_PARAMS, NODE_DESCRIPTION, NODE_PARAMS, offer_fault_onset, offer_result_details, offer_timeline_changes, without_params
 from app.services.investigation import settings as investigation_settings
 from app.services.tool_whitelists import WRITE_TOOL_NAMES
 
@@ -233,8 +233,8 @@ def _names(tools: List[Dict]) -> List[str]:
 
 async def gate_tools(tools: List[Dict], service) -> List[Dict]:
     """The chat's tool list for the service's active cluster and token, timeline's changes view and the words of
-    AI_TOOL_RESULT_DETAILS only with their switches."""
-    tools = offer_result_details(offer_timeline_changes(tools))
+    AI_TOOL_RESULT_DETAILS and AI_FAULT_ONSET only with their switches."""
+    tools = offer_fault_onset(offer_result_details(offer_timeline_changes(tools)))
     names = _names(tools)
     if not any(gated(n) or n in PARAM_GATES for n in names):
         return tools

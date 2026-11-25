@@ -76,6 +76,19 @@ FIND_ONCE_DETAILS = (
 ISSUES_EMPTY = "An empty list means nothing is failing in that scope right now."
 ISSUES_EMPTY_DETAILS = ISSUES_EMPTY[:-1] + " unless not_read is there: it names the lists that could not be read, which are not counted."
 
+# Words of the two tools whose answers say from when a failing object's state is known with AI_FAULT_ONSET on, and what
+# then follows them (offer_fault_onset).
+ISSUES_NUMBERS = "plus counts per severity. "
+ISSUES_SINCE = (
+    "since, where it is there, is the time from which the record shows the object failing without a gap: it may have begun earlier, "
+    "and no since is not known, not new. "
+)
+ANOMALY_RANK_ORDER = "then the larger ratio, the warnings of the state now last. "
+ANOMALY_RANK_SINCE = (
+    "since on a failing object is the time from which the record shows it failing (none: not known); already_there says that is before "
+    "the window, and such a finding comes after the rest unless it has worse: another check found the same pod new or grown in the window. "
+)
+
 K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
@@ -2047,6 +2060,28 @@ def offer_result_details(tools: List[Dict]) -> List[Dict]:
         fn = (t or {}).get("function") or {}
         words = _RESULT_DETAILS.get(fn.get("name"))
         out.append({**t, "function": {**fn, "description": fn["description"].replace(*words)}} if words else t)
+    return out
+
+
+_FAULT_ONSET = {"issues": (ISSUES_NUMBERS, ISSUES_SINCE), "anomaly_rank": (ANOMALY_RANK_ORDER, ANOMALY_RANK_SINCE)}
+
+
+def fault_onset_on() -> bool:
+    """AI_FAULT_ONSET (chart ai.faultOnset, default off; in the ConfigMap every service reads), read with the one switch
+    rule (app/services/switch.py)."""
+    return switch.env_on("AI_FAULT_ONSET")
+
+
+def offer_fault_onset(tools: List[Dict]) -> List[Dict]:
+    """tools as the model is offered them: with AI_FAULT_ONSET on, the tools of _FAULT_ONSET with the words of what
+    tool-server then asks for (since, already_there, worse)."""
+    if not fault_onset_on():
+        return tools
+    out = []
+    for t in tools:
+        fn = (t or {}).get("function") or {}
+        words = _FAULT_ONSET.get(fn.get("name"))
+        out.append({**t, "function": {**fn, "description": fn["description"].replace(words[0], words[0] + words[1])}} if words else t)
     return out
 
 

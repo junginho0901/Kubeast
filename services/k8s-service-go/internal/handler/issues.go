@@ -9,7 +9,8 @@ import (
 )
 
 // GetClusterIssues handles GET /api/v1/issues (gateway: /api/v1/cluster/issues).
-// window = minutes of Warning events to read (default ISSUES_EVENT_WINDOW_MINUTES).
+// window = minutes of Warning events to read (default ISSUES_EVENT_WINDOW_MINUTES); with_since = each issue's since, for the AI
+// tool (AI_FAULT_ONSET in tool-server).
 func (h *Handler) GetClusterIssues(w http.ResponseWriter, r *http.Request) {
 	window := queryParamInt(r, "window", h.cfg.IssuesEventWindowMinutes)
 	if window < 1 || window > 7*24*60 {
@@ -18,6 +19,7 @@ func (h *Handler) GetClusterIssues(w http.ResponseWriter, r *http.Request) {
 	issues, err := h.svc.CollectIssues(r.Context(), k8s.IssuesOptions{
 		Window:                time.Duration(window) * time.Minute,
 		IncludeRestartHistory: queryParamBool(r, "include_restart_history", false),
+		Since:                 queryParamBool(r, "with_since", false),
 	})
 	if err != nil {
 		h.handleError(w, err)

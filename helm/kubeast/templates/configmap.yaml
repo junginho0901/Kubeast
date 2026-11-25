@@ -142,6 +142,7 @@ data:
   AI_TIMELINE_CHANGES: {{ .Values.ai.timelineChanges | quote }}
   AI_TIMELINE_CHANGES_MORE: {{ dig "timelineChangesMore" false .Values.ai | quote }}
   AI_CAUSE_QUESTIONS: {{ dig "causeQuestions" false .Values.ai | quote }}
+  AI_FAULT_ONSET: {{ dig "faultOnset" false .Values.ai | quote }}
   AI_CHAT_MAX_STEPS: {{ dig "maxSteps" 20 .Values.ai.chat | quote }}
   AI_CHAT_HISTORY_MESSAGES: {{ .Values.ai.chat.historyMessages | quote }}
   AI_CHAT_SUMMARY_ENABLED: {{ .Values.ai.chat.summary.enabled | quote }}

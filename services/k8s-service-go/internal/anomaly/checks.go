@@ -8,13 +8,16 @@ import (
 	"time"
 )
 
-// IssueRow is what the issue check (k8s.Issue) gives a row of: the object, how bad, why.
+// IssueRow is what the issue check (k8s.Issue) gives a row of: the object, how bad, why, and where it was asked for
+// (with_since) from when the record shows it, with Before when that is before the window.
 type IssueRow struct {
 	Kind     string
 	Name     string
 	Severity string
 	Reason   string
 	Message  string
+	Since    string
+	Before   bool
 }
 
 // FromIssues is the "failing now" check: each critical or warning issue of an object in the namespace. It reads the
@@ -36,7 +39,7 @@ func FromIssues(rows []IssueRow, pods []map[string]interface{}, wl *Workload) Ch
 			continue
 		}
 		f := Finding{Check: CheckIssues, Target: row.Kind + "/" + row.Name, Verdict: VerdictAnomalous,
-			Summary: stateNow(row), critical: row.Severity == "critical"}
+			Summary: stateNow(row), Since: row.Since, AlreadyThere: row.Before, critical: row.Severity == "critical"}
 		r.Findings = append(r.Findings, f)
 	}
 	sort.Strings(unread)
@@ -52,10 +55,13 @@ func FromIssues(rows []IssueRow, pods []map[string]interface{}, wl *Workload) Ch
 }
 
 // stateNow is a state's summary. A critical one, which ranks beside what is new, says that nothing is known of the window
-// before; a warning ranks last and claims nothing of it.
+// before, or that it was there before it; a warning ranks last and claims nothing of it.
 func stateNow(row IssueRow) string {
 	now := row.Severity + " now: "
-	if row.Severity == "critical" {
+	switch {
+	case row.Before:
+		now = row.Severity + " now (" + ThereBefore + "): "
+	case row.Severity == "critical":
 		now = row.Severity + " now (" + NoEarlier + "): "
 	}
 	return shorten(now + strings.TrimSpace(row.Reason+" "+row.Message))
@@ -217,6 +223,9 @@ func FromCrashReasons(pods []map[string]interface{}, wl *Workload, w Window) Che
 			f.Verdict = VerdictAnomalous
 		}
 		compare(&f, b, count)
+		for _, t := range list {
+			f.pods = append(f.pods, t.pod)
+		}
 		for i, t := range list {
 			if i == MaxExamples {
 				break

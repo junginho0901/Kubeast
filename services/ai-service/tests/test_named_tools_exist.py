@@ -8,7 +8,7 @@ import pytest
 
 from app.prompts.floating_system_prompt import FLOATING_BASE_SYSTEM_PROMPT
 from app.services import rule_cards
-from app.services.ai.prompts import CAUSE_QUESTION_LINES, SYSTEM_MESSAGE
+from app.services.ai.prompts import CAUSE_QUESTION_LINES, ONSET_SECTION, SYSTEM_MESSAGE
 from app.services.ai.tools import K8S_READONLY_TOOLS, get_tools_definition
 from app.services.investigation.prompt import system_prompt
 
@@ -20,9 +20,11 @@ _DEFINED = {tool["function"]["name"] for tool in _ALL_TOOLS} | _LABELS
 _TEXTS = {
     "the system message": SYSTEM_MESSAGE,
     "the chat's rules for why questions": "\n".join(CAUSE_QUESTION_LINES.values()),
+    "the chat's section on when a failure began": ONSET_SECTION,
     "the floating chat's system prompt": FLOATING_BASE_SYSTEM_PROMPT,
     "an investigation's system prompt": system_prompt(cluster="c1", namespace="shop", language="en"),
     "an investigation's system prompt with the rules": system_prompt(cluster="c1", namespace="shop", language="en", rules=True),
+    "an investigation's system prompt on when a failure began": system_prompt(cluster="c1", namespace="shop", language="en", fault_onset=True),
     "an investigation's system prompt with the call paths": system_prompt(cluster="c1", namespace="shop", language="en", call_paths=True),
     "the tool descriptions": json.dumps(_ALL_TOOLS),
     # each card as the model reads it when every tool it names is offered, so a name no tool has is not left out
