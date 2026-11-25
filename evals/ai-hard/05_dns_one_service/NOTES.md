@@ -13,7 +13,7 @@ What the AI has to notice:
 
 The trap: blame the callee (inventory "unreachable"), the Service, or CoreDNS.
 
-How the scorer judges: the cause is storefront (Deployment, or its ReplicaSet / pod) with kind `dns`. `rollout` or `config_change` alone does not count: the case is about recognising DNS. inventory, its Service or CoreDNS named as causes are decoys. Start time ±2 min of the patch.
+How the scorer judges: the cause is storefront (Deployment, or its ReplicaSet / pod) with kind `dns`. `rollout` or `config_change` alone does not count: the case is about recognising DNS. inventory, its Service or CoreDNS named as causes are decoys. Start time ±2 min of the patch. The second scoring takes storefront with kind `rollout` or `config_change` when the answer says, in a sentence that names storefront, that its DNS settings changed or lack the namespace. A change told without that is still a miss (`scoring.json`).
 
 Unsure:
 - The patch is a rollout, so `timeline` shows it; an AI can get there from "what changed" without reading the DNS error. That is realistic, but it makes the case easier than DNSChaos (no spec change).

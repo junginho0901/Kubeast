@@ -42,18 +42,14 @@ func (f *twoRestarting) ProtectedNamespaces(context.Context) protectedns.Namespa
 	return protectedns.Namespaces{NodeShell: "kubeast-node-shell"}
 }
 
-func (f *twoRestarting) PrometheusQueryAt(_ context.Context, q string, at time.Time) ([]k8s.PrometheusQueryResult, error) {
+func (f *twoRestarting) PrometheusQueryAt(_ context.Context, q string, _ time.Time) ([]k8s.PrometheusQueryResult, error) {
 	f.mu.Lock()
 	f.reads++
 	f.mu.Unlock()
 	if !strings.Contains(q, "kube_pod_container_status_restarts_total") {
 		return nil, nil
 	}
-	web, api := 1.0, 1.0
-	if at.Equal(anomalyNow) {
-		web, api = 8, 3
-	}
-	return []k8s.PrometheusQueryResult{{Metric: map[string]interface{}{"pod": "web-1"}, Value: web}, {Metric: map[string]interface{}{"pod": "api-1"}, Value: api}}, nil
+	return append(bothWindows(map[string]interface{}{"pod": "web-1"}, 8, 1), bothWindows(map[string]interface{}{"pod": "api-1"}, 3, 1)...), nil
 }
 
 // orderGraph is callsGraph with api's pod: web's pod is web-1 (selected by web-svc), api's api-1.
@@ -100,7 +96,7 @@ func TestAnomaliesCallOrderOffReadsNothingMore(t *testing.T) {
 	if got := findingOrder(res); got != "restarts:Pod/web-1,restarts:Pod/api-1" {
 		t.Fatalf("2-a order %s", got)
 	}
-	if res.StoreQueries != 6 {
+	if res.StoreQueries != 3 {
 		t.Fatalf("store queries %d", res.StoreQueries)
 	}
 }
@@ -131,7 +127,7 @@ func TestAnomaliesCallOrderPutsTheCauseBeforeItsVictim(t *testing.T) {
 		}
 	}
 	// the 90th percentile ranks nothing and is not read; the queries stay within features.anomalyRank.maxQueries
-	if calls.plain != 0 || calls.count("traces_service_graph_request_server_seconds_bucket") != 0 || res.StoreQueries > 12 || res.StoreQueries != 6+len(calls.at)+len(calls.between) {
+	if calls.plain != 0 || calls.count("traces_service_graph_request_server_seconds_bucket") != 0 || res.StoreQueries > 12 || res.StoreQueries != 3+len(calls.at)+len(calls.between) {
 		t.Fatalf("plain %d queries %v store %d", calls.plain, calls.queries, res.StoreQueries)
 	}
 	if !strings.Contains(w.Body.String(), `"call_order":{"applied":true`) {
@@ -139,9 +135,10 @@ func TestAnomaliesCallOrderPutsTheCauseBeforeItsVictim(t *testing.T) {
 	}
 }
 
-// The checks take their queries first: with none left for the call graph the 2-a order stays and call_order says why.
+// Below the default the call order keeps no query of its own and the checks take theirs first: with too few left for the
+// call graph the 2-a order stays and call_order says why.
 func TestAnomaliesCallOrderWithinTheStoreQueries(t *testing.T) {
-	h, _, calls, _ := callOrderHandler(config.Config{CallGraphEnabled: true, AnomalyRankMaxQueries: 7})
+	h, _, calls, _ := callOrderHandler(config.Config{CallGraphEnabled: true, AnomalyRankMaxQueries: 4})
 	w, res := getAnomalies(h, "/api/v1/namespaces/shop/anomalies", flowReader)
 	if w.Code != http.StatusOK {
 		t.Fatalf("%d %s", w.Code, w.Body)
@@ -150,7 +147,7 @@ func TestAnomaliesCallOrderWithinTheStoreQueries(t *testing.T) {
 		t.Fatalf("order %s", got)
 	}
 	co := res.CallOrder
-	if co == nil || co.Applied || co.Moved != 0 || !strings.Contains(co.Reason, budgetSpent) || res.StoreQueries != 7 {
+	if co == nil || co.Applied || co.Moved != 0 || !strings.Contains(co.Reason, budgetSpent) || res.StoreQueries != 4 {
 		t.Fatalf("call_order %+v store %d", co, res.StoreQueries)
 	}
 	if len(calls.at)+len(calls.between) > 1 {

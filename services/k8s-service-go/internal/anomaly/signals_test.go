@@ -76,7 +76,7 @@ func TestErrorShapesWithNothingBeforeAreNotCompared(t *testing.T) {
 }
 
 func TestErrorCountsPerContainer(t *testing.T) {
-	r := FromLogCounts(map[string]float64{"app": 9, "sidecar": 5, "quiet": 2, "": 7}, map[string]float64{"app": 2, "sidecar": 4})
+	r := FromLogCounts(map[string]float64{"app": 9, "sidecar": 5, "quiet": 2, "": 7}, map[string]float64{"app": 2, "sidecar": 4}, EarlierUnknown)
 	got := map[string]Finding{}
 	for _, f := range r.Findings {
 		got[f.Target] = f
@@ -85,7 +85,7 @@ func TestErrorCountsPerContainer(t *testing.T) {
 		got["container sidecar"].Verdict != VerdictNormal || !got["containers without a name label"].New {
 		t.Fatalf("%+v", r.Findings)
 	}
-	if r := FromLogCounts(map[string]float64{}, map[string]float64{}); r.NotRun != "" || len(r.Findings) != 0 {
+	if r := FromLogCounts(map[string]float64{}, map[string]float64{}, EarlierUnknown); r.NotRun != "" || len(r.Findings) != 0 {
 		t.Fatalf("no error line in either window is normal once the store said it holds lines: %+v", r)
 	}
 }
@@ -182,7 +182,7 @@ func TestTraceChecksWithoutSpansDoNotRun(t *testing.T) {
 }
 
 func TestNewChecksRankAfterTheOldOnATie(t *testing.T) {
-	if checkOrder(CheckCPUThrottling) >= checkOrder(CheckErrorLogShapes) || checkOrder(CheckTraceRequests) >= checkOrder(CheckNodePressure) {
+	if checkOrder(CheckCPUThrottling) >= checkOrder(CheckErrorLogShapes) || checkOrder(CheckTraceRequests) >= checkOrder(CheckNodeConditions) {
 		t.Fatal(Checks)
 	}
 	if len(Checks) != 11 || len(LogChecks)+len(TraceChecks) != 5 {

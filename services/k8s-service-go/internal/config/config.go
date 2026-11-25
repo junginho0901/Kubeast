@@ -67,6 +67,10 @@ type Config struct {
 	// ALERT_INVESTIGATION_CHANGES_FIRST); otherwise the routes answer 404, as before the view.
 	TimelineChangesView bool
 
+	// The changes view's further sources (chart ai.timelineChangesMore, off by default): Jobs made, NetworkPolicy and
+	// Service writes and replica counts set, in a namespace. Alone it opens no route.
+	TimelineChangesMore bool
+
 	// Narrowing for the AI (chart features.anomalyRank, off by default): GET
 	// /namespaces/{namespace}/anomalies ranks what differs from the window
 	// before. Off = the route answers 404 and reads nothing. The rest bound one
@@ -219,6 +223,7 @@ func Load() Config {
 		// ALERT_INVESTIGATION_ENABLED, a 0.7.8 switch, as AlertInvestigationEnabled reads it; the v0.7.9 ones by SwitchOn
 		TimelineChangesView: pkgconfig.EnvSwitch("AI_TIMELINE_CHANGES") ||
 			(pkgconfig.GetEnvBool("ALERT_INVESTIGATION_ENABLED", false) && pkgconfig.EnvSwitch("ALERT_INVESTIGATION_CHANGES_FIRST")),
+		TimelineChangesMore: pkgconfig.EnvSwitch("AI_TIMELINE_CHANGES_MORE"),
 
 		AnomalyRankEnabled:         pkgconfig.EnvSwitch("ANOMALY_RANK_ENABLED"),
 		AnomalyRankMaxQueries:      pkgconfig.GetEnvInt("ANOMALY_RANK_MAX_QUERIES", 12),

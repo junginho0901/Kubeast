@@ -4,7 +4,7 @@ Group: hidden cause. Cluster `default`, on the OpenTelemetry demo (`scripts/kind
 
 Asks (EN gloss): specific "product pages of the otel-demo shop got slow — why?"; vague "something is a bit off with the otel-demo shop, take a look".
 
-Setup: the demo with its load generator. The runner's namespace `shop-07` holds only `uptime-check`, which asks the shop for one product and an empty cart every 10 s and logs the duration — the runner waits on its lines.
+Setup: the demo with its load generator. The runner's namespace `shop-07` holds only `uptime-check`, which asks the shop for one product and an empty cart every 10 s and logs the duration — the runner waits on its lines. `not_right_after` keeps it from running right after 01, whose scaled store is still in the last hour of the demo's metrics and logs.
 
 The fault: a Chaos Mesh NetworkChaos (in namespace `chaos-mesh`, where the controller runs) holds every packet product-catalog's pods send to frontend's pods for 700 ms. product-catalog answers as fast as ever, and its server spans say so; frontend's client spans of the same calls are 700 ms longer. product-catalog's other callers (checkout, recommendation) and frontend's other calls (cart, currency, recommendation) are untouched. Nothing fails.
 

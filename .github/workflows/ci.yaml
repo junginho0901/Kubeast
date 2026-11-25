@@ -177,6 +177,7 @@ jobs:
       - run: python -I scripts/test_ai_eval_cases.py
       - run: python -I scripts/test_ai_eval_runner.py
       - run: python -I scripts/test_ai_eval_alerts.py
+      - run: python -I scripts/test_ai_eval_second.py
 
   frontend:
     name: frontend (tsc + vitest)

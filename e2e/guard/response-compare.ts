@@ -135,15 +135,26 @@ export function tailCopies(old1: Answer, fresh: Answer, old2: Answer): (cell: st
   return (cell) => tails.some((row) => cell.startsWith(`${row}.`))
 }
 
+// One row the new build adds to a list, by its name: the row's cells, which neither old answer has, and the list's own
+// two cells while the old list is the new one without that row: its count one higher, its names in the same order.
+export function addsRow(d: Difference, row: string): boolean {
+  if (d.kind === 'added') return d.cell.includes(`[${row}].`)
+  if (d.old === null || d.new === null) return false
+  if (d.cell.endsWith('.$length')) return Number(d.new) === Number(d.old) + 1
+  if (!d.cell.endsWith('.$order')) return false
+  const names = d.new.split(' ')
+  return names.includes(row) && names.filter((name) => name !== row).join(' ') === d.old
+}
+
 // A known difference: which requests (route), which cells, optionally whose answers (user) and on which cluster
 // (cluster), why, and the PR that made it. A rule with no reason or PR is refused; the file's changes show in the diff of
 // whichever PR adds to it. A rule whose cells take in `$status` names the status the new build answers (newStatus), so a
 // server error is never a known difference. A rule with rowsLeftOut takes its cells only from an answer rowsLeftOut holds,
-// and one with tailCopies only the cells tailCopies names.
+// one with tailCopies only the cells tailCopies names, and one with addedRow only the differences addsRow takes.
 export type IgnoreRule = {
-  route: string; cell: string; user?: string; cluster?: string; newStatus?: string; rowsLeftOut?: boolean; tailCopies?: boolean; why: string; pr: string
+  route: string; cell: string; user?: string; cluster?: string; newStatus?: string; rowsLeftOut?: boolean; tailCopies?: boolean; addedRow?: string; why: string; pr: string
 }
-export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string, user?: string, newStatus?: string, cluster?: string, leftOut?: boolean, tailCopy?: boolean) => IgnoreRule | null) {
+export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string, user?: string, newStatus?: string, cluster?: string, leftOut?: boolean, tailCopy?: boolean, difference?: Difference) => IgnoreRule | null) {
   const compiled = rules.map((r) => {
     if (!r.why?.trim() || !r.pr?.trim()) throw new Error(`an ignore rule needs a reason and a PR: ${JSON.stringify(r)}`)
     const cell = new RegExp(r.cell)
@@ -151,9 +162,10 @@ export function compileRules(rules: IgnoreRule[]): ((route: string, cell: string
     const pattern = (p?: string) => (p ? new RegExp(p) : null)
     return { rule: r, route: new RegExp(r.route), cell, user: pattern(r.user), cluster: pattern(r.cluster), newStatus: pattern(r.newStatus) }
   })
-  return (route, cell, user = '', newStatus = '', cluster = '', leftOut = false, tailCopy = false) => compiled.find((c) => c.route.test(route)
+  return (route, cell, user = '', newStatus = '', cluster = '', leftOut = false, tailCopy = false, difference) => compiled.find((c) => c.route.test(route)
     && c.cell.test(cell) && (!c.user || c.user.test(user)) && (!c.cluster || c.cluster.test(cluster)) && (!c.newStatus || c.newStatus.test(newStatus))
-    && (!c.rule.rowsLeftOut || leftOut) && (!c.rule.tailCopies || tailCopy))?.rule ?? null
+    && (!c.rule.rowsLeftOut || leftOut) && (!c.rule.tailCopies || tailCopy)
+    && (c.rule.addedRow === undefined || (!!difference && addsRow(difference, c.rule.addedRow))))?.rule ?? null
 }
 
 // The cluster a request asked: a GET's `cluster` parameter, a live request's cluster id ("live <cluster> <path>?<query>").

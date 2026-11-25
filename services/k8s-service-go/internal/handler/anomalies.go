@@ -110,7 +110,9 @@ func (h *Handler) GetNamespaceAnomalies(w http.ResponseWriter, r *http.Request) 
 
 // rankAnomalies runs the checks: the pods and the issue check once, then the metric, log and trace checks, at most
 // features.anomalyRank.concurrency at once, each within checkTimeoutSeconds and all within timeoutSeconds. The store
-// queries are taken from the answer's budget in check order before any runs, so the same budget gives the same checks.
+// queries are taken from the answer's budget in check order before any runs, so the same budget gives the same checks:
+// one for each of the three metric checks, three for the log checks and three for the trace checks, beside those the
+// call order keeps (callOrderShare); the log checks' reads of one line (logSpare) come last, from what is left.
 // It returns the store rows it wrote and whether they were all written (a check whose row could not be written is not
 // run, and the answer is not kept).
 func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.Workload, win anomaly.Window, namespaceLimited bool) (anomaly.Result, []storeRow, bool) {
@@ -165,19 +167,23 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 
 	queries := anomaly.Queries(namespace, wl, win.Length())
 	budget := &anomalyBudget{left: countOr(h.cfg.AnomalyRankMaxQueries, 12)}
+	prometheus := !namespaceLimited && src.PrometheusAvailable(ctx)
+	if h.cfg.CallGraphEnabled && prometheus {
+		budget.keep(callOrderShare(budget.left))
+	}
 	switch {
 	case namespaceLimited:
 		// as the Prometheus routes refuse such a grant (prometheus_scope.go): the cluster's Prometheus answers for every namespace
 		for _, q := range queries {
 			add(anomaly.CheckResult{Check: q.Check, NotRun: "the cluster's Prometheus covers the whole cluster; your grant on this cluster is limited to namespaces"})
 		}
-	case !src.PrometheusAvailable(ctx):
+	case !prometheus:
 		for _, q := range queries {
 			add(anomaly.CheckResult{Check: q.Check, NotRun: "no Prometheus reaches this cluster"})
 		}
 	default:
 		for _, q := range queries {
-			if !budget.take(2) {
+			if !budget.take(1) {
 				add(anomaly.CheckResult{Check: q.Check, NotRun: budgetSpent})
 				continue
 			}
@@ -198,11 +204,6 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 		notRun(anomaly.LogChecks, budgetSpent)
 	default:
 		logs.ran = true
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			add(h.logChecks(r, run, budget, logs, namespace, wl, win)...)
-		}()
 	}
 	traceReads := &storeReads{action: "k8s.traces.query", checks: anomaly.TraceChecks, rangeSeconds: int64(2 * win.Length() / time.Second)}
 	step, stepOK := anomaly.TraceStep(win)
@@ -215,6 +216,16 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 		notRun(anomaly.TraceChecks, budgetSpent)
 	default:
 		traceReads.ran = true
+	}
+	if logs.ran {
+		spare := budget.upTo(logSpare)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			add(h.logChecks(r, run, budget, logs, namespace, wl, win, spare)...)
+		}()
+	}
+	if traceReads.ran {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -222,18 +233,19 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 		}()
 	}
 	wg.Wait()
+	budget.release()
 
 	switch {
 	case issuesErr != nil:
 		add(anomaly.CheckResult{Check: anomaly.CheckIssues, NotRun: readFailure("the issue check", issuesErr)})
-		add(anomaly.CheckResult{Check: anomaly.CheckNodePressure, NotRun: readFailure("the issue check", issuesErr)})
+		add(anomaly.CheckResult{Check: anomaly.CheckNodeConditions, NotRun: readFailure("the nodes (read with the issue check)", issuesErr)})
 	case podsErr != nil:
 		add(anomaly.CheckResult{Check: anomaly.CheckIssues, NotRun: readFailure("the pods", podsErr)})
-		add(anomaly.CheckResult{Check: anomaly.CheckNodePressure, NotRun: readFailure("the pods", podsErr)})
+		add(anomaly.CheckResult{Check: anomaly.CheckNodeConditions, NotRun: readFailure("the pods (they say which nodes to look at)", podsErr)})
 	default:
 		rows, nodesErr := issueRows(issues)
 		add(anomaly.FromIssues(rows, pods, wl))
-		add(anomaly.FromNodePressure(rows, pods, wl, nodesErr))
+		add(anomaly.FromNodeConditions(rows, pods, wl, nodesErr))
 	}
 	if podsErr != nil {
 		add(anomaly.CheckResult{Check: anomaly.CheckCrashReasons, NotRun: readFailure("the pods", podsErr)})
@@ -260,12 +272,25 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 	return anomaly.AssembleWith(namespace, wl, win, results, budget.used(), order), rows, recorded
 }
 
+// callOrderReads are the Prometheus reads of the call order's traces source: the label names, the requests and the
+// failed requests (the 90th percentile ranks nothing and is not read).
+const callOrderReads = 3
+
+// callOrderShare is what the call order keeps of an answer's store queries while the checks take theirs: its traces
+// source's reads, when they are a quarter of the queries or less (the default 12 and more), since fewer read no source.
+// The checks need nine at most, so at the default each still runs with features.callGraph on.
+func callOrderShare(queries int) int {
+	if queries < 4*callOrderReads {
+		return 0
+	}
+	return callOrderReads
+}
+
 // callOrder reads the call graph over the narrowing's window when features.callGraph is on and the anomalous findings
 // name two workloads or more of the namespace's graph, and gives its order of the failing workloads (callgraph.Suspects,
-// a failing workload whose callees are all well first). Its Prometheus reads (1 + 2 for the traces, without the 90th
-// percentile, which ranks nothing; 3 or 4 for the traffic lines) are taken from the answer's store queries after the
-// checks took theirs, so the same budget gives the same checks with the switch on or off; a read past the budget is
-// refused and call_order says why. nil = not asked (the answer has no call_order).
+// a failing workload whose callees are all well first). Its Prometheus reads (callOrderReads for the traces, up to 5 for
+// the traffic lines) are taken from the store queries it kept (callOrderShare) and those the checks left; a read past
+// them is refused and call_order says why. nil = not asked (the answer has no call_order).
 func (h *Handler) callOrder(r *http.Request, run func(func(context.Context)), budget *anomalyBudget, namespace string, win anomaly.Window, results []anomaly.CheckResult) *anomaly.CallOrder {
 	if !h.cfg.CallGraphEnabled {
 		return nil
@@ -503,17 +528,25 @@ func (h *Handler) traceChecksRefusal(r *http.Request, namespace string, win anom
 	return ""
 }
 
+// logSpare are the log checks' reads of one line, at most: whether the store holds any line when its index counts none,
+// and whether it holds one of the window before when error lines would else be new.
+const logSpare = 2
+
 // logChecks estimates the namespace's log volume over both windows from the store's index, then, under
 // features.anomalyRank.logMaxBytes and with lines there, reads the error shapes and counts. Three store queries were
-// taken; those not made go back. When the index counts no line, a read of one line over the same range, made under the
-// estimate's query, says whether there is one: Loki's index leaves out the lines its ingesters hold and have not
-// flushed, and a Loki run as one process (-target=all) asks no ingester for it, so a recent window can count none.
-func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), budget *anomalyBudget, reads *storeReads, namespace string, wl *anomaly.Workload, win anomaly.Window) []anomaly.CheckResult {
+// taken, and spare of logSpare; those not made go back. When the index counts no line, a read of one line over the same
+// range, with a spare query, says whether there is one: Loki's index leaves out the lines its ingesters hold and have not
+// flushed, and a Loki run as one process (-target=all) asks no ingester for it, so a recent window can count none. With
+// none spare the shapes and counts are read all the same, and when they show no line the count check did not run.
+// When a container's error lines would be new and neither the shapes nor the counts show a line of the window before, a
+// read of one line of that window, with a spare query, says whether the store has data for it.
+func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), budget *anomalyBudget, reads *storeReads, namespace string, wl *anomaly.Workload, win anomaly.Window, spare int) []anomaly.CheckResult {
 	id, _ := cluster.FromContext(r.Context())
 	cfg := h.logSearch.Config()
 	labels := anomaly.LogLabels{Pod: cfg.Labels.Pod, Container: cfg.Labels.Container}
 	selector := anomaly.LogSelector(labels, wl)
 	before := win.Before()
+	defer func() { budget.give(spare) }()
 	both := func(why string) []anomaly.CheckResult {
 		budget.give(2)
 		return []anomaly.CheckResult{{Check: anomaly.CheckErrorLogShapes, NotRun: why}, {Check: anomaly.CheckErrorLogCounts, NotRun: why}}
@@ -521,6 +554,7 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 
 	var vol logsearch.Volume
 	var err error
+	lineRead := false
 	run(func(c context.Context) {
 		var eff string
 		vol, eff, err = h.logSearch.Estimate(c, logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: selector, Start: before.Start, End: win.End})
@@ -539,7 +573,8 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 	case vol.Bytes > limit:
 		return both(fmt.Sprintf("too large: the log store's index puts these logs over the window and the one before at %s, past features.anomalyRank.logMaxBytes (%s); narrow with workload_kind and workload_name or a shorter window",
 			logsearch.Size(vol.Bytes), logsearch.Size(limit)))
-	case vol.Entries == 0:
+	case vol.Entries == 0 && spare > 0:
+		spare--
 		var res logsearch.Result
 		var qerr error
 		run(func(c context.Context) {
@@ -552,12 +587,16 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 		case len(res.Lines) == 0:
 			return both("the log store holds no lines for this namespace (or workload) in the window or the one before")
 		}
+		lineRead = true
 	}
 
 	var (
 		wg               sync.WaitGroup
 		shapes, counts   anomaly.CheckResult
 		patterns, series int
+		now, prev        map[string]float64
+		partial          string
+		samples          []anomaly.PatternSample
 	)
 	wg.Add(2)
 	go func() {
@@ -572,7 +611,6 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 				shapes = anomaly.CheckResult{Check: anomaly.CheckErrorLogShapes, NotRun: readFailure("the log store", perr)}
 			default:
 				patterns = len(ps)
-				samples := make([]anomaly.PatternSample, 0, len(ps))
 				for _, p := range ps {
 					samples = append(samples, anomaly.PatternSample{Pattern: p.Pattern, Level: p.Level, Samples: p.Samples})
 				}
@@ -591,7 +629,7 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 				return
 			}
 			series = len(res.Series)
-			now, prev := map[string]float64{}, map[string]float64{}
+			now, prev = map[string]float64{}, map[string]float64{}
 			for _, s := range res.Series {
 				for _, p := range s.Points {
 					switch int64(p.T) {
@@ -602,13 +640,40 @@ func (h *Handler) logChecks(r *http.Request, run func(func(context.Context)), bu
 					}
 				}
 			}
-			counts = anomaly.FromLogCounts(now, prev)
 			if res.Truncated {
-				counts.Partial = seriesCut("the log store", res.SeriesTotal, len(res.Series))
+				partial = seriesCut("the log store", res.SeriesTotal, len(res.Series))
 			}
 		})
 	}()
 	wg.Wait()
+	earlier := anomaly.EarlierUnknown
+	if anomaly.LinesIn(samples, before) {
+		earlier = anomaly.EarlierSome
+	}
+	if spare > 0 && earlier == anomaly.EarlierUnknown && anomaly.LogCountsNeedEarlier(now, prev) {
+		spare--
+		run(func(c context.Context) {
+			res, qerr := h.logSearch.Query(c, logsearch.QueryRequest{Cluster: string(id), Namespace: namespace, Query: selector, Start: before.Start, End: before.End, Limit: 1})
+			reads.sent(res.EffectiveQuery, qerr)
+			switch {
+			case qerr != nil:
+			case len(res.Lines) == 0:
+				earlier = anomaly.EarlierNone
+			default:
+				earlier = anomaly.EarlierSome
+			}
+		})
+	}
+	lines := vol.Entries > 0 || lineRead || anomaly.LinesIn(samples, win) || anomaly.LinesIn(samples, before) || anomaly.HasLines(now) || anomaly.HasLines(prev)
+	switch {
+	case now == nil:
+		// the count query failed: counts says why
+	case !lines:
+		counts = anomaly.CheckResult{Check: anomaly.CheckErrorLogCounts, NotRun: anomaly.NoLinesSeen}
+	default:
+		counts = anomaly.FromLogCounts(now, prev, earlier)
+		counts.Partial = partial
+	}
 	reads.count("patterns", patterns)
 	reads.count("series", series)
 	return []anomaly.CheckResult{shapes, counts}
@@ -661,6 +726,9 @@ func (h *Handler) traceChecks(r *http.Request, run func(func(context.Context)), 
 	// a check that compares a query cut at the reader's series is about the series read
 	partial := func(r anomaly.CheckResult, signals ...string) anomaly.CheckResult {
 		var why []string
+		if r.Partial != "" {
+			why = append(why, r.Partial)
+		}
 		for _, s := range signals {
 			if c := cut[s]; c != "" {
 				why = append(why, c)
@@ -775,17 +843,14 @@ func issueRows(issues []k8s.Issue) ([]anomaly.IssueRow, string) {
 	return rows, nodesErr
 }
 
-// metricCheck runs one metric check's query at the end of the window and at the end of the window before it.
+// metricCheck runs one metric check's query, which reads the window and the one before it, at the end of the window.
 func metricCheck(ctx context.Context, src anomalySource, q anomaly.Query, win anomaly.Window) anomaly.CheckResult {
-	now, err := src.PrometheusQueryAt(ctx, q.Expr, win.End)
-	var before []k8s.PrometheusQueryResult
-	if err == nil {
-		before, err = src.PrometheusQueryAt(ctx, q.Expr, win.Start)
-	}
+	rows, err := src.PrometheusQueryAt(ctx, q.Expr, win.End)
 	if err != nil {
 		return anomaly.CheckResult{Check: q.Check, NotRun: readFailure("Prometheus", err)}
 	}
-	return anomaly.FromMetric(q.Check, samplesOf(now), samplesOf(before))
+	now, before := anomaly.SplitWindows(samplesOf(rows))
+	return anomaly.FromMetric(q.Check, now, before)
 }
 
 func samplesOf(rows []k8s.PrometheusQueryResult) []anomaly.Sample {
@@ -808,11 +873,29 @@ func readFailure(what string, err error) string {
 	return what + ": " + response.Public(err)
 }
 
-// anomalyBudget counts one answer's store queries.
+// anomalyBudget counts one answer's store queries. kept are those set aside for the call order: they are in neither left
+// nor spent until release puts them back, so the checks cannot take them and the queries stay maxQueries in all.
 type anomalyBudget struct {
 	mu    sync.Mutex
 	left  int
+	kept  int
 	spent int
+}
+
+// keep sets n queries aside until release.
+func (b *anomalyBudget) keep(n int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.left -= n
+	b.kept += n
+}
+
+// release puts back the queries set aside.
+func (b *anomalyBudget) release() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.left += b.kept
+	b.kept = 0
 }
 
 func (b *anomalyBudget) take(n int) bool {
@@ -824,6 +907,16 @@ func (b *anomalyBudget) take(n int) bool {
 	b.left -= n
 	b.spent += n
 	return true
+}
+
+// upTo takes n queries, or those that are left when fewer are, and says how many it took.
+func (b *anomalyBudget) upTo(n int) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n = min(n, b.left)
+	b.left -= n
+	b.spent += n
+	return n
 }
 
 // give returns n queries taken and not made.

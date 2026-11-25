@@ -10,7 +10,7 @@ import pytest
 from app.services.ai import prompts, tools
 
 ROOT = Path(__file__).resolve().parents[3]
-SWITCHES = ("AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED")
+SWITCHES = ("AI_TIMELINE_CHANGES", "AI_TIMELINE_CHANGES_MORE", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED")
 
 
 def _only(monkeypatch, *on):

@@ -17,10 +17,11 @@ from tests.test_chat_turn_edges import parsed, stream, text_chunk
 
 # Every v0.7.9 switch, as the chart's ConfigMap names it; each is off when unset (LOG_SEARCH_QUERY_MAX_BYTES: 0, not asked).
 V079_SWITCHES = (
-    "AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED", "AI_RULE_CARDS_CHAT", "AI_RULE_CARDS_INVESTIGATIONS",
-    "AI_REFUSE_REPEATED_READS", "AI_TOOL_RESULT_DETAILS", "REDACTION_NUMBERED", "LOG_SEARCH_QUERY_MAX_BYTES",
+    "AI_TIMELINE_CHANGES", "AI_TIMELINE_CHANGES_MORE", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED", "AI_RULE_CARDS_CHAT", "AI_RULE_CARDS_INVESTIGATIONS",
+    "AI_RULE_CARDS_SYMPTOMS", "AI_REFUSE_REPEATED_READS", "AI_TOOL_RESULT_DETAILS", "REDACTION_NUMBERED", "LOG_SEARCH_QUERY_MAX_BYTES",
     "ALERT_INVESTIGATION_RULES", "ALERT_INVESTIGATION_CHANGES_FIRST", "ALERT_INVESTIGATION_NARROW_FIRST",
-    "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "AI_TOOL_RESULTS_JSON",
+    "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_VERDICT", "AI_TOOL_RESULTS_JSON",
+    "AI_CAUSE_QUESTIONS", "NODE_NEIGHBORS_ENABLED",
 )
 
 # The cluster's features with every 0.7.8 feature on and none of 0.7.9's (anomalyRank, callGraph): the most tools 0.7.8 offered.
@@ -297,8 +298,8 @@ async def test_with_only_the_investigations_switches_on_a_chat_is_sent_and_asks_
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("REDACTION_PII", "true")
     for name in ("ALERT_INVESTIGATION_ENABLED", "ALERT_INVESTIGATION_CHANGES_FIRST", "ALERT_INVESTIGATION_NARROW_FIRST",
-                 "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_RULES",
-                 "AI_RULE_CARDS_INVESTIGATIONS"):
+                 "ALERT_INVESTIGATION_EVIDENCE_CHECK", "ALERT_INVESTIGATION_LEDGER", "ALERT_INVESTIGATION_VERDICT",
+                 "ALERT_INVESTIGATION_RULES", "AI_RULE_CARDS_INVESTIGATIONS"):
         monkeypatch.setenv(name, "true")
     sent, asked = await _chat_calls(monkeypatch, QUESTIONS["en"], False, ROUND)
     got = {"chat tools": _sha(sent[0]["tools"]), "chat second call": _sha(sent[1]["messages"]),

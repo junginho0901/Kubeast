@@ -65,7 +65,7 @@ export interface InvestigationHypothesis {
   cut?: { for?: InvestigationCut; against?: InvestigationCut }
 }
 
-export type UnverifiedReason = 'no_evidence' | 'bad_calls' | 'name_missing' | 'after_alert'
+export type UnverifiedReason = 'no_evidence' | 'bad_calls' | 'empty_answer' | 'name_missing' | 'after_alert'
 
 // A list the server cut at what it keeps of it: how many items the model gave and how many are kept (the first ones).
 export interface InvestigationCut {
@@ -87,6 +87,48 @@ export interface InvestigationCause {
   cut?: { evidence?: InvestigationCut }
 }
 
+// features.alertInvestigation.verdict: which of three answers the report gives, as the server keeps it.
+export type InvestigationOutcome = 'cause_found' | 'no_fault' | 'cannot_tell'
+
+// A check the server saw find nothing: anomaly_rank's, or an issue check that listed nothing.
+export interface InvestigationChecked {
+  check: string
+  call: number
+  tool: string
+  namespace?: string
+  workload?: string
+  since?: string
+  until?: string
+  // the check read only a part, and what it could not read
+  partial?: string
+}
+
+// What the run's calls did not look at: a source no call read, a check anomaly_rank did not run, a call that gave no answer.
+export interface InvestigationNotLookedAt {
+  reason: 'not_offered' | 'not_called' | 'no_answer' | 'not_run' | 'failed' | 'unavailable' | 'not_found'
+  source?: string
+  check?: string
+  call?: number
+  tool?: string
+  namespace?: string
+  workload?: string
+  detail?: string
+}
+
+// The outcome and the server's lists, made from the run's calls; nothing in the lists is the model's.
+export interface InvestigationVerdict {
+  // null: the report ended without a block the server could read
+  outcome: InvestigationOutcome | null
+  // what the block says; another outcome than it when the calls do not hold it (why)
+  said: InvestigationOutcome | null
+  why: string[]
+  symptom?: { resource: string; evidence: InvestigationCallRef[]; cut?: { evidence?: InvestigationCut } }
+  looked_at: { source: string; calls: InvestigationCallRef[]; cut?: { calls?: InvestigationCut } }[]
+  checked_normal: InvestigationChecked[]
+  not_looked_at: InvestigationNotLookedAt[]
+  cut?: { checked_normal?: InvestigationCut; not_looked_at?: InvestigationCut }
+}
+
 // What the server read of the report's rca block (evidenceCheck or ledger on; absent with both off).
 export interface InvestigationResult {
   version: number
@@ -105,6 +147,8 @@ export interface InvestigationResult {
   checks?: { evidence: boolean; ledger: boolean }
   // the lists the model gave longer than the server keeps; absent when every list fits
   cut?: { causes?: InvestigationCut; path?: InvestigationCut; ruled_out?: InvestigationCut; hypotheses?: InvestigationCut }
+  // the outcome (verdict on); absent with it off and on a row written before it
+  verdict?: InvestigationVerdict
 }
 
 export interface Investigation extends InvestigationSummary {

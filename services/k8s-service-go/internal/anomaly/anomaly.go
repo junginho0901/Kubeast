@@ -1,7 +1,9 @@
 // Package anomaly ranks what differs in a namespace between a window and the window of the same length right before it:
 // failing objects, container terminations by reason, restarts, CPU throttling and memory against the limit, error log
-// shapes and counts, requests, errors and latency of the services' server spans, node pressure. It parses the window, builds the PromQL and turns the reads into findings; the caller runs the reads as the
-// user. A check that could not run says why, so a missing source does not read as "normal".
+// shapes and counts, requests, errors and latency of the services' server spans, the conditions of the nodes (not their
+// CPU). It parses the window, builds the PromQL and turns the reads into findings; the caller runs the reads as the
+// user. A check that could not run says why, so a missing source does not read as "normal", and a finding is new only
+// when the window before has data, so a window before that was never recorded does not read as "it was not there".
 package anomaly
 
 import (
@@ -15,7 +17,8 @@ import (
 	"time"
 )
 
-// The checks, in the order a tie is broken.
+// The checks, in the order a tie is broken. The node check's name says what it reads, since a check that found nothing
+// is listed under normal by its name alone: the nodes' conditions, not how busy their CPU is.
 const (
 	CheckIssues          = "issues"
 	CheckCrashReasons    = "crash_reasons"
@@ -27,12 +30,12 @@ const (
 	CheckTraceErrors     = "trace_errors"
 	CheckTraceLatency    = "trace_latency"
 	CheckTraceRequests   = "trace_requests"
-	CheckNodePressure    = "node_pressure"
+	CheckNodeConditions  = "node_conditions_not_cpu"
 )
 
 // Checks lists every check in tie order.
 var Checks = []string{CheckIssues, CheckCrashReasons, CheckRestarts, CheckMemoryNearLimit, CheckCPUThrottling,
-	CheckErrorLogShapes, CheckErrorLogCounts, CheckTraceErrors, CheckTraceLatency, CheckTraceRequests, CheckNodePressure}
+	CheckErrorLogShapes, CheckErrorLogCounts, CheckTraceErrors, CheckTraceLatency, CheckTraceRequests, CheckNodeConditions}
 
 // LogChecks are the checks that read the log store, TraceChecks those that read the trace store.
 var (
@@ -311,7 +314,12 @@ func (w *Workload) podMatcher() string {
 	return `,pod=~` + strconv.Quote(w.PodPattern())
 }
 
-// Finding is one thing a check found, or one target it compared.
+// NoEarlier is said in a finding's summary in place of the window before's value when that window has no data for it:
+// whether it is new is then not known.
+const NoEarlier = "no earlier data"
+
+// Finding is one thing a check found, or one target it compared. New: the window before has data and none of it there;
+// with no data in the window before it is not set, before is left out and the summary says NoEarlier.
 type Finding struct {
 	Check    string   `json:"check"`
 	Target   string   `json:"target"`
@@ -322,6 +330,11 @@ type Finding struct {
 	Ratio    *float64 `json:"ratio,omitempty"`
 	New      bool     `json:"new,omitempty"`
 	Examples []string `json:"examples,omitempty"`
+
+	// For Rank, not in the answer: critical is a critical state now, which no window before is compared with; noEarlier a
+	// value past its threshold with nothing known of the window before.
+	critical  bool
+	noEarlier bool
 }
 
 // CheckResult is what one check gives: findings, or the reason it did not run. Partial says what part of its reads it
@@ -508,13 +521,25 @@ func value(p *float64) float64 {
 	return *p
 }
 
-// Rank orders findings: what is new first, then the larger ratio, then the larger value, then the check order and the
-// target, so the same reads give the same order.
+// tier is where Rank starts: what is new or critical now, then what has no earlier data, then the rest (what grew, and
+// the warnings, which have no value to rank by, last).
+func (f Finding) tier() int {
+	switch {
+	case f.New || f.critical:
+		return 0
+	case f.noEarlier:
+		return 1
+	}
+	return 2
+}
+
+// Rank orders findings: what is new or critical now first, then what has no earlier data, then the larger ratio, then
+// the larger value, then the check order and the target, so the same reads give the same order.
 func Rank(findings []Finding) {
 	sort.SliceStable(findings, func(i, j int) bool {
 		a, b := findings[i], findings[j]
-		if a.New != b.New {
-			return a.New
+		if ta, tb := a.tier(), b.tier(); ta != tb {
+			return ta < tb
 		}
 		if ra, rb := value(a.Ratio), value(b.Ratio); ra != rb {
 			return ra > rb
@@ -546,18 +571,28 @@ func shorten(s string) string {
 	return s[:cut] + "…"
 }
 
-// compare fills a finding's before, now, ratio and new from two values; before is nil when the window before had none.
+// compare fills a finding's before, now, ratio and new from two values; before is nil when the window before has no
+// data, and the finding is then not new.
 func compare(f *Finding, before *float64, now float64) {
 	f.Now = num(now)
-	if before == nil || *before == 0 {
-		if before != nil {
-			f.Before = num(0)
-		}
+	switch {
+	case before == nil:
+		f.noEarlier = true
+	case *before == 0:
+		f.Before = num(0)
 		f.New = now > 0
-		return
+	default:
+		f.Before = num(*before)
+		f.Ratio = num(now / *before)
 	}
-	f.Before = num(*before)
-	f.Ratio = num(now / *before)
+}
+
+// earlierText is the window before's value in format, or NoEarlier when it has no data.
+func earlierText(before *float64, format string) string {
+	if before == nil {
+		return NoEarlier
+	}
+	return fmt.Sprintf(format, *before)
 }
 
 // countAnomalous: a count that appeared, or at least doubled.

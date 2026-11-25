@@ -42,6 +42,13 @@ async function call(request: APIRequestContext, token: string, name: string, arg
 }
 
 const json = (text: string) => JSON.parse(text)
+// k8s_get_events answers a list; with ai.toolResultDetails on, one with no event is {events: [], empty_reason}
+const eventRows = (text: string) => {
+  const body = json(text)
+  if (Array.isArray(body)) return body
+  expect(body).toEqual({ events: [], empty_reason: expect.any(String) })
+  return []
+}
 
 test.describe('AI read tools: misses are results, not errors', () => {
   test.setTimeout(180_000)
@@ -103,7 +110,8 @@ test.describe('AI read tools: misses are results, not errors', () => {
 
     const nothing = json((await call(request, token, 'k8s_find_resource', { query: 'no-such-thing-anywhere', kinds: ['pods', 'services'] })).text)
     expect(nothing.matches).toEqual([])
-    expect(nothing.hint).toMatch(/Stop searching/)
+    // the second wording with ai.toolResultDetails on
+    expect(nothing.hint).toMatch(/Stop searching|Do not repeat this search/)
 
     const bad = await call(request, token, 'k8s_find_resource', { query: 'x' })
     expect(bad.isError).toBe(true)
@@ -134,14 +142,13 @@ test.describe('AI read tools: misses are results, not errors', () => {
     const grep = await call(request, token, 'k8s_get_pod_logs', { pod_name: pod, namespace: 'kubeast', grep: 'zz-no-such-text-zz', since: '24h' })
     expect(grep.isError).toBeFalsy()
     // a day of a busy auth-service is past the tool's 1 MiB of log: the newest part is read and the line above says so
-    expect(grep.text).toMatch(/^(… \[older lines cut by tool-server: this read is larger than \d+ bytes and the newest lines follow; narrow it with since, tail_lines, grep or container\]\n)?# grep "zz-no-such-text-zz": 0 of \d+ lines matched$/)
+    // (with ai.toolResultDetails on, one line after it says what the search may have missed)
+    expect(grep.text).toMatch(/^(… \[older lines cut by tool-server: this read is larger than \d+ bytes and the newest lines follow; narrow it with since, tail_lines, grep or container\]\n)?# grep "zz-no-such-text-zz": 0 of \d+ lines matched(\n# grep is a plain substring of .+)?$/)
 
     // Events narrowed to one object: every row is about it (or there are none yet).
-    const events = json((await call(request, token, 'k8s_get_events', { namespace: 'kubeast', kind: 'pods', name: pod })).text)
-    expect(Array.isArray(events)).toBe(true)
+    const events = eventRows((await call(request, token, 'k8s_get_events', { namespace: 'kubeast', kind: 'pods', name: pod })).text)
     for (const ev of events) expect(ev.object).toEqual({ kind: 'Pod', name: pod })
-    const warnings = json((await call(request, token, 'k8s_get_events', { all_namespaces: true, field_selector: 'type=Warning' })).text)
-    expect(Array.isArray(warnings)).toBe(true)
+    const warnings = eventRows((await call(request, token, 'k8s_get_events', { all_namespaces: true, field_selector: 'type=Warning' })).text)
     for (const ev of warnings) expect(ev.type).toBe('Warning')
     const badSelector = await call(request, token, 'k8s_get_events', { namespace: 'kubeast', field_selector: 'spec.nodeName=x' })
     expect(badSelector.isError).toBe(true)

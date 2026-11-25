@@ -333,8 +333,13 @@ func handleTimelineChanges(ctx context.Context, args map[string]interface{}, hea
 		result["namespace"] = scope
 	}
 	total, _ := summary["changes_total"].(float64)
+	bySource, _ := summary["by_source"].(map[string]interface{})
+	more := bySource["jobs"] != nil // k8s-service read the further sources (ai.timelineChangesMore)
 	if int(total) > len(changes) {
 		result["changes_note"] = fmt.Sprintf("The newest %d of the %d changes in this window are listed; summary.by_source counts them by source.", len(changes), int(total))
+		if more {
+			result["changes_note"] = fmt.Sprintf("%d of the %d changes in this window are listed: the newest %d at most, of the Jobs the newest 15 and of one CronJob's the newest 4; summary.by_source counts them all by source.", len(changes), int(total), limit)
+		}
 	}
 	notRead, _ := summary["not_read"].(map[string]interface{})
 	if len(notRead) > 0 {
@@ -346,6 +351,9 @@ func handleTimelineChanges(ctx context.Context, args map[string]interface{}, hea
 	}
 	if total == 0 && len(notRead) == 0 && len(skipped) == 0 {
 		result["hint"] = "Nothing changed in this window as far as the objects keep it. Each ConfigMap, Secret, HPA and container keeps only its last change; older ones are in events, which live about an hour."
+		if more {
+			result["hint"] = "Nothing changed in this window as far as the objects keep it. Each ConfigMap, Secret, NetworkPolicy, Service, HPA, replica count and container keeps only its last change; older ones are in events, which live about an hour."
+		}
 	}
 	return marshalOrdered(result, []string{"view", "namespace", "summary", "changes_note", "not_read_note", "skipped_note", "hint"}, []string{"changes"})
 }

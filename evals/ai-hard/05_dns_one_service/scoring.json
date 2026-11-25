@@ -1,0 +1,10 @@
+{
+ "accept_kinds": [
+  {
+   "cause": "Deployment/shop-05/storefront",
+   "kinds": ["config_change", "rollout"],
+   "needs": "dns ?policy|dns ?config|dns settings|dns 설정|search (domain|list)|dns search|\\bndots\\b|검색 ?(도메인|목록)",
+   "notes": "The second scoring takes storefront with kind `rollout` or `config_change` when the answer says, in a sentence that names storefront, that its DNS settings changed or lack the namespace."
+  }
+ ]
+}

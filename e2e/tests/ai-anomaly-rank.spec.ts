@@ -33,7 +33,7 @@ const SECOND_WINDOW_S = 900
 
 // every check of internal/anomaly, each answered once: a finding, normal, or not run with why
 const CHECKS = ['issues', 'crash_reasons', 'restarts', 'memory_near_limit', 'cpu_throttling', 'error_log_patterns', 'error_log_counts',
-  'trace_errors', 'trace_latency', 'trace_requests', 'node_pressure']
+  'trace_errors', 'trace_latency', 'trace_requests', 'node_conditions_not_cpu']
 const METRIC_CHECKS = ['restarts', 'memory_near_limit', 'cpu_throttling']
 const NO_PROMETHEUS = 'no Prometheus reaches this cluster'
 const LIMITED = "the cluster's Prometheus covers the whole cluster; your grant on this cluster is limited to namespaces"
@@ -175,7 +175,7 @@ test.describe('AI tool anomaly_rank', () => {
   const promAt = (expr: string, atSeconds: number): Sample[] => JSON.parse(second!(
     `get --raw "/api/v1/namespaces/monitoring/services/prometheus:9090/proxy/api/v1/query?query=${encodeURIComponent(expr)}&time=${atSeconds}"`,
   )).data.result
-  // the queries of the restarts and memory_near_limit checks (internal/anomaly Queries) for the namespace
+  // what the restarts and memory_near_limit checks' queries (internal/anomaly Queries) read over the window for the namespace
   const restartsQuery = (seconds: number) => `sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace="${NS}"}[${seconds}s]))`
   const memoryQuery = (seconds: number) =>
     `max by (pod, container) (max_over_time(container_memory_working_set_bytes{namespace="${NS}",container!=""}[${seconds}s])) / ` +
@@ -309,12 +309,14 @@ test.describe('AI tool anomaly_rank', () => {
       expect(tool.compared_with).toEqual({ start: stamp(start - WINDOW_S * 1000), end: stamp(start) })
       eachCheckOnce(tool)
 
-      // terminations by reason, as kubectl's containers hold them; nothing before the namespace was made
+      // terminations by reason, as kubectl's containers hold them; the pod was made in the window, so the window before has
+      // no data for them and whether they are new is not known
       const crash = found(tool, 'crash_reasons')
       expect(crash.map((f) => [f.target, f.now])).toEqual(Object.entries(want).sort())
       for (const f of crash) {
-        expect(f).toMatchObject({ verdict: 'anomalous', new: true, before: 0 })
-        expect(f.summary).toContain(`${want[f.target]} container terminations with reason ${f.target} in the window, 0 in the window before`)
+        expect(f.verdict).toBe('anomalous')
+        expect([f.new, f.before]).toEqual([undefined, undefined])
+        expect(f.summary).toContain(`${want[f.target]} container terminations with reason ${f.target} in the window, no earlier data`)
       }
       // failing now: the issues the Dashboard reads for this namespace, the crashing pod among them
       expect(found(tool, 'issues').map((f) => f.target).sort()).toEqual(issues)
@@ -376,17 +378,19 @@ test.describe('AI tool anomaly_rank', () => {
     expect(tool.window).toEqual({ start: stamp(start), end: stamp(end) })
     eachCheckOnce(tool)
 
-    // restarts: the pod that settled, as many as kubectl counts, none before the namespace was made
+    // restarts: the pod that settled, as many as kubectl counts; no series before the namespace was made, so not called new
     const settled = before.find((p) => p.metadata.name === 'settle')!.status.containerStatuses![0].restartCount
     expect(settled).toBe(RESTARTS)
-    expect(found(tool, 'restarts')).toEqual([expect.objectContaining({ target: 'Pod/settle', verdict: 'anomalous', new: true, now: settled })])
+    expect(found(tool, 'restarts')).toEqual([expect.objectContaining({ target: 'Pod/settle', verdict: 'anomalous', now: settled })])
+    expect(found(tool, 'restarts')[0].new, 'new with no series in the window before').toBeUndefined()
     expect(found(tool, 'restarts')[0].before, 'no series in the window before').toBeUndefined()
-    expect(found(tool, 'restarts')[0].summary).toBe(`${settled} restarts in the window, no series in the window before`)
+    expect(found(tool, 'restarts')[0].summary).toBe(`${settled} restarts in the window, no earlier data`)
 
     // memory: the working set's peak over the limit, the value Prometheus gives the same query at the window's end
-    expect(found(tool, 'memory_near_limit')).toEqual([expect.objectContaining({ target: 'Pod/near container fill', verdict: 'anomalous', new: true, now: round3(Number(memory.value[1])) })])
+    expect(found(tool, 'memory_near_limit')).toEqual([expect.objectContaining({ target: 'Pod/near container fill', verdict: 'anomalous', now: round3(Number(memory.value[1])) })])
+    expect(found(tool, 'memory_near_limit')[0].new, 'new with no series in the window before').toBeUndefined()
     expect(found(tool, 'memory_near_limit')[0].now).toBeGreaterThanOrEqual(0.9)
-    expect(found(tool, 'memory_near_limit')[0].summary).toContain('of the memory limit, no series before')
+    expect(found(tool, 'memory_near_limit')[0].summary).toContain('of the memory limit, no earlier data')
 
     // terminations: the settled pod's last exit, as kubectl holds it
     const want = terminations(before, start, end)

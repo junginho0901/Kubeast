@@ -1,13 +1,16 @@
 // What the metrics, log, trace and timeline tools add to their answers with AI_TOOL_RESULT_DETAILS (chart
 // ai.toolResultDetails, off by default): why an empty answer may be empty where the answer did not say, how much of a
 // cut answer is shown out of how many, and the window read when the call named none. Each comes from what the handler
-// already holds; where the total is not in hand the answer says so instead of reading more. Off, the answers are as
-// they were.
+// already holds; where the total is not in hand the answer says so instead of reading more. An empty answer of the
+// kubectl read tools says why it may be empty too, and k8s_find_resource is the one that reads more: the namespaces,
+// by name (handlers_find.go). Off, the answers are as they were.
 
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -24,6 +27,27 @@ const (
 	targetsNoneReason = "The store lists no scrape target for this cluster: it has no targets API and no up series carries this " +
 		"cluster's label, or nothing is scraped here. Without targets prometheus_query has no data from this cluster either."
 	targetsFilteredReason = "No target matches the health or job filter; health counts all %d targets."
+
+	// kube-apiserver's own default (--event-ttl).
+	eventsEmptyReason = "No event matched. The API server keeps an event for about an hour by default, so this does not say that " +
+		"nothing happened before: read the logs (k8s_get_pod_logs, or a log store's tools where offered) and the replica and " +
+		"restart metrics over a longer window (prometheus_query with range=true and since, where offered)."
+	eventsNarrowedReason = " The call was narrowed by kind, name or field_selector: what happened to a workload's pods or ReplicaSets " +
+		"is recorded under their own names."
+	describeNoEventsReason = "# Events are kept about an hour by default, so none here does not say that nothing happened before: logs and metrics reach further back."
+	noSuchNamespaceReason  = " A namespace that does not exist answers the same."
+
+	listEmptyReason = "Nothing of this kind exists now in what was read. An object deleted earlier is not listed: events, logs and " +
+		"metrics of that time may still name it."
+	listOneNamespaceReason = " k8s_find_resource looks for a name in every namespace the user may read."
+	listNoNamespaceReason  = " No namespace was given: of a kind that lives in namespaces only the default one was read (all_namespaces=true reads every one)."
+
+	podMetricsEmptyReason = "metrics-server lists no pod here. It holds only each running pod's newest sample, so a pod that is gone or " +
+		"has just started has none; prometheus_query (where offered) has the use over time."
+
+	endpointsNoneReason = "No endpoint address is behind this Service: its selector may match no pod (compare it with the pods' labels), " +
+		"the pods may be scaled to zero or gone, or it has no selector."
+	endpointsUnreadReason = "The EndpointSlices of this Service could not be read, so 0 endpoints is not a count: %s"
 )
 
 // cutOf is "M of N <unit>" for an answer that lists part of what it holds.
@@ -120,4 +144,106 @@ func addDetails(result map[string]interface{}, cut, window, emptyReason string) 
 			result[k] = v
 		}
 	}
+}
+
+// eventsEmpty is why k8s_get_events may have found none.
+func eventsEmpty(namespace string, narrowed bool) string {
+	reason := eventsEmptyReason
+	if narrowed {
+		reason += eventsNarrowedReason
+	}
+	if namespace != "" {
+		reason += noSuchNamespaceReason
+	}
+	return reason
+}
+
+// listEmpty is why a kubectl list of one kind may hold nothing.
+func listEmpty(kind, namespace string, allNamespaces bool) string {
+	reason, otherNamespaces := listEmptyReason, listOneNamespaceReason
+	if isEventsKind(kind) {
+		reason, otherNamespaces = eventsEmptyReason, ""
+	}
+	switch {
+	case allNamespaces:
+		return reason
+	case namespace != "":
+		return reason + noSuchNamespaceReason + otherNamespaces
+	}
+	return reason + listNoNamespaceReason
+}
+
+func isEventsKind(kind string) bool {
+	name, _, _ := strings.Cut(strings.ToLower(strings.TrimSpace(kind)), ".")
+	return name == "events" || name == "event" || name == "ev"
+}
+
+// reNoEvents is the line kubectl describe ends with for an object no event is kept of.
+var reNoEvents = regexp.MustCompile(`(?m)^Events:[ \t]+<none>[ \t]*$`)
+
+func withEventsReason(out string) string {
+	return reNoEvents.ReplaceAllString(out, "${0}\n"+describeNoEventsReason)
+}
+
+// noneInTable: kubectl's own sentence for a table without a row, after its warnings if any (it prints nothing for -o name).
+func noneInTable(out string) bool {
+	text := strings.TrimSpace(out)
+	return text == "" || strings.HasPrefix(text[strings.LastIndexByte(text, '\n')+1:], noResourcesFound)
+}
+
+// emptyListBytes is more than kubectl writes for a JSON list without items.
+const emptyListBytes = 1 << 10
+
+// withListReason adds reason to a kubectl list that holds nothing: the line after a table or names, the first key of a
+// JSON list. An answer that holds something is out as it came.
+func withListReason(out, reason string) string {
+	if noneInTable(out) {
+		return out + reason + "\n"
+	}
+	text := strings.TrimSpace(out)
+	if len(text) > emptyListBytes || !strings.HasPrefix(text, "{") {
+		return out
+	}
+	var list struct {
+		Kind  string             `json:"kind"`
+		Items *[]json.RawMessage `json:"items"`
+	}
+	if json.Unmarshal([]byte(text), &list) != nil || !strings.HasSuffix(list.Kind, "List") || list.Items == nil || len(*list.Items) > 0 {
+		return out
+	}
+	quoted, err := json.Marshal(reason)
+	if err != nil {
+		return out
+	}
+	return `{"empty_reason":` + string(quoted) + "," + strings.TrimPrefix(text, "{") + "\n"
+}
+
+// logEmpty is the line for a pod log read that held nothing, and logNoMatch the one for a grep without a match.
+func logEmpty(lines int, since string, previous, allContainers bool) string {
+	return fmt.Sprintf("# No line was read: the newest %d lines%s were asked for. An empty log does not say that nothing failed: %s.\n",
+		lines, sinceText(since), logElsewhere(previous, allContainers))
+}
+
+func logNoMatch(since string, previous, allContainers bool) string {
+	return fmt.Sprintf("\n# grep is a plain substring of the newest %d lines%s: the same thing in other words, or an older line, is not matched; %s.",
+		maxLogTailLines, sinceText(since), logElsewhere(previous, allContainers))
+}
+
+func sinceText(since string) string {
+	if since == "" {
+		return ""
+	}
+	return " within since=" + since
+}
+
+// logElsewhere says where else a pod's lines may be, leaving out what the call already asked for.
+func logElsewhere(previous, allContainers bool) string {
+	var parts []string
+	if !previous {
+		parts = append(parts, "previous=true reads the run before a restart")
+	}
+	if !allContainers {
+		parts = append(parts, "all_containers=true the pod's other containers")
+	}
+	return strings.Join(append(parts, "a log store's tools (where offered) older lines and pods that are gone"), ", ")
 }

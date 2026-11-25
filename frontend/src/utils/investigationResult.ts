@@ -1,5 +1,8 @@
 import type { AIContextInput } from '@/hooks/useAIContext'
-import type { HypothesisState, Investigation, InvestigationCallRef, InvestigationCause, InvestigationCut, InvestigationHypothesis, InvestigationResult } from '@/services/api/investigations'
+import type {
+  HypothesisState, Investigation, InvestigationCallRef, InvestigationCause, InvestigationChecked, InvestigationCut, InvestigationHypothesis,
+  InvestigationNotLookedAt, InvestigationOutcome, InvestigationResult, InvestigationVerdict,
+} from '@/services/api/investigations'
 import { MAX_LAYER_BYTES } from '@/utils/aiContext/tokenBudget'
 
 // The report's result (evidenceCheck or ledger): what its window draws and what it tells the floating chat.
@@ -70,6 +73,7 @@ const UNVERIFIED_TEXT: Record<string, string> = {
   bad_calls: 'a call given is not a call of this investigation that answered',
   name_missing: 'its name does not appear in what the calls returned',
   after_alert: 'it starts after the alert did',
+  empty_answer: 'the calls given read nothing or their answer holds nothing',
 }
 
 // A cause the run's calls do not show (evidenceCheck), as the window and the floating chat say it.
@@ -78,6 +82,69 @@ export function notVerifiedText(c: InvestigationCause, tr: Tr): string {
   return reason
     ? tr('investigations.result.notVerified', 'Not verified: {{reason}}', { reason })
     : tr('investigations.result.notVerifiedBare', 'Not verified')
+}
+
+export const outcomeBadge: Record<InvestigationOutcome, string> = {
+  cause_found: 'badge badge-error',
+  no_fault: 'badge badge-success',
+  cannot_tell: 'badge badge-warning',
+}
+
+const OUTCOME_TEXT: Record<InvestigationOutcome, string> = { cause_found: 'Cause found', no_fault: 'No fault found', cannot_tell: 'Cannot tell' }
+
+export function outcomeText(outcome: InvestigationOutcome, tr: Tr): string {
+  return tr(`investigations.result.outcome.${outcome}`, OUTCOME_TEXT[outcome] ?? outcome)
+}
+
+const WHY_TEXT: Record<string, string> = {
+  contradicts: 'the outcome, "no_fault" and the causes say different things',
+  no_symptom: "no call is given that shows the alert's symptom",
+  symptom_bad_calls: 'the calls given for the symptom are not calls of this investigation that answered',
+  symptom_name_missing: "what the calls given for the symptom returned does not name the workload the alert's labels name, or without one the symptom's object",
+  symptom_not_shown: 'the calls given for the symptom hold nothing or read only what changed, an alert or its rule, or names',
+  cause_not_shown: 'no call shows any of its causes',
+  nothing_read: 'no call of this investigation that read a state answered with something',
+  not_read: "no call that read a state names the alert's object",
+}
+
+// Why the server keeps "cannot tell" of what the report concludes; '' when it keeps what the report says.
+export function outcomeWhyText(v: InvestigationVerdict, tr: Tr): string {
+  if (v.why.length === 0) return ''
+  const reasons = v.why.map((reason) => tr(`investigations.result.outcomeWhy.${reason}`, WHY_TEXT[reason] ?? reason)).join('; ')
+  return v.said
+    ? tr('investigations.result.outcomeKept', 'Kept by the server. The report says "{{said}}", but {{reasons}}.', { said: outcomeText(v.said, tr), reasons })
+    : tr('investigations.result.outcomeKeptBare', 'Kept by the server: {{reasons}}.', { reasons })
+}
+
+const SOURCE_TEXT: Record<string, string> = {
+  objects: 'Objects', events: 'Events', changes: 'Changes', logs: 'Logs', metrics: 'Metrics', traces: 'Traces', network: 'Network', alerts: 'Alerts',
+}
+
+export function sourceText(source: string, tr: Tr): string {
+  return tr(`investigations.result.source.${source}`, SOURCE_TEXT[source] ?? source)
+}
+
+// "restarts (apps, Deployment/web)": a check and where the server saw it.
+export function checkText(c: Pick<InvestigationChecked, 'check' | 'namespace' | 'workload'>): string {
+  const place = [c.namespace, c.workload].filter(Boolean).join(', ')
+  return place ? `${c.check} (${place})` : c.check
+}
+
+const NOT_LOOKED_TEXT: Record<string, string> = {
+  not_offered: 'the cluster offers no tool for it',
+  not_called: 'no call read it',
+  no_answer: 'the calls that read it gave no answer',
+  not_run: 'the check did not run',
+  failed: 'the call failed or was refused',
+  unavailable: 'the cluster does not have it',
+  not_found: 'not found',
+}
+
+// One thing the run did not look at, as the window and the floating chat say it.
+export function notLookedAtText(n: InvestigationNotLookedAt, tr: Tr): string {
+  const what = n.source ? sourceText(n.source, tr) : n.check ? checkText({ ...n, check: n.check }) : callLabel({ call: n.call ?? 0, tool: n.tool ?? '' })
+  const reason = tr(`investigations.result.notLooked.${n.reason}`, NOT_LOOKED_TEXT[n.reason] ?? n.reason)
+  return n.detail ? `${what}: ${reason} (${n.detail})` : `${what}: ${reason}`
 }
 
 // A list the server cut at what it keeps of it (`cut`), as the window says it under the list; '' for one that fits.
@@ -108,7 +175,7 @@ export const CHAT_REPORT_WITH_RESULT = 2048
 const NOTE_RULE = '\n\n---\n\n'  // the server's notes under a report each follow this rule
 export const CHAT_NOTES = 1024
 const CHAT_TEXT = 120
-const LEAVE_OUT = ['hypotheses', 'ruled_out', 'path'] as const  // in this order while the layer is past 8 KB
+const LEAVE_OUT = ['hypotheses', 'checked_normal', 'not_looked_at', 'ruled_out', 'path'] as const  // in this order while the layer is past 8 KB
 
 const short = (s: string) => (s.length > CHAT_TEXT ? `${s.slice(0, CHAT_TEXT - 1)}…` : s)
 
@@ -134,12 +201,23 @@ const hypothesesForChat = (result: InvestigationResult) => orderedHypotheses(res
   ...(h.cut ? { cut: h.cut } : {}),
 }))
 
+// What the floating chat is told of the outcome: the server's, what the report said when it differs, and the server's lists.
+const outcomeForChat = (v: InvestigationVerdict) => ({
+  outcome: v.outcome,
+  ...(v.why.length > 0 ? { outcome_said: v.said, outcome_why: v.why } : {}),
+  ...(v.symptom ? { symptom: { resource: short(v.symptom.resource), evidence: v.symptom.evidence.map(callLabel) } } : {}),
+  checked_normal: v.checked_normal.map((c) => short(`${checkText(c)} ${callLabel(c)}`)),
+  not_looked_at: v.not_looked_at.map((n) => short(`${n.source ?? (n.check ? checkText({ ...n, check: n.check }) : callLabel({ call: n.call ?? 0, tool: n.tool ?? '' }))}: ${n.reason}`)),
+  ...(v.cut ? { lists_cut: v.cut } : {}),
+})
+
 // What the floating chat is told of the result: a cause the calls do not show says so, hypotheses only with the ledger,
 // a list the server cut with how many were given (`cut`).
 export function resultForChat(result: InvestigationResult): Record<string, unknown> {
   return {
     status: result.status,
     no_fault: result.no_fault,
+    ...(result.verdict ? outcomeForChat(result.verdict) : {}),
     asked_again: result.asked_again,
     causes: result.causes.map((c) => ({
       resource: short(c.resource), kind: c.kind, started_at: c.started_at, evidence: c.evidence.map(callLabel),

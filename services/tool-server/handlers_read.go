@@ -92,6 +92,10 @@ func handleGetResources(ctx context.Context, args map[string]interface{}, header
 	if err != nil {
 		return explainFailure(ctx, headers, err, resourceType, resourceName, namespace)
 	}
+	// an expression prints nothing for an unset field as well
+	if resultDetails() && resourceName == "" && !outputExpression(output) {
+		out = withListReason(out, listEmpty(resourceType, namespace, allNamespaces))
+	}
 	return stripCutSecret(ctx, out, resourceType), nil
 }
 
@@ -143,6 +147,9 @@ func handleDescribeResource(ctx context.Context, args map[string]interface{}, he
 	if err != nil {
 		return explainFailure(ctx, headers, err, resourceType, resourceName, namespace)
 	}
+	if resultDetails() {
+		out = withEventsReason(out)
+	}
 	return out, nil
 }
 
@@ -193,8 +200,15 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 	if err != nil {
 		return explainFailure(ctx, headers, err, "pods", podName, namespace)
 	}
+	if out == "" && resultDetails() {
+		return logEmpty(scan, since, previous, allContainers), nil
+	}
 	if grep != "" {
 		out = grepLines(out, grep, tailLines)
+		// the header alone
+		if resultDetails() && !strings.Contains(out, "\n") {
+			out += logNoMatch(since, previous, allContainers)
+		}
 	}
 	if cut {
 		return fmt.Sprintf(logsCutNotice, outputMaxBytes) + out, nil
@@ -303,6 +317,9 @@ func handleGetEvents(ctx context.Context, args map[string]interface{}, headers h
 			"note": fmt.Sprintf("the newest %d of %d events, newest first; narrow with kind and name, or field_selector type=Warning", len(events), reply.Total),
 		})
 	}
+	if len(events) == 0 && resultDetails() {
+		return marshalJSON(map[string]interface{}{"events": events, "empty_reason": eventsEmpty(q.Get("namespace"), len(selectors) > 0)})
+	}
 	return marshalJSON(events)
 }
 
@@ -392,6 +409,13 @@ func handleGetPodMetrics(ctx context.Context, args map[string]interface{}, heade
 	if err != nil {
 		return explainFailure(ctx, headers, err, "", "", namespace)
 	}
+	if resultDetails() && noneInTable(output) {
+		reason := podMetricsEmptyReason
+		if namespace != "" {
+			reason += noSuchNamespaceReason
+		}
+		return marshalJSON(map[string]interface{}{"pods": []map[string]interface{}{}, "empty_reason": reason})
+	}
 	metrics := parseTopPods(output, allNamespaces)
 	return marshalJSON(metrics)
 }
@@ -475,6 +499,12 @@ func handleCheckServiceConnectivity(ctx context.Context, args map[string]interfa
 			"total":     readyCount + notReadyCount,
 		},
 		"status": status,
+	}
+	switch {
+	case err != nil:
+		addDetails(result, "", "", fmt.Sprintf(endpointsUnreadReason, strings.TrimPrefix(err.Error(), "kubectl failed: ")))
+	case readyCount+notReadyCount == 0:
+		addDetails(result, "", "", endpointsNoneReason)
 	}
 
 	return marshalJSON(result)

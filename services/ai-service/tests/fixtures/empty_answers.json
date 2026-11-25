@@ -1,0 +1,324 @@
+[
+ {
+  "name": "a table of no pod",
+  "tool": "k8s_tabular_query",
+  "details": false,
+  "answer": "# pods in shop: 0 rows (none)\nNAMESPACE   NAME",
+  "holds": "nothing"
+ },
+ {
+  "name": "a table of no pod",
+  "tool": "k8s_tabular_query",
+  "details": true,
+  "answer": "# pods in shop: 0 rows (none)\nNAMESPACE   NAME",
+  "holds": "nothing"
+ },
+ {
+  "name": "a table kubectl printed nothing of",
+  "tool": "k8s_tabular_query",
+  "details": false,
+  "answer": "# pods in shop: 0 rows (none)\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a table kubectl printed nothing of",
+  "tool": "k8s_tabular_query",
+  "details": true,
+  "answer": "# pods in shop: 0 rows (none)\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a table of a pod",
+  "tool": "k8s_tabular_query",
+  "details": false,
+  "answer": "# pods in shop: 1 rows\nNAMESPACE   NAME\nshop   web-1",
+  "holds": "something"
+ },
+ {
+  "name": "a table of a pod",
+  "tool": "k8s_tabular_query",
+  "details": true,
+  "answer": "# pods in shop: 1 rows\nNAMESPACE   NAME\nshop   web-1",
+  "holds": "something"
+ },
+ {
+  "name": "a table whose first row was cut off",
+  "tool": "k8s_tabular_query",
+  "details": false,
+  "answer": "# pods in shop: more rows than the tool output holds (1000 bytes); the first 0 read. The total is not known: narrow with namespace, label_selector or field_selector, or count with k8s_count (none)\nNAMESPACE   NAME",
+  "holds": "something"
+ },
+ {
+  "name": "a table whose first row was cut off",
+  "tool": "k8s_tabular_query",
+  "details": true,
+  "answer": "# pods in shop: more rows than the tool output holds (1000 bytes); the first 0 read. The total is not known: narrow with namespace, label_selector or field_selector, or count with k8s_count (none)\nNAMESPACE   NAME",
+  "holds": "something"
+ },
+ {
+  "name": "a log",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "ready\n",
+  "holds": "something"
+ },
+ {
+  "name": "a log",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "ready\n",
+  "holds": "something"
+ },
+ {
+  "name": "an empty log",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# No line was read: the newest 50 lines were asked for. An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of a log without a match",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# grep \"web-1\": 0 of 1 lines matched",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of a log without a match",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# grep \"web-1\": 0 of 1 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of a cut log without a match",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 0 of 71 lines matched",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of a cut log without a match",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 0 of 71 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of a cut log with a match",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 1 of 71 lines matched\nweb-1 stopped",
+  "holds": "something"
+ },
+ {
+  "name": "a search of a cut log with a match",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 1 of 71 lines matched\nweb-1 stopped",
+  "holds": "something"
+ },
+ {
+  "name": "a cut log",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\n",
+  "holds": "something"
+ },
+ {
+  "name": "a cut log",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\n",
+  "holds": "something"
+ },
+ {
+  "name": "a list of no name",
+  "tool": "k8s_get_resources",
+  "details": false,
+  "answer": "",
+  "holds": "nothing"
+ },
+ {
+  "name": "a list of no name",
+  "tool": "k8s_get_resources",
+  "details": true,
+  "answer": "Nothing of this kind exists now in what was read. An object deleted earlier is not listed: events, logs and metrics of that time may still name it. A namespace that does not exist answers the same. k8s_find_resource looks for a name in every namespace the user may read.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a list of no event's name",
+  "tool": "k8s_get_resources",
+  "details": false,
+  "answer": "",
+  "holds": "nothing"
+ },
+ {
+  "name": "a list of no event's name",
+  "tool": "k8s_get_resources",
+  "details": true,
+  "answer": "No event matched. The API server keeps an event for about an hour by default, so this does not say that nothing happened before: read the logs (k8s_get_pod_logs, or a log store's tools where offered) and the replica and restart metrics over a longer window (prometheus_query with range=true and since, where offered).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a list of a name",
+  "tool": "k8s_get_resources",
+  "details": false,
+  "answer": "configmap/web\n",
+  "holds": "something"
+ },
+ {
+  "name": "a list of a name",
+  "tool": "k8s_get_resources",
+  "details": true,
+  "answer": "configmap/web\n",
+  "holds": "something"
+ },
+ {
+  "name": "a table of no object",
+  "tool": "k8s_get_resources",
+  "details": false,
+  "answer": "No resources found in shop namespace.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a table of no object",
+  "tool": "k8s_get_resources",
+  "details": true,
+  "answer": "No resources found in shop namespace.\nNothing of this kind exists now in what was read. An object deleted earlier is not listed: events, logs and metrics of that time may still name it. A namespace that does not exist answers the same. k8s_find_resource looks for a name in every namespace the user may read.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a file's lines",
+  "tool": "logfiles",
+  "details": false,
+  "answer": "{\"path\":\"/var/log/web-1.log\",\"container\":\"\",\"lines\":0,\"truncated\":false,\"content\":\"ready\\n\"}",
+  "holds": "something"
+ },
+ {
+  "name": "a file's lines",
+  "tool": "logfiles",
+  "details": true,
+  "answer": "{\"path\":\"/var/log/web-1.log\",\"container\":\"\",\"lines\":0,\"truncated\":false,\"content\":\"ready\\n\"}",
+  "holds": "something"
+ },
+ {
+  "name": "an empty file",
+  "tool": "logfiles",
+  "details": false,
+  "answer": "{\"path\":\"/var/log/web-1.log\",\"container\":\"\",\"lines\":0,\"truncated\":false,\"content\":\"\"}",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty file",
+  "tool": "logfiles",
+  "details": true,
+  "answer": "{\"path\":\"/var/log/web-1.log\",\"container\":\"\",\"lines\":0,\"truncated\":false,\"content\":\"\"}",
+  "holds": "nothing"
+ },
+ {
+  "name": "a file the command could not read",
+  "tool": "logfiles",
+  "details": false,
+  "answer": "{\"code\":\"read\",\"feature\":\"logFiles\",\"hint\":\"The command ran in the container and could not read the file. Tell the user why.\",\"reason\":\"tail: cannot open '/var/log/web-1.log'\",\"status\":\"failed\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a file the command could not read",
+  "tool": "logfiles",
+  "details": true,
+  "answer": "{\"code\":\"read\",\"feature\":\"logFiles\",\"hint\":\"The command ran in the container and could not read the file. Tell the user why.\",\"reason\":\"tail: cannot open '/var/log/web-1.log'\",\"status\":\"failed\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a file that is not there",
+  "tool": "logfiles",
+  "details": false,
+  "answer": "{\"feature\":\"logFiles\",\"hint\":\"Call without path to list the files of this container, and k8s_find_resource to find the pod.\",\"reason\":\"container not found\",\"status\":\"not_found\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a file that is not there",
+  "tool": "logfiles",
+  "details": true,
+  "answer": "{\"feature\":\"logFiles\",\"hint\":\"Call without path to list the files of this container, and k8s_find_resource to find the pod.\",\"reason\":\"container not found\",\"status\":\"not_found\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "every application healthy",
+  "tool": "gitops_status",
+  "details": false,
+  "answer": "{\"applications\":[],\"applications_total\":1,\"counts\":{\"health\":{\"Healthy\":1},\"sync\":{\"Synced\":1}},\"filter\":{\"destination_namespace\":\"\",\"name\":\"\",\"only_problems\":true,\"project\":\"\"},\"matched\":0,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "something"
+ },
+ {
+  "name": "every application healthy",
+  "tool": "gitops_status",
+  "details": true,
+  "answer": "{\"applications\":[],\"applications_total\":1,\"counts\":{\"health\":{\"Healthy\":1},\"sync\":{\"Synced\":1}},\"filter\":{\"destination_namespace\":\"\",\"name\":\"\",\"only_problems\":true,\"project\":\"\"},\"matched\":0,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "something"
+ },
+ {
+  "name": "every application of a namespace healthy",
+  "tool": "gitops_status",
+  "details": false,
+  "answer": "{\"applications\":[],\"applications_total\":1,\"counts\":{\"health\":{\"Healthy\":1},\"sync\":{\"Synced\":1}},\"filter\":{\"destination_namespace\":\"shop\",\"name\":\"\",\"only_problems\":true,\"project\":\"\"},\"matched\":0,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "something"
+ },
+ {
+  "name": "every application of a namespace healthy",
+  "tool": "gitops_status",
+  "details": true,
+  "answer": "{\"applications\":[],\"applications_total\":1,\"counts\":{\"health\":{\"Healthy\":1},\"sync\":{\"Synced\":1}},\"filter\":{\"destination_namespace\":\"shop\",\"name\":\"\",\"only_problems\":true,\"project\":\"\"},\"matched\":0,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "something"
+ },
+ {
+  "name": "the applications",
+  "tool": "gitops_status",
+  "details": false,
+  "answer": "{\"applications\":[{\"destination\":{\"namespace\":\"shop\"},\"health\":{\"status\":\"Healthy\"},\"name\":\"web\",\"namespace\":\"argocd\",\"project\":\"shop\",\"sync\":{\"revision\":\"\",\"status\":\"Synced\"}}],\"applications_total\":1,\"counts\":{\"health\":{\"Healthy\":1},\"sync\":{\"Synced\":1}},\"matched\":1,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "something"
+ },
+ {
+  "name": "the applications",
+  "tool": "gitops_status",
+  "details": true,
+  "answer": "{\"applications\":[{\"destination\":{\"namespace\":\"shop\"},\"health\":{\"status\":\"Healthy\"},\"name\":\"web\",\"namespace\":\"argocd\",\"project\":\"shop\",\"sync\":{\"revision\":\"\",\"status\":\"Synced\"}}],\"applications_total\":1,\"counts\":{\"health\":{\"Healthy\":1},\"sync\":{\"Synced\":1}},\"matched\":1,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "something"
+ },
+ {
+  "name": "no application of the project",
+  "tool": "gitops_status",
+  "details": false,
+  "answer": "{\"applications\":[],\"applications_total\":1,\"counts\":{\"health\":{},\"sync\":{}},\"filter\":{\"destination_namespace\":\"\",\"name\":\"\",\"only_problems\":true,\"project\":\"other\"},\"matched\":0,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "nothing"
+ },
+ {
+  "name": "no application of the project",
+  "tool": "gitops_status",
+  "details": true,
+  "answer": "{\"applications\":[],\"applications_total\":1,\"counts\":{\"health\":{},\"sync\":{}},\"filter\":{\"destination_namespace\":\"\",\"name\":\"\",\"only_problems\":true,\"project\":\"other\"},\"matched\":0,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "nothing"
+ },
+ {
+  "name": "no application",
+  "tool": "gitops_status",
+  "details": false,
+  "answer": "{\"applications\":[],\"applications_total\":0,\"counts\":{\"health\":{},\"sync\":{}},\"filter\":{\"destination_namespace\":\"\",\"name\":\"\",\"only_problems\":true,\"project\":\"\"},\"hint\":\"No Argo CD Applications in all namespaces. If Argo CD runs in another cluster (a management cluster), call gitops_status there; the Application's own namespace is usually argocd.\",\"matched\":0,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "nothing"
+ },
+ {
+  "name": "no application",
+  "tool": "gitops_status",
+  "details": true,
+  "answer": "{\"applications\":[],\"applications_total\":0,\"counts\":{\"health\":{},\"sync\":{}},\"filter\":{\"destination_namespace\":\"\",\"name\":\"\",\"only_problems\":true,\"project\":\"\"},\"hint\":\"No Argo CD Applications in all namespaces. If Argo CD runs in another cluster (a management cluster), call gitops_status there; the Application's own namespace is usually argocd.\",\"matched\":0,\"resource\":\"applications.argoproj.io\",\"scope\":\"all namespaces\"}",
+  "holds": "nothing"
+ }
+]

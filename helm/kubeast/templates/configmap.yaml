@@ -140,6 +140,8 @@ data:
   AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
   AI_TOOL_RESULTS_JSON: {{ dig "toolResultsJSON" false .Values.ai | quote }}
   AI_TIMELINE_CHANGES: {{ .Values.ai.timelineChanges | quote }}
+  AI_TIMELINE_CHANGES_MORE: {{ dig "timelineChangesMore" false .Values.ai | quote }}
+  AI_CAUSE_QUESTIONS: {{ dig "causeQuestions" false .Values.ai | quote }}
   AI_CHAT_MAX_STEPS: {{ dig "maxSteps" 20 .Values.ai.chat | quote }}
   AI_CHAT_HISTORY_MESSAGES: {{ .Values.ai.chat.historyMessages | quote }}
   AI_CHAT_SUMMARY_ENABLED: {{ .Values.ai.chat.summary.enabled | quote }}
@@ -148,6 +150,7 @@ data:
   AI_CHAT_BUDGET_USER_DAILY_TOKENS: {{ .Values.ai.chat.budget.userDailyTokens | quote }}
   AI_RULE_CARDS_CHAT: {{ .Values.ai.ruleCards.chat | quote }}
   AI_RULE_CARDS_INVESTIGATIONS: {{ .Values.ai.ruleCards.investigations | quote }}
+  AI_RULE_CARDS_SYMPTOMS: {{ dig "symptoms" false .Values.ai.ruleCards | quote }}
   AI_RULE_CARDS: {{ .Values.ai.ruleCards.cards | default (list) | toJson | quote }}
   AI_RULE_CARDS_REMOVE: {{ .Values.ai.ruleCards.remove | default (list) | join "," | quote }}
   AI_CLAUDE_CODE_ENABLED: {{ .Values.ai.providers.claudeCode.enabled | quote }}
@@ -194,13 +197,16 @@ data:
   ALERT_INVESTIGATION_ENABLED: {{ .Values.features.alertInvestigation.enabled | quote }}
   {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's defaults */}}
   {{- $anomalyRank := dig "anomalyRank" (dict) .Values.features }}
-  ANOMALY_RANK_ENABLED: {{ dig "enabled" false $anomalyRank | quote }}
+  ANOMALY_RANK_ENABLED: {{ dig "enabled" true $anomalyRank | quote }}
   ANOMALY_RANK_MAX_QUERIES: {{ dig "maxQueries" 12 $anomalyRank | int64 | quote }}
   ANOMALY_RANK_CHECK_TIMEOUT_SEC: {{ dig "checkTimeoutSeconds" 5 $anomalyRank | int64 | quote }}
   ANOMALY_RANK_TIMEOUT_SEC: {{ dig "timeoutSeconds" 20 $anomalyRank | int64 | quote }}
   ANOMALY_RANK_CONCURRENCY: {{ dig "concurrency" 4 $anomalyRank | int64 | quote }}
   ANOMALY_RANK_CACHE_SEC: {{ dig "cacheSeconds" 60 $anomalyRank | int64 | quote }}
   ANOMALY_RANK_LOG_MAX_BYTES: {{ dig "logMaxBytes" 10737418240 $anomalyRank | int64 | quote }}
+  {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's defaults */}}
+  {{- $nodeNeighbors := dig "nodeNeighbors" (dict) .Values.features }}
+  NODE_NEIGHBORS_ENABLED: {{ dig "enabled" false $nodeNeighbors | quote }}
   {{- with .Values.features.alertInvestigation }}
   ALERT_INVESTIGATION_SEVERITIES: {{ join "," .severities | quote }}
   ALERT_INVESTIGATION_DEDUPE_HOURS: {{ .dedupeHours | int64 | quote }}
@@ -216,7 +222,7 @@ data:
   ALERT_INVESTIGATION_TIMEOUT_SECONDS: {{ .timeoutSeconds | int64 | quote }}
   ALERT_INVESTIGATION_RULES: {{ .rules | quote }}
   ALERT_INVESTIGATION_CHANGES_FIRST: {{ .changesFirst | quote }}
-  ALERT_INVESTIGATION_NARROW_FIRST: {{ dig "narrowFirst" false . | quote }}
+  ALERT_INVESTIGATION_NARROW_FIRST: {{ dig "narrowFirst" true . | quote }}
   ALERT_INVESTIGATION_LEDGER: {{ .ledger | quote }}
   ALERT_INVESTIGATION_METRICS_WINDOW_MINUTES: {{ .window.metricsMinutes | int64 | quote }}
   ALERT_INVESTIGATION_LOGS_WINDOW_MINUTES: {{ .window.logsMinutes | int64 | quote }}
@@ -225,6 +231,7 @@ data:
   ALERT_INVESTIGATION_LANGUAGE: {{ .language | quote }}
   ALERT_INVESTIGATION_CONSOLE_URL: {{ .consoleUrl | quote }}
   ALERT_INVESTIGATION_EVIDENCE_CHECK: {{ .evidenceCheck | quote }}
+  ALERT_INVESTIGATION_VERDICT: {{ dig "verdict" true . | quote }}
   ALERT_INBOX_STALE_HOURS: {{ .inbox.staleAfterHours | int64 | quote }}
   {{- end }}
   AUTH_INVESTIGATOR_TOKEN_URL: "http://auth-service:8004/api/v1/auth/internal/investigator-token"

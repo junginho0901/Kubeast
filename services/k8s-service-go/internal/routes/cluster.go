@@ -62,6 +62,7 @@ func RegisterCluster(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/nodes/{name}/yaml", h.GetNodeYAML)
 	r.Get("/api/v1/nodes/{name}/pods", h.GetNodePods)
 	r.Get("/api/v1/nodes/{name}/events", h.GetNodeEvents)
+	r.Get("/api/v1/nodes/{name}/neighbors", h.NodeNeighbors().Get)
 	r.Delete("/api/v1/nodes/{name}", h.DeleteNode)
 	r.Post("/api/v1/nodes/{name}/yaml/apply", h.ApplyNodeYAML)
 	r.Post("/api/v1/nodes/{name}/cordon", h.CordonNode)

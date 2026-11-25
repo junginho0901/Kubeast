@@ -1,6 +1,7 @@
 // k8s_find_resource looks for objects by a name fragment or a label across
 // several kinds and namespaces, so the model does not guess namespaces one
-// kubectl get at a time. k8s_explain hands the model the API schema
+// kubectl get at a time; with AI_TOOL_RESULT_DETAILS it looks among the names
+// of the namespaces too. k8s_explain hands the model the API schema
 // (kubectl explain) so it stops inventing field names.
 
 package main
@@ -18,8 +19,19 @@ var findDefaultKinds = []string{"pods", "deployments", "statefulsets", "daemonse
 const (
 	findMaxKinds   = 12
 	findMaxMatches = 50
+	// findNotedNames: the most names a note lists of the namespaces that could not be read.
+	findNotedNames = 5
 	// explainMaxBytes caps kubectl explain --recursive, which can run to hundreds of KB.
 	explainMaxBytes = 64 << 10
+
+	findStopHint = "Nothing matched in the searched kinds and namespaces. Stop searching: tell the user what was searched and ask for the exact name, the namespace, or whether it lives in another cluster."
+	// With AI_TOOL_RESULT_DETAILS on: nothing found ends this search, not the work it was part of.
+	findNothingHint = "Nothing matched in the searched kinds and namespaces (notes: what could not be read). Do not repeat this search with the same words: " +
+		"its answer would be the same. Kinds not in searched were not looked at (name them in kinds), and an object deleted earlier is not listed. " +
+		"This ends the search for the name, not the investigation: go on with what is known — the namespaces, the workloads, events, logs and metrics around the symptom. " +
+		"If the user asked for this object itself, say what was searched and ask for the exact name, the namespace, or whether it lives in another cluster."
+	findOneNamespaceHint  = " Only namespace %s was searched: leave namespace out to search every namespace the user may read. A namespace that does not exist answers the same."
+	findNamespaceOnlyHint = "No object of the searched kinds matched; a namespace does. List what is in it (k8s_get_resources with that namespace)."
 )
 
 func handleFindResource(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
@@ -28,7 +40,8 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 		return "", wrapBadRequest("query parameter is required")
 	}
 	kinds := argStringSlice(args, "kinds")
-	if len(kinds) == 0 {
+	kindsGiven := len(kinds) > 0
+	if !kindsGiven {
 		kinds = findDefaultKinds
 	}
 	if len(kinds) > findMaxKinds {
@@ -133,6 +146,32 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 			}
 		}
 	}
+	none := len(matches) == 0
+	hint := findStopHint
+	if resultDetails() {
+		hint = findNothingHint
+		switch {
+		case namespace != "":
+			hint += fmt.Sprintf(findOneNamespaceHint, namespace)
+		// A namespace is found by its name: beside the default kinds, and for kinds given when they matched nothing.
+		case !byLabel && !truncated && (!kindsGiven || none) && !slices.ContainsFunc(kinds, isNamespaceKind):
+			kinds = append(slices.Clone(kinds), "namespaces")
+			names, note := namespacesNamed(ctx, headers, needle, grant, limit-len(matches)+1)
+			if note != "" {
+				notes = append(notes, note)
+			}
+			for _, name := range names {
+				if len(matches) >= limit {
+					truncated = true
+					break
+				}
+				matches = append(matches, map[string]string{"kind": "namespaces", "name": name})
+			}
+			if len(matches) > 0 {
+				hint = findNamespaceOnlyHint
+			}
+		}
+	}
 	result := map[string]interface{}{
 		"query":     query,
 		"matches":   matches,
@@ -140,10 +179,74 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 		"truncated": truncated,
 		"notes":     notes,
 	}
-	if len(matches) == 0 {
-		result["hint"] = "Nothing matched in the searched kinds and namespaces. Stop searching: tell the user what was searched and ask for the exact name, the namespace, or whether it lives in another cluster."
+	if none {
+		result["hint"] = hint
 	}
 	return marshalJSON(result)
+}
+
+// namespacesNamed lists at most the given number of namespaces whose name holds needle: of those the caller may list or,
+// for a grant limited to namespaces, of its own. Those are read by name (such a grant may not list the cluster's) and one
+// by one, as many as may be listed: a kubectl run of several names is an error when one of them is refused, and its other
+// names are lost with it.
+func namespacesNamed(ctx context.Context, headers http.Header, needle string, grant []string, most int) (names []string, note string) {
+	holds := func(name string) bool { return strings.Contains(strings.ToLower(name), needle) }
+	read := func(args ...string) error {
+		cmd := append([]string{"get", "namespaces"}, args...)
+		text, err := runKubectl(ctx, headers, append(cmd, "-o", "custom-columns=NAME:.metadata.name", "--no-headers")...)
+		if err != nil {
+			return err
+		}
+		for _, line := range strings.Split(text, "\n") {
+			// one word: not the line that says the output was cut
+			if f := strings.Fields(line); len(f) == 1 && holds(f[0]) && len(names) < most {
+				names = append(names, f[0])
+			}
+		}
+		return nil
+	}
+	why := func(err error) string { return strings.TrimPrefix(err.Error(), "kubectl failed: ") }
+	if len(grant) == 0 {
+		if err := read(); err != nil {
+			return nil, "namespaces: " + why(err)
+		}
+		return names, ""
+	}
+	// A refused or a gone one counts as well: the runs are bounded, whatever each answers.
+	var unread []string
+	var first error
+	tried, named := 0, 0
+	for _, ns := range grant {
+		if !holds(ns) {
+			continue
+		}
+		named++
+		if tried >= most || ctx.Err() != nil {
+			continue
+		}
+		tried++
+		if err := read(ns, "--ignore-not-found"); err != nil {
+			unread = append(unread, ns)
+			if first == nil {
+				first = err
+			}
+		}
+	}
+	var parts []string
+	if first != nil {
+		listed := strings.Join(unread[:min(len(unread), findNotedNames)], ", ")
+		if more := len(unread) - findNotedNames; more > 0 {
+			listed += fmt.Sprintf(" and %d more", more)
+		}
+		parts = append(parts, listed+": "+why(first))
+	}
+	if tried < named && len(names) < most {
+		parts = append(parts, fmt.Sprintf("%d of the grant's %d namespaces with such a name were looked at", tried, named))
+	}
+	if len(parts) > 0 {
+		note = "namespaces: " + strings.Join(parts, "; ")
+	}
+	return names, note
 }
 
 func isNamespaceKind(kind string) bool {

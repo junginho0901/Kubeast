@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -254,6 +255,148 @@ func TestIssues_FilterScopeSeverityAndCounts(t *testing.T) {
 	out, _ = handleIssues(ctxFor("c1"), map[string]interface{}{}, bearer())
 	if m := decode(t, out); len(m["issues"].([]interface{})) != issuesCap || m["truncated"] != true || m["total"] != float64(issuesCap+5) {
 		t.Fatalf("cap: total=%v", m["total"])
+	}
+}
+
+// What k8s-service answers the issue check when lists were refused: a Collector row each, beside the rows it could read.
+const (
+	issuesWindow   = `"window_minutes":30,"generated_at":"2026-10-15T00:00:00Z"`
+	unreadDeploys  = `{"id":"Collector/deployments","kind":"Collector","message":"deployments.apps is forbidden","name":"deployments","reason":"ListFailed","severity":"info"}`
+	unreadEvents   = `{"id":"Collector/events","kind":"Collector","message":"events: the server was unable to return a response in the time allotted","name":"events","reason":"ListFailed","severity":"info"}`
+	unreadNodes    = `{"id":"Collector/nodes","kind":"Collector","message":"nodes is forbidden","name":"nodes","reason":"ListFailed","severity":"info"}`
+	failingWeb     = `{"id":"Pod/shop/web-1","kind":"Pod","name":"web-1","namespace":"shop","reason":"CrashLoopBackOff","severity":"critical"}`
+	issuesQuietEnd = `"hint":"Nothing is failing in the checked scope right now (pods, workloads, nodes, PVCs, Warning events in the window).","issues":[],`
+)
+
+func issuesOf(t *testing.T, ctx context.Context, a args, rows ...string) string {
+	t.Helper()
+	fakeK8sService(t, func(*http.Request) (int, string) {
+		return 200, `{` + issuesWindow + `,"issues":[` + strings.Join(rows, ",") + `]}`
+	})
+	out, err := handleIssues(ctx, a, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// Where no list was refused, and where the answer lists the refused ones as rows, the answer is the bytes it was.
+func TestIssues_WithEveryListReadTheAnswerIsTheBytesItWas(t *testing.T) {
+	const tail = `"window_minutes":30}`
+	const at = `"generated_at":"2026-10-15T00:00:00Z",`
+	none := `{"counts":{"critical":0,"info":0,"warning":0},` + at + issuesQuietEnd
+	one := `{"counts":{"critical":1,"info":0,"warning":0},` + at + `"issues":[` + failingWeb + `],`
+	for _, c := range []struct {
+		name string
+		args args
+		rows []string
+		want string
+	}{
+		{"a quiet cluster", args{}, nil, none + `"namespace":"all namespaces","total":0,` + tail},
+		{"a quiet namespace", args{"namespace": "shop"}, nil, none + `"namespace":"shop","total":0,` + tail},
+		{"a failing namespace", args{"namespace": "shop"}, []string{failingWeb}, one + `"namespace":"shop","total":1,` + tail},
+		{"a severity", args{"severity": "critical"}, []string{failingWeb}, one + `"namespace":"all namespaces","total":1,` + tail},
+		{"a refused list among the rows", args{}, []string{unreadNodes},
+			`{"counts":{"critical":0,"info":1,"warning":0},` + at + `"issues":[` + unreadNodes + `],"namespace":"all namespaces","total":1,` + tail},
+		{"a refused list among the rows of its severity", args{"severity": "info"}, []string{unreadNodes},
+			`{"counts":{"critical":0,"info":1,"warning":0},` + at + `"issues":[` + unreadNodes + `],"namespace":"all namespaces","total":1,` + tail},
+		// the nodes are no part of a namespace's answer, read or not: a grant limited to namespaces never lists them
+		{"a namespace, the nodes refused", args{"namespace": "shop"}, []string{unreadNodes}, none + `"namespace":"shop","total":0,` + tail},
+	} {
+		if out := issuesOf(t, ctxFor("c1"), c.args, c.rows...); out != c.want {
+			t.Errorf("%s:\n%s\nwant\n%s", c.name, out, c.want)
+		}
+	}
+}
+
+// A narrowed answer leaves the refused lists' rows out; it names them in not_read, in front, and its other fields are those
+// of the lists that were read, without the hint that nothing is failing.
+func TestIssues_ANarrowedAnswerNamesTheListsThatCouldNotBeRead(t *testing.T) {
+	deployments := map[string]interface{}{"deployments": "deployments.apps is forbidden"}
+	two := map[string]interface{}{"deployments": "deployments.apps is forbidden", "events": "events: the server was unable to return a response in the time allotted"}
+	withNodes := map[string]interface{}{"deployments": "deployments.apps is forbidden", "nodes": "nodes is forbidden"}
+	for _, c := range []struct {
+		name    string
+		ctx     context.Context
+		args    args
+		rows    []string
+		notRead map[string]interface{}
+		total   float64
+	}{
+		{"a namespace with nothing found", ctxFor("c1"), args{"namespace": "shop"}, []string{unreadDeploys}, deployments, 0},
+		{"two lists", ctxFor("c1"), args{"namespace": "shop"}, []string{unreadDeploys, unreadEvents}, two, 0},
+		{"a namespace with a failing pod", ctxFor("c1"), args{"namespace": "shop"}, []string{unreadDeploys, failingWeb}, deployments, 1},
+		{"the nodes beside them", ctxFor("c1"), args{"namespace": "shop"}, []string{unreadNodes, unreadDeploys}, deployments, 0},
+		{"a namespace and a severity", ctxFor("c1"), args{"namespace": "shop", "severity": "critical"}, []string{unreadDeploys, failingWeb}, deployments, 1},
+		{"a namespace and the rows' own severity", ctxFor("c1"), args{"namespace": "shop", "severity": "info"}, []string{unreadDeploys}, deployments, 0},
+		{"a namespace of a limited grant", ctxFor("c1", "shop"), args{"namespace": "shop"}, []string{unreadNodes, unreadDeploys}, deployments, 0},
+		// a severity leaves their rows out too, of every namespace: the nodes are part of that answer
+		{"a severity", ctxFor("c1"), args{"severity": "critical"}, []string{unreadNodes, unreadDeploys, failingWeb}, withNodes, 1},
+	} {
+		out := issuesOf(t, c.ctx, c.args, c.rows...)
+		m := decode(t, out)
+		if !reflect.DeepEqual(m["not_read"], c.notRead) || m["total"] != c.total || !strings.HasPrefix(out, `{"not_read":{`) {
+			t.Errorf("%s: %s", c.name, out)
+		}
+		if note, _ := m["not_read_note"].(string); !strings.Contains(note, "not counted, not zero") {
+			t.Errorf("%s: note %q", c.name, note)
+		}
+		if _, ok := m["hint"]; ok {
+			t.Errorf("%s: hint beside not_read: %s", c.name, out)
+		}
+		// beside the two fields and the hint, the answer is that of a cluster whose other lists say the same
+		var others []string
+		for _, row := range c.rows {
+			if row == failingWeb {
+				others = append(others, row)
+			}
+		}
+		delete(m, "not_read")
+		delete(m, "not_read_note")
+		want := decode(t, issuesOf(t, c.ctx, c.args, others...))
+		if _, ok := want["hint"]; ok != (c.total == 0) {
+			t.Errorf("%s: with every list read, hint %v of total %v", c.name, want["hint"], c.total)
+		}
+		delete(want, "hint")
+		if !reflect.DeepEqual(m, want) {
+			t.Errorf("%s: the other fields %v, want %v", c.name, m, want)
+		}
+	}
+
+	// A refused list's message is masked as any answer is.
+	planted := strings.Replace(unreadDeploys, "deployments.apps is forbidden", "dial postgres://app:fake-db-password@db.shop:5432 refused", 1)
+	masked, _ := redactToolOutput(issuesOf(t, ctxFor("c1"), args{"namespace": "shop"}, planted))
+	if strings.Contains(masked, "fake-db-password") || !strings.Contains(masked, `"not_read":{"deployments":`) {
+		t.Errorf("masked: %s", masked)
+	}
+}
+
+// A grant limited to namespaces never lists the nodes: they are no part of its answers, with a namespace named or not, so
+// an answer that missed the nodes alone is what it was before not_read. The rows of an answer that is not narrowed stay.
+func TestIssues_ALimitedGrantsAnswerDoesNotMissTheNodes(t *testing.T) {
+	const head = `{"counts":{"critical":0,"info":0,"warning":0},"generated_at":"2026-10-15T00:00:00Z",` + issuesQuietEnd
+	const tail = `"namespace":["shop"],"total":0,"window_minutes":30}`
+	for _, severity := range []string{"critical", "warning"} {
+		out := issuesOf(t, ctxFor("c1", "shop"), args{"severity": severity}, unreadNodes)
+		if out != head+tail {
+			t.Errorf("%s: %s", severity, out)
+		}
+		// a list of its namespaces that was refused is still named, alone
+		m := decode(t, issuesOf(t, ctxFor("c1", "shop"), args{"severity": severity}, unreadNodes, unreadDeploys))
+		if !reflect.DeepEqual(m["not_read"], map[string]interface{}{"deployments": "deployments.apps is forbidden"}) || m["hint"] != nil {
+			t.Errorf("%s: %v", severity, m)
+		}
+	}
+	for _, a := range []args{{}, {"severity": "info"}} {
+		m := decode(t, issuesOf(t, ctxFor("c1", "shop"), a, unreadNodes))
+		if m["total"] != float64(1) || m["not_read"] != nil {
+			t.Errorf("%v: %v", a, m)
+		}
+	}
+	// whoever reads the whole cluster may list the nodes: an answer that missed them says so
+	m := decode(t, issuesOf(t, ctxFor("c1"), args{"severity": "critical"}, unreadNodes))
+	if !reflect.DeepEqual(m["not_read"], map[string]interface{}{"nodes": "nodes is forbidden"}) || m["hint"] != nil {
+		t.Errorf("the whole cluster: %v", m)
 	}
 }
 

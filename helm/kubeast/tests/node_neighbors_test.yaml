@@ -1,0 +1,28 @@
+suite: One node's neighbours for the AI — features.nodeNeighbors
+templates:
+  - configmap.yaml
+tests:
+  - it: is off by default
+    asserts:
+      - equal:
+          path: data.NODE_NEIGHBORS_ENABLED
+          value: "false"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: takes the switch from features.nodeNeighbors
+    set:
+      features.nodeNeighbors.enabled: true
+    asserts:
+      - equal:
+          path: data.NODE_NEIGHBORS_ENABLED
+          value: "true"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: renders this chart's default on values from a chart without nodeNeighbors (helm upgrade --reuse-values)
+    set:
+      features.nodeNeighbors: null
+    asserts:
+      - equal:
+          path: data.NODE_NEIGHBORS_ENABLED
+          value: "false"
+        documentSelector: {path: metadata.name, value: kubeast-config}

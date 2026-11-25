@@ -90,6 +90,18 @@
     "title": "CPU or memory held by its limit",
     "alerts": ["CPUThrottlingHigh"],
     "terms": ["throttling", "throttled"],
+    "symptoms": {
+      "phrases": [
+        {
+          "subject": ["cpu", "memory", "container", "containers", "pod", "pods", "메모리", "컨테이너", "파드", "리소스"],
+          "state": [
+            "hits its limit", "hit its limit", "hitting its limit", "hitting the limit", "reached its limit", "at its limit",
+            "held by its limit",
+            "스로틀", "쓰로틀", "한도에 걸", "제한에 걸", "리밋에 걸", "limit 에 걸", "한도에 도달", "제한에 도달"
+          ]
+        }
+      ]
+    },
     "checks": [
       {"check": "The container's CPU and memory requests and limits", "tools": ["k8s_describe_resource"]},
       {"check": "The throttled share of CPU periods and the use against the limit over the window", "tools": ["prometheus_query", "get_pod_metrics"]},
@@ -128,6 +140,27 @@
     "title": "A service it depends on is down",
     "alerts": ["TargetDown"],
     "terms": ["connection refused", "ECONNREFUSED", "no endpoints available", "no healthy upstream", "upstream connect error", "503 Service Unavailable"],
+    "symptoms": {
+      "alerts": [
+        "InstanceDown", "DatabaseDown", "PostgresqlDown", "MysqlDown", "MongodbDown", "RedisDown", "KafkaDown", "RabbitmqDown",
+        "DependencyDown", "UpstreamDown"
+      ],
+      "phrases": [
+        {
+          "subject": ["@dependency"],
+          "state": [
+            "@not answering", "outage", "refusing connections", "refused", "connection error", "connection errors", "connection failed",
+            "connection failure", "connection failures", "cannot connect", "cannot reach", "can't reach", "could not reach",
+            "unable to reach", "can't connect", "could not connect", "unable to connect", "failed to connect", "fails to connect",
+            "failing to connect", "lost connection", "keep dropping", "keeps dropping", "connection drops", "dropped connections",
+            "disconnected", "disconnecting",
+            "연결이 안", "연결 안", "연결 실패", "연결이 실패", "연결에 실패", "연결할 수 없", "연결 불가", "연결이 끊", "연결 끊", "연결 오류", "연결 에러", "접속이 안", "접속 안", "접속 실패",
+            "접속이 실패", "접속에 실패", "접속 불가", "내려갔", "끊겼", "끊김", "끊겨", "안 붙", "못 붙"
+          ],
+          "unless": ["@other work", "@other work ko"]
+        }
+      ]
+    },
     "checks": [
       {"check": "The address the error names, the Service behind it and its ready endpoints", "tools": ["k8s_check_service_connectivity"]},
       {"check": "The dependency's own pods: status, restarts and their log at that time", "tools": ["issues", "k8s_get_pod_logs"]},
@@ -140,6 +173,29 @@
     "title": "A service it depends on is slow",
     "alerts": [],
     "terms": ["context deadline exceeded", "i/o timeout", "DeadlineExceeded", "upstream request timeout", "Gateway Timeout"],
+    "symptoms": {
+      "phrases": [
+        {
+          "subject": ["@dependency", "queries", "쿼리"],
+          "state": ["@slow", "@timing out", "overloaded", "latency is high", "high latency", "과부하", "밀려", "밀렸", "적체"],
+          "unless": ["@other work", "@other work ko", "log", "logs", "로그"]
+        },
+        {
+          "subject": [
+            "consumer lag", "kafka lag", "queue depth", "queue length", "queue size", "queue backlog", "message backlog",
+            "컨슈머 랙", "카프카 랙", "컨슈머 지연", "대기열", "메시지 큐"
+          ],
+          "state": ["@high", "쌓이", "쌓여", "쌓였", "밀려", "밀렸"]
+        },
+        {
+          "subject": [
+            "connection pool exhausted", "connection pool is exhausted", "connection pool exhaustion", "pool exhausted",
+            "too many connections", "lagging behind", "falling behind",
+            "커넥션 풀 고갈", "커넥션 풀이 고갈", "커넥션 풀 부족", "커넥션 풀이 부족", "커넥션이 부족", "연결 풀 고갈"
+          ]
+        }
+      ]
+    },
     "checks": [
       {"check": "Where a slow request spends its time: the span that took it", "tools": ["traces_compare", "traces_get"]},
       {"check": "The dependency's latency and request count over the window against the window before", "tools": ["traces_metrics", "prometheus_query"]},
@@ -157,6 +213,212 @@
       {"check": "Volume use against capacity and the days until full", "tools": ["storage_summary", "prometheus_query"]},
       {"check": "Whether the volume is still attached to another node or pod", "tools": ["k8s_get_resources"]},
       {"check": "The write error in the log (no space left, read-only file system)", "tools": ["k8s_get_pod_logs"]}
+    ]
+  },
+  {
+    "kind": "error_rate",
+    "title": "Requests failing (error rate up)",
+    "symptoms": {
+      "alerts": ["KubeAPIErrorBudgetBurn", "KubeAggregatedAPIErrors", "KubeAPITerminatedRequests", "KubeClientErrors", "ServiceDown", "EndpointDown", "SiteDown"],
+      "phrases": [
+        {
+          "subject": [
+            "error rate", "error rates", "error ratio", "failure rate", "failure rates", "failure ratio", "error count", "number of errors",
+            "5xx", "5xxs", "500s", "502s", "503s", "504s", "502", "503", "504", "http errors", "server errors", "request errors",
+            "에러율", "오류율", "실패율", "에러 비율", "오류 비율", "실패 비율", "에러 건수", "오류 건수"
+          ],
+          "state": [
+            "@high", "too many", "lots of", "a lot of", "throws", "throwing", "many", "seeing", "getting", "returning",
+            "많아", "많은", "많다", "많습", "많이", "자주", "계속", "쏟아", "속출", "나요", "나와요", "납니다", "뱉", "반환"
+          ]
+        },
+        {
+          "subject": ["success rate", "success ratio", "availability", "성공률", "가용성", "가용률"],
+          "state": ["low", "lower", "dropped", "drops", "dropping", "below", "decreased", "decreasing", "falling", "fell", "떨어", "낮아", "낮은", "낮습", "하락", "감소", "미달"],
+          "unless": ["zone", "zones"]
+        },
+        {
+          "subject": [
+            "5xx errors", "5xx error", "5xx responses", "500 errors", "502 errors", "503 errors", "504 errors", "http 500", "http 502",
+            "http 503", "http 504", "internal server error", "internal server errors", "bad gateway", "returning 5xx", "returns 5xx",
+            "returning 500", "returns 500", "returning 502", "returns 502", "returning 503", "returns 503", "returning 504", "returns 504",
+            "intermittent errors", "sporadic errors", "error spike", "error spikes", "spike in errors", "many errors", "lots of errors",
+            "a lot of errors", "elevated errors", "errors increased", "errors spiked", "returning errors", "returns errors",
+            "throwing errors", "throws errors", "serving errors",
+            "5xx 에러", "5xx 오류", "500 에러", "500 오류", "502 에러", "502 오류", "503 에러", "503 오류", "504 에러", "504 오류", "에러 급증", "에러가 급증", "오류 급증",
+            "오류가 급증", "에러 증가", "에러가 증가", "오류 증가", "오류가 증가", "에러가 늘", "오류가 늘", "에러가 많이", "오류가 많이", "에러가 쏟아", "오류가 쏟아", "에러가 자주", "오류가 자주",
+            "에러가 계속 나", "오류가 계속 나", "에러가 계속 발생", "오류가 계속 발생"
+          ],
+          "unless": ["how", "@other work", "@other work ko"]
+        },
+        {
+          "subject": ["requests", "calls", "transactions", "요청", "호출", "트랜잭션"],
+          "state": ["fail", "fails", "failed", "failing", "failure", "failures", "erroring", "실패"],
+          "unless": [
+            "cpu", "memory", "resource", "storage", "gpu", "pull", "merge", "signing", "which", "but", "@other work", "@other work ko",
+            "메모리", "리소스", "자원", "스토리지", "파드", "프로브", "헬스체크", "실패 시", "실패하면", "실패할 때", "실패할 경우", "실패해도"
+          ]
+        },
+        {
+          "subject": ["request failed", "request fails", "request failing", "request failure", "request failures"],
+          "unless": ["token", "signing", "pull", "merge"]
+        },
+        {
+          "subject": ["@service", "users", "customers", "clients", "응답", "사용자", "고객"],
+          "state": [
+            "@not answering", "failing", "erroring", "giving errors", "gives errors", "see errors", "seeing errors", "get errors",
+            "getting errors", "inaccessible", "not accessible", "not working", "not loading", "won't load", "doesn't load", "degraded",
+            "안 돼", "안 되", "안 됩", "안 됨", "안 열", "안 떠", "안 뜨", "안 뜹", "안 와", "안 옵", "안 오", "못 해", "못 하", "못 쓰", "못 써", "못 열", "못 들어", "실패하",
+            "실패해", "실패했", "실패합", "불가", "장애가 났", "장애가 나", "장애가 발생", "장애 발생", "에러가 나", "에러가 발생", "에러 발생", "에러가 떠", "에러가 뜨", "에러를 내", "오류가 나",
+            "오류가 발생", "오류 발생", "오류가 떠", "오류가 뜨", "오류를 내"
+          ],
+          "unless": [
+            "@other work", "@other work ko", "account", "accounts", "mesh", "monitor", "systemd", "probe", "which", "but",
+            "어카운트", "계정", "모니터", "목록", "로그", "메트릭", "지표", "알림", "문서", "설정", "지원", "프로브", "헬스체크", "실패하면", "실패해도"
+          ]
+        },
+        {
+          "subject": ["errors", "에러", "오류"],
+          "state": ["jumped", "surged", "spiked", "spiking", "rising", "increasing", "increased", "많이 나", "많이 발생", "많이 떠", "많이 뜨", "쏟아", "급증", "폭증", "늘었", "늘어", "속출"],
+          "unless": ["@other work", "@other work ko", "로그", "코드"]
+        },
+        {
+          "subject": ["@slo"],
+          "state": ["@missed"]
+        }
+      ]
+    },
+    "checks": [
+      {"check": "Which requests fail and since when: by status code, route and pod over the window against the window before", "tools": ["prometheus_query", "traces_metrics"]},
+      {"check": "The error line of the failing requests: the message, address or key it names", "tools": ["logsearch", "k8s_get_pod_logs"]},
+      {"check": "A failed request's trace: the deepest span with an error and the service it belongs to", "tools": ["traces_search", "traces_get"]},
+      {"check": "One pod or all: ready pods, restarts and the Service's ready endpoints", "tools": ["issues", "k8s_get_resources", "k8s_check_service_connectivity"]},
+      {"check": "A rollout, ConfigMap or Secret write just before it began", "tools": ["timeline"]},
+      {"check": "What it calls, and other alerts firing at the same time, often from the same cause", "tools": ["resource_graph", "alerts_list"]}
+    ]
+  },
+  {
+    "kind": "latency",
+    "title": "Requests slow (latency up)",
+    "symptoms": {
+      "alerts": ["RequestTimeout"],
+      "phrases": [
+        {
+          "subject": [
+            "latency", "latencies", "response time", "response times", "request duration", "response duration", "request time", "p90", "p95",
+            "p99", "99th percentile", "95th percentile",
+            "레이턴시", "응답 시간", "응답 속도", "지연 시간", "지연율", "처리 시간", "로딩 시간"
+          ],
+          "state": [
+            "@high", "slow", "slower", "worse", "worsened", "degraded", "degradation", "regressed", "regression", "too long", "is up",
+            "go up", "goes up", "went up", "going up", "gone up", "slo burn", "budget burn", "slo violation", "slo breach",
+            "길어", "길다", "길고", "깁니다", "느려", "느리", "느립", "느렸", "나빠", "악화"
+          ],
+          "unless": ["@other work", "@other work ko"]
+        },
+        {
+          "subject": ["@service", "request", "requests", "response", "responses", "server", "응답", "요청", "호출", "화면", "로딩", "서버", "속도"],
+          "state": ["@slow"],
+          "unless": ["@other work", "@other work ko"]
+        },
+        {
+          "subject": [
+            "is slow", "are slow", "is so slow", "is too slow", "is very slow", "is really slow", "feels slow", "feel slow", "seems slow",
+            "looks slow", "are so slow", "are too slow", "are very slow", "are really slow", "been slow", "been so slow", "been very slow",
+            "got slow", "got slower", "gets slow", "getting slow", "getting slower", "became slow", "become slow", "becoming slow",
+            "running slow", "running slowly", "slowed down", "slowing down", "responding slowly", "responds slowly", "slow to respond",
+            "is timing out", "are timing out", "been timing out", "keeps timing out", "keep timing out",
+            "이 느려", "가 느려", "은 느려", "는 느려", "도 느려", "이 느리", "가 느리", "은 느리", "는 느리", "이 느립", "가 느립", "은 느립", "는 느립", "이 느렸", "가 느렸"
+          ],
+          "unless": ["@other work", "@other work ko"]
+        },
+        {
+          "subject": ["why is", "why are", "why does", "why do", "왜", "너무", "많이", "자꾸", "계속", "갑자기", "점점", "이렇게", "평소보다", "유독", "부터", "이후", "후", "뒤", "나서", "다음"],
+          "state": ["slow", "slower", "slowly", "sluggish", "taking so long", "taking long", "take so long", "느려", "느리", "느립", "느렸"],
+          "unless": ["@other work", "@other work ko is"]
+        },
+        {
+          "subject": ["@service", "request", "requests", "calls", "요청", "호출"],
+          "state": ["@timing out"],
+          "unless": ["@other work", "@other work ko"]
+        },
+        {
+          "subject": ["timeouts", "타임아웃"],
+          "state": ["@high", "many", "lots of", "frequent", "intermittent", "random", "sporadic", "많아", "많은", "많이 나", "많이 발생", "자주", "잦아", "잦은", "계속"],
+          "unless": ["@other work", "@other work ko"]
+        },
+        {
+          "subject": ["performance", "성능", "응답 속도", "처리 속도"],
+          "state": ["degraded", "degrading", "degradation", "worse", "worsened", "dropped", "poor", "regressed", "저하", "떨어", "나빠", "안 나"],
+          "unless": ["@other work", "@other work ko"]
+        },
+        {
+          "subject": ["@slo"],
+          "state": ["@missed"]
+        }
+      ]
+    },
+    "checks": [
+      {"check": "Since when and on which operation: p95 and p99, request rate and errors over the window against the window before", "tools": ["traces_metrics", "prometheus_query"]},
+      {"check": "Where a slow request spends its time, in the service itself or in a call it makes: the span that took it", "tools": ["traces_compare", "traces_get"]},
+      {"check": "A rollout, ConfigMap or Secret write, or fewer replicas just before it began", "tools": ["timeline"]},
+      {"check": "CPU use against the limit, throttling and ready replicas against the load", "tools": ["prometheus_query", "get_pod_metrics"]},
+      {"check": "What it calls: their latency and errors over the same window", "tools": ["resource_graph", "traces_metrics"]},
+      {"check": "The node its pods run on and what else runs there", "tools": ["get_node_metrics", "k8s_get_resources"]}
+    ]
+  },
+  {
+    "kind": "resource_pressure",
+    "title": "CPU, memory or disk running short",
+    "symptoms": {
+      "alerts": [
+        "NodeCPUHighUsage", "NodeSystemSaturation", "NodeMemoryMajorPagesFaults", "NodeDiskIOSaturation", "KubeCPUOvercommit",
+        "KubeMemoryOvercommit", "KubeHpaMaxedOut"
+      ],
+      "phrases": [
+        {
+          "subject": [
+            "cpu usage", "cpu utilization", "cpu utilisation", "cpu load", "cpu consumption", "memory usage", "memory utilization",
+            "memory utilisation", "memory consumption", "heap usage", "disk usage", "disk utilization", "disk utilisation", "disk io",
+            "disk i/o", "load average", "system load", "iowait",
+            "cpu 사용률", "cpu 사용량", "cpu 점유율", "cpu 부하", "메모리 사용률", "메모리 사용량", "메모리 점유율", "디스크 사용률", "디스크 사용량", "디스크 io", "시스템 부하"
+          ],
+          "state": ["@high", "at 100", "maxed", "saturated", "saturation", "near the limit", "close to the limit", "at the limit", "한계", "포화"]
+        },
+        {
+          "subject": ["cpu", "memory", "disk", "메모리", "디스크"],
+          "state": [
+            "is high", "is too high", "is very high", "is full", "is almost full", "almost full", "nearly full", "almost gone",
+            "is filling up", "filling up", "climbing", "rising", "growing", "is maxed out", "maxed out", "is saturated", "saturated",
+            "is exhausted", "exhausted", "is running out", "running out of", "running low on", "running short of", "runs out of",
+            "starved of", "high usage", "high utilization", "high utilisation", "spike", "spikes", "spiking", "leak", "leaks", "leaking",
+            "pressure", "saturation", "exhaustion", "contention", "starvation", "pegged", "at 100",
+            "높아", "높은", "높다", "높습", "높네", "높음", "높고", "높았", "올라", "올랐", "늘어", "늘었", "증가", "많이 써", "많이 쓰", "많이 사용", "부족", "모자라", "꽉 찼", "꽉 차",
+            "다 찼", "찼어", "가득", "포화", "치솟", "급증", "튀어", "튀었", "튀는", "누수"
+          ],
+          "unless": ["request", "requests", "limit", "limits", "quota", "요청", "한도", "제한", "쿼터", "할당", "리밋"]
+        },
+        {
+          "subject": [
+            "high cpu on", "high cpu in", "high memory on", "high memory in", "high load on", "cpu high", "memory high", "too much cpu",
+            "too much memory", "low disk space", "low on disk space", "out of disk space", "noisy neighbor", "noisy neighbour",
+            "resource exhaustion", "resource saturation", "resource contention",
+            "자원 부족", "자원이 부족", "리소스 부족", "리소스가 부족"
+          ]
+        },
+        {
+          "subject": ["node", "nodes", "host", "instance", "server", "pod", "pods", "@service", "노드", "서버", "파드"],
+          "state": ["overloaded", "under heavy load", "high load", "load is high", "과부하", "부하가 높", "부하가 심", "부하가 걸"]
+        }
+      ]
+    },
+    "checks": [
+      {"check": "Who uses it: pods and nodes by CPU and memory, the highest first", "tools": ["get_pod_metrics", "get_node_metrics"]},
+      {"check": "Use against the requests and limits over the window: a steady climb, a jump or a daily peak", "tools": ["prometheus_query", "k8s_describe_resource"]},
+      {"check": "What grew with it: request rate, fewer ready replicas, a Job that started", "tools": ["prometheus_query", "k8s_get_resources"]},
+      {"check": "A rollout or scale just before that changed replicas, requests or limits", "tools": ["timeline"]},
+      {"check": "What it led to: OOM kills, evictions and scheduling failures in the events", "tools": ["k8s_get_events", "issues"]},
+      {"check": "A HorizontalPodAutoscaler at its maximum, or a LimitRange or ResourceQuota that holds it", "tools": ["k8s_describe_resource", "limit_range_violations"]}
     ]
   }
 ]

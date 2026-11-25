@@ -69,12 +69,22 @@ export async function comparePictures(page: Page, a: Buffer, b: Buffer): Promise
 }
 
 // A screen change a PR means to make: which screens, why, and the PR. A rule with no reason or PR is refused; the file's
-// changes show in the diff of whichever PR adds to it.
-export type IntendedRule = { screen: string; why: string; pr: string }
+// changes show in the diff of whichever PR adds to it. A rule with `within`, a CSS selector, keeps the change to that
+// element: it is covered in both pictures, as a mask covers one, and the rest of the screen is compared. A rule without
+// it takes the whole screen.
+export type IntendedRule = { screen: string; within?: string; why: string; pr: string }
+const compiledIntended = (rules: IntendedRule[]) => rules.map((r) => {
+  if (!r.why?.trim() || !r.pr?.trim()) throw new Error(`an intended change needs a reason and a PR: ${JSON.stringify(r)}`)
+  if (r.within !== undefined && !r.within.trim()) throw new Error(`an intended change with no element to keep to: ${JSON.stringify(r)}`)
+  return { rule: r, screen: new RegExp(r.screen) }
+})
 export function compileIntended(rules: IntendedRule[]): (screen: string) => IntendedRule | null {
-  const compiled = rules.map((r) => {
-    if (!r.why?.trim() || !r.pr?.trim()) throw new Error(`an intended change needs a reason and a PR: ${JSON.stringify(r)}`)
-    return { rule: r, screen: new RegExp(r.screen) }
-  })
+  const compiled = compiledIntended(rules).filter((c) => c.rule.within === undefined)
   return (screen) => compiled.find((c) => c.screen.test(screen))?.rule ?? null
+}
+
+// The elements of a screen that its rules with `within` cover.
+export function intendedWithin(rules: IntendedRule[]): (screen: string) => string[] {
+  const compiled = compiledIntended(rules)
+  return (screen) => compiled.flatMap((c) => (c.rule.within !== undefined && c.screen.test(screen) ? [c.rule.within] : []))
 }

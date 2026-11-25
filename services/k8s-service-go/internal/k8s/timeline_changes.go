@@ -96,6 +96,9 @@ type changeSink struct {
 	notRead map[string]string
 	notes   map[string]string
 	skipped map[string]string
+
+	// more is set with the further sources (ai.timelineChangesMore, timeline_changes_more.go); nil without them
+	more *moreChanges
 }
 
 func newChangeSink(since, until time.Time, most int) *changeSink {
@@ -176,6 +179,11 @@ func (c *changeSink) result() *TimelineChangesResult {
 	for _, source := range timelineChangeSources {
 		bySource[source] = c.counts[source]
 	}
+	if c.more != nil {
+		for _, source := range timelineMoreChangeSources {
+			bySource[source] = c.counts[source]
+		}
+	}
 	for source := range c.notRead {
 		bySource[source] = nil
 	}
@@ -218,12 +226,20 @@ const timelineChangesRunMax = 60 * time.Second
 // restarts. Callers asking the same window with the same identity and grant at one moment share one read
 // (changesFlight): the same window is the same question, and the handler keeps the answer 30 s anyway.
 func (s *Service) GetTimelineChanges(ctx context.Context, namespace string, since, until time.Time, limit int) (*TimelineChangesResult, error) {
+	return s.timelineChanges(ctx, namespace, since, until, limit, false)
+}
+
+func (s *Service) timelineChanges(ctx context.Context, namespace string, since, until time.Time, limit int, more bool) (*TimelineChangesResult, error) {
 	if s.clientsetCtx(ctx) == nil {
 		return nil, errNotLoaded
 	}
-	key := s.clusterCacheKey(ctx, fmt.Sprintf("timeline-changes|%s|%d|%d|%d|%s", namespace, since.Unix(), until.Unix(), limit, strings.Join(scopeFromCtx(ctx), ",")))
+	view := "timeline-changes"
+	if more {
+		view = "timeline-changes-more"
+	}
+	key := s.clusterCacheKey(ctx, fmt.Sprintf("%s|%s|%d|%d|%d|%s", view, namespace, since.Unix(), until.Unix(), limit, strings.Join(scopeFromCtx(ctx), ",")))
 	answer, err := sharedRun(ctx, &s.changesFlight, key, func(run context.Context) (interface{}, error) {
-		return s.readTimelineChanges(run, namespace, since, until, limit)
+		return s.readTimelineChanges(run, namespace, since, until, limit, more)
 	})
 	if err != nil {
 		return nil, err
@@ -248,22 +264,29 @@ func sharedRun(ctx context.Context, group *singleflight.Group, key string, read 
 	}
 }
 
+// changeSource is one source of the view, read in a namespace.
+type changeSource struct {
+	source string
+	read   func(ns string) error
+}
+
 // readTimelineChanges reads the sources one after another, so one read has one list at a time with the cluster and holds
 // at most one of bigReadSlots (eachPage takes it before a second page). A source that could not be read is in
 // summary.not_read with why; when every namespaced source that was read was refused, that refusal is the answer.
 // Without a namespace, a caller not limited to namespaces walks the cluster's pods only when it may list pods across
-// the cluster; otherwise the restarts are skipped and summary.skipped says so.
-func (s *Service) readTimelineChanges(ctx context.Context, namespace string, since, until time.Time, limit int) (*TimelineChangesResult, error) {
+// the cluster; otherwise the restarts are skipped and summary.skipped says so. The further sources (more) come after the
+// namespaced ones, in a namespace named only.
+func (s *Service) readTimelineChanges(ctx context.Context, namespace string, since, until time.Time, limit int, more bool) (*TimelineChangesResult, error) {
 	sink := newChangeSink(since, until, limit)
-	namespaced := []struct {
-		source string
-		read   func(ns string) error
-	}{
+	namespaced := []changeSource{
 		{"rollouts", func(ns string) error { return s.rolloutChangesIn(ctx, ns, sink) }},
 		{"configmaps", func(ns string) error { return s.writeChangesIn(ctx, ns, "configmaps", "ConfigMap", sink) }},
 		{"secrets", func(ns string) error { return s.writeChangesIn(ctx, ns, "secrets", "Secret", sink) }},
 		{"hpas", func(ns string) error { return s.hpaChangesIn(ctx, ns, sink) }},
 		{"pods", func(ns string) error { return s.restartChangesIn(ctx, ns, sink) }},
+	}
+	if more {
+		namespaced = append(namespaced, s.moreChangeSources(ctx, namespace, sink)...)
 	}
 	tried, refused := 0, 0
 	var first error
@@ -324,6 +347,8 @@ type revisionBook struct {
 	since, until time.Time
 	mu           sync.Mutex
 	owners       map[revisionKey]*ownerRevisions
+	// replicas is what each Deployment's ReplicaSets say of its count, kept with the further sources only
+	replicas map[revisionKey]deploymentReplicas
 }
 
 func newRevisionBook(since, until time.Time) *revisionBook {
@@ -335,6 +360,9 @@ func newRevisionBook(since, until time.Time) *revisionBook {
 func (s *Service) rolloutChangesIn(ctx context.Context, namespace string, sink *changeSink) error {
 	cs := s.clientsetCtx(ctx)
 	book := newRevisionBook(sink.since, sink.until)
+	if sink.more != nil {
+		book.replicas = map[revisionKey]deploymentReplicas{}
+	}
 	err := eachRolloutPage(ctx, func(o metav1.ListOptions) (*appsv1.ReplicaSetList, error) {
 		return cs.AppsV1().ReplicaSets(namespace).List(ctx, o)
 	}, func(page *appsv1.ReplicaSetList) {
@@ -356,6 +384,9 @@ func (s *Service) rolloutChangesIn(ctx context.Context, namespace string, sink *
 		return fmt.Errorf("list controller revisions: %w", err)
 	}
 	book.emit(sink)
+	if sink.more != nil {
+		sink.more.rollouts = book
+	}
 	return nil
 }
 
@@ -368,7 +399,11 @@ func (b *revisionBook) addReplicaSet(rs *appsv1.ReplicaSet) {
 	if err != nil {
 		return
 	}
-	b.add(revisionKey{"Deployment", rs.Namespace, owner.Name}, revision, rs.CreationTimestamp.Time, &rs.Spec.Template)
+	key := revisionKey{"Deployment", rs.Namespace, owner.Name}
+	b.add(key, revision, rs.CreationTimestamp.Time, &rs.Spec.Template)
+	if b.replicas != nil {
+		b.keepReplicas(key, revision, rs)
+	}
 }
 
 func (b *revisionBook) addControllerRevision(cr *appsv1.ControllerRevision) {
@@ -591,8 +626,24 @@ func hashBytes(b []byte) uint64 {
 // window, with the field manager that wrote it. Helm keeps a release's revisions as Secrets (or ConfigMaps) of its own;
 // those are written as the release's revisions instead.
 func (s *Service) writeChangesIn(ctx context.Context, namespace, resource, kind string, sink *changeSink) error {
+	return s.eachMetadataIn(ctx, []string{"/api", "v1"}, namespace, resource, func(meta *metav1.ObjectMeta) {
+		if isHelmRelease(meta) {
+			if ch, ok := helmRevisionChange(meta, sink); ok {
+				sink.add("helm", ch)
+			}
+			return
+		}
+		if ch, ok := writeChange(kind, meta, sink); ok {
+			sink.add(resource, ch)
+		}
+	})
+}
+
+// eachMetadataIn lists a kind of the API at api in a namespace ("" for every one) as metadata only, a page at a time as
+// the caller, and gives each object's metadata to keep.
+func (s *Service) eachMetadataIn(ctx context.Context, api []string, namespace, resource string, keep func(*metav1.ObjectMeta)) error {
 	cs := s.clientsetCtx(ctx)
-	path := []string{"/api", "v1"}
+	path := slices.Clone(api)
 	if namespace != "" {
 		path = append(path, "namespaces", namespace)
 	}
@@ -613,16 +664,7 @@ func (s *Service) writeChangesIn(ctx context.Context, namespace, resource, kind 
 		return list, nil
 	}, func(page *metav1.PartialObjectMetadataList) {
 		for i := range page.Items {
-			meta := &page.Items[i].ObjectMeta
-			if isHelmRelease(meta) {
-				if ch, ok := helmRevisionChange(meta, sink); ok {
-					sink.add("helm", ch)
-				}
-				continue
-			}
-			if ch, ok := writeChange(kind, meta, sink); ok {
-				sink.add(resource, ch)
-			}
+			keep(&page.Items[i].ObjectMeta)
 		}
 	})
 }
@@ -693,6 +735,9 @@ func (s *Service) hpaChangesIn(ctx context.Context, namespace string, sink *chan
 				What: "scaled", To: h.Status.DesiredReplicas,
 				Note: fmt.Sprintf("%d running now, of %s %s", h.Status.CurrentReplicas, h.Spec.ScaleTargetRef.Kind, h.Spec.ScaleTargetRef.Name),
 			})
+			if sink.more != nil {
+				sink.more.hpaScaled[revisionKey{h.Spec.ScaleTargetRef.Kind, h.Namespace, h.Spec.ScaleTargetRef.Name}] = true
+			}
 		}
 	})
 }
