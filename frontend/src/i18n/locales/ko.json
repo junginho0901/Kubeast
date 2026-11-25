@@ -5637,6 +5637,7 @@
       "started": "{{at}}부터",
       "path": "경로(원인 → 증상)",
       "ruledOut": "배제한 것",
+      "partial": "{{total}}개 중 앞의 {{shown}}개를 보여 줍니다. 나머지는 서버가 저장하지 않았습니다.",
       "hypotheses": "가설 ({{count}})",
       "col": {
         "hypothesis": "가설",
@@ -5665,7 +5666,7 @@
       "notVerifiedBare": "확인 안 됨",
       "unverified": {
         "no_evidence": "근거로 댄 호출이 없음",
-        "bad_calls": "댄 호출은 이 조사에서 답을 받은 호출이 아님",
+        "bad_calls": "댄 호출 중 이 조사에서 답을 받은 호출이 아닌 것이 있음",
         "name_missing": "댄 호출이 돌려준 결과에 이름이 나오지 않음",
         "after_alert": "알림보다 늦게 시작함"
       }
