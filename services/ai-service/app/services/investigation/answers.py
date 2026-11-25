@@ -4,7 +4,8 @@ An answer repeats what was asked: the name in a not_found, the pod in an empty q
 (unread()) or whose answer holds nothing (empty()) shows no symptom, no cause and no object, whatever names are in its
 text. The answer of a raw-text tool (tool_results.RAW_TEXT_TOOLS) is what a container or the cluster wrote: a log line that
 is a JSON object with an `error` or a `status` is a log line, and only an object of the shape tool-server or ai-service
-makes is an answer of theirs (raw_outcome()). Nothing here but no_log() and log_text() runs with the verdict off."""
+makes is an answer of theirs (raw_outcome(), which the chat's row reads too, streaming.read_outcome). Nothing here but
+no_log() and log_text() runs with the verdict off."""
 
 from __future__ import annotations
 
