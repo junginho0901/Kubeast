@@ -300,7 +300,8 @@ ingress:
 # and calls none of them, on a Claude subscription an alert investigation's closing call and second ask hold the tool results between
 # markers, a chat answer's last model call calls no tool and is told to answer (ai.chat.maxSteps), the request for the rest of a chat
 # answer cut at its length is in other words, and Claude Code receives every prompt as written. What the AI tools get_pod_metrics,
-# issues, logsearch, alerts_inbox and investigations answer changed with no switch too (upgrade-0.7.9.md section 4).
+# issues, logsearch, alerts_inbox, investigations and k8s_get_pod_logs answer changed with no switch too
+# (upgrade-0.7.9.md section 4).
 # (alpha): may change or go without notice. More in ai-alerts.md and features.md
 features:
   alertInvestigation:

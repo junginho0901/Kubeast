@@ -292,7 +292,7 @@ ingress:
 # Claude 구독의 알림 조사에서는 조사를 닫는 호출과 다시 묻기가 도구 결과를 표식 사이에 담고,
 # 채팅 답의 마지막 모델 호출은 도구를 부르지 않고 답하라는 지시를 받고(ai.chat.maxSteps), 길이에서 잘린 채팅 답의 나머지를 청하는 글이 바뀌고,
 # Claude Code는 모든 프롬프트를 쓴 그대로 받습니다.
-# AI 도구 get_pod_metrics·issues·logsearch·alerts_inbox·investigations의 답도 스위치 없이 바뀝니다(upgrade-0.7.9.md 4절).
+# AI 도구 get_pod_metrics·issues·logsearch·alerts_inbox·investigations·k8s_get_pod_logs의 답도 스위치 없이 바뀝니다(upgrade-0.7.9.md 4절).
 # (alpha): 예고 없이 바뀌거나 없어질 수 있습니다. 자세한 것은 ai-alerts.md·features.md에 있습니다
 features:
   alertInvestigation:
