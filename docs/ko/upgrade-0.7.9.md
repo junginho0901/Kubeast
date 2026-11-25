@@ -227,7 +227,6 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 \
 - 새 경로는 `GET /api/v1/timeline/changes`, `GET /api/v1/namespaces/{namespace}/timeline/changes`, `GET /api/v1/namespaces/{namespace}/anomalies`(#902), `GET /api/v1/nodes/{name}/neighbors`(#1088)입니다. 스위치가 꺼져 있으면 404로 답하고, anomalies 경로는 기본 설치에서 답합니다.
 - `features.alertInvestigation.evidenceCheck`나 `ledger`를 켠 채 돈 알림 조사의 답에는 `result`가 있고(#882), `features.alertInvestigation.verdict`도 켜면 그 안에 `verdict`가 있습니다(#1088). 그때 `ai.investigation.run` 행에 `after.verdict`가 더해집니다.
 - AI 도구 `get_pod_metrics`는 Pod가 없는 네임스페이스에서 kubectl의 문장으로 만든 행 하나 대신 `[]`로 답합니다. AI 도구 `issues`는 네임스페이스나 심각도로 좁힌 호출에서 읽지 못한 목록을 `not_read`와 `not_read_note`로 더하고, 그때는 문제가 없다는 `hint`가 없습니다. 모든 목록을 읽었다면 답은 전과 같습니다(#1088).
-- 워크로드로 좁힌 로그 검색(그 서랍의 로그 검색 절과 AI 도구 `logsearch`)은 컨트롤러가 붙이는 파드 이름으로 맞춥니다. 전에는 Deployment `cart`가 DaemonSet `cart-api`의 파드를 함께 가져왔고, Kubeast에서 실행한 CronJob의 Job이나 이름이 긴 워크로드의 파드는 빠졌습니다(#1077).
 
 **감사 로그**
 
@@ -249,7 +248,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 \
 
 - Cluster View의 파드 창은 Exec 탭을, 상자 메뉴는 Exec 항목을 Pods 서랍처럼 그 사람이 그 파드에 터미널을 열 수 있을 때만 보여 줍니다. Write 역할에는 더는 보이지 않습니다(#1077).
 - AI가 쓴 글(채팅 답, 알림 조사 보고서, 최적화 답) 속 이미지는 글을 그릴 때 불러오지 않습니다. 다른 호스트의 http 또는 https 주소에 있는 이미지는 그 주소로 가는 링크가 되어 새 탭에서 열리고, 대체 텍스트(없으면 주소)가 링크 글자가 됩니다. 그 밖의 이미지는 콘솔 자기 호스트의 것과 `data:` 주소의 것도 포함해 대체 텍스트만 보입니다. 게이트웨이 뒤에서는 Content-Security-Policy가 콘솔 자기 호스트와 `data:`의 이미지만 불러오게 하므로, 다른 호스트의 이미지는 전에도 불러와지지 않았습니다(#917).
-- 워크로드로 좁힌 로그 검색은 그 컨트롤러가 붙이는 파드 이름과 맞춥니다. 이름이 같은 글자로 시작하는 다른 워크로드는 빠지고, Kubeast에서 시작한 CronJob의 Job 파드와 이름이 긴 워크로드의 파드를 찾습니다(#1077).
+- 워크로드로 좁힌 로그 검색(그 서랍의 로그 검색 절과 AI 도구 `logsearch`)은 그 컨트롤러가 붙이는 파드 이름과 맞춥니다. 이름이 같은 글자로 시작하는 다른 워크로드는 빠지고, Kubeast에서 시작한 CronJob의 Job 파드와 이름이 긴 워크로드의 파드를 찾습니다(#1077).
 - 워크로드 이름의 점은 서랍의 Prometheus 그래프에서 점하고만 맞습니다(#1079).
 
 **그 밖**

@@ -227,7 +227,6 @@ New values whose defaults need nothing from you: `podStartup.quickReady` (true),
 - New routes: `GET /api/v1/timeline/changes`, `GET /api/v1/namespaces/{namespace}/timeline/changes`, `GET /api/v1/namespaces/{namespace}/anomalies` (#902) and `GET /api/v1/nodes/{name}/neighbors` (#1088). They answer 404 while their switches are off, and the anomalies route answers on a default install.
 - An alert investigation's answer holds `result` once it ran with `features.alertInvestigation.evidenceCheck` or `ledger` on (#882), and the result holds `verdict` with `features.alertInvestigation.verdict` on too (#1088). The `ai.investigation.run` row then adds `after.verdict`.
 - The AI tool `get_pod_metrics` answers `[]` for a namespace with no pods, where it answered one row made from kubectl's sentence. The AI tool `issues`, narrowed to a namespace or a severity, adds `not_read` and `not_read_note` with the lists it could not read, and has no `hint` that nothing is failing then; with every list read its answer is the same (#1088).
-- Log search narrowed to a workload (the Log search section of its drawer, and the AI tool `logsearch`) matches the pod names its controller gives. Deployment `cart` took the pods of DaemonSet `cart-api`, and the pods of a CronJob's Job started from Kubeast, or of a workload with a long name, were left out (#1077).
 
 **Audit log**
 
@@ -249,7 +248,7 @@ New values whose defaults need nothing from you: `podStartup.quickReady` (true),
 
 - Cluster View's pod window shows its Exec tab, and a box's menu its Exec entry, only when the person may open a terminal in that pod, as the Pods drawer asks: the Write role no longer sees them (#1077).
 - An image in AI-written text (chat answers, alert investigation reports, the optimization answer) is not loaded when the text is drawn. An image at another host's http or https address becomes a link to that address, opened in a new tab, with its alt text (or else the address) as the link's words; any other image, one on the console's own host or at a `data:` address included, shows its alt text only. Behind the gateway, whose Content-Security-Policy lets images load from the console's own host and `data:` only, an image on another host did not load before either (#917).
-- Log search narrowed to a workload matches the pod names its controller gives: a workload whose name starts with the same words is left out, and the pods of a CronJob's Job started from Kubeast, or of a workload with a long name, are found (#1077).
+- Log search narrowed to a workload (the Log search section of its drawer, and the AI tool `logsearch`) matches the pod names its controller gives: a workload whose name starts with the same words is left out, and the pods of a CronJob's Job started from Kubeast, or of a workload with a long name, are found (#1077).
 - A dot in a workload's name matches only a dot in its drawer's Prometheus charts (#1079).
 
 **Other**
