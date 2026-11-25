@@ -11,8 +11,9 @@ import (
 // in services/pkg/dbmigrate and applied before this repository is used.
 
 // ReadAIToolPermissions are the ai.tool.* permissions of the read-only AI
-// tools (ai-service READONLY_TOOL_NAMES — keep the two lists the same): the
-// Read role gets exactly these, never a write tool.
+// tools (ai-service READONLY_TOOL_NAMES — its tests/test_read_tool_lists.py
+// holds the two lists the same): the Read role gets exactly these, never a
+// write tool.
 var ReadAIToolPermissions = []string{
 	"ai.tool.get_cluster_overview",
 	"ai.tool.get_pod_metrics",
