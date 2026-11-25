@@ -5,6 +5,7 @@ request's cancel scope, which cancels each of its awaits again, does not cut it,
 A run whose end had begun keeps that end."""
 import asyncio
 import contextlib
+import gc
 import io
 import json
 import logging
@@ -213,3 +214,56 @@ async def test_a_close_that_fails_is_one_warning_line_in_the_pod_log(db, monkeyp
     assert _lines(buf) == ["approval a1: the run's close was not written: RuntimeError"]
     assert " WARNING " in buf.getvalue()
     assert "hunter2" not in buf.getvalue() and not approval_runs._open
+
+
+@pytest.mark.parametrize("step", ["end", "close", "move", "close of a move"])
+async def test_a_step_refused_once_the_request_has_gone_is_one_line_with_the_errors_name(db, rows, monkeypatch, caplog, step):
+    """asyncio.shield gives the error of a task whose waiter was cancelled to the event loop, whose asyncio logger writes
+    its text and traceback to stderr, which kubectl logs shows as well."""
+    at = asyncio.Event()
+
+    async def refused(*_a, **_k):
+        at.set()
+        await asyncio.sleep(0.1)  # the database takes a moment: the request has gone by then
+        raise RuntimeError("password=hunter2")
+
+    move = db.transition_tool_approval
+
+    async def moved_slowly(*a, **k):
+        moved = await move(*a, **k)
+        at.set()
+        await asyncio.sleep(0.1)
+        return moved
+
+    for name, stand_in in {
+        "end": {"end_tool_run": refused},
+        "close": {"close_cut_tool_approval": refused},
+        "move": {"transition_tool_approval": refused},
+        "close of a move": {"transition_tool_approval": moved_slowly, "close_cut_tool_approval": refused},
+    }[step].items():
+        monkeypatch.setattr(db, name, stand_in)
+    api = _api(monkeypatch, _in_the_call(at) if step == "close" else _answered)
+    row = await _card(db)
+    with _pod_log() as buf:
+        async with anyio.create_task_group() as requests:
+            requests.start_soon(_press, api, row)
+            await at.wait()
+            requests.cancel_scope.cancel()  # Starlette's task group: it cancels each await of the request again
+        assert await approval_runs.settle(5) == 0
+    gc.collect()  # an error nobody read is logged when its task goes
+    what = "end" if step == "end" else "close"
+    assert _lines(buf) == [f"approval {row.id}: the run's {what} was not written: RuntimeError"]
+    assert [r.getMessage() for r in caplog.records if r.name == "asyncio"] == []
+    assert "hunter2" not in caplog.text + buf.getvalue()
+
+
+@pytest.mark.parametrize("name", ["end_tool_run", "transition_tool_approval"])
+async def test_a_step_refused_while_the_request_is_there_is_the_requests_error(db, rows, monkeypatch, name):
+    async def refused(*_a, **_k):
+        raise RuntimeError("the database is away")
+
+    row = await _card(db)
+    monkeypatch.setattr(db, name, refused)
+    with pytest.raises(RuntimeError, match="the database is away"):
+        await _press(_api(monkeypatch, _answered), row)
+    assert not approval_runs._open

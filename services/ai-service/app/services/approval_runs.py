@@ -30,22 +30,41 @@ class Run:
         """The run's end (the approval leaves `approved` with its outcome row), finished even when the request is
         cancelled meanwhile; from here a cancel closes nothing."""
         self.task = _hold(self, end, "end")
-        return await asyncio.shield(self.task)
+        return _value(await asyncio.shield(self.task))
 
 
 # Per process, as the runs are: another server's runs are its own.
 _open: set[Run] = set()
 
 
+async def _outcome(step: Awaitable[Any]) -> tuple[Any, Optional[Exception]]:
+    """step's value, or the error it ended in, as a value: asyncio.shield gives the error of a task whose waiter was
+    cancelled to the event loop, whose asyncio logger writes its text (a database error's has the statement and its
+    parameters) and traceback."""
+    try:
+        return await step, None
+    except Exception as error:
+        return None, error
+
+
+def _value(outcome: tuple[Any, Optional[Exception]]) -> Any:
+    value, error = outcome
+    if error is not None:
+        raise error
+    return value
+
+
 def _hold(run: Run, step: Awaitable[Any], what: str) -> asyncio.Task:
-    task = asyncio.ensure_future(step)
+    task = asyncio.ensure_future(_outcome(step))
 
     def done(finished: asyncio.Task) -> None:
         if run.task is finished:
             _open.discard(run)
-        if not finished.cancelled() and finished.exception() is not None:
-            log.warning("approval %s: the run's %s was not written: %s", run.approval_id, what,
-                        finished.exception().__class__.__name__)
+        if finished.cancelled():
+            return
+        error = finished.exception() or finished.result()[1]
+        if error is not None:
+            log.warning("approval %s: the run's %s was not written: %s", run.approval_id, what, error.__class__.__name__)
 
     task.add_done_callback(done)
     return task
@@ -56,22 +75,19 @@ async def approving(db: Any, approval_id: str, move: Awaitable[Any]) -> Any:
     moved, or None when another press or end came first). A cancel while it is under way lets the move finish in a
     task of its own: a row it moved is this request's run, cut before it began, and is closed as running closes one;
     a row it did not move is left as it is."""
-    moving = asyncio.ensure_future(move)
+    moving = asyncio.ensure_future(_outcome(move))
     try:
-        return await asyncio.shield(moving)
+        return _value(await asyncio.shield(moving))
     except asyncio.CancelledError:
         run = Run(approval_id)
         _open.add(run)
         run.task = _hold(run, _close_if_moved(db, approval_id, moving), "close")
-        try:
-            await asyncio.shield(run.task)
-        except Exception:
-            pass  # logged when it ends
+        await asyncio.shield(run.task)  # its error is logged when it ends
         raise
 
 
 async def _close_if_moved(db: Any, approval_id: str, moving: "asyncio.Future[Any]") -> bool:
-    if await moving is None:
+    if _value(await moving) is None:
         return False
     return await db.close_cut_tool_approval(approval_id)
 
@@ -87,10 +103,7 @@ async def running(db: Any, approval_id: str) -> AsyncIterator[Run]:
     except asyncio.CancelledError:
         if run.task is None:
             run.task = _hold(run, db.close_cut_tool_approval(approval_id), "close")
-            try:
-                await asyncio.shield(run.task)
-            except Exception:
-                pass  # logged when it ends
+            await asyncio.shield(run.task)  # its error is logged when it ends
         raise
     finally:
         if run.task is None:
