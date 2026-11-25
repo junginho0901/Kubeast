@@ -490,7 +490,9 @@ V078_SYSTEM = {
     ("", "ko"): "6b47cbc52d168d28e151b8f4673de0ecb440747bad08df7ff20bd4037e5e842a",
     ("apps", "fr"): "516e8030991829d2bf2afbee09f029a52ca19daf874eb4ea6fbff80fa5723eb4",
 }
-V078_FIRST_MESSAGE = "9894a30d258e3de5dac0ea9e592c0d843122cb66f98fc6680f9f81d21742663a"
+# Not 142b50b5's, on purpose with no switch: the alert leaves out its generatorURL and keeps only the rule's expression
+# (none in row()); with "generatorURL": "" put back last in the alert it is 142b50b5's 9894a30d258e3de5….
+V078_FIRST_MESSAGE = "7e14a8677ca56e30b3e863757291dcbe1f858fd20d67beb7787a0a5681806bb0"
 V078_FINAL = "Tool calls are over for this investigation. Write the report now from what you found, under the four headings."
 
 

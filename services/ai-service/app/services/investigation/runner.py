@@ -37,7 +37,7 @@ import re
 import time
 from datetime import timedelta
 from typing import Any, Optional, Sequence
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode
 
 import httpx
 
@@ -124,16 +124,38 @@ async def build_service(cfg: inv_settings.InvestigationSettings, token: str, clu
     return service
 
 
+# A graph link's query names each panel's expression g0.expr, g1.expr, … (Prometheus, Thanos and the rulers made like them).
+_EXPR_KEY = re.compile(r"g([0-9]{1,3})\.expr")
+
+
+def rule_expressions(generator_url: str) -> list[str]:
+    """The expressions an alert's generatorURL holds in its query — the text after its first "?" and before its "#" — in
+    panel order. None for an empty value, text that is not a link, or a link of another form (a Grafana rule's page);
+    the address is never read. tool-server's ruleExpressions is the same rule (tests/fixtures/alert_expr_cases.json)."""
+    query = (generator_url or "").split("#", 1)[0].partition("?")[2]
+    found: dict[int, str] = {}
+    for key, value in parse_qsl(query):
+        match = _EXPR_KEY.fullmatch(key)
+        if match and value.strip():
+            found.setdefault(int(match.group(1)), value.strip())
+    return [found[n] for n in sorted(found)]
+
+
 def alert_view(row) -> dict[str, Any]:
-    return {
+    """The alert as the model reads it. Of its generatorURL only the rule's expression goes, as `expr` (a list when the
+    link holds several): the address of the server that sent the alert stays out. The screens read the stored row."""
+    view: dict[str, Any] = {
         "alertname": row.alertname,
         "severity": row.severity,
         "namespace": row.namespace,
         "labels": row.labels or {},
         "annotations": row.annotations or {},
         "startsAt": row.starts_at.isoformat() + "Z" if row.starts_at else None,
-        "generatorURL": row.generator_url,
     }
+    exprs = rule_expressions(row.generator_url)
+    if exprs:
+        view["expr"] = exprs[0] if len(exprs) == 1 else exprs
+    return view
 
 
 async def link_for(cfg: inv_settings.InvestigationSettings, db, row) -> Optional[str]:

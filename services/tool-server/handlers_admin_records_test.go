@@ -199,7 +199,7 @@ const (
 
 func investigationDetail() string {
 	return strings.TrimSuffix(investigationRowA, "}") + `,` + investigationScreenFields + `,"fingerprint":"fp1","labels":{"pod":"web-1"},"annotations":{"summary":"load is high"},"starts_at":"2026-11-01T00:00:00Z",` +
-		`"generator_url":"https://prom.example/graph","alertmanager_url":"https://am.example","provider":"anthropic","prompt_tokens":800,"completion_tokens":100,` +
+		`"generator_url":"https://prom.example/graph?g0.expr=node_load1+%3E+4&g0.tab=1","alertmanager_url":"https://am.example","provider":"anthropic","prompt_tokens":800,"completion_tokens":100,` +
 		`"tool_calls":[{"tool":"k8s_get_resources","args":{"resource_type":"pods"},"step":1,"result_chars":120,"access":{"kind":"investigator"},"fake_field":"fake-credential-value"}],` +
 		`"report":"The load comes from web-1.","error":""}`
 }
@@ -265,8 +265,12 @@ func TestInvestigations_OneReportReadsTheRouteThatRecordsItsView(t *testing.T) {
 		t.Errorf("the route's audit row should say a tool read it: %q", req.Header.Get("User-Agent"))
 	}
 	m := decode(t, out)
-	if m["report"] != "The load comes from web-1." || m["provider"] != "anthropic" || m["status"] != "done" || m["generator_url"] != "https://prom.example/graph" || m["prompt_tokens"] != float64(800) {
+	if m["report"] != "The load comes from web-1." || m["provider"] != "anthropic" || m["status"] != "done" || m["expr"] != "node_load1 > 4" || m["prompt_tokens"] != float64(800) {
 		t.Errorf("report: %v", m)
+	}
+	// The report window's two links are the install's addresses: the model reads the rule's expression only.
+	if strings.Contains(out, "prom.example") || strings.Contains(out, "am.example") || strings.Contains(out, "_url") {
+		t.Errorf("links: %.400s", out)
 	}
 	assertSame(t, "labels", m["labels"], `{"pod":"web-1"}`)
 	assertSame(t, "annotations", m["annotations"], `{"summary":"load is high"}`)
@@ -496,8 +500,11 @@ func TestAlertsInbox_WithReportReadsTheReportTheWindowOpens(t *testing.T) {
 	}
 	m := decode(t, out)
 	report := mapOf(m["investigation_report"])
-	if report["report"] != "The load comes from web-1." || report["status"] != "done" {
+	if report["report"] != "The load comes from web-1." || report["status"] != "done" || report["expr"] != "node_load1 > 4" {
 		t.Errorf("report: %v", report)
+	}
+	if strings.Contains(out, "prom.example") || strings.Contains(out, "monitoring.svc") || strings.Contains(out, "_url") {
+		t.Errorf("links: %.400s", out)
 	}
 	assertSame(t, "tool calls", report["tool_calls"], `[{"tool":"k8s_get_resources","args":{"resource_type":"pods"},"step":1,"result_chars":120,"access":{"kind":"investigator"}}]`)
 	assertNoCredentials(t, "alerts_inbox", out)
