@@ -74,21 +74,33 @@ func gatherWatchWaits(t *testing.T, w *watchWaitMetrics) (map[string]placeWaits,
 	return byPlaces, memory
 }
 
+// stopsAfter is places whose take stops waiting after a time that runs from the take's arrival at them, which is after its
+// wait began to be timed: what is observed is never shorter than it.
+type stopsAfter struct {
+	placeTaker
+	after time.Duration
+}
+
+func (s stopsAfter) Take(ctx context.Context) (func(), error) {
+	ctx, cancel := context.WithTimeout(ctx, s.after)
+	defer cancel()
+	return s.placeTaker.Take(ctx)
+}
+
 // Each take of a watch's places is one observation under its places, a free place a few microseconds and a take that
 // stopped waiting the time it waited; a watch is counted as waiting while it waits, and no longer once it has its place
 // or stopped.
 func TestEachTakeOfAWatchsPlacesIsTimedAndCountedWhileItWaits(t *testing.T) {
 	m := NewMultiplexer(fakeClients{})
 	m.waits = newWatchWaitMetrics()
-	start := m.timed(placesStart, limits.NewSlots("watch start on c", 1))
+	places := limits.NewSlots("watch start on c", 1)
+	start := m.timed(placesStart, places)
 
 	give, err := start.Take(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
-	defer cancel()
-	if _, err := start.Take(ctx); err == nil {
+	if _, err := m.timed(placesStart, stopsAfter{places, 30 * time.Millisecond}).Take(context.Background()); err == nil {
 		t.Fatal("a second take of one place got it")
 	}
 	got, _ := gatherWatchWaits(t, m.waits)
