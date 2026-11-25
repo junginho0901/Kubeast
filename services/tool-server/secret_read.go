@@ -10,40 +10,63 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"sync/atomic"
+	"sync"
 
 	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
 
 type readMasksKey struct{}
 
-// withReadMasks counts what a read takes out of a Secret before the answer is written, which the answer's masking cannot
-// see any more and the audit row says all the same.
-func withReadMasks(ctx context.Context) (context.Context, *atomic.Int64) {
-	count := &atomic.Int64{}
-	return context.WithValue(ctx, readMasksKey{}, count), count
+// readMasks is what a call's read masked by kind before its answer was written.
+type readMasks struct {
+	mu    sync.Mutex
+	stats redact.Stats
 }
 
+// withReadMasks counts what a read takes out before the answer is written, which the answer's masking cannot see any more
+// and the audit row says all the same.
+func withReadMasks(ctx context.Context) (context.Context, *readMasks) {
+	masks := &readMasks{}
+	return context.WithValue(ctx, readMasksKey{}, masks), masks
+}
+
+// countReadMasks counts the values a read took out of a Secret.
 func countReadMasks(ctx context.Context, n int) {
-	if count, ok := ctx.Value(readMasksKey{}).(*atomic.Int64); ok {
-		count.Add(int64(n))
+	if n > 0 {
+		countReadStats(ctx, redact.Stats{Count: n, Kinds: map[string]int{"secret": n}})
 	}
 }
 
-// addReadMasks puts what the read took out next to what the answer's masking did, as the kind of a Secret's values.
-func addReadMasks(stats *redact.Stats, count *atomic.Int64) *redact.Stats {
-	n := int(count.Load())
-	if n == 0 {
+// countReadStats counts what a read masked by the rules of the answer's own masking.
+func countReadStats(ctx context.Context, stats redact.Stats) {
+	if masks, ok := ctx.Value(readMasksKey{}).(*readMasks); ok {
+		masks.mu.Lock()
+		defer masks.mu.Unlock()
+		mergeStats(&masks.stats, stats)
+	}
+}
+
+func mergeStats(into *redact.Stats, from redact.Stats) {
+	if into.Kinds == nil && len(from.Kinds) > 0 {
+		into.Kinds = map[string]int{}
+	}
+	for kind, n := range from.Kinds {
+		into.Kinds[kind] += n
+		into.Count += n
+	}
+}
+
+// addReadMasks puts what the read masked next to what the answer's masking did.
+func addReadMasks(stats *redact.Stats, masks *readMasks) *redact.Stats {
+	masks.mu.Lock()
+	defer masks.mu.Unlock()
+	if masks.stats.Count == 0 {
 		return stats
 	}
 	if stats == nil {
 		stats = &redact.Stats{}
 	}
-	if stats.Kinds == nil {
-		stats.Kinds = map[string]int{}
-	}
-	stats.Kinds["secret"] += n
-	stats.Count += n
+	mergeStats(stats, masks.stats)
 	return stats
 }
 

@@ -143,9 +143,17 @@ test.describe('AI trace tools', () => {
     const opened = await tool(request, reader, 'traces_get', { cluster: CLUSTER, namespace: NS, trace_id: (found.traces as Found[])[0].traceId })
     expect(opened.shown).toBe(2) // telemetrygen: a server span and its child
     expect(opened.errors).toBe(2)
-    for (const s of opened.spans as { service: string; namespace: string; durationMs: number; status: string }[]) {
-      expect(s).toMatchObject({ service: svc, namespace: NS, status: 'ERROR' })
-      expect(s.durationMs).toBeCloseTo(1500, 0)
+    if (opened.table) { // ai.traceSpanTable on: a line per span, "start_ms | ms | self_ms | outside_ms | service | kind | span"
+      for (const line of opened.table as string[]) {
+        expect(line).toContain(svc)
+        expect(line).toContain('[ERROR')
+        expect(Number(line.split(' | ')[1])).toBeCloseTo(1500, 0)
+      }
+    } else {
+      for (const s of opened.spans as { service: string; namespace: string; durationMs: number; status: string }[]) {
+        expect(s).toMatchObject({ service: svc, namespace: NS, status: 'ERROR' })
+        expect(s.durationMs).toBeCloseTo(1500, 0)
+      }
     }
 
     type Row = { ActorEmail?: string; actor_email?: string; After?: Record<string, unknown>; after?: Record<string, unknown> }
