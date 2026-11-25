@@ -117,8 +117,10 @@ func TestATimelineIsKeptForTheGrantThatAsked(t *testing.T) {
 				if code, body := rig.ask(token(inside, second), target); code != http.StatusOK {
 					t.Fatalf("%d %.300s", code, body)
 				}
-				if calls := rig.api.calls; len(calls) > 0 {
-					t.Errorf("the same grant, its namespaces in another order, asked the cluster again: %+v", calls)
+				rig.api.mu.Lock()
+				defer rig.api.mu.Unlock()
+				if len(rig.api.calls) > 0 {
+					t.Errorf("the same grant, its namespaces in another order, asked the cluster again: %+v", rig.api.calls)
 				}
 			})
 		}

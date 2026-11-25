@@ -273,7 +273,9 @@ func splitGroupVersion(path string) (gv, rest string) {
 
 func standInObject(gv, plural string, k kindInfo, namespace, name string) map[string]interface{} {
 	now := time.Now().UTC().Format(time.RFC3339)
-	meta := map[string]interface{}{"name": name, "uid": name + "-uid", "creationTimestamp": now}
+	// a minute ago, so it is in a window that ends at the second its request came in
+	made := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339)
+	meta := map[string]interface{}{"name": name, "uid": name + "-uid", "creationTimestamp": made}
 	if namespace != "" {
 		meta["namespace"] = namespace
 	}
