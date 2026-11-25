@@ -57,12 +57,13 @@ cd "$WORK"
 show_logs() { docker compose ps -a; docker compose logs --no-color --tail 60; }
 ./install-docker.sh --port "$PORT" > install.log 2>&1 || { sed -e '/Password:/d' install.log; show_logs; exit 1; }
 
-# Sign in as the admin the installer created (the password stays in .env, never printed), take the token from the
-# answer's Set-Cookie header and read /api/v1/auth/me with it (the token is never printed either).
+# Sign in as the admin the installer created (the password stays in .env, never printed, nor in curl's arguments, which
+# every process of the machine can read), take the token from the answer's Set-Cookie header and read /api/v1/auth/me
+# with it (the token is kept out of both too).
 password=$(grep '^DEFAULT_ADMIN_PASSWORD=' .env | cut -d= -f2-)
-body=$(printf '{"email":"admin","password":"%s"}' "$password")
-token=$(curl -s -o /dev/null -D - -X POST "http://localhost:${PORT}/api/v1/auth/login" -H 'Content-Type: application/json' \
-  --data-raw "$body" | awk -f "$ROOT/scripts/session-token.awk") || token=""
+token=$(printf '{"email":"admin","password":"%s"}' "$password" \
+  | curl -s -o /dev/null -D - -X POST "http://localhost:${PORT}/api/v1/auth/login" -H 'Content-Type: application/json' \
+    --data-binary @- | awk -f "$ROOT/scripts/session-token.awk") || token=""
 [[ -n "$token" ]] || { echo "::error::admin sign-in failed: no session cookie in the answer"; show_logs; exit 1; }
 me=$(curl -s -o /dev/null -w '%{http_code}' -H @<(printf 'Authorization: Bearer %s\n' "$token") "http://localhost:${PORT}/api/v1/auth/me") || true
 [[ "$me" == 200 ]] || { echo "::error::the sign-in cookie's token was refused: GET /api/v1/auth/me answered $me"; show_logs; exit 1; }
