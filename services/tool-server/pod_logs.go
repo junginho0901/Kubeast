@@ -135,11 +135,12 @@ func (l *podLogRead) pastLine() (line, after *regexp.Regexp) {
 // them, with why a line says a container has no log. One is on the line of what was printed before it where that has no end:
 // a log's last line, which ends here, or the kubelet's words, which noLogOf reads. What a container wrote may end a line the
 // same, so one that is not a line of its own is kubectl's only where it names one of containers, the ones that may have no
-// log, of which no line was read and which kubectl has not named yet: it names each once.
+// log, of which no line was read. It names each once: two lines that name one are the log's where one is a line of its own,
+// and where none is, both stay, since which of them is kubectl's is not known.
 func takePast(out, namespace, pod string, own *regexp.Regexp, containers []string) (string, []string, map[string]string) {
 	var rest strings.Builder
 	var names []string
-	why := map[string]string{}
+	why, after := map[string]string{}, map[string]int{}
 	containers = slices.DeleteFunc(slices.Clone(containers), func(name string) bool {
 		return strings.Contains(out, "[pod/"+pod+"/"+name+"] ")
 	})
@@ -151,8 +152,12 @@ func takePast(out, namespace, pod string, own *regexp.Regexp, containers []strin
 		}
 	}
 	for line := range strings.SplitAfterSeq(out, "\n") {
-		if m := own.FindStringSubmatchIndex(line); m != nil && m[0] == 0 && line[m[4]:m[5]] == pod {
+		switch m := own.FindStringSubmatchIndex(line); {
+		case m == nil || line[m[4]:m[5]] != pod:
+		case m[0] == 0:
 			named(line, m)
+		default:
+			after[line[m[2]:m[3]]]++
 		}
 	}
 	for line := range strings.SplitAfterSeq(out, "\n") {
@@ -162,7 +167,7 @@ func takePast(out, namespace, pod string, own *regexp.Regexp, containers []strin
 			continue
 		}
 		if name := line[m[2]:m[3]]; m[0] > 0 {
-			if !slices.Contains(containers, name) || slices.Contains(names, name) {
+			if !slices.Contains(containers, name) || slices.Contains(names, name) || after[name] > 1 {
 				rest.WriteString(line)
 				continue
 			}

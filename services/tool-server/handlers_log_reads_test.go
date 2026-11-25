@@ -562,10 +562,12 @@ func TestPodLogs_ALineOfALogThatEndsAsTheErrorIsTheLogs(t *testing.T) {
 	if rest, names, _ := takePast(another, "shop", "web-1", reNoPreviousLine, []string{"side"}); rest != another || len(names) != 0 {
 		t.Errorf("%q %v", rest, names)
 	}
-	// one container's line twice: kubectl says it once
-	pod = aPod{names: "app side", containers: []aContainer{{name: "app", log: "panic"}, {name: "side", never: true}, {name: "late", log: says("side") + "\n"}}}
-	if out, _ := pod.read(t, asked); out != "[pod/web-1/app] panic\n[pod/web-1/late] "+says("side")+"\n"+noPreviousOfSide {
-		t.Errorf("%q", out)
+	// one container's line twice: kubectl says it once, and which of the two it is is not known
+	for _, names := range []string{"app side", ""} {
+		pod = aPod{names: names, containers: []aContainer{{name: "app", log: "panic"}, {name: "side", never: true}, {name: "late", log: says("side") + "\n"}}}
+		if out, _ := pod.read(t, asked); out != "[pod/web-1/app] panicerror: previous terminated container \"side\" in pod \"web-1\" not found\n[pod/web-1/late] "+says("side")+"\n" {
+			t.Errorf("%q", out)
+		}
 	}
 }
 

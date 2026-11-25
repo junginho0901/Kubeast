@@ -408,6 +408,20 @@ func TestPodLogs_ALineOfALogThatEndsAsTheErrorOfAContainerThatWaitsIsTheLogs(t *
 			}
 		})
 	}
+	// one word is as the kubelet's is: kubectl's own line is a line of its own, or which of the two it is is not known
+	for _, names := range []string{"migrate side", ""} {
+		line := `saw error: container "side" in pod "web-1" is waiting to start: Healthy`
+		pod := aPod{names: names, containers: []aContainer{{name: "migrate", log: line + "\npanic"}, side}}
+		pod.inEveryOrder(t, asked, func(out string, _ [][]string) {
+			lines :="[pod/web-1/migrate] " + line + "\n[pod/web-1/migrate] panic"
+			if out != lines+"\n"+noLogOfSideYet && out != lines+"error: "+side.fails+"\n" {
+				t.Errorf("%q", out)
+			}
+		})
+		if out, _ := pod.read(t, asked); out != "[pod/web-1/migrate] "+line+"\n[pod/web-1/migrate] panicerror: "+side.fails+"\n" {
+			t.Errorf("%q", out)
+		}
+	}
 	// two that wait, one named on the line of a log without an end: it is a container's name
 	pod := aPod{names: "migrate side app", containers: []aContainer{{name: "migrate", log: says("ghost") + "\npanic"}, side, app}}
 	want := "[pod/web-1/migrate] " + says("ghost") + "\n[pod/web-1/migrate] panic\n# No log of app (waiting to start: PodInitializing), side (waiting to start: PodInitializing).\n"
