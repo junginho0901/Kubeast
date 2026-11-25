@@ -326,7 +326,7 @@ type podRowSet struct {
 	revision  string // "" when the rows were listed
 	unchanged bool   // the caller's revision is current: no rows
 	source    string // "index" or "list"
-	release   func() // gives back the podRowSlots place the rows took
+	release   func() // gives back the place the rows took, of podRowSlots or podRowLists
 	// a set callerPodRows gave a caller whose answer is shared holds no rows yet: the informer set and the access
 	// decision its answer's build reads them by (pods_share.go)
 	ci         *clusterInformers
@@ -346,7 +346,7 @@ func (p *podRowSet) done() {
 // the work on the rows is CPU-bound, so more at once only multiplied the
 // copies — 400 people opening the Pods page at once took k8s-service from 93
 // to 482 MiB. A place is taken after the access check, so callers waiting on
-// the cluster's answer do not hold one.
+// the cluster's answer do not hold one; who lists the rows takes one of podRowLists.
 var podRowSlots = make(chan struct{}, podRowConcurrency(runtime.GOMAXPROCS(0)))
 
 // maxPodRowPlaces: the chart sets no CPU limit, so Go counts every CPU of the node, and each place holds about 2 MB of
@@ -408,7 +408,7 @@ func (s *Service) callerPodRows(ctx context.Context, namespace, revision string,
 	if err != nil {
 		return nil, err
 	}
-	release, err := takePodRowSlot(ctx)
+	release, err := podRowLists.take(ctx, b.id)
 	if err != nil {
 		return nil, err
 	}
