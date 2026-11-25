@@ -1202,8 +1202,10 @@ func TestThePodListFallbackIsNeverShared(t *testing.T) {
 				api := &clusterAPI{pods: podsOnNodes(), review: rbac(map[string][]string{"a@example.com": {""}, "b@example.com": {""}, "c@example.com": {""}})}
 				api.may = func(user, _, _, _, _ string) bool { return c.closed || user != overviewCacheUser }
 				s := listingService(t, api, c.noInformers)
-				if c.closed {
-					_ = s.defaultBundle.Load().Close()
+				if c.closed { // the informers, were any started on it, would sync at once
+					b := s.defaultBundle.Load()
+					b.cacheClient = fake.NewSimpleClientset(pagePods()...)
+					_ = b.Close()
 				}
 				g := watchBuilds(t, s, &buildGate{})
 				going := make([]*asking, len(users))
