@@ -30,6 +30,8 @@ type Issue struct {
 	Restarts int `json:"restarts,omitempty"`
 	Failed   int `json:"failed,omitempty"`
 	Events   int `json:"events,omitempty"`
+	// Namespaces are those of a limited grant a list was refused in, on the row (Kind Collector) that says so.
+	Namespaces []string `json:"namespaces,omitempty"`
 }
 
 const (
@@ -52,20 +54,34 @@ type IssuesOptions struct {
 // CollectIssues gathers the issues of the ctx cluster. Pods are required; a
 // list that fails elsewhere — nodes too, which a grant limited to namespaces
 // may not list — becomes an info issue of kind Collector so the gap is
-// visible instead of silent.
+// visible instead of silent. So does a list, the pods too, that a namespace of
+// such a grant refused, naming those namespaces.
 func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issue, error) {
 	if opts.Now.IsZero() {
 		opts.Now = time.Now()
 	}
-	podIssues, err := s.podIssues(ctx, opts)
+	var issues []Issue
+	unread := func(what, why string, namespaces []string) {
+		issues = append(issues, Issue{ID: "Collector/" + what, Kind: "Collector", Name: what, Severity: severityInfo, Reason: "ListFailed", Message: why, Namespaces: namespaces})
+	}
+	partly := func(what string, notes *refusedNamespaces) {
+		if names, why := notes.refused(); len(names) > 0 {
+			unread(what, notReadIn(names, why.Error()), names)
+		}
+	}
+	podsCtx, podsRefused := noteRefusedNamespaces(ctx)
+	podIssues, err := s.podIssues(podsCtx, opts)
 	if err != nil {
 		return nil, err
 	}
-	var issues []Issue
+	partly("pods", podsRefused)
 	collect := func(what string, fn func(context.Context) ([]map[string]interface{}, error)) []map[string]interface{} {
-		items, err := fn(ctx)
+		listCtx, refused := noteRefusedNamespaces(ctx)
+		items, err := fn(listCtx)
 		if err != nil {
-			issues = append(issues, Issue{ID: "Collector/" + what, Kind: "Collector", Name: what, Severity: severityInfo, Reason: "ListFailed", Message: err.Error()})
+			unread(what, err.Error(), nil)
+		} else {
+			partly(what, refused)
 		}
 		return items
 	}
@@ -119,7 +135,7 @@ func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, e
 		return list(opts.Namespace)
 	}
 	if scope := scopeFromCtx(ctx); len(scope) > 0 {
-		return fanOutNamespaces(scope, list)
+		return fanOutNamespaces(scope, list, noteRefusedTo(ctx))
 	}
 	return list("")
 }
