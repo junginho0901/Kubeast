@@ -406,7 +406,7 @@ func main() {
 		m.Registry.MustRegister(nodedrains.Collectors(drainTracker)...)
 	}
 	m.Registry.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
-		Name: "kubeast_shared_writes_without_place_total", Help: "Node list, node box and shared read answers past 256 KiB whose waits for a write place reached a second in all, so the rest was written without one, since start-up.",
+		Name: "kubeast_shared_writes_without_place_total", Help: "Node list, node box, Pods page, node map and shared read answers past 256 KiB whose waits for a write place reached a second in all, so the rest was written without one, since start-up.",
 		ConstLabels: prometheus.Labels{"service": "k8s"},
 	}, func() float64 { return float64(handler.BigWritesWithoutPlace()) }))
 	m.Registry.MustRegister(handler.BigWriteWaitCollectors()...)
