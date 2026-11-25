@@ -76,6 +76,18 @@ def test_writes_and_actions_are_never_held():
         assert guard.earlier(name, {"resource_name": "web"}) is None
 
 
+def test_after_a_write_every_read_may_be_made_again():
+    guard = repeats.RepeatGuard(clock=lambda: 0.0)
+    guard.note("k8s_get_resources", PODS, step=1)
+    guard.note("k8s_get_pod_logs", LOGS, step=1)
+    guard.changed("k8s_get_events")  # a read changes nothing
+    assert guard.earlier("k8s_get_resources", PODS) is not None
+    guard.changed("k8s_scale")
+    assert guard.earlier("k8s_get_resources", PODS) is None and guard.earlier("k8s_get_pod_logs", LOGS) is None
+    guard.note("k8s_get_resources", PODS, step=3)  # held again from its next answer
+    assert guard.earlier("k8s_get_resources", PODS).step == 3
+
+
 def test_the_refusal_says_where_the_result_is_and_asks_for_other_arguments():
     told = json.loads(repeats.refusal(repeats.Seen(step=2, call=1, at=0.0), 12, scope="answer"))
     assert told["status"] == "repeated" and told["repeat_of"] == 2
@@ -183,6 +195,50 @@ async def test_a_failed_or_refused_read_can_be_made_again(monkeypatch):
         _events, _entry, text = await _call(service, guard, PODS, n + 1, n)
     assert service.executed == ["k8s_get_resources"] * 3
     assert json.loads(text) == json.loads(POD_LIST)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("answer", ['{"status": "scaled"}', '{"error": "timeout"}', '{"status": "forbidden", "message": "no"}'])
+async def test_a_write_that_ran_lets_the_chat_read_the_same_again(monkeypatch, answer):
+    """ai.writeApproval off: the write runs within the answer, and what the read held may be old, also when the write
+    failed part of the way."""
+    from app.services import tool_whitelists
+    from app.services.ai import permissions, streaming
+
+    monkeypatch.setattr(tool_whitelists, "write_approval_required", lambda: False)
+    monkeypatch.setattr(permissions, "tool_refusal", lambda *a, **k: None)
+    rows = _patch_audit(monkeypatch)
+    service = _Service([POD_LIST, answer, POD_LIST, POD_LIST])
+    guard = repeats.RepeatGuard(clock=lambda: 50.0)
+    await _call(service, guard, PODS, 1, 0)
+    await streaming._call_tool(service, None, None, "s1", [], None, "k8s_scale", {"resource_type": "deployment", "resource_name": "web", "namespace": "apps", "replicas": 2},
+                               iteration=2, audit_actor=ACTOR, audit_http=None, call_id=1, repeats=guard)
+    _events, _entry, text = await _call(service, guard, dict(PODS), 3, 2)
+    assert service.executed == ["k8s_get_resources", "k8s_scale", "k8s_get_resources"] and json.loads(text) == json.loads(POD_LIST)
+    assert "repeat_of" not in rows[2]["after"]
+    told = json.loads((await _call(service, guard, dict(PODS), 4, 3))[2])  # and the third read is held by the second
+    assert told["status"] == "repeated" and told["repeat_of"] == 3
+
+
+@pytest.mark.asyncio
+async def test_a_write_that_waits_for_its_approval_changes_nothing_yet(monkeypatch):
+    from app.services import tool_whitelists
+    from app.services.ai import permissions, streaming
+
+    async def made(**kw):
+        return SimpleNamespace(id="a1", cluster="c", args={}, expires_at=SimpleNamespace(isoformat=lambda: "2026-11-25T00:00:00"))
+
+    monkeypatch.setattr(tool_whitelists, "write_approval_required", lambda: True)
+    monkeypatch.setattr(permissions, "tool_refusal", lambda *a, **k: None)
+    monkeypatch.setattr(permissions, "may_request_approval", lambda *a, **k: True)
+    _patch_audit(monkeypatch)
+    service = _Service([POD_LIST])
+    guard = repeats.RepeatGuard(clock=lambda: 50.0)
+    await _call(service, guard, PODS, 1, 0)
+    await streaming._call_tool(service, SimpleNamespace(create_tool_approval=made), SimpleNamespace(user_id="u1"), "s1", [], None, "k8s_scale",
+                               {"resource_name": "web"}, iteration=2, audit_actor=ACTOR, audit_http=None, call_id=1, repeats=guard)
+    told = json.loads((await _call(service, guard, dict(PODS), 3, 2))[2])
+    assert told["status"] == "repeated" and service.executed == ["k8s_get_resources"]
 
 
 @pytest.mark.asyncio

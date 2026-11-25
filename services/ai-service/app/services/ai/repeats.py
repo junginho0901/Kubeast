@@ -3,7 +3,8 @@ ai.refuseRepeatedReads, off by default).
 
 A read tool called again with the same arguments less than REPEAT_SECONDS after the first call of that turn (chat) or
 run (investigation) answered is not run: the model is told where it already has the answer and that other arguments
-would run, as HolmesGPT does. Past REPEAT_SECONDS it runs, since a rollout or a pod may have moved on. A call that
+would run, as HolmesGPT does. Past REPEAT_SECONDS it runs, since a rollout or a pod may have moved on, and so does one
+after a write that ran in the turn (ai.writeApproval off). A call that
 failed or was refused is not kept, so it can be tried again. The check sits where the tool calls arrive
 (streaming._call_tool for the chat, the investigator's run_tool), which both loops reach: the API-key loop and Claude
 Code's calls on a Claude subscription.
@@ -63,6 +64,13 @@ class RepeatGuard:
 
         if name in READONLY_TOOL_NAMES:
             self._seen[key(name, args)] = Seen(step=step, call=call, at=self._clock())
+
+    def changed(self, name: str) -> None:
+        """A tool that ran: after one that is no read, also one that failed part of the way, an earlier answer may be old."""
+        from app.services.tool_whitelists import READONLY_TOOL_NAMES
+
+        if name not in READONLY_TOOL_NAMES:
+            self._seen.clear()
 
     def age(self, seen: Seen) -> int:
         return int(self._clock() - seen.at)

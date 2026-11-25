@@ -589,8 +589,10 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         if stored is False and ran and function_name not in WRITE_TOOL_NAMES and fail_closed_enabled():
             # As on the screens, a read nobody could find later gives no answer. A write has happened, so it keeps its own.
             function_response = AUDIT_UNAVAILABLE_RESULT
-    if repeats is not None and ran and tool_outcome(function_response)[0] == "success":
-        repeats.note(function_name, function_args, step=iteration, call=call_id)
+    if repeats is not None and ran:
+        repeats.changed(function_name)
+        if tool_outcome(function_response)[0] == "success":
+            repeats.note(function_name, function_args, step=iteration, call=call_id)
 
     log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
 
