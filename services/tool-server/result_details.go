@@ -47,7 +47,6 @@ const (
 
 	endpointsNoneReason = "No endpoint address is behind this Service: its selector may match no pod (compare it with the pods' labels), " +
 		"the pods may be scaled to zero or gone, or it has no selector."
-	endpointsUnreadReason = "The EndpointSlices of this Service could not be read, so 0 endpoints is not a count: %s"
 )
 
 // cutOf is "M of N <unit>" for an answer that lists part of what it holds.

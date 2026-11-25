@@ -75,3 +75,27 @@ def test_a_card_without_a_reason_is_the_same_on_and_off(monkeypatch, name, value
     monkeypatch.setenv("AI_TOOL_RESULT_DETAILS", value)
     tool, args, answer, want = WITHOUT[name]
     assert card(tool, args, answer) == want
+
+
+UNREAD_WHY = "Error from server (Forbidden): endpointslices.discovery.k8s.io is forbidden"
+UNREAD = {**SERVICE, "endpoints": {"ready": None, "not_ready": None, "total": None}, "status": "Unknown"}
+
+
+@pytest.mark.parametrize("value", ["", "true"])
+def test_endpoints_that_were_not_read_are_no_zero_on_the_card(monkeypatch, value):
+    monkeypatch.setenv("AI_TOOL_RESULT_DETAILS", value)
+    assert card("k8s_check_service_connectivity", {}, {**UNREAD, "endpoints_error": UNREAD_WHY}) == (
+        "NAMESPACE  SERVICE  TYPE       PORT(S)      ENDPOINTS  STATUS \n"
+        f"shop       web      ClusterIP  http:80/TCP  -          Unknown\n{UNREAD_WHY}")
+    # a Service that was not read either, and no reason that is a text
+    assert card("k8s_check_service_connectivity", {}, {**UNREAD, "type": "", "ports": None, "status": "Forbidden", "error": "refused", "endpoints_error": 1}) == (
+        "NAMESPACE  SERVICE  TYPE  PORT(S)  ENDPOINTS  STATUS   \n"
+        "shop       web                     -          Forbidden\nrefused")
+
+
+@pytest.mark.parametrize("value", ["", "true"])
+def test_a_service_that_is_not_there_has_the_card_it_had(monkeypatch, value):
+    monkeypatch.setenv("AI_TOOL_RESULT_DETAILS", value)
+    assert card("k8s_check_service_connectivity", {}, {**SERVICE, "type": "", "ports": [], "status": "NotFound", "error": "not found"}) == (
+        "NAMESPACE  SERVICE  TYPE  PORT(S)  ENDPOINTS  STATUS  \n"
+        "shop       web                     0/0        NotFound")

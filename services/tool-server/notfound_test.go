@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -339,5 +340,92 @@ func TestServiceConnectivity_NotFoundSuggests(t *testing.T) {
 	similar, _ := json.Marshal(m["similar"])
 	if m["status"] != "NotFound" || m["namespace_exists"] != false || !strings.Contains(string(similar), "api-gateway") {
 		t.Fatalf("result: %s", out)
+	}
+}
+
+// A Service that could not be read is NotFound only when the cluster says it is not there; what was not read is null.
+func TestServiceConnectivity_AServiceThatCouldNotBeReadSaysWhy(t *testing.T) {
+	const notRead = `{"endpoints":{"not_ready":null,"ready":null,"total":null},"error":"kubectl failed: %s","namespace":"shop","port_check":{},"ports":null,"service":"web","status":"%s","type":""}`
+	for _, c := range []struct{ name, text, want string }{
+		{"refused", `Error from server (Forbidden): services is forbidden`, fmt.Sprintf(notRead, `Error from server (Forbidden): services is forbidden`, "Forbidden")},
+		{"not answered", `Unable to connect to the server: i/o timeout`, fmt.Sprintf(notRead, `Unable to connect to the server: i/o timeout`, "Unknown")},
+		{"another refusal", `error: You must be logged in to the server (Unauthorized)`, fmt.Sprintf(notRead, `error: You must be logged in to the server (Unauthorized)`, "Unknown")},
+		{"not there", `Error from server (NotFound): services "web" not found`,
+			`{"endpoints":{"not_ready":0,"ready":0,"total":0},"error":"kubectl failed: Error from server (NotFound): services \"web\" not found","namespace":"shop","namespace_exists":true,` +
+				`"port_check":{},"ports":[],"searched":"all namespaces","service":"web","similar":[],"status":"NotFound","type":""}`},
+	} {
+		var asked []string
+		fakeKubectl(t, func(a []string) (string, error) {
+			v := verb(a)
+			asked = append(asked, v[1])
+			if v[1] == "svc" {
+				return kubectlErr(c.text)
+			}
+			return "", nil
+		})
+		out, err := handleCheckServiceConnectivity(context.Background(), map[string]interface{}{"service_name": "web", "namespace": "shop"}, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if out != c.want {
+			t.Errorf("%s:\n%s\nwant\n%s", c.name, out, c.want)
+		}
+		// names that may be meant are looked for only when the Service is not there
+		if looked := len(asked) > 1; looked != (c.name == "not there") {
+			t.Errorf("%s: reads %v", c.name, asked)
+		}
+	}
+
+	// the port asked for is kept
+	fakeKubectl(t, func([]string) (string, error) {
+		return kubectlErr(`Error from server (Forbidden): services is forbidden`)
+	})
+	out, _ := handleCheckServiceConnectivity(context.Background(), map[string]interface{}{"service_name": "web", "namespace": "shop", "port": "http"}, nil)
+	if m := decode(t, out); m["status"] != "Forbidden" || fmt.Sprint(m["port_check"]) != "map[requested:http]" {
+		t.Errorf("a port: %s", out)
+	}
+}
+
+// EndpointSlices that could not be read are not counted: the Service is neither ready nor not ready by them.
+func TestServiceConnectivity_EndpointsThatCouldNotBeReadAreNotCounted(t *testing.T) {
+	a := map[string]interface{}{"service_name": "web", "namespace": "shop", "port": "http"}
+	for _, details := range []string{"", "true"} {
+		t.Setenv("AI_TOOL_RESULT_DETAILS", details)
+		fakeKubectl(t, serviceWith(func() (string, error) {
+			return kubectlErr(`Error from server (Forbidden): endpointslices.discovery.k8s.io is forbidden`)
+		}))
+		out, err := handleCheckServiceConnectivity(context.Background(), a, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		const want = `{"endpoints":{"not_ready":null,"ready":null,"total":null},"endpoints_error":"Error from server (Forbidden): endpointslices.discovery.k8s.io is forbidden",` +
+			`"namespace":"shop","port_check":{"matched":{"name":"http","port":80,"protocol":"TCP"},"requested":"http"},` +
+			`"ports":[{"name":"http","port":80,"protocol":"TCP"}],"service":"web","status":"Unknown","type":"ClusterIP"}`
+		if out != want {
+			t.Errorf("%q:\n%s\nwant\n%s", details, out, want)
+		}
+	}
+	// slices that are no JSON were not read either
+	fakeKubectl(t, serviceWith(func() (string, error) { return "Warning: x", nil }))
+	out, _ := handleCheckServiceConnectivity(context.Background(), a, nil)
+	m := decode(t, out)
+	if text, _ := m["endpoints_error"].(string); m["status"] != "Unknown" || text == "" || fmt.Sprint(m["endpoints"]) != "map[not_ready:<nil> ready:<nil> total:<nil>]" {
+		t.Errorf("no JSON: %s", out)
+	}
+}
+
+// Read, the answer is the bytes it was.
+func TestServiceConnectivity_EndpointsThatWereReadAnswerTheBytesTheyDid(t *testing.T) {
+	t.Setenv("AI_TOOL_RESULT_DETAILS", "")
+	for _, c := range []struct{ name, slices, want string }{
+		{"none", `{"items":[]}`, noEndpoint},
+		{"one ready", `{"items":[{"endpoints":[{"addresses":["10.0.0.1"]}]}]}`, strings.NewReplacer(`"ready":0,"total":0`, `"ready":1,"total":1`, "NotReady", "Ready").Replace(noEndpoint)},
+		{"one not ready", `{"items":[{"endpoints":[{"addresses":["10.0.0.1"],"conditions":{"ready":false}}]}]}`, strings.NewReplacer(`"not_ready":0`, `"not_ready":1`, `"total":0`, `"total":1`).Replace(noEndpoint)},
+	} {
+		fakeKubectl(t, serviceWith(func() (string, error) { return c.slices, nil }))
+		out, err := handleCheckServiceConnectivity(context.Background(), map[string]interface{}{"service_name": "web", "namespace": "shop"}, nil)
+		if err != nil || out != c.want {
+			t.Errorf("%s: %v %s\nwant %s", c.name, err, out, c.want)
+		}
 	}
 }
