@@ -482,7 +482,7 @@ func (s *Service) ApplyNamespaceYAML(ctx context.Context, name, opened, yamlStr 
 		return nil, fmt.Errorf("update namespace %s: %w", name, err)
 	}
 
-	s.dropCached(ctx, fmt.Sprintf("yaml|namespaces||%s", name))
+	s.dropCached(ctx, yamlCacheKey(corev1.Resource("namespaces"), "", name))
 
 	return map[string]interface{}{
 		"name":        updated.Name,

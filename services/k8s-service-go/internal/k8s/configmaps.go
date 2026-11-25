@@ -82,7 +82,7 @@ func (s *Service) DeleteConfigMap(ctx context.Context, namespace, name string) e
 
 // GetConfigMapYAML returns a configmap as YAML.
 func (s *Service) GetConfigMapYAML(ctx context.Context, namespace, name string) (string, error) {
-	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("yaml|configmaps|%s|%s", namespace, name))
+	cacheKey := s.clusterCacheKey(ctx, yamlCacheKey(corev1.Resource("configmaps"), namespace, name))
 
 	var cached string
 	if s.cache.Get(ctx, cacheKey, &cached) {

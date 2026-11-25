@@ -1029,9 +1029,16 @@ func (s *Service) CreateResource(ctx context.Context, gvr schema.GroupVersionRes
 	return dyn.Resource(gvr).Create(ctx, obj, metav1.CreateOptions{FieldManager: "k8s-service"})
 }
 
+// yamlCacheKey is what an object's YAML is kept under, before the cluster and the identity (clusterCacheKey). It names
+// the group as kubectl does (services.serving.knative.dev, core's services): two groups may serve one plural name, and
+// an object each of the same namespace and name.
+func yamlCacheKey(gr schema.GroupResource, namespace, name string) string {
+	return fmt.Sprintf("yaml|%s|%s|%s", gr, namespace, name)
+}
+
 // GetResourceYAML returns a resource as YAML string with caching.
 func (s *Service) GetResourceYAML(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string, forceRefresh bool) (string, error) {
-	cacheKey := s.clusterCacheKey(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, namespace, name))
+	cacheKey := s.clusterCacheKey(ctx, yamlCacheKey(gvr.GroupResource(), namespace, name))
 
 	if !forceRefresh {
 		var cached string

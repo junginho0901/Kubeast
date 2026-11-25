@@ -340,7 +340,7 @@ func (s *Service) ApplyNodeYAML(ctx context.Context, name string, yamlStr string
 		return fmt.Errorf("update node %s: %w", name, err)
 	}
 
-	s.dropCached(ctx, fmt.Sprintf("yaml|nodes||%s", name))
+	s.dropCached(ctx, yamlCacheKey(corev1.Resource("nodes"), "", name))
 	return nil
 }
 

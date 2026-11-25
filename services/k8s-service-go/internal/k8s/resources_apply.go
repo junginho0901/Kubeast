@@ -175,7 +175,7 @@ func (s *Service) applyResourceYAML(ctx context.Context, resourceType, namespace
 		return nil, fmt.Errorf("patch %s %s: %w", resourceType, name, err)
 	}
 
-	s.dropCached(ctx, fmt.Sprintf("yaml|%s|%s|%s", gvr.Resource, ns, name))
+	s.dropCached(ctx, yamlCacheKey(gvr.GroupResource(), ns, name))
 
 	// kubectl apply's "unchanged": the object is at the version the window held, so this patch wrote nothing. A version
 	// that moved may be another writer's, so that reads as updated.
