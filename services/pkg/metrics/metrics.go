@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus"
@@ -41,9 +42,10 @@ type Metrics struct {
 	// pattern. nil = the request path, for servers with a few fixed paths.
 	Route func(ctx context.Context) string
 
-	requests *prometheus.CounterVec
-	duration *prometheus.HistogramVec
-	inFlight prometheus.Gauge
+	requests   *prometheus.CounterVec
+	duration   *prometheus.HistogramVec
+	inFlight   prometheus.Gauge
+	leftWithin time.Duration
 }
 
 type pathKey struct{}
@@ -54,8 +56,9 @@ func New(service string) *Metrics {
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	svc := prometheus.Labels{"service": service}
 	m := &Metrics{
-		Service:  service,
-		Registry: reg,
+		Service:    service,
+		Registry:   reg,
+		leftWithin: leftWithin,
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "kubeast_http_requests_total", Help: "HTTP requests handled, by route pattern and status code.", ConstLabels: svc,
 		}, []string{"code", "method", "route"}),
@@ -96,23 +99,25 @@ func skip(path string) bool {
 	return path == "/metrics" || path == "/health" || path == "/" || path == "/livez" || path == "/readyz"
 }
 
-// Middleware counts and times every request except the probes. The promhttp
-// instrumentation wraps the ResponseWriter so streaming (Flusher) and
-// WebSocket upgrades (Hijacker) keep working.
+// Middleware counts and times every request except the probes. The handler
+// writes to an answer (answer.go), which names the code label and keeps
+// streaming (Flusher) and WebSocket upgrades (Hijacker) working.
 func (m *Metrics) Middleware(next http.Handler) http.Handler {
-	opt := promhttp.WithLabelFromCtx("route", m.route)
+	route, code := promhttp.WithLabelFromCtx("route", m.route), promhttp.WithLabelFromCtx("code", countedCode)
 	instrumented := promhttp.InstrumentHandlerInFlight(m.inFlight,
 		promhttp.InstrumentHandlerDuration(m.duration,
-			promhttp.InstrumentHandlerCounter(m.requests, next, opt), opt))
+			promhttp.InstrumentHandlerCounter(m.requests, next, route, code), route, code))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if skip(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
+		a := &answer{ResponseWriter: w, request: r.Context(), start: time.Now(), leftWithin: m.leftWithin}
+		ctx := context.WithValue(r.Context(), answerKey{}, a)
 		if m.Route == nil {
-			r = r.WithContext(context.WithValue(r.Context(), pathKey{}, r.URL.Path))
+			ctx = context.WithValue(ctx, pathKey{}, r.URL.Path)
 		}
-		instrumented.ServeHTTP(w, r)
+		instrumented.ServeHTTP(a, r.WithContext(ctx))
 	})
 }
 
