@@ -196,13 +196,14 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 	// No --limit-bytes: it stops the window that many bytes after its start, so the newest lines would go first.
 	cmdArgs = append(cmdArgs, "--tail", fmt.Sprintf("%d", scan))
 
-	out, cut, err := runKubectlKeepingEnd(ctx, cmdArgs...)
-	if err != nil {
+	logs := podLogRead{pod: podName, namespace: namespace, container: container, since: since, previous: previous, allContainers: allContainers}
+	if err := logs.read(ctx, headers, cmdArgs); err != nil {
 		return explainFailure(ctx, headers, err, "pods", podName, namespace)
 	}
-	if containers, words, ok := noLogOf(out, namespace, podName, container, allContainers); ok {
-		return noLogResult(podName, namespace, containers, words, previous, allContainers)
+	if answer, ok, err := logs.withoutALine(ctx, headers); ok {
+		return answer, err
 	}
+	out := logs.out
 	if out == "" && resultDetails() {
 		return logEmpty(scan, since, previous, allContainers), nil
 	}
@@ -212,8 +213,13 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 		if resultDetails() && !strings.Contains(out, "\n") {
 			out += logNoMatch(since, previous, allContainers)
 		}
+	} else {
+		out = logs.said + out
 	}
-	if cut {
+	if len(logs.never) > 0 { // last, where the model's cut of a long log keeps it
+		out = strings.TrimSuffix(out, "\n") + "\n# " + noPreviousLog(logs.never) + "\n"
+	}
+	if logs.cut {
 		return fmt.Sprintf(logsCutNotice, outputMaxBytes) + out, nil
 	}
 	return out, nil
@@ -224,6 +230,9 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 func grepLines(text, pattern string, limit int) string {
 	needle := strings.ToLower(pattern)
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	if text == "" {
+		lines = nil
+	}
 	var hits []string
 	for _, line := range lines {
 		if strings.Contains(strings.ToLower(line), needle) {

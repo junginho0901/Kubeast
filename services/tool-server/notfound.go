@@ -36,6 +36,9 @@ var (
 	// What kubectl logs says first, on stderr, when no container was named, and what --prefix puts before a container's line.
 	reDefaulted = regexp.MustCompile(`^(?:Default container name "[^"\n]*" not found in pod [^\n]*\n)?(?:Defaulted container "([^"\n]+)" out of: [^\n]*\n)?`)
 	reLogPrefix = regexp.MustCompile(`\[pod/[^/\]\s]+/([^\]\s]+)\] `)
+	// What ends kubectl logs at a container without a previous run, and what --ignore-errors prints of it instead.
+	reEndsNoPrevious = regexp.MustCompile(`previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found$`)
+	reNoPreviousLine = regexp.MustCompile(`error: previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found\n$`)
 	// A ReplicaSet pod template hash or a pod's random suffix: 5–10 characters
 	// from Kubernetes' safe-encoding alphabet (no vowels, so "cache" or "redis"
 	// are not stripped).
@@ -346,8 +349,8 @@ func editDistanceAtMost(a, b string, limit int) bool {
 	return prev[len(b)] <= limit
 }
 
-// isNoLog reports whether what kubectl printed of one container is the kubelet's own words in place of its log: a line of
-// a log ends with a line break and those words do not, and a file they name is the pod's own.
+// isNoLog reports whether what kubectl printed of one container is the kubelet's own words in place of its log: they have
+// no line end, and a file they name is the pod's own.
 func isNoLog(text, namespace, pod string) bool {
 	if reNoContainer.MatchString(text) {
 		return true
@@ -356,14 +359,9 @@ func isNoLog(text, namespace, pod string) bool {
 	return m != nil && m[1] == namespace+"_"+pod
 }
 
-// noLogOf reads what kubectl logs printed as the kubelet's own words in place of every log it was asked for and nothing
-// else: the container of each ("" where none was named) and the first one's words. ok is false of an answer that holds a
-// line of any container.
+// noLogOf reads what kubectl logs printed as the kubelet's own words in place of a log and nothing else: the containers
+// ("" where none was named) and the first one's words. ok is false of an answer that holds a line of any container.
 func noLogOf(out, namespace, pod, container string, allContainers bool) (containers []string, words string, ok bool) {
-	if container == "" && !allContainers {
-		said := reDefaulted.FindStringSubmatch(out)
-		out, container = out[len(said[0]):], said[1]
-	}
 	if strings.Contains(out, "\n") {
 		return nil, "", false
 	}
@@ -392,30 +390,47 @@ func noLogOf(out, namespace, pod, container string, allContainers bool) (contain
 	return containers, wordsOf[containers[0]], true
 }
 
-// noLogResult is the answer of a log read that noLogOf read as none: kubectl ended with 0, and no line was read.
-func noLogResult(pod, namespace string, containers []string, words string, previous, allContainers bool) (string, error) {
-	result := map[string]interface{}{"status": "no_log", "pod": pod, "namespace": namespace, "reason": words}
+// noLogResult is the answer of a log read that noLogOf read as none: kubectl ended with 0, and no line was read. known is
+// false where the pod's other containers, which left nothing in what kubectl printed, are not known.
+func (l *podLogRead) noLogResult(containers []string, words string, known bool) (string, error) {
+	result := map[string]interface{}{"status": "no_log", "pod": l.pod, "namespace": l.namespace, "reason": words}
 	log := "This container's log is gone"
 	switch {
-	case allContainers && previous:
+	case l.allContainers && l.previous:
 		log = "The previous log of each container listed is gone"
-	case allContainers:
+	case l.allContainers:
 		log = "The log of each container listed is gone"
-	case previous:
+	case l.previous:
 		log = "The previous container's log is gone"
 	}
-	if allContainers {
+	if l.allContainers {
 		result["containers"] = containers
 	} else if containers[0] != "" {
 		result["container"] = containers[0]
 	}
+	hint := log + " or cannot be read: the kubelet answered with reason in its place, so no line was read. " + l.goneElsewhere()
+	if len(l.never) > 0 {
+		hint += " " + noPreviousLog(l.never)
+	}
+	if !known {
+		hint += " Any other container of the pod gave no line."
+	}
+	result["hint"] = hint
+	return marshalJSON(result)
+}
+
+// goneElsewhere says what to read in place of a log that is gone.
+func (l *podLogRead) goneElsewhere() string {
 	instead := "the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true)"
-	if previous {
+	if l.previous {
 		instead = "the current log (previous=false), the pod's events and its last state (k8s_describe_resource: reason, exit code) instead"
 	}
-	result["hint"] = log + " or cannot be read: the kubelet answered with reason in its place, so no line was read. Read " + instead +
-		"; a log store's tools (where offered) may still hold its lines."
-	return marshalJSON(result)
+	return "Read " + instead + "; a log store's tools (where offered) may still hold its lines."
+}
+
+// noPreviousLog names the containers without a previous run.
+func noPreviousLog(containers []string) string {
+	return "No previous log of " + strings.Join(containers, ", ") + " (not restarted)."
 }
 
 func notFoundHint(kind string, similar []map[string]string) string {

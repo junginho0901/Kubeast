@@ -106,7 +106,7 @@ func emptyReads() []emptyRead {
 		{name: "a log since", handler: handleGetPodLogs, args: args{"pod_name": "web-1", "namespace": "shop", "since": "10m", "previous": true, "all_containers": true},
 			kubectl: kubectlSays(""), off: "", on: []string{"within since=10m", "log store"}, not: []string{"previous=true", "all_containers=true"}},
 		{name: "a search of an empty log", handler: handleGetPodLogs, args: args{"pod_name": "web-1", "namespace": "shop", "grep": "error"},
-			kubectl: kubectlSays(""), off: `# grep "error": 0 of 1 lines matched`, on: []string{"newest 2000 lines", "previous=true"}, not: []string{"of 1 lines"}},
+			kubectl: kubectlSays(""), off: `# grep "error": 0 of 0 lines matched`, on: []string{"newest 2000 lines", "previous=true"}, not: []string{"of 1 lines", "of 0 lines"}},
 		{name: "a search without a match", handler: handleGetPodLogs, args: args{"pod_name": "web-1", "namespace": "shop", "grep": "error"},
 			kubectl: kubectlSays("a\nb\nc\n"), off: `# grep "error": 0 of 3 lines matched`,
 			on: []string{`# grep "error": 0 of 3 lines matched`, "substring", "newest 2000 lines", "previous=true", "log store"}},

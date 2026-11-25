@@ -220,8 +220,11 @@ func withListReason(out, reason string) string {
 
 // logEmpty is the line for a pod log read that held nothing, and logNoMatch the one for a grep without a match.
 func logEmpty(lines int, since string, previous, allContainers bool) string {
-	return fmt.Sprintf("# No line was read: the newest %d lines%s were asked for. An empty log does not say that nothing failed: %s.\n",
-		lines, sinceText(since), logElsewhere(previous, allContainers))
+	return fmt.Sprintf("# No line was read: the newest %d lines%s were asked for.%s\n", lines, sinceText(since), emptyLogNote(previous, allContainers))
+}
+
+func emptyLogNote(previous, allContainers bool) string {
+	return " An empty log does not say that nothing failed: " + logElsewhere(previous, allContainers) + "."
 }
 
 func logNoMatch(since string, previous, allContainers bool) string {

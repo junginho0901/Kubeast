@@ -224,6 +224,132 @@
   "holds": "something"
  },
  {
+  "name": "a search of an empty log",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# grep \"web-1\": 0 of 0 lines matched",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of an empty log",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# No line was read: the newest 2000 lines were asked for. An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log of the container kubectl picked",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# No line was read: the log holds no line (kubectl: Defaulted container \"app\" out of: app, side, migrate (init)).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log of the container kubectl picked",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# No line was read: the log holds no line (kubectl: Defaulted container \"app\" out of: app, side, migrate (init)). An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of it for a word of kubectl's line",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# No line was read: the log holds no line (kubectl: Defaulted container \"app\" out of: app, side, migrate (init)).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of it for a word of kubectl's line",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# No line was read: the log holds no line (kubectl: Defaulted container \"app\" out of: app, side, migrate (init)). An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log beside one whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# No line was read: the log of side was read and holds no line. The log of app is gone or cannot be read (the kubelet answered in its place: unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef). Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log beside one whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# No line was read: the log of side was read and holds no line. The log of app is gone or cannot be read (the kubelet answered in its place: unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef). Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines. An empty log does not say that nothing failed: previous=true reads the run before a restart, a log store's tools (where offered) older lines and pods that are gone.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "previous logs past a container that has not restarted",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "[pod/web-1/app] stopped\n# No previous log of side (not restarted).\n",
+  "holds": "something"
+ },
+ {
+  "name": "previous logs past a container that has not restarted",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "[pod/web-1/app] stopped\n# No previous log of side (not restarted).\n",
+  "holds": "something"
+ },
+ {
+  "name": "a search of those without a match",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# grep \"refused\": 0 of 1 lines matched\n# No previous log of side (not restarted).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of those without a match",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# grep \"refused\": 0 of 1 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; a log store's tools (where offered) older lines and pods that are gone.\n# No previous log of side (not restarted).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a previous log without a line past a container that has not restarted",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# No line was read: the previous log of app was read and holds no line. No previous log of side (not restarted).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a previous log without a line past a container that has not restarted",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# No line was read: the previous log of app was read and holds no line. No previous log of side (not restarted). An empty log does not say that nothing failed: a log store's tools (where offered) older lines and pods that are gone.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a previous log that is gone past a container that has not restarted",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "{\"containers\":[\"app\"],\"hint\":\"The previous log of each container listed is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the current log (previous=false), the pod's events and its last state (k8s_describe_resource: reason, exit code) instead; a log store's tools (where offered) may still hold its lines. No previous log of side (not restarted).\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a previous log that is gone past a container that has not restarted",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "{\"containers\":[\"app\"],\"hint\":\"The previous log of each container listed is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the current log (previous=false), the pod's events and its last state (k8s_describe_resource: reason, exit code) instead; a log store's tools (where offered) may still hold its lines. No previous log of side (not restarted).\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "previous logs of containers that have not restarted",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "{\"container\":\"side\",\"hint\":\"The container has not restarted, so there is no previous log. Read the current log (previous=false) and the pod's events instead.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"status\":\"no_previous\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "previous logs of containers that have not restarted",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "{\"container\":\"side\",\"hint\":\"The container has not restarted, so there is no previous log. Read the current log (previous=false) and the pod's events instead.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"status\":\"no_previous\"}",
+  "holds": "unread"
+ },
+ {
   "name": "a list of no name",
   "tool": "k8s_get_resources",
   "details": false,

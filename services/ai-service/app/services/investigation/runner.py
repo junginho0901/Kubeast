@@ -402,7 +402,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             repeats.note(name, args, step=step, call=number)
         if read is not None:
             read.failed = bool(entry.get("error")) or (not ran and seen is None)
-            read.text = result if ran and not read.failed and not entry.get("no_log") else ""
+            read.text = answers.log_text(name, result) if ran and not read.failed and not entry.get("no_log") else ""
         if facts is not None and ran and not entry.get("error"):
             facts.note(number, name, args, raw, status)
             if read is not None:

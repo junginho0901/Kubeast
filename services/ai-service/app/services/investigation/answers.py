@@ -4,7 +4,7 @@ An answer repeats what was asked: the name in a not_found, the pod in an empty q
 (unread()) or whose answer holds nothing (empty()) shows no symptom, no cause and no object, whatever names are in its
 text. The answer of a raw-text tool (tool_results.RAW_TEXT_TOOLS) is what a container or the cluster wrote: a log line that
 is a JSON object with an `error` or a `status` is a log line, and only an object of the shape tool-server or ai-service
-makes is an answer of theirs (raw_outcome()). Nothing here but no_log() runs with the verdict off."""
+makes is an answer of theirs (raw_outcome()). Nothing here but no_log() and log_text() runs with the verdict off."""
 
 from __future__ import annotations
 
@@ -54,6 +54,8 @@ _NO_ROWS = re.compile(r"# .+: 0 rows \(none\)")
 # k8s_get_pod_logs: a grep without a match, or (ai.toolResultDetails) a log without a line, is comment lines alone, after
 # the line that says the front of the log was cut off.
 _NO_LINE = re.compile(r"# (grep .*: 0 of \d+ lines matched|No line was read:)")
+_SAYS_NO_LINE = re.compile(r"# No line was read: .+\n?")
+_NO_PREVIOUS = re.compile(r"\n# No previous log of [^\n]+ \(not restarted\)\.\n?\Z")
 _LOG_CUT = re.compile(r"… \[older lines cut by tool-server: .+\]")
 
 
@@ -92,8 +94,16 @@ def raw_outcome(tool: str, raw: Any) -> tuple[Optional[str], Optional[str]]:
 
 def no_log(tool: str, raw: Any) -> bool:
     """Whether a read of a pod's log is tool-server's answer that the node had no log to give: the kubelet's own words in
-    place of one. The one function here the runner asks with the verdict off too."""
+    place of one. The runner asks this and log_text() with the verdict off too."""
     return tool == "k8s_get_pod_logs" and raw_outcome(tool, raw)[1] == "no_log"
+
+
+def log_text(tool: str, text: str) -> str:
+    """What the model reads of a call without tool-server's own line of which containers' logs held or have no line: the
+    containers, and the file in the kubelet's words, that it names are not in a log."""
+    if tool != "k8s_get_pod_logs":
+        return text
+    return "" if _SAYS_NO_LINE.fullmatch(text) else _NO_PREVIOUS.sub("", text)
 
 
 def unread(tool: str, raw: Any, status: Optional[str]) -> Optional[str]:
