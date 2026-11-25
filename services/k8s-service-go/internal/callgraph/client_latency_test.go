@@ -131,9 +131,9 @@ func TestTimeOutsideCallee(t *testing.T) {
 	edge := func(to string, server, client float64) Edge {
 		return Edge{From: end("web"), To: end(to), P90Ms: server, ClientP90Ms: client}
 	}
-	// at the bounds: twice the callee's and 50 ms above it; one below either is not listed, nor is a side not read
+	// at the bounds: three times the callee's and 50 ms above it; one below either is not listed, nor is a side not read
 	got := TimeOutsideCallee([]Edge{
-		edge("at", 50, 100), edge("ratio", 100, 199.9), edge("small", 10, 59.9), edge("server-slow", 1300, 1310),
+		edge("at", 25, 75), edge("ratio", 100, 299.9), edge("small", 10, 59.9), edge("server-slow", 1300, 1310),
 		edge("no-server", 0, 900), edge("no-client", 900, 0), edge("faster", 900, 20),
 	})
 	if len(got) != 1 || got[0].To != "Deployment/shop/at" || got[0].OutsideMs != 50 {
@@ -151,6 +151,22 @@ func TestTimeOutsideCallee(t *testing.T) {
 	}
 	if TimeOutsideCallee(nil) != nil {
 		t.Fatal("no edges")
+	}
+}
+
+// The 90th percentile of calls that all fall in one bucket is nine tenths into it. Two calls a moment apart on either side
+// of a bound, read that way, are never listed, in Tempo's default buckets and the OpenTelemetry connector's.
+func TestTimeOutsideCalleeIsNotOneBucketsStep(t *testing.T) {
+	for name, bounds := range map[string][]float64{
+		"Tempo":     {0, 100, 200, 400, 800, 1600, 3200, 6400, 12800},
+		"connector": {0, 2, 4, 6, 8, 10, 50, 100, 200, 400, 800, 1000, 1400, 2000, 5000, 10000, 15000},
+	} {
+		p90 := func(i int) float64 { return bounds[i] + 0.9*(bounds[i+1]-bounds[i]) }
+		for i := 0; i+2 < len(bounds); i++ {
+			if out := TimeOutsideCallee([]Edge{{P90Ms: p90(i), ClientP90Ms: p90(i + 1)}}); out != nil {
+				t.Errorf("%s: %v ms and %v ms, one bucket apart, listed", name, p90(i), p90(i+1))
+			}
+		}
 	}
 }
 

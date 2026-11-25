@@ -135,17 +135,17 @@ func TestResourceGraphCallsPutTheClientSideBesideTheServers(t *testing.T) {
 	t.Setenv("CALL_GRAPH_ENABLED", "true")
 	t.Setenv("CALL_GRAPH_CLIENT_LATENCY", "true")
 	for namespaced, before := range callsBefore {
-		off, on := newClientCalls(namespaced, nil), newClientCalls(namespaced, clientSide(4.25, ""))
+		off, on := newClientCalls(namespaced, nil), newClientCalls(namespaced, clientSide(4.75, ""))
 		readCalls(t, config.Config{CallGraphEnabled: true}, off, flowReader)
 		res, raw := readCalls(t, config.Load(), on, flowReader)
 		e := res.Edges[0]
-		if len(res.Edges) != 1 || e.P90Ms != 1500 || e.ClientP90Ms != 4250 || e.ConnectionType != "" {
+		if len(res.Edges) != 1 || e.P90Ms != 1500 || e.ClientP90Ms != 4750 || e.ConnectionType != "" {
 			t.Fatalf("namespaced %v: %s", namespaced, raw)
 		}
 		if st := res.Sources[0].ClientP90; st == nil || !st.Read || st.Series != 1 || st.Reason != "" || st.Truncated {
 			t.Fatalf("namespaced %v: %+v", namespaced, st)
 		}
-		if len(res.TimeOutsideCallee) != 1 || res.TimeOutsideCallee[0] != (callgraph.Outside{From: "Deployment/shop/web", To: "Deployment/shop/api", ClientP90Ms: 4250, P90Ms: 1500, OutsideMs: 2750}) {
+		if len(res.TimeOutsideCallee) != 1 || res.TimeOutsideCallee[0] != (callgraph.Outside{From: "Deployment/shop/web", To: "Deployment/shop/api", ClientP90Ms: 4750, P90Ms: 1500, OutsideMs: 3250}) {
 			t.Fatalf("namespaced %v: %+v", namespaced, res.TimeOutsideCallee)
 		}
 		if on.reads != off.reads+1 || on.count(callgraph.ClientSeconds) != 1 || !strings.HasPrefix(traceQueries(on), before.queries+"\n") {

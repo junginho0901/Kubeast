@@ -49,10 +49,10 @@ const (
 )
 
 // A call is named in TimeOutsideCallee when its caller's 90th percentile is at least OutsideRatio times its callee's and
-// OutsideMinMs above it: both are interpolated inside histogram buckets (Tempo's double from 100 ms), so a smaller
-// difference may be one bucket's.
+// OutsideMinMs above it. Both are interpolated inside histogram buckets, so two calls a moment apart on either side of a
+// bound read about twice each other in Tempo's default buckets, and under 50 ms over four times in the OpenTelemetry connector's.
 const (
-	OutsideRatio = 2
+	OutsideRatio = 3
 	OutsideMinMs = 50
 )
 

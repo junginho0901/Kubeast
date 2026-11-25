@@ -613,7 +613,7 @@ const graphClientLatencyNote = " client_p90_ms is the p90 the caller measured fo
 	"for a connection) or in the caller; name both ends and read a trace of that call. Well below it: the caller stopped waiting (a timeout) " +
 	"or the callee worked on after answering. Both cover the whole range, so slowness of fewer than a tenth of its calls does not show: ask " +
 	"over the slow time alone. time_outside_callee lists the edges (at most 5, the largest difference first) whose caller's p90 is at least " +
-	"twice the callee's and 50 ms above it. An edge with connection_type (database, virtual_node, messaging_system) is not the two ends of " +
+	"three times the callee's and 50 ms above it. An edge with connection_type (database, virtual_node, messaging_system) is not the two ends of " +
 	"one call: do not compare its two. The traces source's client_p90 with read false says why there is no client_p90_ms (no_metrics: not " +
 	"available in this Prometheus), which says nothing of the callers; truncated true there: some edges have none."
 
