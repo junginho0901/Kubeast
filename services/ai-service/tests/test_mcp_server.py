@@ -4,6 +4,7 @@ with an audit row per call. Driven over the real Streamable HTTP transport
 replaced by fakes."""
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 
 import httpx
@@ -177,6 +178,21 @@ async def test_call_runs_as_the_user_and_is_audited(fakes):
     assert row["after"]["access"] == {"cluster": "self", "kind": "api_key", "user": "w@example.com",
                                       "groups": ["kubeast:authenticated", "kubeast:operator"], "impersonation": True, "mode": "read"}
     assert row["after"]["requests"]["total"] == 1 and row["after"]["requests"]["requests"][0]["audit_id"] == "kubeast-1"
+
+
+@pytest.mark.asyncio
+async def test_a_log_the_node_has_no_more_is_an_answer_and_its_row_is_of_a_call_that_was_made(fakes, monkeypatch):
+    no_log = json.dumps({"container": "web", "hint": "The previous container's log is gone.", "namespace": "apps", "pod": "web-1",
+                         "reason": "unable to retrieve container logs for containerd://" + "0" * 64, "status": "no_log"})
+    monkeypatch.setattr(FakeToolServer, "content", no_log)
+    server = mcp_server.KubeastMCPServer(tool_server_url="http://tools")
+    asked = {"cluster": "self", "pod_name": "web-1", "namespace": "apps", "container": "web", "previous": True}
+    async with running_app(server) as client:
+        result = (await call(client, "tok-write", "tools/call", {"name": "k8s_get_pod_logs", "arguments": asked})).json()["result"]
+    assert result.get("isError") in (None, False) and result["content"][0]["text"] == no_log  # as tool-server wrote it
+    (row,) = fakes["audit"]
+    assert (row["action"], row.get("result", "success"), row.get("error")) == ("ai.mcp.call", "success", None)
+    assert "status" not in row["after"] and "0" * 64 not in json.dumps(row["after"])
 
 
 @pytest.mark.asyncio

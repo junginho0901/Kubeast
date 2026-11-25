@@ -1262,6 +1262,17 @@ LOG_FILE = "/var/log/pods/apps_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/web/1.
 FILE_GONE = f'failed to open log file "{LOG_FILE}": open {LOG_FILE}: no such file or directory'
 
 
+@pytest.mark.asyncio
+async def test_with_the_verdict_off_the_pod_in_a_missing_log_files_path_shows_no_cause(monkeypatch):
+    for switches in ({"verdict": False}, {"verdict": False, "ledger": True}):
+        given = answer("A cause was found.", "cause_found", [cause(POD, [1])], shown(POD, 1), hypotheses=[hypothesis(resource=POD, **{"for": [1]})])
+        out, _ = await run_of(monkeypatch, [(*GONE, no_log(FILE_GONE, container="web"))], given, {"pod": "web-1"}, **switches)
+        assert (out["result"]["causes"][0]["verified"], out["result"]["causes"][0]["reason"]) == (False, "name_missing"), switches
+        # a line of the log that names the pod does
+        out, _ = await run_of(monkeypatch, [(*GONE, FILE_GONE + "\n")], given, {"pod": "web-1"}, **switches)
+        assert out["result"]["causes"][0]["verified"] is True, switches
+
+
 # What tool-server says in place of a line, of a read whose containers' logs held none (notfound.go, handlers_read.go).
 NO_LINES = [
     f"# No line was read: the previous log of web was read and holds no line. The previous log of app is gone or cannot be read "
@@ -1321,6 +1332,28 @@ async def test_a_container_that_has_not_restarted_is_shown_by_no_line_of_the_oth
 ])
 def test_tool_servers_own_line_of_containers_is_no_text_of_the_log(tool, text, shown_text):
     assert answers.log_text(tool, text) == shown_text
+
+
+@pytest.mark.asyncio
+async def test_the_second_ask_says_what_a_read_of_no_log_came_to_as_the_ledger_does(monkeypatch):
+    given = answer("A cause was found.", "cause_found", [cause(POD, [1])], shown(POD, 1), hypotheses=[hypothesis(resource=POD, **{"for": [1]})])
+    for switches in ({"ledger": True}, {"ledger": True, "verdict": False}, {"ledger": True, "verdict": False, "evidence_check": False}):
+        for raw, came in ((no_log(container="web"), "answered, holding nothing"), (LOG_LINE.replace("error", "msg") + "\n", "answered")):
+            # a hypothesis that is open has the report asked for again whatever the call answered
+            again = answer("A cause was found.", "cause_found", [cause(POD, [1])], shown(POD, 1), hypotheses=[hypothesis(resource=POD, state="open", **{"for": [1]})])
+            out, service = await run_of(monkeypatch, [(*GONE, raw)], again, {"pod": "web-1"}, **switches)
+            ask = service.completions.calls[2]["messages"][-1]["content"]
+            assert [line.rsplit(" — ", 1)[1] for line in ask.splitlines() if line.startswith("[call 1] ")] == [came], switches
+        out, service = await run_of(monkeypatch, [(*GONE, no_log(container="web"))], given, {"pod": "web-1"}, **switches)
+        ask = service.completions.calls[2]["messages"][-1]["content"]
+        assert 'no call that answered is given under "for"' in ask and "— answered\n" not in ask + "\n", switches
+
+
+def test_the_calls_of_the_second_ask_are_read_in_one_order():
+    log = [{"tool": "k8s_get_pod_logs", "args": {}, "no_log": True}, {"tool": "k8s_get_pod_logs", "args": {}, "no_log": True},
+           {"tool": "k8s_get_pod_logs", "args": {}, "no_log": True, "error": "audit unavailable"}, {"tool": "k8s_get_pod_logs", "args": {}}]
+    assert [came for _, _, came in rca.rows(log, {2: 1})] == ["answered, holding nothing", "the same read as call 1", "failed", "answered"]
+    assert [came for _, _, came in rca.rows(log, {2: 1}, {4})][3] == "answered, holding nothing"
 
 
 @pytest.mark.asyncio
