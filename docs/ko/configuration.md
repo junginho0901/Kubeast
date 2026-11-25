@@ -320,6 +320,9 @@ features:
                              # 묻고 그래도 안 되는 것은 확인 안 됨으로 적습니다. ledger와 함께면 묶음 하나, 다시 묻기 한 번
     verdict: true            # (alpha) true면(evidenceCheck나 ledger와 함께) 묶음에 결론(원인 찾음 · 이상 없음 · 알 수 없음)도 적고 호출로
                              # 확인합니다. 확인했고 정상인 것과 안 본 것은 서버가 적습니다
+    pastReports:             # 같은 알림의 지난 조사, 최근 30일 것(ai-alerts.md). 새로 저장하는 것은 없습니다
+      window: false          # (alpha) true면 Alerts의 알림 창에 결론 · 원인 · 보고서와 함께 최대 다섯 개를 보여 줍니다
+      model: false           # (alpha) true면 조사의 첫 입력에 표식 사이로 최대 다섯 줄을 넣습니다. evidenceCheck가 확인한 원인만입니다
     window:                  # 알림 시작 시각에서 셉니다. 끝은 늦어도 지금입니다
       metricsMinutes: 15     # 시작 앞뒤로 이만큼의 지표(1–360)
       logsMinutes: 5         # 시작 이만큼 전부터의 로그(0–1440)
@@ -414,6 +417,7 @@ multicluster:
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | 스위치를 하나씩 끄고 켠 AI 평가의 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.ledger`, `evidenceCheck`(켜면 다시 물을 때 `maxSteps`에 모델 호출 하나가 더해짐) | true, true | alpha | 하나씩 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.verdict`(`evidenceCheck`나 `ledger`와 함께, 둘 다 끄면 아무것도 안 함) | true | alpha | `evidenceCheck` 옆에서 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `features.alertInvestigation.pastReports.window`, `pastReports.model`(`evidenceCheck`를 끈 채 돈 조사는 줄이 없음) | false, false | alpha | 둘 다 켠 kind 개발 설치, 같은 원인과 다른 원인으로 다시 울린 알림에 대한 AI 평가의 알림 조사 |
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | 이 값만 끄고 켠 AI 평가. 돌려 봄: AI 스위치를 켠 kind 설치의 전체 e2e에서 `ai-anomaly-rank.spec.ts`(2026-11-25), 시험 넷 모두 통과 |
 | `features.nodeNeighbors.enabled` | false | alpha | 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.nodeNeighbors.busiestCPU`(`enabled` 없이는 아무것도 안 함) | false | alpha | `enabled`와 함께 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 둘 다 켠 상태로 kind 개발 설치에서 돌린 경우 |

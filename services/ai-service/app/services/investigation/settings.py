@@ -73,6 +73,10 @@ class InvestigationSettings:
     # ai.causeNaming: the rca block's instruction says how its causes are named (app/services/cause_naming.py); nothing with
     # evidence_check and ledger off.
     cause_naming: bool = False
+    # features.alertInvestigation.pastReports (investigation/past.py): the alert's window lists the same alert's earlier
+    # investigations (window); an investigation's first message holds what they concluded (model).
+    past_window: bool = False
+    past_model: bool = False
 
 
 def _on(name: str) -> bool:
@@ -121,4 +125,6 @@ def load() -> InvestigationSettings:
         call_paths=switch.env_on("CALL_GRAPH_ENABLED"),  # the one switch rule, as tools.call_graph_on
         fault_onset=switch.env_on("AI_FAULT_ONSET"),
         cause_naming=switch.env_on("AI_CAUSE_NAMING"),
+        past_window=switch.env_on("ALERT_INVESTIGATION_PAST_WINDOW"),
+        past_model=switch.env_on("ALERT_INVESTIGATION_PAST_MODEL"),
     )

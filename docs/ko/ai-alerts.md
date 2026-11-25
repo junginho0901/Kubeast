@@ -103,6 +103,12 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
     - `result`에는 원인 10개 · 경로 12단계 · 배제한 것 20개 · 가설 12개 · 원인마다와 가설의 뒷받침 · 반박마다 호출 번호 20개까지 남깁니다. 모델이 그보다 길게 적은 목록은 앞의 것만 남기고, 모델이 적은 수와 남긴 수를 `cut`에 적습니다(`{"given": 11, "kept": 10}`). `causes` · `path` · `ruled_out`과 `ledger`를 켰을 때의 `hypotheses`는 `result.cut`에, 원인의 `evidence`는 그 원인의 `cut`에, 가설의 `for` · `against`는 그 가설의 `cut`에 적습니다. 보고서 창은 그 목록 아래에 "N개 중 앞의 M개를 보여 줍니다"를 보여 주고, 떠 있는 채팅은 결과와 함께 `cut`을 받습니다. 모든 목록이 한도 안이면 `cut`은 없습니다.
   - `ai.toolResultDetails`(기본 꺼짐)를 켜면 조사가 읽는 도구 결과에 잘린 결과에서 받은 양, 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭, 결과가 가리키는 오브젝트의 콘솔 경로가 붙고, 보고서는 그 경로를 링크로 쓸 수 있습니다(상대 경로라 보고서를 읽는 그 콘솔에서 열림). 조사 프롬프트의 한 줄도 `verdict`가 꺼져 있어도 같이 바뀝니다: 도구 결과처럼, 빈 검색은 그 이름을 찾는 일만 끝내고 조사는 이어 가게 합니다. `verdict`도 혼자 켜면 같은 줄을 바꾸고, 둘 다 끄면 전처럼 그만 찾으라고 합니다. [기능](features.md) 참고.
   - `ai.traceSpanTable`과 `ai.yamlSpecFirst`(둘 다 기본 꺼짐)를 켜면 조사가 트레이스를 스팬 표로, 오브젝트의 YAML을 spec이 먼저이고 끝에 마지막 apply와 다른 것이 적힌 꼴로 읽습니다. [기능](features.md) 참고.
+  - `pastReports.model`(기본 꺼짐)을 켜면 같은 알림의 지난 조사가 낸 결론이 첫 입력에 들어갑니다. 자리는 0번째 걸음 다음, 규칙 카드 앞이고 `<<<PAST`와 `PAST>>>` 사이에 최신 순으로 최대 다섯 줄 · 600자입니다. 같은 클러스터에서 같은 Namespace의(Namespace가 없는 알림은 없는 것끼리) 같은 알림(fingerprint)을 끝까지 조사한 것 가운데, 이번 것보다 앞서 30일 안에 · 클러스터를 등록한 뒤에 받은 것만 읽습니다.
+    - 한 줄에는 시각, 원인을 찾았다는 말, 원인마다 대상(`Kind/namespace/name`)과 종류만 있습니다. 모두 꼴이 정해진 값이고 보고서 · 가설 · 라벨 · 메모의 글은 들어가지 않으며, 그 조사의 번호 표로 한 번 더 가립니다. 남긴 결론이 `cause_found`인 조사만, 그 조사의 `evidenceCheck`가 확인한 원인만(끈 채 돈 조사는 줄이 없음), 그것도 알림 · 규칙 · 이름만 읽은 호출이 아닌 호출로 확인된 것만 줄이 됩니다. Namespace가 있는 알림에는 다른 Namespace의 대상을 주지 않습니다.
+    - 이 줄들에는 호출 번호가 없으므로 보고서의 원인을 받쳐 주지 못합니다. 서버는 여전히 원인마다 이번 조사의 호출로 확인합니다. 앞뒤 글은 이것이 자료이고 사람이 확인하지 않았으며 이번 원인은 다를 수 있다고 적고, 서로 다른 원인이면 그렇게 적습니다.
+    - 켜져 있는 동안 조사는 `alerts_inbox`의 `with_report`를 거절받으므로 지난 보고서에서 읽는 것은 이 줄뿐입니다.
+    - 읽기가 실패하거나 3초를 넘기면 그 줄 없이 조사합니다. 읽기는 그 알림의 줄만 색인으로 찾는 질의 한 번이고 최대 20줄이며 보고서 글은 가져오지 않습니다.
+    - `ai.investigation.run` 행에 `past_investigations`(몇 줄인지, 조사 ID, 못 읽었으면 `failed`)가 남습니다.
   - API는 `GET /api/v1/ai/investigations`(목록, `status`·`cluster`로 거르기)와 `/{id}`(상세: 보고서·도구 호출·토큰)이고, 권한은 `admin.investigations.read`입니다.
   - 상세에는 파드 로그가 인용될 수 있어 열람할 때마다 `ai.investigation.view`로 남깁니다.
   - 보존 기간은 `retention.investigationDays`(90일)입니다.
@@ -129,6 +135,7 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
 
 - **누가**: 선택한 클러스터를 Namespace 제한 없이 읽을 수 있는 사람(그 클러스터의 `resource.pod.read`)이 봅니다. AI 알림 도구, 알림 저장소 읽기와 같은 기준입니다.
   - 그 알림의 AI 조사 보고서도 여기서 열 수 있고, 열 때마다 `ai.investigation.view`가 남습니다.
+  - `pastReports.window`(기본 꺼짐)를 켜면 알림 창에 같은 알림의 지난 조사도 나옵니다. fingerprint · 클러스터 · Namespace가 같고 끝까지 돈 조사 가운데 창에 보이는 것보다 앞서 30일 안에 받은 것을 최신 순으로 최대 다섯 개, 시각 · 결론 · 원인(그 조사의 `evidenceCheck`가 확인하지 못한 것은 확인 안 됨)과 그 보고서를 여는 버튼으로 보여 줍니다. 보고서를 열면 다른 보고서와 같이 `ai.investigation.view`가 남습니다. 모델에게 가려진 값은 자리 표시 그대로입니다. 새로 저장하는 것은 없으므로 `retention.investigationDays`가 지나면 같이 없어지고, AI의 `alerts_inbox`와 떠 있는 채팅에는 이 목록을 주지 않습니다.
 - **한 줄 = 알림 1건**: 클러스터, fingerprint, `startsAt`이 같으면 같은 알림입니다.
   - Alertmanager가 `repeat_interval`마다 다시 보내면 "받은 횟수"가 오릅니다.
   - resolved가 오면 해결됨이 되고, 해결 뒤 다시 울리면 새 줄이 생깁니다.
@@ -168,7 +175,7 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
   - 대상(라벨 `pod`·`deployment`·`node` 등)을 누르면 리소스 상세 창이 열립니다.
   - 한 건을 열면 라벨, 주석, 알림 보낸 곳 링크, 처리 칸, AI 조사가 나옵니다.
   - 이 창의 "원본 쿼리"와 "알림 보낸 곳"도 보고서 창과 같습니다: http·https 주소만 링크이고 다른 주소는 글로 보입니다.
-  - API는 `GET /api/v1/alerts/inbox?cluster=`·`/{id}`(`investigate_now`: 되는지, 안 되면 `reason`·`until`)·`PATCH /{id}`·`/{id}/investigation`·`POST /{id}/investigate`(403 `forbidden`·`manual_off`, 429 `provider_paused`·`manual_budget`와 `until`·`Retry-After`, 감사 행을 못 남기면 503)입니다.
+  - API는 `GET /api/v1/alerts/inbox?cluster=`·`/{id}`(`investigate_now`: 되는지, 안 되면 `reason`·`until`. `pastReports.window`를 켜고 `?past=true`로 물으면 `past_investigations`도)·`PATCH /{id}`·`/{id}/investigation`(`?past=<ID>`: 목록에 있는 지난 조사)·`POST /{id}/investigate`(403 `forbidden`·`manual_off`, 429 `provider_paused`·`manual_budget`와 `until`·`Retry-After`, 감사 행을 못 남기면 503)입니다.
   - 보존 기간은 조사와 같은 `retention.investigationDays`이며, 마지막으로 받은 시각부터 셉니다.
 
 ## 트레이스 읽기 (AI, Tempo)
@@ -229,6 +236,7 @@ AI가 원인을 실제로 찾는지는 e2e가 아니라 평가 스크립트로 �
 - Claude 구독의 알림 조사나 채팅 답이 걸음 한도에서 멈추면 마지막 호출은 도구 없이 결과를 요청에 받습니다. 결과는 `<<<RESULTS`와 `RESULTS>>>` 사이에 줄마다 `| `로 시작해 들어가므로, 심어 둔 `>>>`가 이 표식을 닫지 못하고 어느 줄도 대화의 차례로 시작하지 않습니다. 그 뒤에 그 안의 지시나 요청은 사용자의 것이 아니라는 문장이 옵니다. 스위치를 켜면 거기서도 결과가 JSON 객체입니다.
 - 알림 조사의 0번째 걸음(`changesFirst` · `narrowFirst`)은 첫 모델 호출 전에 읽고, 모델은 그 답을 도구 결과로 읽습니다. 첫 입력은 그 호출을 적고, 호출과 답은 모델이 스스로 한 호출처럼 첫 입력 다음에 옵니다. Claude 구독에서는 Claude Code가 자기가 한 호출의 도구 결과만 채우므로, 답이 첫 입력 안의 `<<<CHANGES`와 `CHANGES>>>` 또는 `<<<NARROWING`과 `NARROWING>>>` 사이에 들어갑니다. 스위치와 상관없이 같고, 심어 둔 `>>>`는 이 표식을 닫지 못합니다.
 - 알림의 레이블·주석은 조사의 첫 메시지에 `<<<ALERT`와 `ALERT>>>` 사이의 JSON으로 들어갑니다. 심어 둔 `>>>`는 이 표식을 닫지 못합니다.
+- `pastReports.model`(기본 꺼짐)을 켜면 첫 메시지에 같은 알림의 지난 조사 줄도 `<<<PAST`와 `PAST>>>` 사이에 들어갑니다. 심어 둔 `>>>`는 이 표식을 닫지 못합니다. 서버가 쓴 말 · 시각 · 정해진 목록의 종류 · Kubernetes 이름 꼴의 대상뿐이고 보고서의 문장은 없습니다.
 - 떠 있는 채팅의 화면 데이터는 `<untrusted_context>` 안의 시스템 메시지입니다. 심어 둔 닫는 태그는 이 태그를 닫지 못합니다.
 - 앞 턴의 기록은 도구 블록을 통째로 뺍니다.
 - 스위치와 상관없이 도구 결과가 아닌 자리: 사람이 승인한 쓰기의 결과는 모델 턴 밖에서 돌고 코드 블록이 든 assistant 메시지로 저장됩니다. 다음 턴은 이것을 기록으로 읽습니다. 클러스터가 쓴 오류(admission 웹훅의 문장)도 여기에 들어갑니다.
