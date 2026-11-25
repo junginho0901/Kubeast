@@ -113,6 +113,14 @@ def test_hidden_cases_run_only_with_the_flag():
     assert {d.name for d, _ in shown} == every - hidden
 
 
+def test_07_is_not_run_right_after_01():
+    for only in (["01", "07"], ["01", "07", "10"], ["01", "07", "12"], [], ["07"]):
+        cases, problems = AI_EVAL.load_cases(HARD, only, False)
+        ids = [c["id"][:2] for _, c in cases]
+        assert problems == [] and "07" in ids
+        assert "01" not in ids or ids.index("07") != ids.index("01") + 1, ids
+
+
 def test_each_group_of_more_than_one_case_has_a_hidden_one():
     groups: dict = {}
     for _, c in all_cases():

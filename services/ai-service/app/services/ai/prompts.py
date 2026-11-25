@@ -3,13 +3,15 @@
 # ai_service.py 의 `_get_system_message` 에서 추출. 단순 문자열 상수라 외부 의존
 # 없음 (self / instance 의존 X). 호출처에서 SYSTEM_MESSAGE 를 직접 import 해서
 # 사용하거나 system_prompt_override 로 덮어쓸 수 있다. 채팅은 system_message() 로
-# 받는다 (timeline 의 changes 보기 스위치 AI_TIMELINE_CHANGES, anomaly_rank 스위치 ANOMALY_RANK_ENABLED).
+# 받는다 (timeline 의 changes 보기 스위치 AI_TIMELINE_CHANGES 와 그 더 많은 출처 AI_TIMELINE_CHANGES_MORE, anomaly_rank 스위치
+# ANOMALY_RANK_ENABLED, 노드 이웃 스위치 NODE_NEIGHBORS_ENABLED, 원인을 묻는 질문의 규칙 스위치 AI_CAUSE_QUESTIONS).
 #
 # 변경 시 주의: AI 응답의 형식·언어·도구 호출 정책이 모두 이 프롬프트에 의존.
 # 키워드 ("Kubeast", "도구 호출", "Critical Rules" 등) 가 사라지면 행동이
 # 바뀐다 — tests/test_prompts.py 의 회귀 테스트로 보호.
 
-from app.services.ai.tools import anomaly_rank_on, call_graph_on, timeline_changes_on
+from app.services import switch
+from app.services.ai.tools import anomaly_rank_on, call_graph_on, node_neighbors_on, timeline_changes_more_on, timeline_changes_on
 
 SYSTEM_MESSAGE = """# Kubernetes AI Agent System Prompt
 
@@ -354,6 +356,19 @@ TIMELINE_CHANGES_LINES = {
     "revision before, ConfigMap/Secret writes, Helm revisions, HPA scales, node conditions, Argo CD syncs, restarts), never a value",
 }
 
+# The view's further sources in the prompt too, with AI_TIMELINE_CHANGES_MORE on beside it (chart ai.timelineChangesMore,
+# off by default): these lines in the place of the two above.
+TIMELINE_CHANGES_MORE_LINES = {
+    _TIMELINE_GUIDE: _TIMELINE_GUIDE + '. `view: "changes"`는 기간 동안 바뀐 것만 시간순으로(롤아웃의 이미지·바뀐 필드·env 키, ConfigMap·Secret 마지막 쓰기, '
+    'Helm 리비전, HPA 크기, 노드 상태, Argo CD 동기화, 재시작, 그리고 `namespace`를 주면 Job 생성(만든 CronJob 이름), NetworkPolicy 쓰기, Service의 selector·port 쓰기, '
+    'Deployment의 레플리카 수 변경(`kubectl scale`·오토스케일러·수정)과 StatefulSet의 레플리카 수 수정 — 값은 읽지 않음). StatefulSet의 `kubectl scale`, 롤아웃을 만든 쓰기와 함께 바뀐 '
+    '레플리카 수, 지운 객체(정리된 끝난 Job도), 그 밖의 종류(Ingress·PVC 등)의 수정은 안 나오니 여기 없다고 "바뀐 것 없음"이 아닙니다 — `view` 없이 부른 이벤트도 함께 보세요',
+    _TIMELINE_SIGNATURE: TIMELINE_CHANGES_LINES[_TIMELINE_SIGNATURE].replace(
+        "Argo CD syncs, restarts), never a value",
+        "Argo CD syncs, restarts, and in a named namespace Jobs made, NetworkPolicy and Service writes, replica counts set), never a value",
+    ),
+}
+
 
 # anomaly_rank in the prompt only where it is turned on (ANOMALY_RANK_ENABLED, chart features.anomalyRank.enabled, off by
 # default): the line after which each of its lines goes.
@@ -362,7 +377,8 @@ _STATE_RULE = _line("- 클러스터·네임스페이스의 상태를 묻는 질�
 _ISSUES_SIGNATURE = _line("- `issues(")
 ANOMALY_RANK_GUIDE = (
     "- `anomaly_rank`: 한 네임스페이스(또는 워크로드 하나)가 앞 같은 길이 구간과 무엇이 달라졌나를 서버가 순위로(지금 고장 · 종료 이유별 수 · 재시작 · CPU 걸림 · 메모리 "
-    "limit 근처 · 오류 로그 모양·줄 수 · 서비스별 요청·실패 비율·p90 · 노드 압박, 최대 10개, 새로 나타난 것 먼저). `normal`은 아무것도 못 찾은 검사, `not_run`은 "
+    "limit 근처 · 오류 로그 모양·줄 수 · 서비스별 요청·실패 비율·p90 · 노드 상태(Ready·메모리·디스크·PID·네트워크, CPU는 안 봄), 최대 10개, 새로 나타난 것 먼저. 요약의 no earlier data는 앞 구간 "
+    "자료가 없어 새것인지 모른다는 뜻). `normal`은 아무것도 못 찾은 검사, `not_run`은 "
     "못 한 검사와 까닭 — 못 한 것은 정상이 아님 (켜진 설치에서만 제공)"
 )
 # The one order for broad "why did this break?" questions, by the switches that are on; each switch alone gives its own
@@ -401,7 +417,7 @@ ANOMALY_RANK_SIGNATURE = (
     "- `anomaly_rank(namespace, since_time, until_time, workload_kind, workload_name)` - What differs in one "
     "namespace from the window before, ranked by the server (failing objects, terminations by reason, restarts, CPU "
     "throttling, memory near the limit, error log shapes and counts, services' requests, failures and p90, node "
-    "pressure); not_run is not normal; offered only where it is turned on"
+    "conditions but not node CPU); \"no earlier data\" is not new; not_run is not normal; offered only where it is turned on"
 )
 ANOMALY_RANK_LINES = {
     _ISSUES_GUIDE: _ISSUES_GUIDE + "\n" + ANOMALY_RANK_GUIDE,
@@ -409,14 +425,101 @@ ANOMALY_RANK_LINES = {
     _ISSUES_SIGNATURE: _ISSUES_SIGNATURE + "\n" + ANOMALY_RANK_SIGNATURE,
 }
 
+# get_node_metrics with a node in the prompt only where it takes one (NODE_NEIGHBORS_ENABLED, chart
+# features.nodeNeighbors.enabled, off by default): the line after which each of its lines goes.
+_NODE_METRICS_GUIDE = _line("- `get_node_metrics`: ")
+_NODE_METRICS_SIGNATURE = _line("- `get_node_metrics()`")
+NODE_NEIGHBORS_LINES = {
+    _NODE_METRICS_GUIDE: _NODE_METRICS_GUIDE + "\n"
+    "- `get_node_metrics(node, since_time, until_time)`: 노드 하나의 CPU를 네임스페이스를 넘어 누가 썼나(앞 구간 대비 늘어난 코어 · 요청 · 한도 · 시작 · 스로틀 · CPU를 기다린 시간), "
+    "CPU별 최댓값(평균에는 꽉 찬 CPU 하나가 안 보임), 역할(의심 가해자/피해자/자기 한도). 여러 서비스가 한꺼번에 느려졌는데 실패도 스로틀도 없으면 그 파드들의 노드를 먼저 찾고 "
+    "느려지기 전 시각을 since_time으로 주세요. 피해자는 원인이 아니라 증상입니다.",
+    _NODE_METRICS_SIGNATURE: _NODE_METRICS_SIGNATURE + "\n"
+    "- `get_node_metrics(node, since_time, until_time)` - One node's neighbours: who used its CPU across namespaces against the window before, "
+    "each CPU's busy share, roles (suspicions)",
+}
+
+
+# Why questions (AI_CAUSE_QUESTIONS, chart ai.causeQuestions, off by default): how far to read before answering and which
+# of three outcomes the answer gives, in place of the lines that end the reading early (a number of calls, the first
+# source that explains it, only what issues names) and of the answer rules that expect a cause. It names no tool to call
+# first: that stays with the order rules above.
+def cause_questions_on() -> bool:
+    return switch.env_on("AI_CAUSE_QUESTIONS")
+
+
+def _swapped(line: str, old: str, new: str) -> str:
+    """line with its one `old` as `new` (a line that no longer holds it once is an error at import)."""
+    before, after = line.split(old)
+    return before + new + after
+
+
+CAUSE_SECTION = """### 원인을 묻는 질문
+왜 고장 났는지·왜 느린지·무엇 때문인지 묻거나 증상을 말하며 봐 달라는 질문은, 호출 수가 아니라 아래에서 해당하는 것을 확인했는지로 끝을 정하세요. 무엇을 먼저 부를지 정한 규칙이 있으면 그 차례를 따르세요. 읽기 조회는 침습적이지 않으니 넓혀도 되고(다른 시각·대상을 읽는 것은 재요청이 아닙니다), 더 읽어도 결론이 바뀌지 않으면 멈추고 답하세요.
+- **증상이 실제로 있나**: 질문이 고장을 전제해도, 물은 시각에 그 증상이 있었는지와 언제부터 어디까지인지를 호출로 확인하세요.
+- **바뀐 것은 후보일 뿐**: 증상이 시작되기 앞에 바뀐 것(`timeline`)을 읽되, 그것이 이 증상을 만드는 메커니즘이 있고, 증상보다 먼저였고, 다른 후보를 확인해 제쳤을 때만 원인입니다. 이상해 보이는 설정과 질문이 짚은 원인도 후보입니다.
+- **부르는 쪽과 불리는 쪽**: 요청이 실패하거나 느리면 그 워크로드의 로그만 보지 말고, 그것을 부르는 쪽과 그것이 부르는 쪽의 같은 시각 로그도 읽으세요.
+- **크래시면 설정도**: 파드가 크래시하면 직전 로그와 종료 이유에 더해, 그 파드의 설정(이미지·명령·env·ConfigMap과 Secret의 참조와 키·프로브·requests와 limits)을 앞 리비전이나 멀쩡한 파드와 비교하세요.
+- **여럿이 같은 때 느려지면 노드**: 서로 관계없는 워크로드 여럿이 같은 때 느려졌고 어느 것도 CPU 제한에 걸리지(throttled) 않았으면, 그 파드들의 노드와 그 노드에 있는 다른 네임스페이스 파드의 사용량을 보세요.
+- **빈 결과와 정상은 다름**: 권한 거부·없는 기능·보존 기간 지남·잘림으로 비었으면 "못 봤다"입니다. 그 시각의 자료가 있는 조회가 비었을 때만 정상입니다. `issues`가 비어도 느려짐이나 지난 장애는 있을 수 있습니다. 물은 대상이 아닌 이름을 못 찾았으면 그 이름 찾기만 멈추고 나머지를 계속 확인하세요.
+
+마지막 답은 첫 문장에서 셋 중 하나로 말하세요(문제가 여럿이면 문제마다):
+1. **원인 확인**: 원인, 증상을 보여 준 호출, 둘을 잇는 근거. 호출이 보여 주지 않은 고리는 추정이라고 적으세요.
+2. **이상 없음**: 무엇을 어느 기간 보았고 어떻게 정상이었는지.
+3. **알 수 없음**: 무엇이 없거나 안 읽혀서 못 가렸는지, 남은 후보와 그것을 가를 다음 확인. 볼 수 있는 것을 보고도 못 가릴 때만 쓰세요.
+
+근거는 도구 이름과 거기서 본 값·시각 한 줄이면 됩니다. 증상을 보여 준 호출이 없으면 원인을 지목하지 마세요."""
+
+_NAMESPACE_HEADING = _line("### 네임스페이스/리소스 식별 규칙")
+_EFFICIENT_HEADING = _line("### 효율적 도구 사용")
+_LOGS_RULE = _line("- 로그를 받았으면 바로 분석하세요.")
+_FEW_CALLS_RULE = _line("- **도구 호출은 최소한으로**")
+_NOT_FOUND_RULE = _line("- 도구가 `{\"status\": \"not_found\"")
+_SEARCH_RULE = _line("- 그래도 없으면 **검색을 멈추고**")
+_FOUND_RULE = _line("2. **문제 발견 시**")
+_PROBLEM_FORMAT = _line("2. **문제가 있다면**")
+_COMPLETE_RULE = _line("- You MUST provide COMPLETE answers")
+_LENGTH_RULE = _line("- Minimum response length")
+_EXAMPLE_ANALYZE = _line("6. Analyze")
+_EXAMPLE_SOLUTION = _line("7. Provide solution")
+CAUSE_STATE_RULE = _swapped(_STATE_RULE, "거기 나온 객체만 describe/logs로 파세요.",
+                            "거기 나온 객체부터 describe/logs로 파세요(원인을 묻는 질문이면 거기 안 나온 객체도 봅니다).")
+CAUSE_QUESTION_LINES = {
+    _EFFICIENT_HEADING: _swapped(_EFFICIENT_HEADING, "(최우선 규칙)", "(최우선 규칙. 원인을 묻는 질문은 아래 \"원인을 묻는 질문\"이 먼저)"),
+    _LOGS_RULE: _swapped(_LOGS_RULE, "로그를 받았으면 바로 분석하세요.", "로그를 보여 달라는 질문이면 로그를 받아 바로 분석하세요."),
+    _FEW_CALLS_RULE: _swapped(_FEW_CALLS_RULE, "보통 1~3회면", "목록·상태·값을 묻는 질문은 보통 1~3회면"),
+    _STATE_RULE: CAUSE_STATE_RULE,
+    _NAMESPACE_HEADING: CAUSE_SECTION + "\n\n" + _NAMESPACE_HEADING,
+    # a name not found ends the search for it, not the reading, as k8s_find_resource's own hint says with AI_TOOL_RESULT_DETAILS
+    _NOT_FOUND_RULE: _NOT_FOUND_RULE + " 원인을 묻는 질문에서 이미 지워진 객체의 그 시각 이벤트·로그·지표를 읽는 것은 반복이 아닙니다.",
+    _SEARCH_RULE: _swapped(_SEARCH_RULE, "**검색을 멈추고** 어디를", "**같은 검색을 반복하지 마세요.** 원인을 묻는 질문이면 그 이름 찾기만 끝내고 "
+                           "아는 것(네임스페이스·워크로드·증상 시각의 이벤트·로그·지표)으로 계속하세요. 물은 대상 자체가 없거나 다른 질문이면 어디를"),
+    _FOUND_RULE: "2. **문제 발견 시**: 왜 그런지 묻지 않았으면 로그나 이벤트 등 하나의 소스로 파악되는 대로 바로 분석하고, 추가 도구 호출은 기존 정보로 "
+    "판단이 불가능할 때만 하세요. 왜 그런지 물었으면 하나의 소스에서 멈추지 말고 \"원인을 묻는 질문\"을 따르세요.",
+    _PROBLEM_FORMAT: _PROBLEM_FORMAT + " (왜 그런지 물은 질문의 원인은 \"원인을 묻는 질문\"의 세 결론 중 하나로)",
+    _COMPLETE_RULE: _COMPLETE_RULE + " (for a why question, \"no fault found\" with what you checked, or \"cannot tell\" with what is missing, is complete)",
+    _LENGTH_RULE: _LENGTH_RULE + " (a \"no fault found\" or \"cannot tell\" answer may be shorter; never fill it with a guess)",
+    _EXAMPLE_ANALYZE: "6. Analyze → Cause found (with the call that showed it), no fault found, or cannot tell (with what is missing)",
+    _EXAMPLE_SOLUTION: "7. Cause found → Provide solution with commands; otherwise → the next check",
+}
+
 
 def system_message() -> str:
-    """The chat's system prompt: SYSTEM_MESSAGE, with the lines of each switch that is on (timeline's changes view,
-    anomaly_rank, resource_graph's calls); with every one off, SYSTEM_MESSAGE as it is."""
+    """The chat's system prompt: SYSTEM_MESSAGE, with the lines of each switch that is on (timeline's changes view and its
+    further sources, anomaly_rank, resource_graph's calls, get_node_metrics with a node, the rules for why questions); with
+    every one off, SYSTEM_MESSAGE as it is."""
     lines: dict = {}
     changes, anomaly, calls = timeline_changes_on(), anomaly_rank_on(), call_graph_on()
+    state_rule = _STATE_RULE
+    if cause_questions_on():
+        lines.update(CAUSE_QUESTION_LINES)
+        state_rule = CAUSE_STATE_RULE
     if changes:
         lines.update(TIMELINE_CHANGES_LINES)
+        if timeline_changes_more_on():
+            lines.update(TIMELINE_CHANGES_MORE_LINES)
+    if node_neighbors_on():
+        lines.update(NODE_NEIGHBORS_LINES)
     rule = None
     if anomaly:
         lines.update(ANOMALY_RANK_LINES)
@@ -424,7 +527,7 @@ def system_message() -> str:
     elif calls:
         rule = CALL_GRAPH_RULE_WITH_CHANGES if changes else CALL_GRAPH_RULE
     if rule is not None:
-        lines[_STATE_RULE] = _STATE_RULE + "\n" + rule
+        lines[_STATE_RULE] = state_rule + "\n" + rule
         if changes:
             del lines[_TIME_RULE]
     if not lines:

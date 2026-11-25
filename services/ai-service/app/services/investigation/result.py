@@ -10,7 +10,9 @@ report and keeps what it read in the row's `result` (dbmigrate 00031), so the re
 MCP `investigations` read and the AI evaluation stay with the calls they came from. `checks` says which switches read
 it: with evidenceCheck each cause says whether the calls show it (`verified`, and why not as `reason`), without the
 ledger `hypotheses` is empty and the window shows none. A list cut at what the row keeps of it (MAX_CAUSES, MAX_PATH,
-MAX_RULED_OUT, MAX_CALLS, MAX_HYPOTHESES) is named in `cut` with how many the model gave, which the window shows. With both switches
+MAX_RULED_OUT, MAX_CALLS, MAX_HYPOTHESES) is named in `cut` with how many the model gave, which the window shows. With
+features.alertInvestigation.verdict on too, `verdict` holds the outcome the server keeps and its lists of what was and was
+not looked at (investigation/verdict.py); a result without it was written with that switch off. With both switches
 off nothing here runs and `result` stays null. NUL characters, which the database refuses in JSON, are taken out of every text.
 """
 
@@ -46,8 +48,11 @@ def number(value: Any) -> Optional[int]:
         return None
     if isinstance(value, int):
         return value
-    if isinstance(value, str) and value.strip().lstrip("#").isdigit():
-        return int(value.strip().lstrip("#"))
+    if isinstance(value, str) and value.strip().lstrip("#").isdecimal():
+        try:
+            return int(value.strip().lstrip("#"))
+        except ValueError:  # more digits than int() takes
+            return None
     return None
 
 
@@ -85,13 +90,14 @@ def counted(given: Any, limit: int, kept: int) -> Optional[dict[str, int]]:
 def shape(block: Optional[dict], status: str, tool_log: list[dict[str, Any]], hypotheses: list[dict[str, Any]],
           *, asked_again: bool = False, ask_failed: bool = False,
           failures: Optional[list[dict[str, Any]]] = None, cause_problems: Optional[list] = None,
-          checks: Optional[dict[str, bool]] = None) -> dict[str, Any]:
+          checks: Optional[dict[str, bool]] = None, verdict: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """The row's `result`: what the server read of the block, with each call number given as its call. `failures`:
     what the checks still found wrong (rca.check), kept when given. `cause_problems` (evidence.Problem, given while
     evidenceCheck is on) marks each cause `verified` or not, by its place in the block. `checks`: the switches that
     read the block. A list past its cap keeps its first items and is named in `cut` with how many the model gave and
     how many are kept: the causes, the path, ruled_out and, where the ledger read them, the hypotheses in the result's,
-    a cause's evidence in the cause's (a hypothesis's for and against in the hypothesis's, ledger.check)."""
+    a cause's evidence in the cause's (a hypothesis's for and against in the hypothesis's, ledger.check). `verdict`:
+    verdict.shape's, kept as it is when given."""
     block = block if isinstance(block, dict) else {}
     unverified = {p.index: p.reason for p in cause_problems or []}
     causes = []
@@ -138,4 +144,6 @@ def shape(block: Optional[dict], status: str, tool_log: list[dict[str, Any]], hy
         out["failures"] = [{k: text(v) if isinstance(v, str) else v for k, v in f.items()} for f in failures]
     if checks is not None:
         out["checks"] = {"evidence": bool(checks.get("evidence")), "ledger": bool(checks.get("ledger"))}
+    if verdict is not None:
+        out["verdict"] = verdict
     return out

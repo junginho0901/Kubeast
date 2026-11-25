@@ -13,6 +13,10 @@ their call numbers (investigation/numbers.py).
 The block is the last rca block of the answer (split()); a second answer replaces the first only with a report before
 its block (has_report()). The model's answers in a run with the block may be ANSWER_TOKENS long; one that still stops
 inside the block (or at its length before it) is `cut` and asked for once more, shorter.
+
+With features.alertInvestigation.verdict on too, the block also says the report's outcome and the calls that show the
+alert's symptom, and the same check and second ask hold it to the calls (investigation/verdict.py); off, nothing of it
+is asked for or read.
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ from app.services.investigation import numbers
 KINDS = ("crash", "oom", "image", "config_change", "rollout", "network_policy", "dns", "resource_limit", "quota", "node",
          "dependency_down", "dependency_slow", "storage", "none")
 
-# What check() can find wrong, both checks together.
+# What check() can find wrong, every check together.
 FAILURES = (
     # no block at the very end, one that is not the shape below, one the answer stopped inside
     "block_missing", "block_invalid", "block_cut",
@@ -38,6 +42,10 @@ FAILURES = (
     # ledger: a hypothesis not closed (ledger.check's reasons, not_verified with both on), or none while the block finds a fault
     "hypothesis_open", "hypothesis_no_evidence", "hypothesis_no_reason", "hypothesis_bad_calls", "hypothesis_not_verified",
     "no_hypotheses",
+    # verdict: an outcome the block or the calls do not hold (verdict.check's reasons)
+    "outcome_missing", "outcome_contradicts", "outcome_no_symptom", "outcome_symptom_bad_calls",
+    "outcome_symptom_name_missing", "outcome_symptom_not_shown", "outcome_cause_not_shown", "outcome_nothing_read",
+    "outcome_not_read",
 )
 
 FINAL_NOTE = " End it with the rca block."
@@ -63,10 +71,21 @@ def is_cause(c: dict) -> bool:
     return not (isinstance(kind, str) and kind.strip().lower() == "none")
 
 
-def instruction(*, evidence: bool, hypotheses: bool) -> str:
+# features.alertInvestigation.verdict: what the block has more, and what it is (investigation/verdict.py).
+_OUTCOME_SHAPE = ('"outcome": "cause_found|no_fault|cannot_tell",\n'
+                  ' "symptom": {"resource": "Kind/namespace/name", "evidence": [2]},\n ')
+_OUTCOME_SAYS = (
+    '"outcome" is cause_found when calls show the alert\'s symptom and a cause in "causes", no_fault when they show nothing '
+    'wrong, and cannot_tell otherwise, with "no_fault": false and "causes": []. "symptom" is the object where the symptom the '
+    "alert names shows and the numbers of the calls whose results show it there; a call that reads what changed, an alert, its "
+    'rule or a list of names does not show it. While no call does, its "evidence" is [] and so is "causes". The server writes '
+    "down what was checked and normal and what was not looked at from the calls themselves: the block has no list of them.")
+
+
+def instruction(*, evidence: bool, hypotheses: bool, verdict: bool = False) -> str:
     """The system prompt's last part, with the call numbers' sentence first."""
     shape = (
-        '{"no_fault": false,\n'
+        "{" + (_OUTCOME_SHAPE if verdict else "") + '"no_fault": false,\n'
         f' "causes": [{{"resource": "Kind/namespace/name", "kind": "{"|".join(KINDS)}", '
         '"started_at": "RFC3339 time or null", "evidence": [1, 3]}],\n'
         ' "path": ["Kind/namespace/name of the cause", "...", "Kind/namespace/name where the symptom shows"],\n'
@@ -89,6 +108,8 @@ def instruction(*, evidence: bool, hypotheses: bool) -> str:
         if evidence:
             says.append('Each cause in "causes" is also a hypothesis of state cause about the same object.')
     says.append('If you find no fault, answer "no_fault": true and "causes": [].')
+    if verdict:
+        says.append(_OUTCOME_SAYS)
     says.append("Keep the report brief so that the whole block fits after it; nothing comes after the block.")
     says.append("The server checks the block against this investigation's calls and takes it out of the report"
                 + (", and shows the hypotheses as a table under it: do not write that table yourself." if hypotheses
@@ -228,13 +249,14 @@ class Checked:
     hypotheses: list[dict[str, Any]] = field(default_factory=list)  # ledger.check, ledger on
     not_in_ledger: list[str] = field(default_factory=list)   # both on
     unclosed: bool = False          # missing: its last rca fence holds JSON and never closes
+    outcome: Optional[Any] = None   # verdict.Checked, verdict on and status ok
     failures: list[dict[str, Any]] = field(default_factory=list)    # each {"kind": one of FAILURES, ...}
 
 
 def check(answer: str, *, tool_log: list[dict[str, Any]], reads: Optional[list], alert_start, evidence: bool,
-          ledger: bool, finish_reason: str = "") -> Checked:
+          ledger: bool, finish_reason: str = "", alert: Optional[Any] = None) -> Checked:
     """`finish_reason`: the provider's for the answer; "length" (it stopped at its answer length) makes a missing block
-    a cut one and is kept with the failure."""
+    a cut one and is kept with the failure. `alert`: the alert's object (verdict.alert_of), given with the verdict on."""
     from app.services.investigation import evidence as inv_evidence
     from app.services.investigation import ledger as inv_ledger
 
@@ -261,6 +283,12 @@ def check(answer: str, *, tool_log: list[dict[str, Any]], reads: Optional[list],
                 h["closed"] = False
     if ledger:
         out.failures += hypothesis_failures(block, out.hypotheses)
+    if alert is not None:
+        from app.services.investigation import verdict as inv_verdict
+
+        out.outcome = inv_verdict.check(block, reads=reads, alert=alert, tool_log=tool_log,
+                                        unverified={p.index for p in out.cause_problems} if evidence else None)
+        out.failures += [{"kind": f"outcome_{p.reason}"} for p in out.outcome.problems]
     return out
 
 
@@ -292,11 +320,14 @@ def not_in_ledger(block: dict, hypotheses: list[dict[str, Any]]) -> list[str]:
             if isinstance(c, dict) and is_cause(c) and _name(c.get("resource")) not in named]
 
 
-def rows(tool_log: list[dict[str, Any]], same_as: Optional[dict[int, int]] = None) -> list[tuple[str, Any, str]]:
-    """The run's calls for the second ask: (tool, arguments, what came of it)."""
-    same_as = same_as or {}
+def rows(tool_log: list[dict[str, Any]], same_as: Optional[dict[int, int]] = None,
+         nothing: Iterable[int] = ()) -> list[tuple[str, Any, str]]:
+    """The run's calls for the second ask: (tool, arguments, what came of it). `nothing`: with the verdict on, the calls
+    whose answer holds nothing."""
+    same_as, none_held = same_as or {}, set(nothing)
     return [(e.get("tool", ""), e.get("args") or {},
-             f"the same read as call {same_as[i]}" if i in same_as else "failed" if e.get("error") else "answered")
+             f"the same read as call {same_as[i]}" if i in same_as else "failed" if e.get("error") else
+             "answered, holding nothing" if i in none_held else "answered")
             for i, e in enumerate(tool_log, 1)]
 
 
@@ -306,8 +337,9 @@ def calls_text(calls: Iterable[tuple[str, Any, str]]) -> str:
         for i, (tool, args, outcome) in enumerate(calls, 1))
 
 
-def ask_again(checked: Checked, calls: Iterable[tuple[str, Any, str]], *, evidence: bool, ledger: bool) -> str:
-    """The one second ask, without tools: what both checks found, the run's calls, the report again."""
+def ask_again(checked: Checked, calls: Iterable[tuple[str, Any, str]], *, evidence: bool, ledger: bool,
+              verdict: bool = False) -> str:
+    """The one second ask, without tools: what the checks found, the run's calls, the report again."""
     from app.services.investigation import evidence as inv_evidence
     from app.services.investigation import ledger as inv_ledger
 
@@ -337,6 +369,11 @@ def ask_again(checked: Checked, calls: Iterable[tuple[str, Any, str]], *, eviden
                 for h in still))
         if any(f["kind"] == "no_hypotheses" for f in checked.failures):
             parts.append('Your rca block lists no hypotheses while "no_fault" is not true.')
+        if checked.outcome is not None and checked.outcome.problems:
+            from app.services.investigation import verdict as inv_verdict
+
+            parts.append("The server checked the outcome against this investigation's calls. It does not hold:\n"
+                         + "\n".join(f"- {inv_verdict.reason_text(p)}" for p in checked.outcome.problems))
         head = "\n\n".join(parts)
     says = ["Write the whole report again, under the same headings, ending with the rca block; nothing comes after the block."]
     if evidence:
@@ -345,5 +382,9 @@ def ask_again(checked: Checked, calls: Iterable[tuple[str, Any, str]], *, eviden
     if ledger:
         says.append("Close every hypothesis: give the calls that show it, mark it ruled_out with the calls that show it is "
                     "not the cause, or mark it blocked with the reason.")
+    if verdict:
+        says.append('"outcome" is cause_found only with a call that shows the alert\'s symptom and a cause a call shows. When '
+                    'none does, leave "causes" empty and answer cannot_tell, or no_fault when the calls show nothing wrong, '
+                    "and say so in the report.")
     says.append("No tools now.")
     return f"{head}\n\nThe calls of this investigation:\n{calls_text(calls) or '(none)'}\n\n" + " ".join(says)

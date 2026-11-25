@@ -8,7 +8,7 @@ import pytest
 
 from app.prompts.floating_system_prompt import FLOATING_BASE_SYSTEM_PROMPT
 from app.services import rule_cards
-from app.services.ai.prompts import SYSTEM_MESSAGE
+from app.services.ai.prompts import CAUSE_QUESTION_LINES, SYSTEM_MESSAGE
 from app.services.ai.tools import K8S_READONLY_TOOLS, get_tools_definition
 from app.services.investigation.prompt import system_prompt
 
@@ -19,6 +19,7 @@ _LABELS = {"k8s_container_name", "k8s_namespace_name", "k8s_node_name", "k8s_pod
 _DEFINED = {tool["function"]["name"] for tool in _ALL_TOOLS} | _LABELS
 _TEXTS = {
     "the system message": SYSTEM_MESSAGE,
+    "the chat's rules for why questions": "\n".join(CAUSE_QUESTION_LINES.values()),
     "the floating chat's system prompt": FLOATING_BASE_SYSTEM_PROMPT,
     "an investigation's system prompt": system_prompt(cluster="c1", namespace="shop", language="en"),
     "an investigation's system prompt with the rules": system_prompt(cluster="c1", namespace="shop", language="en", rules=True),
@@ -27,7 +28,7 @@ _TEXTS = {
     # each card as the model reads it when every tool it names is offered, so a name no tool has is not left out
     "the rule cards": "\n".join(
         rule_cards.render([card], {t for check in card.checks for t in check.tools}, source=rule_cards.INVESTIGATION_SOURCE)[0]
-        for card in rule_cards.defaults()),
+        for card in rule_cards.defaults(symptoms=True)),
 }
 
 

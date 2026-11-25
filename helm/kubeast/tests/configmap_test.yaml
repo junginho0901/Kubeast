@@ -388,6 +388,9 @@ tests:
           path: data.AI_RULE_CARDS_INVESTIGATIONS
           value: "false"
       - equal:
+          path: data.AI_RULE_CARDS_SYMPTOMS
+          value: "false"
+      - equal:
           path: data.AI_RULE_CARDS
           value: "[]"
       - equal:
@@ -398,6 +401,7 @@ tests:
     set:
       ai.ruleCards.chat: true
       ai.ruleCards.investigations: true
+      ai.ruleCards.symptoms: true
       ai.ruleCards.cards:
         - kind: payments-db
           title: Payments database slow
@@ -414,11 +418,22 @@ tests:
           path: data.AI_RULE_CARDS_INVESTIGATIONS
           value: "true"
       - equal:
+          path: data.AI_RULE_CARDS_SYMPTOMS
+          value: "true"
+      - equal:
           path: data.AI_RULE_CARDS
           value: '[{"alerts":["PaymentsDBLatencyHigh"],"checks":[{"check":"The database''s slow queries over the window","tools":["prometheus_query"]}],"kind":"payments-db","title":"Payments database slow"}]'
       - equal:
           path: data.AI_RULE_CARDS_REMOVE
           value: network_policy,dns
+
+  - it: values without ai.ruleCards.symptoms, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.ruleCards.symptoms: null
+    asserts:
+      - equal:
+          path: data.AI_RULE_CARDS_SYMPTOMS
+          value: "false"
 
   - it: turns in-place resize on by default and off from features.inPlaceResize
     asserts:
@@ -841,6 +856,44 @@ tests:
       - equal:
           path: data.AI_TIMELINE_CHANGES
           value: "true"
+  - it: keeps the changes view's further sources off by default
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES_MORE
+          value: "false"
+  - it: turns the changes view's further sources on from ai.timelineChangesMore
+    set:
+      ai.timelineChangesMore: true
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES_MORE
+          value: "true"
+  - it: values without ai.timelineChangesMore, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.timelineChangesMore: null
+    asserts:
+      - equal:
+          path: data.AI_TIMELINE_CHANGES_MORE
+          value: "false"
+  - it: keeps the chat's rules for why questions off by default
+    asserts:
+      - equal:
+          path: data.AI_CAUSE_QUESTIONS
+          value: "false"
+  - it: turns the chat's rules for why questions on from ai.causeQuestions
+    set:
+      ai.causeQuestions: true
+    asserts:
+      - equal:
+          path: data.AI_CAUSE_QUESTIONS
+          value: "true"
+  - it: values without ai.causeQuestions, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.causeQuestions: null
+    asserts:
+      - equal:
+          path: data.AI_CAUSE_QUESTIONS
+          value: "false"
 
   - it: values without ai.redaction.numbered, as an earlier chart's --reuse-values keeps them, render it off
     set:
@@ -871,6 +924,28 @@ tests:
       - equal:
           path: data.ALERT_INVESTIGATION_EVIDENCE_CHECK
           value: "true"
+
+  - it: keeps the investigation's outcome off by default
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_VERDICT
+          value: "false"
+
+  - it: passes the investigation's outcome as it is set
+    set:
+      features.alertInvestigation.verdict: true
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_VERDICT
+          value: "true"
+
+  - it: values without the investigation's outcome, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      features.alertInvestigation.verdict: null
+    asserts:
+      - equal:
+          path: data.ALERT_INVESTIGATION_VERDICT
+          value: "false"
 
   - it: keeps the tool result details off by default
     asserts:

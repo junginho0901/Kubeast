@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 import en from '../i18n/locales/en.json'
 import ko from '../i18n/locales/ko.json'
-import type { InvestigationResult, InvestigationToolCall } from '../services/api/investigations'
+import type { InvestigationResult, InvestigationToolCall, InvestigationVerdict } from '../services/api/investigations'
 import { InvestigationResultView } from './InvestigationResultView'
 
 const i18n = i18next.createInstance()
@@ -136,6 +136,31 @@ describe("the report window's result and hypotheses", () => {
     expect(html).toContain(`>${en.investigations.result.titleCauses}<`)
     expect(html).toContain('data-testid="investigation-result-causes"')
     expect(await render({ ...RESULT, checks: { evidence: false, ledger: true } })).toContain('Hypotheses (4)')
+  })
+
+  it('draws the outcome the server keeps with its lists, and nothing of them for a result without one', async () => {
+    const verdict: InvestigationVerdict = {
+      outcome: 'cannot_tell', said: 'no_fault', why: ['not_read'],
+      looked_at: [{ source: 'logs', calls: [{ call: 2, tool: 'k8s_get_pod_logs' }] }],
+      checked_normal: [{ check: 'restarts', call: 1, tool: 'anomaly_rank', namespace: 'apps', partial: 'the first 100 series' }],
+      not_looked_at: [{ source: 'traces', reason: 'not_offered' }, { call: 3, tool: 'traces_search', reason: 'failed', detail: 'a <b>refusal</b>' }],
+      cut: { not_looked_at: { given: 22, kept: 20 } },
+    }
+    const html = await render({ ...RESULT, no_fault: true, causes: [], hypotheses: [], verdict })
+    expect(html).toContain('data-outcome="cannot_tell">Cannot tell<')
+    expect(html).toContain('but no call that read a state names the alert')
+    expect(html).toContain('restarts (apps)')
+    expect(html).toContain('read in part: the first 100 series')
+    expect(html).toContain('Traces: the cluster offers no tool for it')
+    expect(html).toContain('a &lt;b&gt;refusal&lt;/b&gt;')  // drawn as plain text
+    expect(html).toContain('Showing the first 20 of 22')
+    expect(html).not.toContain(en.investigations.result.noFault)  // the outcome says it
+    // a report without a block it could read still has the server's lists
+    const missing = await render({ ...RESULT, status: 'missing', causes: [], hypotheses: [], verdict: { ...verdict, outcome: null, said: null, why: [] } })
+    expect(missing).toContain('data-testid="investigation-looked-at"')
+    expect(missing).not.toContain('data-outcome=')
+    expect(await render({ ...RESULT, verdict }, 'ko')).toContain(`>${ko.investigations.result.outcome.cannot_tell}<`)
+    expect(await render(RESULT)).not.toContain('data-testid="investigation-outcome"')
   })
 
   it('says the answer stopped inside its block', async () => {

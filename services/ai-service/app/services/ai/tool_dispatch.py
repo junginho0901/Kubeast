@@ -20,7 +20,7 @@
 from typing import TYPE_CHECKING, Dict
 
 from app.services.ai import console_links, permissions, resolvers
-from app.services.ai.tools import CALLS_PARAMS, anomaly_rank_on, call_graph_on, changes_view_on
+from app.services.ai.tools import CALLS_PARAMS, NODE_PARAMS, anomaly_rank_on, call_graph_on, changes_view_on, node_neighbors_on
 from app.services.ai.debug_dump import log, safe_error
 
 if TYPE_CHECKING:
@@ -431,7 +431,13 @@ async def execute_function_with_context(
             )
         
         elif function_name == "get_node_metrics":
-            result = await service._call_tool_server(function_name, {})
+            tool_args = {}
+            if node_neighbors_on():  # the node arguments reach tool-server only with the switch, as before them
+                for key in NODE_PARAMS:
+                    value = function_args.get(key)
+                    if isinstance(value, str) and value.strip():
+                        tool_args[key] = value.strip()
+            result = await service._call_tool_server(function_name, tool_args)
         
         else:
             return json.dumps({"error": f"Unknown function: {function_name}"})

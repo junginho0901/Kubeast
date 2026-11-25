@@ -387,6 +387,10 @@ ai:
   # result in the chat and in an alert investigation starts with the console
   # paths of the objects it names (a drawer's ?detail=, an alert, a namespace's
   # Resource Graph). Nothing more is read for them.
+  # An empty answer of the kubectl read tools says why it may be empty too, and
+  # k8s_find_resource also looks among the namespaces' names (one more list).
+  # One line of an investigation's prompt changes with it: an empty search ends
+  # the search for that name, not the investigation.
   # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   toolResultDetails: false
   # What leaves for the model is masked first: credentials by key name
@@ -460,11 +464,16 @@ ai:
   #         - check: The database's slow queries over the window
   #           tools: [prometheus_query]
   #   remove: [network_policy]
+  # symptoms (with chat or investigations on): a card is also picked by what is
+  # said to be wrong, in English or Korean, in a question or in an alert's name,
+  # summary and description; adds error_rate, latency and resource_pressure.
   # At most 6 checks a card, 3 tools a check, 200 characters a check.
-  # Stage: alpha, not run yet: the AI evaluation with chat and investigations off and on (docs/configuration.md "Stages of new values").
+  # Stage: alpha, not run yet: the AI evaluation with chat and investigations off and on, then with symptoms off and on beside them
+  # (docs/configuration.md "Stages of new values").
   ruleCards:
     chat: false
     investigations: false
+    symptoms: false
     cards: []
     remove: []
   # Write model responses, tool arguments and tool results to the ai-service
@@ -485,6 +494,26 @@ ai:
   # still sends its calls without the view.
   # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   timelineChanges: false
+  # More of that view in a named namespace: Jobs made (with their CronJob), NetworkPolicy writes, Service writes of the
+  # selector or ports and replica counts set, read as the user and as metadata only: four lists more a call, five where
+  # the namespace may have a StatefulSet, none without a namespace. Adds to the view wherever it is served
+  # (timelineChanges, or alert investigations' changesFirst); alone it opens nothing. Off: the view is as it was.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  timelineChangesMore: false
+  # The chat's rules for a question that asks why something is broken: what to
+  # check before answering (whether the symptom was there, what changed as a
+  # candidate only, the caller's and the callee's logs, a crashing pod's
+  # configuration, the node when unrelated workloads slow together, what could
+  # not be read), and an answer of one of three: cause found, no fault found or
+  # cannot tell. For those questions they take the place of "one to three tool
+  # calls are enough" and of answering at the first source that explains it, so
+  # such an answer reads more and uses more tokens. Best on together with
+  # toolResultDetails, without which the result of a name not found still says
+  # to stop searching and ask. AI Chat only: the floating chat, alert
+  # investigations and the MCP server are as before. Off: the chat's
+  # instructions are as before.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  causeQuestions: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
@@ -1069,7 +1098,7 @@ features:
     # The time windows below, the scope groups (affected, checked and normal,
     # changed for another reason, not looked at), facts kept apart from
     # hypotheses and the report's six headings, in the prompt.
-    # rules, changesFirst, narrowFirst, ledger, evidenceCheck and window: stage alpha, not run yet: the AI
+    # rules, changesFirst, narrowFirst, ledger, evidenceCheck, verdict and window: stage alpha, not run yet: the AI
     # evaluation's alert investigations with each off and on (docs/configuration.md "Stages of new values").
     rules: false
     # Step 0: before the first model call, the timeline tool's changes view
@@ -1104,6 +1133,13 @@ features:
     # not verified. The block is taken out of the kept report and kept as the
     # report's result. One block with ledger: both on, one second ask.
     evidenceCheck: false
+    # With evidenceCheck or ledger on (nothing with both off), the block also
+    # says the outcome: a cause found, no fault found or cannot tell, with the
+    # calls that show the alert's symptom. The server keeps cannot tell when
+    # the calls do not hold what the report says, with why under the report,
+    # and lists what was checked and normal and what was not looked at from
+    # the run's calls.
+    verdict: false
     inbox:
       staleAfterHours: 8      # a firing alert with no notification for this long shows "status unknown"; twice your repeat_interval
     # More read-only rules for the investigator, appended to the
@@ -1123,8 +1159,8 @@ features:
   # differs in one namespace between a window and the window of the same length
   # before it — failing objects, terminations by reason, restarts, CPU
   # throttling, memory against the limit, error log shapes and counts, the
-  # services' requests, failed requests and p90 from their server spans, node
-  # pressure — ranked, at most ten. The metric checks read the cluster's
+  # services' requests, failed requests and p90 from their server spans, the conditions of
+  # the nodes (not their CPU) — ranked, at most ten. The metric checks read the cluster's
   # Prometheus (kube-state-metrics and cAdvisor names), the log checks the log
   # store (features.logSearch) and the trace checks the trace store
   # (features.traceStore), each through the door of its own tools
@@ -1135,7 +1171,7 @@ features:
   # Stage: alpha, not run yet: the e2e ai-anomaly-rank.spec.ts on the kind dev install (docs/configuration.md "Stages of new values").
   anomalyRank:
     enabled: false
-    maxQueries: 12           # store queries one answer may make; when the log store's index counts no line, the log checks' read of one line is counted under that index query
+    maxQueries: 12           # store queries one answer may make, every one counted; a metric check is one query over both windows, from 12 up three are kept for the call order (features.callGraph), and the log checks' reads of one line (at most two) come from what is left: 14 makes room for all of them when every store answers
     checkTimeoutSeconds: 5   # each check
     timeoutSeconds: 20       # the whole answer
     concurrency: 4           # checks at once
@@ -1143,6 +1179,19 @@ features:
     # The log checks ask the log store's index first (Loki's index stats) and
     # do not read past this many bytes over both windows (10 GiB).
     logMaxBytes: 10737418240
+  # One node's neighbours for the AI (get_node_metrics with node, GET
+  # /nodes/{name}/neighbors, read as the caller like a list): what used a
+  # node's CPU between a window and the same length before it — the containers
+  # of every namespace on it ranked by cores, with request, limit, start,
+  # throttling and time spent waiting for a CPU, the node's CPUs one by one,
+  # and whom to suspect. It reads the cluster's Prometheus (cAdvisor,
+  # node-exporter or hostmetrics, at most six queries, kept a minute per
+  # caller), else the metrics API's current values; a namespace whose pods the
+  # caller may not list is counted, not named. Off: the route answers 404,
+  # reads nothing, and the AI's tool takes no node.
+  # Stage: alpha, not run yet: the AI evaluation's 03_node_cpu_saturated with it off and on (docs/configuration.md "Stages of new values").
+  nodeNeighbors:
+    enabled: false
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,

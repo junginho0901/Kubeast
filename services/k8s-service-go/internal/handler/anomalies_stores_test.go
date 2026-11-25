@@ -38,6 +38,11 @@ type storeFixture struct {
 	// windows but the last, whose failed spans or error lines appear
 	services   int
 	containers int
+	// noBefore: no shape and no error line of the window before; noErrorsBefore: no error line of it, the shapes as they
+	// are; noLines: no shape and no error line at all
+	noBefore, noErrorsBefore, noLines bool
+	// fresh: the first of those services has no span in the window before
+	fresh bool
 }
 
 func (f *storeFixture) lokiPaths() []string {
@@ -77,6 +82,14 @@ func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 		case "/loki/api/v1/index/stats":
 			_, _ = w.Write([]byte(f.stats))
 		case "/loki/api/v1/patterns":
+			if f.noLines {
+				_, _ = w.Write([]byte(`{"status":"success","data":[]}`))
+				return
+			}
+			if f.noBefore {
+				_, _ = fmt.Fprintf(w, `{"status":"success","data":[{"pattern":"GET /healthz <_>","level":"info","samples":[[%d,40]]}]}`, unixAt(1, 0))
+				return
+			}
 			_, _ = fmt.Fprintf(w, `{"status":"success","data":[
 				{"pattern":"level=error msg=\"dial tcp <_>: connection refused\"","level":"error","samples":[[%d,6],[%d,6]]},
 				{"pattern":"GET /healthz <_>","level":"info","samples":[[%d,40],[%d,40]]}]}`,
@@ -89,6 +102,14 @@ func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 			f.mu.Lock()
 			containers := f.containers
 			f.mu.Unlock()
+			if f.noLines {
+				_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[]}}`))
+				return
+			}
+			if f.noBefore || f.noErrorsBefore {
+				_, _ = fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[{"metric":{"k8s_container_name":"app"},"values":[[%d,"9"]]}]}}`, unixAt(1, 30))
+				return
+			}
 			if containers > 0 {
 				series := make([]string, 0, containers)
 				for i := 0; i < containers; i++ {
@@ -157,6 +178,9 @@ func newStoreFixture(t *testing.T, cfg config.Config) *storeFixture {
 				}
 			case strings.Contains(q, "quantile_over_time"):
 				b, n = 0.05, 0.05
+			}
+			if f.fresh && i == 0 {
+				b = 0
 			}
 			series = append(series, fmt.Sprintf(`{"labels":[{"key":"resource.service.name","value":{"stringValue":"svc-%03d"}}],"samples":[%s]}`, i, stepsOf(b, n)))
 		}
@@ -363,8 +387,8 @@ func TestAnomaliesLogChecksReadALineWhenTheIndexCountsNone(t *testing.T) {
 		t.Fatalf("the estimate, the one-line read, then the two reads: %v", got)
 	}
 	oneLineRead(t, f)
-	if res.StoreQueries != 6 {
-		t.Fatalf("%d store queries: the one-line read is made under the estimate's", res.StoreQueries)
+	if res.StoreQueries != 7 {
+		t.Fatalf("%d store queries: the one-line read is one of them", res.StoreQueries)
 	}
 	var after map[string]interface{}
 	_ = json.Unmarshal(f.audit.rows[0].After, &after)
@@ -390,7 +414,7 @@ func TestAnomaliesLogChecksWithNoLineInTheIndexOrTheStoreAreNotRun(t *testing.T)
 		t.Fatalf("the estimate and the one-line read only: %s", got)
 	}
 	oneLineRead(t, f)
-	if res.StoreQueries != 4 {
+	if res.StoreQueries != 5 {
 		t.Fatalf("%d store queries: the two reads not made go back", res.StoreQueries)
 	}
 
@@ -503,7 +527,7 @@ func TestAnomaliesStoreChecksNeedTheAuditRow(t *testing.T) {
 }
 
 func TestAnomaliesBudgetGoesInCheckOrder(t *testing.T) {
-	f := newStoreFixture(t, config.Config{AnomalyRankMaxQueries: 4})
+	f := newStoreFixture(t, config.Config{AnomalyRankMaxQueries: 2})
 	f.h.anomalySrc = &fakeAnomalies{prometheus: true}
 	res := f.get(t, "shop", flowReader)
 	notRun := notRunOf(res)
@@ -512,7 +536,7 @@ func TestAnomaliesBudgetGoesInCheckOrder(t *testing.T) {
 			t.Errorf("%s: %q", check, notRun[check])
 		}
 	}
-	if res.StoreQueries != 4 || f.reads() != 0 {
+	if res.StoreQueries != 2 || f.reads() != 0 {
 		t.Fatalf("%d store queries, %d store reads", res.StoreQueries, f.reads())
 	}
 }
@@ -577,6 +601,23 @@ func TestAnomaliesPastTheTraceReadersSeriesArePartial(t *testing.T) {
 	// the failed share needs the requests: a service past the requests read is not compared even when its failures are read
 	if !strings.Contains(partial[anomaly.CheckTraceErrors], "the trace store's requests query") || !slices.Contains(normal, anomaly.CheckTraceErrors) {
 		t.Fatalf("normal %v partial %v", normal, partial)
+	}
+}
+
+// A service with no span in the window before beside others that have them: the latency check says it was not compared,
+// beside what else it did not read, and the service's requests are new.
+func TestAnomaliesSayWhichServiceWasNotCompared(t *testing.T) {
+	const alone = "not compared, no server spans in the window before: service svc-000"
+	f := newStoreFixture(t, config.Config{})
+	f.services, f.fresh = 3, true
+	found, normal, partial := f.readOf(t, "shop")
+	if partial[anomaly.CheckTraceLatency] != alone || !slices.Contains(normal, anomaly.CheckTraceLatency) || !slices.Contains(found, anomaly.CheckTraceRequests+":service svc-000") {
+		t.Fatalf("found %v normal %v partial %v", found, normal, partial)
+	}
+	f = newStoreFixture(t, config.Config{})
+	f.services, f.fresh = traces.MaxSeries+1, true
+	if _, _, partial = f.readOf(t, "shop"); partial[anomaly.CheckTraceLatency] != alone+"; the trace store's latency query answered 101 series and only the first 100 were read; the check is about those" {
+		t.Fatalf("partial %q", partial[anomaly.CheckTraceLatency])
 	}
 }
 

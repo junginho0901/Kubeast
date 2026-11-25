@@ -43,6 +43,13 @@ class Read:
     text: str = ""
     failed: bool = False
     same_as: Optional[int] = None
+    # with the verdict on (investigation/answers.py): "unread" an answer that read nothing, "empty" one that holds nothing
+    nothing: str = ""
+
+    @property
+    def shows(self) -> bool:
+        """Whether its answer holds more than what was asked."""
+        return not self.nothing
 
 
 @dataclass
@@ -85,9 +92,25 @@ def _number(n: Any) -> Optional[int]:
         return None
     if isinstance(n, int):
         return n
-    if isinstance(n, str) and n.strip().isdigit():
-        return int(n.strip())
+    if isinstance(n, str) and n.strip().isdecimal():
+        try:
+            return int(n.strip())
+        except ValueError:  # more digits than int() takes
+            return None
     return None
+
+
+def answered(numbers: list, reads: list[Read]) -> tuple[list[tuple[Any, Read]], list[tuple[Any, Optional[Read]]]]:
+    """The call numbers given, as (those of calls of this run that answered, the rest), each with its call; a refused
+    repeat stands for the call it repeated."""
+    good, bad = [], []
+    for n in numbers:
+        k = _number(n)
+        read = reads[k - 1] if k is not None and 1 <= k <= len(reads) else None
+        if read is not None and read.same_as is not None and 1 <= read.same_as <= len(reads):
+            read = reads[read.same_as - 1]
+        (good if read is not None and not read.failed else bad).append((n, read))
+    return good, bad
 
 
 def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tuple[int, list[Problem]]:
@@ -105,17 +128,11 @@ def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tu
         if not numbers:
             problems.append(Problem(resource, "no_evidence", index=index))
             continue
-        good, bad = [], []
-        for n in numbers:
-            k = _number(n)
-            read = reads[k - 1] if k is not None and 1 <= k <= len(reads) else None
-            if read is not None and read.same_as is not None and 1 <= read.same_as <= len(reads):
-                read = reads[read.same_as - 1]
-            (good if read is not None and not read.failed else bad).append((n, read))
+        good, bad = answered(numbers, reads)
         if not good:
             problems.append(Problem(resource, "bad_calls", {"calls": [n for n, _ in bad]}, index))
             continue
-        if not any(_names(read.text, resource_name(resource)) for _, read in good):
+        if not any(read.shows and _names(read.text, resource_name(resource)) for _, read in good):
             problems.append(Problem(resource, "name_missing", {"name": resource_name(resource), "calls": [n for n, _ in good]},
                                     index))
             continue

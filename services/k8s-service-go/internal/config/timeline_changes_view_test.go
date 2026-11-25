@@ -38,3 +38,16 @@ func TestTimelineChangesViewReadsInvestigationsAsAlertInvestigationEnabled(t *te
 		}
 	}
 }
+
+// AI_TIMELINE_CHANGES_MORE is a switch of its own, read by the one switch rule: it opens no route by itself.
+func TestTimelineChangesMoreIsASwitchOfItsOwn(t *testing.T) {
+	for _, name := range []string{"AI_TIMELINE_CHANGES", "ALERT_INVESTIGATION_ENABLED", "ALERT_INVESTIGATION_CHANGES_FIRST"} {
+		t.Setenv(name, "")
+	}
+	for value, want := range map[string]bool{"": false, "false": false, "0": false, "maybe": false, "true": true, "On": true, "1": true, "yes": true} {
+		t.Setenv("AI_TIMELINE_CHANGES_MORE", value)
+		if c := Load(); c.TimelineChangesMore != want || c.TimelineChangesView {
+			t.Errorf("AI_TIMELINE_CHANGES_MORE=%q: more %v, want %v; view %v, want false", value, c.TimelineChangesMore, want, c.TimelineChangesView)
+		}
+	}
+}

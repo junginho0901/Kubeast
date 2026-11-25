@@ -71,18 +71,25 @@ func (f *fakeAnomalies) PrometheusQueryAt(_ context.Context, q string, at time.T
 	if f.queryErr != nil {
 		return nil, f.queryErr
 	}
-	latest := at.Equal(anomalyNow)
 	switch {
 	case strings.Contains(q, "kube_pod_container_status_restarts_total"):
-		v := 1.0
-		if latest {
-			v = 6
-		}
-		return []k8s.PrometheusQueryResult{{Metric: map[string]interface{}{"pod": "web-1-a"}, Value: v}}, nil
+		return bothWindows(map[string]interface{}{"pod": "web-1-a"}, 6, 1), nil
 	case strings.Contains(q, "container_memory_working_set_bytes"):
-		return []k8s.PrometheusQueryResult{{Metric: map[string]interface{}{"pod": "web-1-a", "container": "app"}, Value: 0.5}}, nil
+		return bothWindows(map[string]interface{}{"pod": "web-1-a", "container": "app"}, 0.5, 0.5), nil
 	}
 	return nil, nil
+}
+
+// bothWindows is a metric query's answer for one series: its value over the window and over the window before.
+func bothWindows(metric map[string]interface{}, now, before float64) []k8s.PrometheusQueryResult {
+	row := func(window string, v float64) k8s.PrometheusQueryResult {
+		m := map[string]interface{}{anomaly.WindowLabel: window}
+		for k, label := range metric {
+			m[k] = label
+		}
+		return k8s.PrometheusQueryResult{Metric: m, Value: v}
+	}
+	return []k8s.PrometheusQueryResult{row("now", now), row("before", before)}
 }
 
 func anomalyHandler(f *fakeAnomalies, cfg config.Config) *Handler {
@@ -124,9 +131,9 @@ func TestAnomaliesRankWhatChangedAndSayWhatIsNormal(t *testing.T) {
 	for _, finding := range res.Findings {
 		targets = append(targets, finding.Check+":"+finding.Target)
 	}
-	// new first (two OOM kills where there were none, the crash loop), then the restarts that grew six times, then the
-	// pressure on the node the pods run on; n9 runs no pod of shop
-	want := "crash_reasons:OOMKilled,issues:Pod/web-1-a,restarts:Pod/web-1-a,node_pressure:Node/n1"
+	// new first (two OOM kills where there were none) with the crash loop, critical now, then the restarts that grew six
+	// times, then the pressure on the node the pods run on; n9 runs no pod of shop
+	want := "crash_reasons:OOMKilled,issues:Pod/web-1-a,restarts:Pod/web-1-a,node_conditions_not_cpu:Node/n1"
 	if got := strings.Join(targets, ","); got != want {
 		t.Fatalf("findings %s, want %s", got, want)
 	}
@@ -151,8 +158,13 @@ func TestAnomaliesRankWhatChangedAndSayWhatIsNormal(t *testing.T) {
 			t.Errorf("%s: %q", check, notRun[check])
 		}
 	}
-	if res.StoreQueries != 6 || len(f.queries) != 6 {
+	if res.StoreQueries != 3 || len(f.queries) != 3 {
 		t.Fatalf("%d store queries, %d made", res.StoreQueries, len(f.queries))
+	}
+	for _, at := range f.times {
+		if !at.Equal(anomalyNow) {
+			t.Errorf("a metric query not at the window's end: %s", at)
+		}
 	}
 	for i, q := range f.queries {
 		if !strings.Contains(q, `namespace="shop"`) || !strings.Contains(q, "[3600s]") {
@@ -165,7 +177,7 @@ func TestAnomaliesRankWhatChangedAndSayWhatIsNormal(t *testing.T) {
 
 	// the same question in the same minute is the answer already made
 	w2, again := getAnomalies(h, "/api/v1/namespaces/shop/anomalies", flowReader)
-	if w2.Code != http.StatusOK || len(again.Findings) != len(res.Findings) || len(f.queries) != 6 || f.podReads != 1 {
+	if w2.Code != http.StatusOK || len(again.Findings) != len(res.Findings) || len(f.queries) != 3 || f.podReads != 1 {
 		t.Fatalf("asked again: %d, %d queries, %d pod reads", w2.Code, len(f.queries), f.podReads)
 	}
 	// another caller is not given it
@@ -215,14 +227,14 @@ func TestAnomaliesForAGrantLimitedToNamespacesAskNoPrometheus(t *testing.T) {
 
 func TestAnomaliesStopAtTheirStoreQueries(t *testing.T) {
 	f := &fakeAnomalies{prometheus: true}
-	_, res := getAnomalies(anomalyHandler(f, config.Config{AnomalyRankMaxQueries: 4}), "/api/v1/namespaces/shop/anomalies", flowReader)
+	_, res := getAnomalies(anomalyHandler(f, config.Config{AnomalyRankMaxQueries: 2}), "/api/v1/namespaces/shop/anomalies", flowReader)
 	spent := 0
 	for _, n := range res.NotRun {
 		if strings.Contains(n.Reason, "store queries are spent") {
 			spent++
 		}
 	}
-	if len(f.queries) != 4 || res.StoreQueries != 4 || spent != 1 {
+	if len(f.queries) != 2 || res.StoreQueries != 2 || spent != 1 {
 		t.Fatalf("%d queries, %d counted, %d checks spent", len(f.queries), res.StoreQueries, spent)
 	}
 }
@@ -267,7 +279,7 @@ func TestAnomaliesOfOneWorkloadAskForItsPods(t *testing.T) {
 		t.Fatalf("%+v", res.Workload)
 	}
 	for _, finding := range res.Findings {
-		if finding.Check == anomaly.CheckIssues || finding.Check == anomaly.CheckCrashReasons || finding.Check == anomaly.CheckNodePressure {
+		if finding.Check == anomaly.CheckIssues || finding.Check == anomaly.CheckCrashReasons || finding.Check == anomaly.CheckNodeConditions {
 			t.Errorf("a finding of web's pods for api: %+v", finding)
 		}
 	}

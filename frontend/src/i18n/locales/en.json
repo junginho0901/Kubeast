@@ -5057,6 +5057,48 @@
         "bad_calls": "a call given is not a call of this investigation that answered",
         "name_missing": "its name does not appear in what the calls returned",
         "after_alert": "it starts after the alert did"
+      },
+      "outcomeTitle": "Outcome",
+      "outcome": {
+        "cause_found": "Cause found",
+        "no_fault": "No fault found",
+        "cannot_tell": "Cannot tell"
+      },
+      "outcomeKept": "Kept by the server. The report says \"{{said}}\", but {{reasons}}.",
+      "outcomeKeptBare": "Kept by the server: {{reasons}}.",
+      "outcomeWhy": {
+        "contradicts": "the outcome, \"no_fault\" and the causes say different things",
+        "no_symptom": "no call is given that shows the alert's symptom",
+        "symptom_bad_calls": "the calls given for the symptom are not calls of this investigation that answered",
+        "symptom_name_missing": "the symptom's object does not appear in what its calls returned",
+        "symptom_not_shown": "the calls given for the symptom hold nothing or read only what changed, an alert or its rule, or names",
+        "cause_not_shown": "no call shows any of its causes",
+        "nothing_read": "no call of this investigation that read a state answered with something",
+        "not_read": "no call that read a state names the alert's object"
+      },
+      "symptom": "Symptom shown in",
+      "lookedAt": "Looked at",
+      "checkedNormal": "Checked and normal",
+      "notLookedAt": "Not looked at",
+      "partialCheck": "read in part: {{reason}}",
+      "source": {
+        "objects": "Objects",
+        "events": "Events",
+        "changes": "Changes",
+        "logs": "Logs",
+        "metrics": "Metrics",
+        "traces": "Traces",
+        "network": "Network",
+        "alerts": "Alerts"
+      },
+      "notLooked": {
+        "not_offered": "the cluster offers no tool for it",
+        "not_called": "no call read it",
+        "no_answer": "the calls that read it gave no answer",
+        "not_run": "the check did not run",
+        "failed": "the call failed or was refused",
+        "unavailable": "the cluster does not have it",
+        "not_found": "not found"
       }
     }
   },

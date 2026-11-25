@@ -373,6 +373,8 @@ func namespaceOrAll(namespace string) string {
 	return namespace
 }
 
+const issuesNotReadNote = "The lists in not_read could not be read: what they hold is not counted, not zero. counts and total are of the other lists only, so an empty answer does not say that nothing is failing."
+
 // handleIssues returns the dashboard's issue check — pods, workloads, nodes,
 // PVCs and Warning events in one pass — narrowed to a namespace, the caller's
 // granted namespaces, or a severity.
@@ -419,11 +421,19 @@ func handleIssues(ctx context.Context, args map[string]interface{}, headers http
 	}
 	counts := map[string]int{"critical": 0, "warning": 0, "info": 0}
 	kept := make([]map[string]interface{}, 0, len(reply.Issues))
+	notRead := map[string]string{}
 	for _, issue := range reply.Issues {
 		ns, _ := issue["namespace"].(string)
 		sev, _ := issue["severity"].(string)
-		// A list that could not be read holds no object and says the answer is partial, as on the screen.
-		unread := issue["kind"] == "Collector" && namespace == ""
+		// A list that could not be read holds no object and says the answer is partial, as on the screen: a row where the
+		// answer is not narrowed, else its name in not_read. The nodes are no part of a namespace's answer, read or not.
+		unread := issue["kind"] == "Collector"
+		if unread && (namespace != "" || (severity != "" && sev != severity)) {
+			if list, _ := issue["name"].(string); list != "nodes" || namespace == "" {
+				notRead[list], _ = issue["message"].(string)
+			}
+			continue
+		}
 		if (!inScope(ns) && !unread) || (severity != "" && sev != severity) {
 			continue
 		}
@@ -450,8 +460,11 @@ func handleIssues(ctx context.Context, args map[string]interface{}, headers http
 	if truncated {
 		result["truncated"] = true
 	}
-	if total == 0 {
+	if len(notRead) > 0 {
+		result["not_read"] = notRead
+		result["not_read_note"] = issuesNotReadNote
+	} else if total == 0 {
 		result["hint"] = "Nothing is failing in the checked scope right now (pods, workloads, nodes, PVCs, Warning events in the window)."
 	}
-	return marshalJSON(result)
+	return marshalOrdered(result, []string{"not_read", "not_read_note"}, nil)
 }

@@ -23,7 +23,10 @@ def report_headings(rules: bool) -> tuple[str, ...]:
     return RULES_HEADINGS if rules else REPORT_HEADINGS
 
 
-def system_prompt(*, cluster: str, namespace: str, language: str, rules: bool = False, call_paths: bool = False) -> str:
+def system_prompt(*, cluster: str, namespace: str, language: str, rules: bool = False, call_paths: bool = False,
+                  verdict: bool = False, go_on: bool = False, node_neighbors: bool = False) -> str:
+    """`go_on`: an empty search ends the search for that name, not the investigation (ai.toolResultDetails, whose tool
+    results say so too, or the verdict, which tells the model to use the calls it has left)."""
     lang = LANGUAGES.get(language, language or "English")
     scope = f'the namespace "{namespace}" of cluster "{cluster}"' if namespace else f'cluster "{cluster}"'
     names = report_headings(rules)
@@ -48,11 +51,14 @@ def system_prompt(*, cluster: str, namespace: str, language: str, rules: bool = 
         "- When alerts_list is offered, check which other alerts of the cluster fire at the same time (state=firing) — one cause often "
         "fires several — and whether related ones are silenced.\n"
         + (call_path_rules(rules) if call_paths else "")
+        + (_NODE_READ if node_neighbors else "")
         + "- When prometheus_rules is offered, call it first with the alert name to read the rule's expression and threshold, and check that "
         "expression with prometheus_query; find metric and label names with prometheus_metrics and prometheus_labels instead of guessing.\n"
-        "- A tool result with status not_found lists similar names: use one of them or call k8s_find_resource once, then stop looking and report what was searched. "
+        "- A tool result with status not_found lists similar names: use one of them or call k8s_find_resource once, then "
+        + ("go on without that name" if go_on else "stop looking") + " and report what was searched. "
         "Status unavailable means the cluster lacks that feature (for example metrics-server): say so and use the alternative named in the result.\n"
         + (_RULES if rules else "- When something is a guess, say it is a guess.\n")
+        + (_VERDICT if verdict else "")
         + "- When you know enough, stop calling tools and write the report.\n\n"
         f"Write the report in {lang}, in Markdown, under exactly these {_COUNT[len(names)]} headings (keep them in English):\n"
         f"{headings}\n"
@@ -78,6 +84,17 @@ _CALLS_PATH = (
 )
 
 
+# features.nodeNeighbors: what else used the CPU of the node the slow pods run on (get_node_metrics with node).
+_NODE_READ = (
+    "- When pods are slow with no sign that they reached their own CPU limit, or several unrelated workloads slowed at the same time, "
+    "read the node they run on (k8s_describe_resource of a slow pod names it): get_node_metrics with node, and since_time and until_time "
+    "over the alert's time. It ranks what used that node's CPU against the window before, pods of other namespaces included. A "
+    "suspected_aggressor grew while a CPU of the node was full, a suspected_victim was slowed without being throttled: these are leads "
+    "from the figures beside them, so read the workload that grew before you name it. What not_run lists was not looked at, which is "
+    "not normal, and an average below the limit does not rule out one full CPU.\n"
+)
+
+
 def call_path_rules(rules: bool) -> str:
     """With the rules on, their Likely cause chain and "follow it back to the change" are the path instructions, so only when
     to read the calls is added."""
@@ -96,6 +113,18 @@ _RULES = (
     "- Quote error messages exactly as a tool returned them; they are the evidence.\n"
     "- Keep facts apart from hypotheses: a fact is what a tool result showed, with the call that showed it; whatever you infer "
     "beyond that is a hypothesis and is marked as one.\n"
+)
+
+# features.alertInvestigation.verdict: the symptom first, then one of three answers (investigation/verdict.py).
+_VERDICT = (
+    "- First find the symptom the alert names in a tool result: read the object the alert is about over the alert's time. A change, "
+    "the alert itself, its rule or a list of names does not show it. While no result shows the symptom, do not name a cause, however "
+    "well a change fits.\n"
+    "- Three answers are right, whichever the results support: a cause found (one result shows the symptom, one shows the cause); no "
+    "fault found (the results show the alert's object and what it depends on working as they usually do); cannot tell (say what would "
+    "decide it and why it is missing: the tool, the right or the data). Use the tool calls you have left before you answer cannot "
+    "tell, and answer it rather than a cause no result shows.\n"
+    "- Start Summary by saying which of the three it is, and call something checked and normal only with the call that showed it.\n"
 )
 
 _RULES_REPORT = (

@@ -15,8 +15,8 @@ call in that order (investigation/windows.py); the first message names each read
 answer follows that message as the call's tool result (tool_turn.server_calls), or on a
 Claude subscription is in it between markers. With ai.ruleCards.investigations on,
 the first message also holds, after those, at most two rule cards the alert's name and labels
-pick (app/services/rule_cards.py). With any of rules, changes_first,
-narrow_first, evidence_check, ledger or call_paths on, each tool result
+pick (app/services/rule_cards.py); with ai.ruleCards.symptoms its summary and description too.
+With any of rules, changes_first, narrow_first, evidence_check, ledger or call_paths on, each tool result
 the model reads starts with its call number, step 0 being call 1 (investigation/numbers.py). With ai.refuseRepeatedReads a read
 repeated within the run is not run again (app/services/ai/repeats.py). With
 evidence_check or ledger on, the report ends with the rca block (investigation/rca.py):
@@ -25,7 +25,9 @@ investigation/evidence.py) and its hypotheses to their states (ledger,
 investigation/ledger.py), asks once more without tools with every problem of both in
 one message, and returns what it read as `result` (investigation/result.py). Its model
 calls may then answer at rca.ANSWER_TOKENS, and the second ask is one more model call
-than max_steps.
+than max_steps. With verdict on too, the block also says the outcome, which the same
+check holds to the calls, and `result` has it with the server's lists of what was and
+was not looked at (investigation/verdict.py).
 """
 
 from __future__ import annotations
@@ -46,11 +48,13 @@ from app.services import rule_cards
 from app.services.ai import access as access_mod
 from app.services.ai import limits
 from app.services.ai import tool_replay
+from app.services.ai import tool_results
 from app.services.ai.debug_dump import safe_error
 from app.services.ai.model_errors import classify
 from app.services.audit_target import tool_target
 from app.services.audit_writer import audit_ready, fail_closed_enabled, write_audit
 from app.services.ai import repeats as repeats_mod
+from app.services.investigation import answers
 from app.services.investigation import evidence
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import settings as inv_settings
@@ -59,6 +63,7 @@ from app.services.investigation import ledger
 from app.services.investigation import numbers
 from app.services.investigation import rca
 from app.services.investigation import result as inv_result
+from app.services.investigation import verdict as inv_verdict
 from app.services.investigation import webhook
 from app.services.investigation import windows as inv_windows
 
@@ -185,7 +190,8 @@ def used_fields(progress: dict[str, Any]) -> dict[str, Any]:
 async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_log: list[dict[str, Any]],
                  reads: Optional[list], same_as: dict[int, int], row, cfg, remaining, usage: dict[str, Any],
                  progress: dict[str, Any], finish_reason: str = "",
-                 tool_results: Sequence[str] = (), tools: Sequence[dict] = ()) -> tuple[str, dict[str, Any], int]:
+                 tool_results: Sequence[str] = (), tools: Sequence[dict] = (),
+                 facts: Optional[inv_verdict.Facts] = None) -> tuple[str, dict[str, Any], int]:
     """The rca block, once for evidenceCheck and ledger (investigation/rca.py): (the report to keep, the row's
     `result`, the model calls it added — 0 or 1).
 
@@ -195,20 +201,26 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
     the same way. A
     second call that fails or finds the time up leaves the first answer. With evidenceCheck the causes still not
     shown are listed under the report; with the ledger the hypotheses stay in `result` with their reasons. Each switch
-    leaves its counts in `progress` for the run's audit row (`evidence`, `ledger`). `finish_reason`: the provider's
-    for the answer. `tool_results`: a subscription's (ToolTurn.results), which its messages do not hold, so the
-    second ask carries them as the closing call does. `tools`: the turn's, for answer_once."""
+    leaves its counts in `progress` for the run's audit row (`evidence`, `ledger`, `verdict`). `facts` (given with
+    verdict on): what the run's calls answered, which the outcome's lists are made of; an outcome the calls do not hold
+    is named under the report. `finish_reason`: the provider's for the answer. `tool_results`: a subscription's
+    (ToolTurn.results), which its messages do not hold, so the second ask carries them as the closing call does.
+    `tools`: the turn's, for answer_once and the outcome's lists."""
     from app.services.ai.tool_turn import answer_once, tool_results_text
+
+    verdict_on = facts is not None
+    alert = inv_verdict.alert_of(row.labels, row.namespace) if verdict_on else None
 
     def check(text: str, finish: str) -> rca.Checked:
         return rca.check(text, tool_log=tool_log, reads=reads, alert_start=row.starts_at, evidence=cfg.evidence_check,
-                         ledger=cfg.ledger, finish_reason=finish)
+                         ledger=cfg.ledger, finish_reason=finish, alert=alert)
 
     first = kept = check(answer, finish_reason)
     asked = ask_failed = False
     if first.failures:
         asked = True
-        ask = rca.ask_again(first, rca.rows(tool_log, same_as), evidence=cfg.evidence_check, ledger=cfg.ledger)
+        ask = rca.ask_again(first, rca.rows(tool_log, same_as, facts.none_held if facts is not None else ()),
+                            evidence=cfg.evidence_check, ledger=cfg.ledger, verdict=verdict_on)
         if tool_results:
             ask = tool_results_text(tool_results) + "\n\n" + ask
         try:
@@ -235,9 +247,15 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
         # the kept hypotheses counted and the failure kinds of both answers, no text
         progress["ledger"] = ledger.counts(kept.hypotheses, asked_because=first.failures, failures=kept.failures,
                                            asked_again=asked, ask_failed=ask_failed)
+    outcome = None
+    if facts is not None:
+        outcome = inv_verdict.shape(kept.block, kept.outcome, tool_log, facts,
+                                    [(t.get("function") or {}).get("name") for t in tools])
+        progress["verdict"] = inv_verdict.counts(outcome, asked_because=first.failures, failures=kept.failures)
+        report += inv_verdict.note(kept.outcome, cfg.language)
     result = inv_result.shape(kept.block, kept.status, tool_log, kept.hypotheses, asked_again=asked, ask_failed=ask_failed,
                               failures=kept.failures, cause_problems=kept.cause_problems if cfg.evidence_check else None,
-                              checks={"evidence": cfg.evidence_check, "ledger": cfg.ledger})
+                              checks={"evidence": cfg.evidence_check, "ledger": cfg.ledger}, verdict=outcome)
     return report, result, int(asked)
 
 
@@ -274,13 +292,17 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     context = ToolContext(session_id=f"investigation:{row.id}")
     # ai.ruleCards.investigations: at most two cards the alert's name and labels pick, after step 0 in the first message.
     card_settings = rule_cards.load()
-    cards, kinds = rule_cards.investigation_cards(card_settings, alertname=row.alertname, labels=row.labels, tools=tools)
+    cards, kinds = rule_cards.investigation_cards(card_settings, alertname=row.alertname, labels=row.labels, tools=tools,
+                                                  annotations=row.annotations)
     if card_settings.investigations:
         progress["rule_cards"] = kinds
     tool_log: list[dict[str, Any]] = []
     repeats = repeats_mod.RepeatGuard() if repeats_mod.enabled() else None
-    # What each call returned to the model, by its place in tool_log, for the evidence check; kept only while the run lasts.
-    reads: Optional[list[evidence.Read]] = [] if cfg.evidence_check else None
+    verdict_on = inv_verdict.on(cfg)
+    # What each call returned to the model, by its place in tool_log, for the evidence check and the outcome's; kept only
+    # while the run lasts, as `facts` is (what the outcome's lists are made of).
+    reads: Optional[list[evidence.Read]] = [] if cfg.evidence_check or verdict_on else None
+    facts = inv_verdict.Facts() if verdict_on else None
     same_as: dict[int, int] = {}  # a refused repeat's number → the number of the call it repeated
     numbered = numbers.on(cfg)  # each result the model reads starts with its call number
     # Step 0's answers the model reads as tool results after the first message: (tool, arguments, the text it reads).
@@ -291,6 +313,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         """The text the model reads, the tool's own answer (None when it did not run) and the call's log entry."""
         entry: dict[str, Any] = {"tool": name, "args": args, "step": step}
         ran, raw = False, None
+        status: Optional[str] = None  # the tool's own, as its answer gives it
         seen = None
         # anomaly_rank with its switch off is refused as before it was a read-only tool
         if name not in READONLY_TOOL_NAMES or (name == "anomaly_rank" and not anomaly_rank_on()):
@@ -314,8 +337,12 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
                 formatted, _is_json, _is_yaml = formatters._format_tool_result(name, args, raw)
                 result = formatters._truncate_tool_result_for_llm(formatted, limits.tool_result_chars(service), tool=name)
                 entry["result_chars"] = len(formatted)
-                # a refusal or an error the tool answered with, read as the chat reads it
-                _outcome, problem, _status = tool_outcome(raw)
+                # a refusal or an error the tool answered with, read as the chat reads it; with the verdict on a raw-text
+                # tool's answer is what a container or the cluster wrote (a replay's own refusal aside)
+                if verdict_on and name in tool_results.RAW_TEXT_TOOLS and tool_replay.call_fields(service, True).get("replay_hit", True):
+                    problem, status = answers.raw_outcome(name, raw)
+                else:
+                    _outcome, problem, status = tool_outcome(raw)
                 if problem:
                     entry["error"] = problem
             except InvestigationError:
@@ -370,6 +397,10 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         if read is not None:
             read.failed = bool(entry.get("error")) or (not ran and seen is None)
             read.text = result if ran and not read.failed else ""
+        if facts is not None and ran and not entry.get("error"):
+            facts.note(number, name, args, raw, status)
+            if read is not None:
+                read.nothing = facts.held_none(number)
         return result, raw, entry
 
     def number_of(entry: dict[str, Any]) -> int:
@@ -442,9 +473,13 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     if cards:
         first.append(cards)
     system = inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language, rules=cfg.rules,
-                                      call_paths=cfg.call_paths)
+                                      call_paths=cfg.call_paths, verdict=verdict_on,
+                                      go_on=verdict_on or cfg.tool_result_details,
+                                      # the token of an alert with a namespace is limited to it, and get_node_metrics
+                                      # spans the cluster, so such a token is refused it (permissions.CLUSTER_WIDE_TOOLS)
+                                      node_neighbors=cfg.node_neighbors and not row.namespace)
     if rca.on(cfg):
-        tail = rca.instruction(evidence=cfg.evidence_check, hypotheses=cfg.ledger)
+        tail = rca.instruction(evidence=cfg.evidence_check, hypotheses=cfg.ledger, verdict=verdict_on)
     else:
         tail = numbers.NOTE if numbered else ""
     messages: list[dict[str, Any]] = [
@@ -467,7 +502,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         answer, extra["result"], asked = await settle(service, messages, answer, tool_log=tool_log, reads=reads,
                                                       same_as=same_as, row=row, cfg=cfg, remaining=remaining,
                                                       usage=usage, progress=progress, finish_reason=turn.finish_reason,
-                                                      tool_results=turn.results, tools=tools)
+                                                      tool_results=turn.results, tools=tools, facts=facts)
         steps += asked
     return {
         "report": answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else "")
@@ -545,6 +580,8 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
             **({"evidence": progress["evidence"]} if progress.get("evidence") else {}),
             # features.alertInvestigation.ledger: the hypotheses by state and why it asked again (counts, kind names)
             **({"ledger": progress["ledger"]} if progress.get("ledger") else {}),
+            # features.alertInvestigation.verdict: the outcome kept and said, why it asked again, the lists' lengths
+            **({"verdict": progress["verdict"]} if progress.get("verdict") else {}),
             # ai.ruleCards.investigations: the kinds of the cards in the first message (not their text); absent when off
             **({"rule_cards": progress["rule_cards"]} if "rule_cards" in progress else {}),
         },

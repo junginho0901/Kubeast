@@ -332,11 +332,11 @@ def case_dir(case: dict, truth: dict) -> Path:
     return d
 
 
-def run(case=CASE, truth=TRUTH, repeat=2, source="synthetic", server=None):
+def run(case=CASE, truth=TRUTH, repeat=2, source="synthetic", server=None, **more):
     d = case_dir(case, truth)
     loaded = json.loads((d / "case.json").read_text())
     admin = AI_EVAL.Api("admin", PASSWORD)
-    args = argparse.Namespace(repeat=repeat, keep=False, alert_source=source)
+    args = argparse.Namespace(repeat=repeat, keep=False, alert_source=source, **more)
     results = AI_EVAL.run_alert_case(d, loaded, admin, {}, args, "20261115000000", d.parent / "truth", WEBHOOK_TOKEN)
     return results, admin, d
 
@@ -461,6 +461,176 @@ def test_switches_on_score_the_stored_block_beside_the_words():
     r = results[0]
     assert r["rca"]["pass"] and r["rca"]["block"] == "ok" and r["rca"]["ungrounded"] == 0
     assert not r["text"]["pass"] and not r["pass"]  # pass is the words' check, the same measure with the switches off
+
+
+def test_the_second_scoring_is_recorded_beside_the_first():
+    fake = FakeKubeast()
+    with Server(fake):
+        results, _, d = run(repeat=1)
+    r = results[0]
+    assert r["pass"] and r["text"]["pass"] and "rca" not in r and "stored_result" not in r  # the first scoring as it was
+    assert r["second"]["by"] == "text" and r["second"]["pass"] is None and r["second"]["text"]["pass"]  # words are reported, not decided on
+    assert r["second"]["outcome"] == "cause" and "block" not in r["second"]
+    stored = {"version": 1, "status": "ok", "no_fault": False, "path": [], "ruled_out": [], "hypotheses": [],
+              "causes": [{"resource": "Deployment/shop-90/checkout", "kind": "crash", "started_at": None, "evidence": []}]}
+    fake = FakeKubeast()
+    fake.result = stored
+    with Server(fake):
+        results, _, _ = run(repeat=1)
+    r = results[0]
+    assert r["pass"] and not r["rca"]["pass"]  # the first scoring: pass is the words'
+    assert r["second"]["by"] == "block" and not r["second"]["pass"] and r["second"]["miss"] == "cause_not_named" and r["second"]["text"]["pass"]
+    assert r["stored_result"] == stored  # what a later scoring reads
+    assert "block_outcome" not in r["second"]["block"]  # no verdict in the result: the block's own outcome
+    fake = FakeKubeast()
+    fake.result = {**stored, "verdict": {"outcome": "cannot_tell", "said": "cause_found", "why": ["no_symptom"], "looked_at": [],
+                                         "checked_normal": [], "not_looked_at": []}}
+    with Server(fake):
+        results, _, _ = run(case=CONTROL_CASE, truth=CONTROL_TRUTH, repeat=1)
+    s = results[0]["second"]
+    assert s["control"] and s["outcome"] == "cannot_tell" and s["miss"] == "cannot_tell" and not s["pass"]  # the outcome the server keeps
+    assert s["block"]["block_outcome"] == "cause" and results[0]["stored_result"] == fake.result
+    fake = FakeKubeast()
+    fake.report = lambda inv: NO_FAULT_REPORT
+    with Server(fake):
+        results, _, _ = run(case=CONTROL_CASE, truth=CONTROL_TRUTH, repeat=1)
+    assert results[0]["second"]["control"] and results[0]["second"]["outcome"] == "no_fault" and results[0]["second"]["text"]["pass"]
+
+
+def test_the_rules_of_a_case_are_kept_with_its_truth_copy():
+    rules = {"accept_kinds": [{"cause": "ConfigMap/shop-90/settings-b", "kinds": ["rollout"], "notes": "`rollout` too"}]}
+    fake = FakeKubeast()
+    d = case_dir(CASE, TRUTH)
+    (d / "scoring.json").write_text(json.dumps(rules))
+    with Server(fake):
+        AI_EVAL.run_alert_case(d, json.loads((d / "case.json").read_text()), AI_EVAL.Api("admin", PASSWORD), {},
+                               argparse.Namespace(repeat=1, keep=False, alert_source="synthetic"), "20261115000000", d.parent / "truth", WEBHOOK_TOKEN)
+    copy = json.loads((d.parent / "truth" / "90_test_alert.json").read_text())
+    assert copy.pop("scoring") == {**rules, "facts": CASE["expect"]}
+    assert {k: v for k, v in copy.items() if k != "fault_start"} == {k: v for k, v in TRUTH.items() if k != "fault_start"}
+    with Server(FakeKubeast()):
+        _, _, d = run(repeat=1, case={**CASE, "expect": []})
+    assert "scoring" not in json.loads((d.parent / "truth" / "90_test_alert.json").read_text())
+
+
+def _recording(tool, args, result, cluster="default"):
+    replay = AI_EVAL.tool_replay()
+    return replay.path_for(Path("/x"), tool, replay.key(cluster, tool, args)).name, {"format": 1, "tool": tool, "cluster": cluster, "result": result,
+                                                                                    "recorded_at": "2026-11-25T01:00:00Z"}
+
+
+def test_the_reader_in_the_pod_gives_each_recording_it_has():
+    folder = Path(tempfile.mkdtemp(prefix="ai-eval-recordings-"))
+    name, record = _recording("k8s_get_resources", {"resource_type": "pods"}, "p" * 5000)
+    (folder / name).write_text(json.dumps(record))
+    (folder / "loki_query-bad.json").write_text("{")
+    out = subprocess.run([sys.executable, "-I", "-c", AI_EVAL.RECORDINGS_READER, str(folder), "4000", name, "none-0.json", "loki_query-bad.json"],
+                         capture_output=True, text=True, timeout=30)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout) == {name: ["p" * 4000, 5000, "2026-11-25T01:00:00Z"]}
+
+
+def test_the_key_of_a_recording_is_ai_services():
+    replay = AI_EVAL.tool_replay()
+    assert replay.key("default", "timeline", {"namespace": " shop-90 ", "cluster": "x", "kind": None}) == replay.key("default", "timeline", {"namespace": "shop-90"})
+    assert replay.key("self", "timeline", {"namespace": "shop-90"}) != replay.key("default", "timeline", {"namespace": "shop-90"})
+    assert (replay.MODE_ENV, replay.DIR_ENV) == ("AI_TOOL_REPLAY_MODE", "AI_TOOL_REPLAY_DIR")
+    ran = (AI_EVAL.ROOT / "services/ai-service/app/services/investigation/runner.py").read_text()
+    assert "service._execute_function_with_context(name, args, context)" in ran and '"tool": name, "args": args' in ran  # what is recorded is what the row holds
+
+
+def _with_recordings(srv, pods, held):
+    """sh of a stand-in install whose ai-service pods hold these recordings ({pod: {name: [text, chars, at]}})."""
+    plain = AI_EVAL.sh
+
+    def sh(cmd, kc, timeout=300, env=None):
+        done = plain(cmd, kc, timeout, env)
+        if " get pods " in cmd:
+            return subprocess.CompletedProcess([], 0, "".join(f"pod/{p}\n" for p in pods), "")
+        if " exec " in cmd and "-c ai-service" in cmd:
+            pod = next(p for p in pods if f"pod/{p} " in cmd)
+            if held.get(pod) is None:
+                return subprocess.CompletedProcess([], 1, "", "pod not running")
+            return subprocess.CompletedProcess([], 0, json.dumps({k: v for k, v in held[pod].items() if k in cmd}), "")
+        return done
+
+    AI_EVAL.sh = sh
+
+
+def test_tool_results_of_an_investigation_are_kept_from_the_recordings():
+    name, _ = _recording("k8s_get_resources", {"resource_type": "pods"}, "")
+    fake = FakeKubeast()
+    with Server(fake) as srv:
+        _with_recordings(srv, ["ai-service-a", "ai-service-b"], {"ai-service-a": {}, "ai-service-b": {name: ["three pods", 9000, "2026-11-25T01:00:00Z"]}})
+        results, _, _ = run(repeat=1, recordings="/tmp/rec")
+    r = results[0]
+    assert r["calls"][0]["result"] == "three pods" and r["calls"][0]["recorded_chars"] == 9000 and r["calls"][0]["recorded_at"] == "2026-11-25T01:00:00Z"
+    assert "result" not in r["calls"][1] and r["tool_results"] == {"kept": 1, "of": 2}
+    assert any("/tmp/rec" in c and name in c for c in srv.commands)
+    with Server(FakeKubeast()):
+        results, _, _ = run(repeat=1)
+    assert "tool_results" not in results[0] and "result" not in results[0]["calls"][0]  # off: as it was
+
+
+def test_recordings_that_cannot_be_read_are_said_and_the_run_goes_on():
+    fake = FakeKubeast()
+    with Server(fake) as srv:
+        _with_recordings(srv, ["ai-service-a"], {"ai-service-a": None})
+        results, _, _ = run(repeat=1, recordings="/tmp/rec")
+    assert results[0]["pass"] and results[0]["tool_results"]["kept"] == 0 and "pod not running" in results[0]["tool_results"]["error"]
+    with Server(fake) as srv:
+        _with_recordings(srv, [], {})
+        results, _, _ = run(repeat=1, recordings="/tmp/rec")
+    assert results[0]["tool_results"]["error"] == "no ai-service pod"
+
+
+def test_a_repeated_read_gets_no_result_of_its_own():
+    name, _ = _recording("k8s_get_resources", {"resource_type": "pods"}, "")
+    calls = [{"tool": "k8s_get_resources", "args": {"resource_type": "pods"}, "failed": False},
+             {"tool": "k8s_get_resources", "args": {"resource_type": "pods"}, "failed": False, "repeat_of": 1}]
+    with Server(FakeKubeast()) as srv:
+        _with_recordings(srv, ["ai-service-a"], {"ai-service-a": {name: ["three pods", 10, "t"]}})
+        kept = AI_EVAL.keep_tool_results({}, "/tmp/rec", "default", calls)
+    assert calls[0]["result"] == "three pods" and "result" not in calls[1] and kept == {"kept": 1, "of": 1}
+
+
+def test_alert_tool_results_needs_a_recording_install_and_the_alert_path():
+    root = Path(tempfile.mkdtemp(prefix="ai-eval-recording-"))
+    (root / CASE["id"]).mkdir()
+    (root / CASE["id"] / "case.json").write_text(json.dumps(CASE))
+    (root / CASE["id"] / "truth.json").write_text(json.dumps(TRUTH))
+
+    def main(env, *flags):
+        fake, out, errors = FakeKubeast(), Path(tempfile.mkdtemp(prefix="ai-eval-recording-out-")) / "out", io.StringIO()
+        saved_argv, saved = sys.argv, AI_EVAL.webhook_token
+        with Server(fake) as srv, contextlib.redirect_stderr(errors), contextlib.redirect_stdout(io.StringIO()):
+            plain = AI_EVAL.sh
+            AI_EVAL.sh = lambda cmd, kc, timeout=300, env_=None, **kw: (
+                subprocess.CompletedProcess([], 0, env, "") if "get deploy ai-service" in cmd else plain(cmd, kc, timeout, kw.get("env")))
+            _with_recordings(srv, ["ai-service-a"], {"ai-service-a": {}})
+            try:
+                AI_EVAL.webhook_token = lambda kcs: WEBHOOK_TOKEN
+                sys.argv = ["ai-eval.py", "--cases", str(root), "--out", str(out), *flags]
+                os.environ["E2E_USER_PASSWORD"] = PASSWORD
+                try:
+                    code = AI_EVAL.main()
+                except SystemExit as e:
+                    code = e.code
+            finally:
+                sys.argv = saved_argv
+                os.environ.pop("E2E_USER_PASSWORD", None)
+                AI_EVAL.webhook_token = saved
+        return code, errors.getvalue(), fake, out
+
+    code, errors, fake, out = main("\n\n", "--alerts", "--alert-tool-results")
+    assert code == 2 and "AI_TOOL_REPLAY_MODE" in errors and fake.webhooks == [] and not out.exists(), errors
+    code, errors, fake, _ = main("replay\n/tmp/rec\n", "--alerts", "--alert-tool-results")
+    assert code == 2 and fake.webhooks == []
+    code, errors, fake, _ = main("record\n/tmp/rec\n", "--alert-tool-results")
+    assert code == 2 and "--alerts" in errors
+    code, errors, fake, out = main("record\n/tmp/rec\n", "--alerts", "--alert-tool-results")
+    rows = json.loads(next(out.glob("*-claude-haiku-5-5.json")).read_text())
+    assert code == 0 and rows[0]["tool_results"] == {"kept": 0, "of": 2}, errors
 
 
 def test_a_missing_block_with_the_switches_on_is_recorded():

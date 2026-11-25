@@ -206,6 +206,7 @@ func (h *Handler) GetClusterFeatures(w http.ResponseWriter, r *http.Request) {
 		"policyReports":      map[string]interface{}{"enabled": k8s.PolicyReportsFeatureEnabled()},
 		"alertInvestigation": map[string]interface{}{"enabled": h.cfg.AlertInvestigationEnabled && h.cfg.AIEnabled},
 		"anomalyRank":        map[string]interface{}{"enabled": h.cfg.AnomalyRankEnabled},
+		"nodeNeighbors":      map[string]interface{}{"enabled": NodeNeighborsOn()},
 		"callGraph":          map[string]interface{}{"enabled": h.cfg.CallGraphEnabled},
 		// Where this caller's writes are refused whatever its permissions say: the buttons follow this.
 		"writeGuardedNamespaces": h.writeGuardedNamespaces(r),

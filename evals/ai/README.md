@@ -14,7 +14,10 @@ python3 scripts/ai-eval.py --out /tmp/ai-eval --repeat 3 03
 The model is the dev install's default: `scripts/kind-model-subscription.sh up <token-file>` (Claude subscription,
 `SUBSCRIPTION_MODEL=claude-sonnet-5-5` for Sonnet), `scripts/kind-model-subscription.sh down` and
 `deploy/kind/modelconfig-ollama.yaml` for the local model. Run once per model; each run writes
-`<time>-<model>.json` (every tool call with its arguments, the answer, usage) and `<time>-<model>.md` (the table).
+`<time>-<model>.json` (every tool call with its arguments and the first 4,000 characters of its result, the answer,
+usage) and `<time>-<model>.md` (the table). Reports from before kept 400 characters: the planted cases' `reached`
+(`scripts/ai_eval_planted.py`) looks for its canary in the saved results, so it finds it more often now, and its counts are
+not read beside the older ones.
 
 The runner signs in again before its token's lifetime is over (the token's `exp` less its `iat`, counted on this
 machine's clock from the sign-in, so no server time is compared with this machine's) and once more on a 401, sending
@@ -49,6 +52,14 @@ The variables go on the ai-service Deployment of the dev install (record, then r
 Its `/tmp` is an `emptyDir` and a new pod starts with it empty: copy the directory out of the recording pod before
 switching modes and into the replaying pod once it runs. A call reads its file when it comes, so the copy needs no
 restart; the start line in the log says how many recordings the directory held then.
+
+An investigation's row holds its calls' arguments and lengths, not their results. With `record` on,
+`--alerts --alert-tool-results` keeps them: right after each investigation the runner reads each call's recording from
+the running ai-service pods (`kubectl exec`, by the key of its cluster, tool and arguments, which it takes from
+`tool_replay.py` itself) and adds its first 4,000 characters to the call (`result`, `recorded_chars`, `recorded_at`),
+and `tool_results` to the row (`kept` of `of`, and `error` when a pod did not answer). A repeat the investigator refused
+(`repeat_of`) has no result of its own. The run does not start when ai-service is not recording. What the model reads is
+the masked text it would read anyway in `record`. It has not run on a cluster yet.
 
 ## A case
 
@@ -100,6 +111,7 @@ as above.
 | `fault_duration_seconds` | `undo_cmds` this long after the injection (`UNDO_TIME`), the namespace kept |
 | `undo_cmds` | shell steps that take the fault back; otherwise run after the last question |
 | `cooldown_seconds` | a pause after the teardown |
+| `not_right_after` | ids of cases this one does not run right after: where the order would put it there, it goes before that case (`--list` shows the order). 07 after 01: what 01 leaves in the demo's metrics and logs is still in 07's window. It orders one call of the runner; a script that runs a case per call keeps the order itself |
 | `hidden` | `true`: run only with `--hidden`, and the table shows only the total |
 | `group` | `chain`, `hidden_cause`, `trap`, `control` or `past`, for people reading the results; the runner does not read it |
 | `alert` | the alert that starts an investigation in `--alerts` runs ("The alert path" below); the chat path does not read it |
@@ -146,7 +158,8 @@ each other cause outside `also_ok`, the same resource named again under a kind i
 included, and more than one such cause fails it (`EXTRAS_ALLOWED`): a right cause in a list of guesses is not a right
 answer. Reported beside it: `started_at` within the tolerance, the required path hops in order, the causes whose
 `evidence` points at no call that answered, and `pass_grounded` (pass with none of those). `expect` is still checked,
-as `prose_pass`. A truth's `symptom`, `distractor_at`, `variants_note` and a hop's `note` are for people.
+as `prose_pass`. A truth's `symptom`, `distractor_at`, `variants_note` and a hop's `note` are for people; the second
+scoring reads the symptom and the notes for the kind words of the truth's own chain.
 
 How an answer is read: a fence whose info words hold `rca` in any case (```` ```rca ````, ```` ```RCA ````,
 ```` ```json rca ````) is the block (`block: ok`); with none, a ```` ```json ```` or untagged block holding `causes`
@@ -156,14 +169,16 @@ or `no_fault` is scored as `block: loose`. A kind is read as `KINDS` writes it (
 gives its kind: a bare name — a table, an index, a setting — is an extra cause, not a node.
 
 The table leaves hidden cases out, and a hidden case's line on screen says `done` instead of pass or FAIL. Their total
-is written only in the run's last table, once the run ends, and only when two or more hidden cases have a scored row
+(of the first scoring, and of the second, never parted into incidents and controls, since one of the two may hold one
+hidden case) is written only in the run's last table, once the run ends, and only when two or more hidden cases have a scored row
 (a case whose setup failed has none): the tables written after each case, and a run of hidden cases only, say the
 results are in the JSON, so no `.md` or screen line, and no change between two tables, gives one hidden case's score.
 No test file holds a hidden case's answer either: the hidden truths are run from their folders, the scorer's own
 checks use made-up truths, and `scripts/test_ai_eval_cases.py` fails on a test file naming a hidden cause.
 
 `evals/ai-hard/` holds twenty-two cases. Each folder has `case.json`, `truth.json`, the manifests it applies and
-`NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure. None has run on a cluster yet, so
+`NOTES.md`: what the AI has to notice, the trap, how it is scored and what is unsure (and, where the second scoring
+takes more kinds than `truth.json`, `scoring.json`). None has run on a cluster yet, so
 their sizes and waits are first guesses for the first run to measure. Nineteen are made of plain Kubernetes objects:
 they use only `docker.io/library/busybox:1.38.0`, namespaces `shop-NN` (and `edge`, `members`, `reports`),
 business names and no Secret. The fault comes from data or settings, never from a branch in the code, and nothing a
@@ -239,6 +254,7 @@ python3 scripts/ai-eval.py --cases evals/ai-hard --list      # the cases and wha
 python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/ai-eval-hard 06
 python3 scripts/ai-eval.py --cases evals/ai-hard --out /tmp/ai-eval-hard --repeat 3 --hidden --namespace-suffix random
 python3 scripts/test_ai_eval_rca.py                          # the scoring checks, or pytest on that file
+python3 scripts/test_ai_eval_second.py                       # the second scoring: wrong answers that must fail, right ones that must pass
 python3 scripts/test_ai_eval_cases.py                        # the case folders and the demo's alert rules; no cluster
 python3 scripts/test_ai_eval_runner.py                       # the runner against a stand-in API; no cluster
 scripts/kind-otel-demo.sh down && scripts/kind-chaos.sh down
@@ -359,6 +375,85 @@ and Alertmanager as `deploy/kind/second-cluster.yaml` and `deploy/kind/alertmana
 `dedupeHours` at its 24, a real alert whose labels already fired in that window folds into the earlier investigation,
 which the row says; posted alerts never fold. The alert path has not run on kind yet: its waits and the words of the
 text check are first guesses.
+
+## The second scoring
+
+A hard case's row holds two scorings. The first is what is described above: `pass`, `score`, `rca`, `text` and
+`prose_pass`, and the table's first parts, are its numbers and stay as they are. The second (`scripts/ai_eval_second.py`)
+is the row's `second`. `rules` in it is the number of the rules; numbers are read together only under one number, and a
+comparison gives both scorings.
+
+**A decision is made on blocks.** `second.pass` is a block's: true or false for an answer with an rca block (every chat
+answer, and an investigation with `evidenceCheck` or `ledger` on), and null for a report read in its words. The words'
+scoring (`second.text`) is reported and decides nothing. Words that name the right object beside another mechanism pass
+it, and right ones told another way do not: of the review's 22 wrong incident reports the rules of before passed 17 (the
+first scoring 13) and of its 22 right ones 12 (8). The rules now in place fail all 22 and take 20, but they were written on
+those; of 20 wrong and 17 right reports written after them and scored once, they passed 6 of the wrong (the first 5) and 15
+of the right (12). An off round of investigations has no blocks, so off and on are not compared on this scoring at all:
+they are read by judges (a rubric from `truth.json`, the arm hidden), and the numbers here stand beside that.
+
+It was added because a reading of 72 saved incident reports (by a model, the rounds shuffled) took 57 as right where the
+first scoring had passed 38, no wrong one among them: the first reads one section, counts an object as a guess when it is
+mentioned, and reads "no evidence of X" as a no-fault answer.
+
+What the second scoring reads of a block:
+
+| Rule | From |
+|---|---|
+| A control's answer is one of three outcomes: it names a cause, says no fault, or says the cause cannot be told — by the block's own list of causes (one of kind other than `none` is a cause, whatever `no_fault` says and in whatever shape it stands) | 13 and 14's NOTES.md: a made-up cause is the number to watch, and only `no_fault` is right |
+| An incident's answer has the same outcome, so one left open is not counted with the wrong ones | the same |
+| An investigation with the server's outcome in its stored result (`verdict`, with `features.alertInvestigation.verdict` on) has that outcome, `cause_found` being a cause: a cause the server keeps as "cannot tell" is neither made up nor found, and an incident's block passes only with a kept cause | the server holds the outcome to the run's calls, and the report says so |
+| A cause may have a kind its case's `scoring.json` gives beside `truth.json`'s, where the answer says what that asks for | that case's NOTES.md, quoted in the entry |
+| Each hop of the truth's path that is no decoy may be named once without being a guess, by its resource; a name that is only like it, or the hop again under another kind, is one, and more than one fails (`EXTRAS_ALLOWED`), as in the first scoring | `path` |
+
+And of a report's words, which are only reported (its Summary and Likely cause, else the whole report):
+
+| Rule | From |
+|---|---|
+| The case's facts (`expect`) are in it | the NOTES.md lines on the prose check |
+| An object is a guess, and a decoy taken, when it is blamed ("X caused", "the cause is X", "because X ...", "either A or X", an item under "Possible causes:"), not when it is mentioned | `decoys`: named "as a cause" |
+| A hop told as a link of the chain from the cause is not blamed | `path` |
+| Only the whole report saying there is no fault is a no-fault answer; "no evidence of X" rules X out and is no control's answer, and for a fault that is over (`fault_end`) nothing wrong now is true | 13, 14 and 16's NOTES.md |
+| `config_change` is said by a change, a lack or a wrong value that is of account (not a comment or a label), not by the words "config" or "settings"; a NetworkPolicy's and a Node's kind by what they do, not by their type's name; a limit or a kill not by saying it is not so or is well | 04, 12, 21, 22: the cause is what changed or blocks |
+| A cause that stands only in the Summary needs a Likely cause that speaks of its kind and does not leave the cause open | a change seen is not a cause (14) |
+| A kind written beside a name ("the pricing ReplicaSet") is read with it; a sentence that names nothing and says that something failed or changed goes on with the cause before it; a cause of two ends takes one kind word for both | `accept_resources`; 07's `variants_note` |
+
+`second` holds `by` (`block`, or `text` for a report without one), `pass`, `outcome` (`cause`, `no_fault`,
+`cannot_tell`; `unread` for words that say none of them, `no_block` for a chat answer without the block it was asked
+for, `error`) and `miss`, why it does not pass. The investigation's stored block is in the row (`stored_result`), so a
+later scoring can read it. A row with the server's
+outcome also says the block's own (`block_outcome`).
+
+A control passes only with `no_fault`, as in the first scoring; its three counts are what to read, the made-up causes
+first, and of a report in words they are an undercount: a cause told without a name or a blame word is `unread`. The table
+ends with two parts, the incidents and the controls, each with both scorings' counts, how many runs had a block, and the
+outcomes.
+
+`scoring.json`, beside `truth.json`:
+
+| Field of an `accept_kinds` entry | |
+|---|---|
+| `cause` | the truth cause it is for |
+| `kinds` | the kinds it takes besides the truth's |
+| `needs` | what the answer must say changed or is missing, in a sentence that names the cause and a clause that does not take it back (an expression of that thing; optional) |
+| `notes` | the NOTES.md sentence that takes them, as it stands there, with each of the kinds in backquotes |
+
+A kind no NOTES.md sentence takes is not taken: `--list` names an entry whose sentence is not in NOTES.md, does not name
+its kinds, does not say they are taken or takes them back ("does not count", "alone"), and the run does not start. Only 05
+has one. The right object under a kind with no such sentence stays wrong until a person writes it: in the saved answers
+that was `resource_limit` in 10 (twelve times), `rollout` in 09 (three) and 16, and `dependency_slow` in 17 (once each).
+`scripts/test_ai_eval_second.py` holds these and a few more (`KINDS_THE_NOTES_DO_NOT_GIVE`). The filled truth copy of a
+run holds the entries and the facts it was scored with (`scoring`).
+
+```bash
+python3 -I scripts/ai_eval_second.py score /tmp/ai-eval-hard/<stamp>-<model>.json    # both scorings of a saved report
+```
+
+It reads the run's own truth copies and leaves hidden rows out, says how many rows the first scoring now scores another
+way than the report holds (exit 1 when any), and prints the second's tables. A saved alert row from before
+`stored_result` has no block to score (`block_not_saved`), so only its words are reported.
+
+The words are English, with the first scoring's Korean words and a few more; no Korean report has been tried.
 
 ## Results
 

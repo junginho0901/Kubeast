@@ -201,14 +201,23 @@ ai:
     numbered: false        # (alpha) redaction.pii와 함께: 개인 값 네 종류를 채팅 답·조사마다 종류와 번호로(<PHONE_1>), 그 글자를 담은 쓰기는 거절.
                            # 물은 사람의 채팅 답에는 그 자리에 값이 보임. 끄면 한 글 안의 <EMAIL_n>과 <REDACTED:phone>·<REDACTED:rrn>·<REDACTED:card>, 값 안 보임
   timelineChanges: false   # (alpha) AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
+  timelineChangesMore: false # (alpha) 그 보기가 지정한 네임스페이스에서 만들어진 Job, NetworkPolicy·Service 쓰기, 레플리카 수 변경도 답합니다
+                           # (메타데이터만, 호출마다 목록 4~5번 더). 이것만 켜면 아무것도 열리지 않습니다. 끄면 전과 같습니다
+  causeQuestions: false    # (alpha) 채팅의 원인 질문 규칙: 답하기 전에 확인할 것과, 원인 확인·이상 없음·알 수 없음 중 하나로
+                           # 답하기(features.md). toolResultDetails와 함께 켜기를 권합니다. 그것이 꺼져 있으면 못 찾은 이름의
+                           # 결과 글은 여전히 검색을 멈추고 물으라고 합니다. 끄면 전과 같습니다
   refuseRepeatedReads: false # (alpha) true면 채팅 답·조사 하나 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면
                              # 실행하지 않고 그 결과가 어디 있는지 모델에 알려 줍니다. 끄면 전과 같습니다
   toolResultDetails: false # (alpha) true면 도구 결과에 잘린 답의 "M of N", 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭,
-                           # 가리키는 오브젝트의 콘솔 경로를 이미 가진 것만으로 붙입니다(features.md). 끄면 전과 같습니다
+                           # 가리키는 오브젝트의 콘솔 경로를 이미 가진 것만으로 붙입니다(features.md). k8s_find_resource는
+                           # 네임스페이스 이름도 찾고, 조사 프롬프트의 한 줄이 빈 검색으로 조사를 끝내지 않게 합니다(ai-alerts.md).
+                           # 끄면 전과 같습니다
   ruleCards:               # 고장 종류마다 원인을 자주 찾아 주는 확인과 그 도구(features.md "규칙 카드")
     chat: false            # (alpha) true면 카드가 아는 고장을 적은 채팅 질문이 그 턴에 카드를 최대 두 장 받습니다
     investigations: false  # (alpha) true면 알림 조사의 첫 입력에 알림 이름과 라벨로 고른 카드가 최대 두 장 들어갑니다
                            # 둘 다 끄면 카드 파일을 읽지 않고 채팅과 조사는 전과 같습니다
+    symptoms: false        # (alpha) true면 질문이나 알림의 이름·summary·description에 적힌 증상(영어·한국어)으로도 카드를 고르고
+                           # error_rate·latency·resource_pressure 카드를 더합니다. chat이나 investigations가 켜져 있어야 합니다
     cards: []              # 같은 꼴의 카드를 더합니다(이미 있는 종류는 바꿉니다). 기본 카드는 app/services/rule_cards.json
     remove: []             # 빼 둘 기본 종류. 예: [network_policy]
   chat:
@@ -284,6 +293,8 @@ features:
                              # 아래에 따로 보여 줍니다(열린 가설이 있으면 한 번 더 묻습니다)
     evidenceCheck: false     # (alpha) true면 원인마다 댄 호출이 답했고 원인 이름을 담는지 서버가 확인하고, 아니면 도구 없이 한 번 더
                              # 묻고 그래도 안 되는 것은 확인 안 됨으로 적습니다. ledger와 함께면 묶음 하나, 다시 묻기 한 번
+    verdict: false           # (alpha) true면(evidenceCheck나 ledger와 함께) 묶음에 결론(원인 찾음 · 이상 없음 · 알 수 없음)도 적고 호출로
+                             # 확인합니다. 확인했고 정상인 것과 안 본 것은 서버가 적습니다
     window:                  # 알림 시작 시각에서 셉니다. 끝은 늦어도 지금입니다
       metricsMinutes: 15     # 시작 앞뒤로 이만큼의 지표(1–360)
       logsMinutes: 5         # 시작 이만큼 전부터의 로그(0–1440)
@@ -291,13 +302,17 @@ features:
   anomalyRank:
     enabled: false           # (alpha) true면 AI 도구 anomaly_rank와 GET /namespaces/{namespace}/anomalies를 켭니다 — 한 네임스페이스가
                              # 앞 구간과 무엇이 달라졌는지 순위로(cluster-requirements.md). 끄면 그 경로는 404이고 아무것도 읽지 않습니다
-    maxQueries: 12           # 답 하나가 저장소에 보낼 수 있는 질의 수. 로그 저장소 색인이 줄을 하나도 세지 않을 때 로그 검사가 한 줄
-                             # 읽는 것은 그 색인 질의 안에서 셉니다
+    maxQueries: 12           # 답 하나가 저장소에 보낼 수 있는 질의 수(모두 셈). 지표 검사는 질의 하나로 두 구간을 읽고, 12 이상이면
+                             # 셋은 호출 순서 몫이며(features.callGraph), 로그 검사의 한 줄 읽기(최대 둘)는 남은 것에서 씁니다.
+                             # 저장소가 다 답할 때 모두 하려면 14입니다
     checkTimeoutSeconds: 5   # 검사 하나의 시간
     timeoutSeconds: 20       # 답 전체의 시간
     concurrency: 4           # 한 번에 도는 검사 수
     cacheSeconds: 60         # 같은 사용자·네임스페이스·구간은 이 시간 동안 메모리에서 답합니다
     logMaxBytes: 10737418240 # 로그 검사는 먼저 로그 저장소 색인에 양을 묻고, 두 구간을 합쳐 이만큼(10 GiB)을 넘게 읽지 않습니다
+  nodeNeighbors:
+    enabled: false           # (alpha) true면 AI 도구 get_node_metrics가 노드를 받고 GET /nodes/{name}/neighbors가 답합니다 — 그 노드의 CPU를
+                             # 앞 구간 대비 누가 썼고 누구를 의심할지(cluster-requirements.md). 끄면 그 경로는 404입니다
   logSearch:
     queryMaxBytes: 0         # (alpha) 바이트 수를 정하면 AI의 loki_query가 먼저 저장소 색인에 양을 묻고, 넘으면 좁히는 법과 함께
                              # 거절합니다(operations.md). 0이면 묻지 않고 전처럼 질의합니다
@@ -355,13 +370,17 @@ multicluster:
 | `ai.refuseRepeatedReads` | false | alpha | 끄고 켠 AI 평가(`scripts/ai-eval.py`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.toolResultDetails` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.redaction.numbered` | false | alpha | `ai.redaction.pii`와 함께 켠 상태로 kind 개발 설치에서 한 채팅, 끄고 켠 AI 평가 |
-| `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, false, [], [] | alpha | `chat`과 `investigations`를 하나씩 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, false, false, [], [] | alpha | `chat`과 `investigations`를 하나씩 끄고 켠 AI 평가, 그 옆에서 `symptoms`를 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.toolResultsJSON` | false | alpha | 끄고 켠 심어 둔 지시 문제(`evals/ai-planted/`)와 켠 상태의 AI 평가를 모델로 돌린 경우 |
 | `ai.timelineChanges` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.timelineChangesMore` | false | alpha | `ai.timelineChanges`와 함께 끄고 켠 AI 평가, 둘 다 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.causeQuestions` | false | alpha | 끄고 켠 AI 평가, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | 밖으로 나가는 규칙을 지키는 네트워크 플러그인(Calico나 Cilium을 쓴 kind)에서 `allowListOnly`를 켠 경우: 모델 공급자 주소를 목록에 넣은 채팅과 뺀 채팅 |
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | false, false, false, 15, 5, 4 | alpha | 스위치를 하나씩 끄고 켠 AI 평가의 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.ledger`, `evidenceCheck`(켜면 다시 물을 때 `maxSteps`에 모델 호출 하나가 더해짐) | false, false | alpha | 하나씩 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `features.alertInvestigation.verdict`(`evidenceCheck`나 `ledger`와 함께, 둘 다 끄면 아무것도 안 함) | false | alpha | `evidenceCheck` 옆에서 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | false, 12, 5, 20, 4, 60, 10737418240 | alpha | kind 개발 설치에서 e2e `ai-anomaly-rank.spec.ts`, 끄고 켠 AI 평가 |
+| `features.nodeNeighbors.enabled` | false | alpha | 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | 값을 정한 채 kind 개발 설치에서 한 `loki_query` |
 | `features.callGraph.enabled` | false | alpha | kind 개발 설치에서 e2e `ai-call-graph.spec.ts`, 끄고 켠 AI 평가 |
 | `gateway.servedByHeader` | false | alpha | 켠 상태로 한 번도 안 돌림 |

@@ -105,15 +105,21 @@ func (h *Handler) serveTimelineChanges(w http.ResponseWriter, r *http.Request, n
 		return
 	}
 
+	// the further sources with ai.timelineChangesMore; a server without it never answers with one that has it
+	view, read := "changes", h.svc.GetTimelineChanges
+	if h.cfg.TimelineChangesMore {
+		view, read = "changes-more", h.svc.GetTimelineChangesMore
+	}
+
 	// read as the caller, so kept per identity
-	cacheKey := h.svc.IdentityCacheKey(ctx, "timeline|changes|"+namespace+"|"+r.URL.RawQuery)
+	cacheKey := h.svc.IdentityCacheKey(ctx, "timeline|"+view+"|"+namespace+"|"+r.URL.RawQuery)
 	var cached interface{}
 	if h.svc.Cache().Get(ctx, cacheKey, &cached) {
 		response.JSON(w, http.StatusOK, cached)
 		return
 	}
 
-	result, err := h.svc.GetTimelineChanges(ctx, namespace, since, until, limit)
+	result, err := read(ctx, namespace, since, until, limit)
 	if err != nil {
 		h.handleError(w, err)
 		return

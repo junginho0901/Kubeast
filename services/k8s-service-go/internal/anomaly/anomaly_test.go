@@ -3,6 +3,7 @@ package anomaly
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -138,13 +139,17 @@ func f(v float64) *float64 { return &v }
 
 func TestFromMetric_ComparesEachPodWithTheWindowBefore(t *testing.T) {
 	pod := func(name string, v float64) Sample { return Sample{Labels: map[string]string{"pod": name}, Value: v} }
-	r := FromMetric(CheckRestarts, []Sample{pod("new", 3), pod("doubled", 4), pod("steady", 2), pod("quiet", 0)}, []Sample{pod("doubled", 2), pod("steady", 2), pod("quiet", 0)})
+	r := FromMetric(CheckRestarts, []Sample{pod("new", 3), pod("made", 3), pod("doubled", 4), pod("steady", 2), pod("quiet", 0)},
+		[]Sample{pod("new", 0), pod("doubled", 2), pod("steady", 2), pod("quiet", 0)})
 	got := map[string]Finding{}
 	for _, f := range r.Findings {
 		got[f.Target] = f
 	}
-	if f := got["Pod/new"]; f.Verdict != VerdictAnomalous || !f.New || f.Before != nil {
+	if f := got["Pod/new"]; f.Verdict != VerdictAnomalous || !f.New || f.Before == nil || *f.Before != 0 || f.Summary != "3 restarts in the window, 0 in the window before" {
 		t.Errorf("new: %+v", f)
+	}
+	if f := got["Pod/made"]; f.Verdict != VerdictAnomalous || f.New || f.Before != nil || f.Summary != "3 restarts in the window, no earlier data" {
+		t.Errorf("no series in the window before: %+v", f)
 	}
 	if f := got["Pod/doubled"]; f.Verdict != VerdictAnomalous || f.Ratio == nil || *f.Ratio != 2 {
 		t.Errorf("doubled: %+v", f)
@@ -154,6 +159,32 @@ func TestFromMetric_ComparesEachPodWithTheWindowBefore(t *testing.T) {
 	}
 	if f := got["Pod/quiet"]; f.Verdict != VerdictNormal || f.New {
 		t.Errorf("quiet: %+v", f)
+	}
+}
+
+// Prometheus's increase() extrapolates, so one restart reads 1.0020 and two 2.0168: both windows count whole restarts, and
+// twice as many is twice as many.
+func TestFromMetric_RestartsAreWholeInBothWindows(t *testing.T) {
+	pod := func(v float64) []Sample {
+		return []Sample{{Labels: map[string]string{"pod": "web"}, Value: v}}
+	}
+	for _, c := range []struct {
+		before, now float64
+		verdict     string
+		ratio       float64
+		summary     string
+	}{
+		{1.0020, 2.0168, VerdictAnomalous, 2, "2 restarts in the window, 1 in the window before"},
+		{1.0168, 2.0020, VerdictAnomalous, 2, "2 restarts in the window, 1 in the window before"},
+		{2.0168, 3.0020, VerdictNormal, 1.5, "3 restarts in the window, 2 in the window before"},
+	} {
+		f := FromMetric(CheckRestarts, pod(c.now), pod(c.before)).Findings[0]
+		if f.Verdict != c.verdict || f.Ratio == nil || *f.Ratio != c.ratio || *f.Before != math.Round(c.before) || f.Summary != c.summary {
+			t.Errorf("%g after %g: %+v", c.now, c.before, f)
+		}
+	}
+	if f := FromMetric(CheckRestarts, pod(1.0020), pod(0)).Findings[0]; !f.New || f.Summary != "1 restarts in the window, 0 in the window before" {
+		t.Errorf("%+v", f)
 	}
 }
 
@@ -225,14 +256,17 @@ func TestFromIssues_LeavesNodesAndInfoOut(t *testing.T) {
 		{Kind: "Node", Name: "n1", Severity: "warning", Reason: "MemoryPressure"},
 	}
 	r := FromIssues(rows, nil, nil)
-	if len(r.Findings) != 2 || r.Findings[0].Target != "Pod/web-1-a" || !r.Findings[0].New || r.Findings[1].New {
+	if len(r.Findings) != 2 || r.Findings[0].Target != "Pod/web-1-a" || r.Findings[0].New || r.Findings[1].New {
 		t.Fatalf("%+v", r.Findings)
 	}
-	nodes := FromNodePressure(rows, []map[string]interface{}{pod("web-1-a")}, nil, "")
+	if r.Findings[0].Summary != "critical now (no earlier data): CrashLoopBackOff" || r.Findings[1].Summary != "warning now: Unavailable" {
+		t.Fatalf("%+v", r.Findings)
+	}
+	nodes := FromNodeConditions(rows, []map[string]interface{}{pod("web-1-a")}, nil, "")
 	if len(nodes.Findings) != 1 || nodes.Findings[0].Target != "Node/n1" {
 		t.Fatalf("%+v", nodes)
 	}
-	if refused := FromNodePressure(rows, nil, nil, "forbidden"); refused.NotRun == "" {
+	if refused := FromNodeConditions(rows, nil, nil, "forbidden"); refused.NotRun == "" {
 		t.Fatalf("a nodes list that failed is not run: %+v", refused)
 	}
 }
@@ -296,7 +330,7 @@ func TestAssemble_RanksNewThenRatioThenValueAndCapsAtTen(t *testing.T) {
 		{Check: CheckCPUThrottling, Findings: []Finding{{Check: CheckCPUThrottling, Target: "Pod/x", Verdict: VerdictAnomalous, Now: f(0.5), Ratio: f(5)}}},
 		{Check: CheckMemoryNearLimit, Findings: []Finding{{Check: CheckMemoryNearLimit, Target: "Pod/y", Verdict: VerdictNormal}}},
 		{Check: CheckIssues},
-		{Check: CheckNodePressure, NotRun: "the nodes could not be listed: forbidden"},
+		{Check: CheckNodeConditions, NotRun: "the nodes could not be listed: forbidden"},
 	}
 	res := Assemble("shop", nil, w, results, 4)
 	if len(res.Findings) != MaxFindings || res.FindingsTotal != 14 {
@@ -308,7 +342,7 @@ func TestAssemble_RanksNewThenRatioThenValueAndCapsAtTen(t *testing.T) {
 	if strings.Join(res.Normal, ",") != "issues,memory_near_limit" {
 		t.Fatalf("normal: %v", res.Normal)
 	}
-	if len(res.NotRun) != 1 || res.NotRun[0].Check != CheckNodePressure {
+	if len(res.NotRun) != 1 || res.NotRun[0].Check != CheckNodeConditions {
 		t.Fatalf("not run: %+v", res.NotRun)
 	}
 	if res.ComparedWith.End != res.Window.Start || res.StoreQueries != 4 {

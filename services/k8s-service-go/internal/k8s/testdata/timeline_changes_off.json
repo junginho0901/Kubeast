@@ -1,0 +1,55 @@
+{
+  "a namespace": {
+    "answer": "{\"changes\":[{\"when\":\"2026-11-25T09:50:00Z\",\"kind\":\"Pod\",\"name\":\"web-2-x\",\"namespace\":\"shop\",\"what\":\"container restarted\",\"container\":\"app\",\"reason\":\"Error (exit 1)\",\"note\":\"2 restarts\"},{\"when\":\"2026-11-25T09:40:00Z\",\"kind\":\"Node\",\"name\":\"node-a\",\"what\":\"condition Ready\",\"to\":\"False\",\"reason\":\"KubeletNotReady\"},{\"when\":\"2026-11-25T09:30:00Z\",\"kind\":\"ConfigMap\",\"name\":\"settings\",\"namespace\":\"shop\",\"what\":\"written\",\"by\":\"kubectl-edit\"},{\"when\":\"2026-11-25T09:20:00Z\",\"kind\":\"Secret\",\"name\":\"db-login\",\"namespace\":\"shop\",\"what\":\"written\",\"by\":\"external-secrets\"},{\"when\":\"2026-11-25T09:10:00Z\",\"kind\":\"HorizontalPodAutoscaler\",\"name\":\"api\",\"namespace\":\"shop\",\"what\":\"scaled\",\"to\":6,\"note\":\"5 running now, of Deployment api\"},{\"when\":\"2026-11-25T08:00:00Z\",\"kind\":\"Deployment\",\"name\":\"web\",\"namespace\":\"shop\",\"what\":\"rollout\",\"from\":1,\"to\":2,\"changed\":[{\"field\":\"image\",\"container\":\"web\",\"from\":\"web:1\",\"to\":\"web:2\"}]},{\"when\":\"2026-11-25T07:55:00Z\",\"kind\":\"HelmRelease\",\"name\":\"shop\",\"namespace\":\"shop\",\"what\":\"release revision\",\"from\":1,\"to\":2,\"note\":\"status now deployed\"},{\"when\":\"2026-11-25T07:54:00Z\",\"kind\":\"Application\",\"name\":\"shop\",\"namespace\":\"argocd\",\"what\":\"synced\",\"to\":\"v1.2.3\",\"note\":\"deploys to shop\"},{\"when\":\"2026-11-25T07:00:00Z\",\"kind\":\"StatefulSet\",\"name\":\"db\",\"namespace\":\"shop\",\"what\":\"rollout\",\"from\":1,\"to\":2,\"changed\":[{\"field\":\"image\",\"container\":\"db\",\"from\":\"db:1\",\"to\":\"db:2\"}]}],\"summary\":{\"by_source\":{\"argocd\":1,\"configmaps\":1,\"helm\":1,\"hpas\":1,\"nodes\":1,\"pods\":1,\"rollouts\":2,\"secrets\":1},\"changes_shown\":9,\"changes_total\":9,\"time_range\":{\"end\":\"2026-11-25T10:00:00Z\",\"start\":\"2026-11-25T06:00:00Z\"}}}",
+    "requests": [
+      "/apis/apps/v1/namespaces/shop/replicasets",
+      "/apis/apps/v1/namespaces/shop/controllerrevisions",
+      "/api/v1/namespaces/shop/configmaps (metadata only)",
+      "/api/v1/namespaces/shop/secrets (metadata only)",
+      "/apis/autoscaling/v2/namespaces/shop/horizontalpodautoscalers",
+      "/api/v1/namespaces/shop/pods",
+      "/api/v1/nodes",
+      "/apis/argoproj.io/v1alpha1/applications"
+    ]
+  },
+  "every namespace": {
+    "answer": "{\"changes\":[{\"when\":\"2026-11-25T09:50:00Z\",\"kind\":\"Pod\",\"name\":\"web-2-x\",\"namespace\":\"shop\",\"what\":\"container restarted\",\"container\":\"app\",\"reason\":\"Error (exit 1)\",\"note\":\"2 restarts\"},{\"when\":\"2026-11-25T09:40:00Z\",\"kind\":\"Node\",\"name\":\"node-a\",\"what\":\"condition Ready\",\"to\":\"False\",\"reason\":\"KubeletNotReady\"},{\"when\":\"2026-11-25T09:30:00Z\",\"kind\":\"ConfigMap\",\"name\":\"settings\",\"namespace\":\"shop\",\"what\":\"written\",\"by\":\"kubectl-edit\"},{\"when\":\"2026-11-25T09:20:00Z\",\"kind\":\"Secret\",\"name\":\"db-login\",\"namespace\":\"shop\",\"what\":\"written\",\"by\":\"external-secrets\"},{\"when\":\"2026-11-25T09:10:00Z\",\"kind\":\"HorizontalPodAutoscaler\",\"name\":\"api\",\"namespace\":\"shop\",\"what\":\"scaled\",\"to\":6,\"note\":\"5 running now, of Deployment api\"},{\"when\":\"2026-11-25T08:00:00Z\",\"kind\":\"Deployment\",\"name\":\"web\",\"namespace\":\"shop\",\"what\":\"rollout\",\"from\":1,\"to\":2,\"changed\":[{\"field\":\"image\",\"container\":\"web\",\"from\":\"web:1\",\"to\":\"web:2\"}]},{\"when\":\"2026-11-25T07:55:00Z\",\"kind\":\"HelmRelease\",\"name\":\"shop\",\"namespace\":\"shop\",\"what\":\"release revision\",\"from\":1,\"to\":2,\"note\":\"status now deployed\"},{\"when\":\"2026-11-25T07:54:00Z\",\"kind\":\"Application\",\"name\":\"shop\",\"namespace\":\"argocd\",\"what\":\"synced\",\"to\":\"v1.2.3\",\"note\":\"deploys to shop\"},{\"when\":\"2026-11-25T07:00:00Z\",\"kind\":\"StatefulSet\",\"name\":\"db\",\"namespace\":\"shop\",\"what\":\"rollout\",\"from\":1,\"to\":2,\"changed\":[{\"field\":\"image\",\"container\":\"db\",\"from\":\"db:1\",\"to\":\"db:2\"}]}],\"summary\":{\"by_source\":{\"argocd\":1,\"configmaps\":1,\"helm\":1,\"hpas\":1,\"nodes\":1,\"pods\":1,\"rollouts\":2,\"secrets\":1},\"changes_shown\":9,\"changes_total\":9,\"time_range\":{\"end\":\"2026-11-25T10:00:00Z\",\"start\":\"2026-11-25T06:00:00Z\"}}}",
+    "requests": [
+      "/apis/apps/v1/replicasets",
+      "/apis/apps/v1/controllerrevisions",
+      "/api/v1/configmaps (metadata only)",
+      "/api/v1/secrets (metadata only)",
+      "/apis/autoscaling/v2/horizontalpodautoscalers",
+      "/api/v1/pods",
+      "/api/v1/nodes",
+      "/apis/argoproj.io/v1alpha1/applications"
+    ]
+  },
+  "every namespace, pods not listable across the cluster": {
+    "answer": "{\"changes\":[{\"when\":\"2026-11-25T09:40:00Z\",\"kind\":\"Node\",\"name\":\"node-a\",\"what\":\"condition Ready\",\"to\":\"False\",\"reason\":\"KubeletNotReady\"},{\"when\":\"2026-11-25T09:30:00Z\",\"kind\":\"ConfigMap\",\"name\":\"settings\",\"namespace\":\"shop\",\"what\":\"written\",\"by\":\"kubectl-edit\"},{\"when\":\"2026-11-25T09:20:00Z\",\"kind\":\"Secret\",\"name\":\"db-login\",\"namespace\":\"shop\",\"what\":\"written\",\"by\":\"external-secrets\"},{\"when\":\"2026-11-25T09:10:00Z\",\"kind\":\"HorizontalPodAutoscaler\",\"name\":\"api\",\"namespace\":\"shop\",\"what\":\"scaled\",\"to\":6,\"note\":\"5 running now, of Deployment api\"},{\"when\":\"2026-11-25T08:00:00Z\",\"kind\":\"Deployment\",\"name\":\"web\",\"namespace\":\"shop\",\"what\":\"rollout\",\"from\":1,\"to\":2,\"changed\":[{\"field\":\"image\",\"container\":\"web\",\"from\":\"web:1\",\"to\":\"web:2\"}]},{\"when\":\"2026-11-25T07:55:00Z\",\"kind\":\"HelmRelease\",\"name\":\"shop\",\"namespace\":\"shop\",\"what\":\"release revision\",\"from\":1,\"to\":2,\"note\":\"status now deployed\"},{\"when\":\"2026-11-25T07:54:00Z\",\"kind\":\"Application\",\"name\":\"shop\",\"namespace\":\"argocd\",\"what\":\"synced\",\"to\":\"v1.2.3\",\"note\":\"deploys to shop\"},{\"when\":\"2026-11-25T07:00:00Z\",\"kind\":\"StatefulSet\",\"name\":\"db\",\"namespace\":\"shop\",\"what\":\"rollout\",\"from\":1,\"to\":2,\"changed\":[{\"field\":\"image\",\"container\":\"db\",\"from\":\"db:1\",\"to\":\"db:2\"}]}],\"summary\":{\"by_source\":{\"argocd\":1,\"configmaps\":1,\"helm\":1,\"hpas\":1,\"nodes\":1,\"pods\":null,\"rollouts\":2,\"secrets\":1},\"changes_shown\":8,\"changes_total\":8,\"skipped\":{\"pods\":\"the restarts of every namespace are read only for a caller who may list pods across the cluster; name a namespace\"},\"time_range\":{\"end\":\"2026-11-25T10:00:00Z\",\"start\":\"2026-11-25T06:00:00Z\"}}}",
+    "requests": [
+      "/apis/apps/v1/replicasets",
+      "/apis/apps/v1/controllerrevisions",
+      "/api/v1/configmaps (metadata only)",
+      "/api/v1/secrets (metadata only)",
+      "/apis/autoscaling/v2/horizontalpodautoscalers",
+      "/apis/authorization.k8s.io/v1/selfsubjectaccessreviews",
+      "/api/v1/nodes",
+      "/apis/argoproj.io/v1alpha1/applications"
+    ]
+  },
+  "sources refused, no Argo CD, two objects a page": {
+    "answer": "{\"changes\":[{\"when\":\"2026-11-25T09:50:00Z\",\"kind\":\"Pod\",\"name\":\"web-2-x\",\"namespace\":\"shop\",\"what\":\"container restarted\",\"container\":\"app\",\"reason\":\"Error (exit 1)\",\"note\":\"2 restarts\"},{\"when\":\"2026-11-25T09:40:00Z\",\"kind\":\"Node\",\"name\":\"node-a\",\"what\":\"condition Ready\",\"to\":\"False\",\"reason\":\"KubeletNotReady\"},{\"when\":\"2026-11-25T09:30:00Z\",\"kind\":\"ConfigMap\",\"name\":\"settings\",\"namespace\":\"shop\",\"what\":\"written\",\"by\":\"kubectl-edit\"},{\"when\":\"2026-11-25T09:10:00Z\",\"kind\":\"HorizontalPodAutoscaler\",\"name\":\"api\",\"namespace\":\"shop\",\"what\":\"scaled\",\"to\":6,\"note\":\"5 running now, of Deployment api\"}],\"summary\":{\"by_source\":{\"argocd\":null,\"configmaps\":1,\"helm\":null,\"hpas\":1,\"nodes\":1,\"pods\":1,\"rollouts\":null,\"secrets\":null},\"changes_shown\":4,\"changes_total\":4,\"not_read\":{\"rollouts\":\"list controller revisions: controllerrevisions is forbidden\",\"secrets\":\"list secrets: secrets is forbidden\"},\"notes\":{\"argocd\":\"Argo CD Applications are not served in this cluster (no applications.argoproj.io)\"},\"time_range\":{\"end\":\"2026-11-25T10:00:00Z\",\"start\":\"2026-11-25T06:00:00Z\"}}}",
+    "requests": [
+      "/apis/apps/v1/namespaces/shop/replicasets",
+      "/apis/apps/v1/namespaces/shop/replicasets",
+      "/apis/apps/v1/namespaces/shop/controllerrevisions",
+      "/api/v1/namespaces/shop/configmaps (metadata only)",
+      "/api/v1/namespaces/shop/secrets (metadata only)",
+      "/apis/autoscaling/v2/namespaces/shop/horizontalpodautoscalers",
+      "/api/v1/namespaces/shop/pods",
+      "/api/v1/nodes",
+      "/apis/argoproj.io/v1alpha1/applications"
+    ]
+  }
+}
