@@ -373,6 +373,7 @@ func TestPrometheusDiscovery_ARequestThatSendsNoReadStartsNoSearch(t *testing.T)
 			if s.PrometheusAvailable(ctx) {
 				t.Error("found with no search")
 			}
+			time.Sleep(50 * time.Millisecond) // a search left running would have listed by now
 			if lists, _ := srv.counts(); lists != 0 {
 				t.Errorf("service lists = %d, want none", lists)
 			}

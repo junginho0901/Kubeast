@@ -345,6 +345,17 @@ func TestCostDiscovery_OneSearchThatNoCallerCuts(t *testing.T) {
 		}
 	})
 
+	t.Run("its request had ended", func(t *testing.T) {
+		s, srv := newCostServer(t, true)
+		gone, leave := context.WithCancel(context.Background())
+		leave()
+		found := searchAnswer(t, "the ended request", ask(gone, s))
+		time.Sleep(50 * time.Millisecond) // a search left running would have listed by now
+		if found || lists(srv) != 0 {
+			t.Errorf("an ended request looked: %d lists", lists(srv))
+		}
+	})
+
 	t.Run("out of its own time", func(t *testing.T) {
 		was := discoveryTime
 		discoveryTime = 150 * time.Millisecond
