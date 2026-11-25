@@ -74,6 +74,7 @@ func emptyAnswerCaseSet(t *testing.T) []emptyAnswerCase {
 		{name: "logs whose containers are gone", tool: "k8s_get_pod_logs", args: every, kubectl: of("app side", appGone, sideGone), holds: "unread"},
 		{name: "a log beside one whose container is gone", tool: "k8s_get_pod_logs", args: every, kubectl: kubectlSays("[pod/web-1/app] " + goneText + "[pod/web-1/side] ready\n"), holds: "something"},
 		{name: "a line of a log with the words of one that is gone", tool: "k8s_get_pod_logs", args: web, kubectl: kubectlSays(goneText + "\n"), holds: "something"},
+		{name: "a line of a log with those words and no end", tool: "k8s_get_pod_logs", args: web, kubectl: of("app", aContainer{name: "app", log: goneText}), holds: "something"},
 		{name: "a search of an empty log", tool: "k8s_get_pod_logs", args: grepped, kubectl: kubectlSays(""), holds: "nothing"},
 		{name: "an empty log of the container kubectl picked", tool: "k8s_get_pod_logs", args: web, kubectl: of("app side", appEmpty, sideEmpty), holds: "nothing"},
 		{name: "a search of it for a word of kubectl's line", tool: "k8s_get_pod_logs", args: args{"pod_name": "web-1", "namespace": "shop", "grep": "Defaulted"}, kubectl: of("app side", appEmpty, sideEmpty), holds: "nothing"},

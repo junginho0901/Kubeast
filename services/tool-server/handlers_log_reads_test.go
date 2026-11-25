@@ -241,7 +241,7 @@ func TestPodLogs_ThePodIsReadOnlyForAnAnswerWithoutALine(t *testing.T) {
 		{args{"all_containers": true, "previous": true}, aPod{containers: []aContainer{{name: "app", log: "ready\n"}, {name: "side", log: "ready\n"}}}, []string{"logs"}},
 		{args{"all_containers": true, "previous": true}, aPod{containers: []aContainer{{name: "app", log: "ready\n"}, {name: "side", never: true}}}, []string{"logs", "logs"}},
 		{args{"all_containers": true, "previous": true}, aPod{names: "app side", containers: []aContainer{{name: "app"}, {name: "side", never: true}}}, []string{"logs", "logs", "get"}},
-		{args{"all_containers": true}, aPod{names: "app side", containers: []aContainer{{name: "app"}, {name: "side", words: goneText}}}, []string{"logs", "get"}},
+		{args{"all_containers": true}, aPod{names: "app side", containers: []aContainer{{name: "app"}, {name: "side", words: goneText}}}, []string{"logs", "logs", "get"}},
 	} {
 		_, calls := c.pod.read(t, c.with)
 		var got []string
@@ -573,6 +573,76 @@ func TestPodLogs_TheEndOfACutLogIsALog(t *testing.T) {
 	out, _ := every.read(t, args{"all_containers": true})
 	if _, log, found := strings.Cut(out, "\n"); !found || log != "[pod/web-1/app] "+readError {
 		t.Errorf("%q", out)
+	}
+}
+
+// A container's last line may have no end, so a log that is the kubelet's words and no more looks as the words do: with
+// the times kubectl prints before lines, and before none of the words, it is told apart.
+func TestPodLogs_ALineThatIsTheKubeletsWordsAndHasNoEndIsALog(t *testing.T) {
+	bothDetails(t, func(t *testing.T) {
+		for name, text := range kubeletNoLog {
+			wrote := aPod{names: "app", containers: []aContainer{{name: "app", log: text}}}
+			said := aPod{names: "app", containers: []aContainer{{name: "app", words: text}}}
+			for _, with := range []args{{"container": "app"}, {"container": "app", "previous": true}, {}, {"all_containers": true}, {"all_containers": true, "previous": true}} {
+				prefix := ""
+				if with["all_containers"] == true {
+					prefix = "[pod/web-1/app] "
+				}
+				out, calls := wrote.read(t, with)
+				if out != prefix+text {
+					t.Errorf("%s %v: %q", name, with, out)
+				}
+				if last := calls[len(calls)-1]; !has(last, "--timestamps") || len(calls) != 2 {
+					t.Errorf("%s %v: %v", name, with, calls)
+				}
+				if out, _ := said.read(t, with); decode(t, out)["status"] != "no_log" {
+					t.Errorf("%s %v: %q", name, with, out)
+				}
+			}
+			if out, _ := wrote.read(t, args{"container": "app", "grep": "log"}); out != "# grep \"log\": 1 of 1 lines matched\n"+text {
+				t.Errorf("%s: %q", name, out)
+			}
+		}
+	})
+	// one wrote it and the other's log is gone: a line was read
+	pod := aPod{names: "app side", containers: []aContainer{{name: "app", log: goneText}, {name: "side", words: goneText}}}
+	pod.inEveryOrder(t, args{"all_containers": true}, func(out string, _ [][]string) {
+		holdsAll(t, out, "[pod/web-1/app] "+goneText, "[pod/web-1/side] "+goneText)
+		holdsNone(t, out, "no_log", "No line was read")
+	})
+	// kubectl's own line before it
+	pod = aPod{says: defaulted, containers: []aContainer{{name: "app", log: goneText}}}
+	if out, _ := pod.read(t, args{}); out != defaulted+goneText {
+		t.Errorf("%q", out)
+	}
+	// past a container without a previous run
+	pod = aPod{names: "app side", containers: []aContainer{{name: "app", log: goneText}, {name: "side", never: true}}}
+	pod.inEveryOrder(t, args{"all_containers": true, "previous": true}, func(out string, _ [][]string) {
+		if out != "[pod/web-1/app] "+goneText+"\n"+noPreviousOfSide {
+			t.Errorf("%q", out)
+		}
+	})
+}
+
+// The second read decides only that a line was read: one that fails, or reads something else by then, leaves the first.
+func TestPodLogs_ASecondReadThatSaysNothingLeavesNoLog(t *testing.T) {
+	for name, again := range map[string]func([]string) (string, error){
+		"it fails":              func([]string) (string, error) { return kubectlErr("Error from server: etcdserver: request timed out") },
+		"it is empty":           kubectlSays(""),
+		"the container is back": kubectlSays(lineTime + "ready\n"),
+		"a time in the words":   kubectlSays(strings.Replace(goneText, "logs for", "logs "+lineTime+"for", 1)),
+		"another line as well":  kubectlSays(lineTime + goneText + "\n" + lineTime + "ready\n"),
+	} {
+		fakeKubectl(t, func(a []string) (string, error) {
+			if has(a, "--timestamps") {
+				return again(a)
+			}
+			return goneText, nil
+		})
+		out, err := handleGetPodLogs(context.Background(), args{"pod_name": "web-1", "namespace": "shop", "container": "app", "previous": true}, nil)
+		if err != nil || decode(t, out)["status"] != "no_log" {
+			t.Errorf("%s: %q %v", name, out, err)
+		}
 	}
 }
 

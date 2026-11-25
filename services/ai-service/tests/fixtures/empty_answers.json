@@ -224,6 +224,20 @@
   "holds": "something"
  },
  {
+  "name": "a line of a log with those words and no end",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "Defaulted container \"app\" out of: app, side, migrate (init)\nunable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "holds": "something"
+ },
+ {
+  "name": "a line of a log with those words and no end",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "Defaulted container \"app\" out of: app, side, migrate (init)\nunable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "holds": "something"
+ },
+ {
   "name": "a search of an empty log",
   "tool": "k8s_get_pod_logs",
   "details": false,

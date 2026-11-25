@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 )
 
 type podLogRead struct {
@@ -26,6 +27,9 @@ type podLogRead struct {
 
 // podContainers lists the containers kubectl logs --all-containers reads.
 const podContainers = "jsonpath={.spec.initContainers[*].name} {.spec.containers[*].name} {.spec.ephemeralContainers[*].name}"
+
+// lineTimesWait bounds the read that only tells words from lines.
+const lineTimesWait = 10 * time.Second
 
 // read runs kubectl logs. A container without a previous run ends it, and what it read of the others goes with it: the
 // pod's containers are read again past that one. The failure stands when that read none of the others.
@@ -116,6 +120,25 @@ func (l *podLogRead) noLog() (containers []string, words string, ok bool) {
 	return noLogOf(l.out, l.namespace, l.pod, l.picked, l.allContainers)
 }
 
+// wrote reports whether what noLog took for the kubelet's words is what a container wrote: a log's last line may have no
+// end either. Asked for times, kubectl prints one before each line and none before the words.
+func (l *podLogRead) wrote(ctx context.Context) bool {
+	ctx, cancel := context.WithTimeout(ctx, lineTimesWait)
+	defer cancel()
+	out, cut, err := runKubectlKeepingEnd(ctx, append(slices.Clone(l.args), "--timestamps")...)
+	if err != nil {
+		return false
+	}
+	timed := *l
+	timed.take(out, cut)
+	if _, _, words := timed.noLog(); words {
+		return false
+	}
+	timed.take(reLineTime.ReplaceAllString(out, "$1"), cut)
+	_, _, words := timed.noLog()
+	return words
+}
+
 // others are the pod's containers but those seen. They are not known when the pod could not be read, or when what was read
 // does not hold every one of seen.
 func (l *podLogRead) others(ctx context.Context, headers http.Header, seen []string) (names []string, known bool) {
@@ -140,6 +163,8 @@ func (l *podLogRead) others(ctx context.Context, headers http.Header, seen []str
 func (l *podLogRead) withoutALine(ctx context.Context, headers http.Header) (answer string, ok bool, err error) {
 	gone, words, none := l.noLog()
 	switch {
+	case none && l.wrote(ctx):
+		return "", false, nil
 	case none && !l.allContainers:
 		answer, err = l.noLogResult(gone, words, true)
 	case none || l.out == "" && len(l.never) > 0:

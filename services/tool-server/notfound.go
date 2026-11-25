@@ -36,9 +36,11 @@ var (
 	// What kubectl logs says first, on stderr, when no container was named, and what --prefix puts before a container's line.
 	reDefaulted = regexp.MustCompile(`^(?:Default container name "[^"\n]*" not found in pod [^\n]*\n)?(?:Defaulted container "([^"\n]+)" out of: [^\n]*\n)?`)
 	reLogPrefix = regexp.MustCompile(`\[pod/[^/\]\s]+/([^\]\s]+)\] `)
-	// What ends kubectl logs at a container without a previous run, and what --ignore-errors prints of it instead.
+	// What ends kubectl logs at a container without a previous run, what --ignore-errors prints of it instead, and the time
+	// --timestamps puts before a line.
 	reEndsNoPrevious = regexp.MustCompile(`previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found$`)
 	reNoPreviousLine = regexp.MustCompile(`error: previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found\n$`)
+	reLineTime       = regexp.MustCompile(`(^|\n|\[pod/[^/\]\s]+/[^\]\s]+\] )\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+(?:Z|[+-]\d\d:\d\d) `)
 	// A ReplicaSet pod template hash or a pod's random suffix: 5–10 characters
 	// from Kubernetes' safe-encoding alphabet (no vowels, so "cache" or "redis"
 	// are not stripped).
@@ -350,7 +352,7 @@ func editDistanceAtMost(a, b string, limit int) bool {
 }
 
 // isNoLog reports whether what kubectl printed of one container is the kubelet's own words in place of its log: they have
-// no line end, and a file they name is the pod's own.
+// no line end, and a file they name is the pod's own. A log's last line may have no end either (podLogRead.wrote).
 func isNoLog(text, namespace, pod string) bool {
 	if reNoContainer.MatchString(text) {
 		return true
