@@ -292,6 +292,17 @@ describe('a use the chart decides', () => {
     for (const use of ['investigation', 'investigate_now', 'optimization']) expect(byId(`model-use-${use}-kept`)).toHaveLength(0)
   })
 
+  it('with a choice that is disabled says that alone, and it can be taken away', async () => {
+    uses = [{ ...CHART, choice: { id: 4, name: 'old', enabled: false } }, ...USES.slice(1)]
+    await open()
+    expect(textOf('model-use-investigation')).toBe('"old" is disabled, so it does not answer.Answers now: chatTake away')
+    expect(textOf('model-use-investigation-kept')).toBe('Take away')
+    uses = [{ ...CHART, choice: null }, ...USES.slice(1)]
+    await press('model-use-investigation-take-away')
+    expect(put.mock.calls).toEqual([['investigation', null]])
+    expect(byId('model-use-investigation-kept')).toHaveLength(0)
+  })
+
   it('reads in Korean', async () => {
     shown.catalog = ko
     shown.english = false
