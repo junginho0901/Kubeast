@@ -16,20 +16,28 @@ const monaco = vi.hoisted(() => {
   type Change = { isFlush: boolean }
   type Options = { model: { text: string }; readOnly?: boolean }
   // written: the texts the library set
-  type Made = { written: string[]; type: (keys: string) => void; listeners: () => number; getValue: () => string }
+  type Made = { written: string[]; type: (keys: string) => void; insert: (text: string) => void; listeners: () => number; getValue: () => string }
   const made: Made[] = []
   const create = (_node: unknown, options: Options) => {
     const { model } = options
     const listeners = new Set<(change: Change) => void>()
     const written: string[] = []
-    const set = (text: string, change: Change) => {
-      model.text = text
+    const tell = (change: Change) => {
       // as monaco's: one added while the event is given out waits for the next event, one disposed is passed over
       for (const listener of [...listeners]) if (listeners.has(listener)) listener(change)
+    }
+    const set = (text: string, change: Change) => {
+      model.text = text
+      tell(change)
     }
     const editor = {
       written,
       type: (keys: string) => set(model.text + keys, { isFlush: false }),
+      // an input method, dictation: an event for each character, all after the last of them is in
+      insert: (text: string) => {
+        model.text += text
+        for (const _ of text) tell({ isFlush: false })
+      },
       listeners: () => listeners.size,
       getModel: () => model,
       getValue: () => model.text,
@@ -67,7 +75,7 @@ vi.mock('./MonacoEditor', async () => {
   return { default: library.default }
 })
 
-import { createElement, StrictMode, useLayoutEffect, useState, type ReactNode } from 'react'
+import { createElement, StrictMode, useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import CodeEditor, { type EditorProps } from './CodeEditor'
 
@@ -87,9 +95,12 @@ let given: (string | undefined)[] = []
 let setText: (text: string) => void = () => {}
 let waiting: { text: string; go: () => void }[] = []
 
-// The page around an editor: it keeps the text, as the search box and the YAML editors do.
+// The page around an editor: it keeps the text, as the search box and the YAML editors do, and an edit undoes what it
+// said of the text before.
 function Page({ start, editor }: { start: string; editor?: Partial<EditorProps> }) {
   const [text, set] = useState(start)
+  const [, setCopied] = useState(false)
+  useEffect(() => { setCopied(false) }, [text])
   useLayoutEffect(() => {
     setText = set
     shown.push(text)
@@ -105,7 +116,10 @@ function Page({ start, editor }: { start: string; editor?: Partial<EditorProps> 
 
 // resolves once a render of this text is on the page; its effects run in a task of their own, after it
 const onPage = (text: string) => new Promise<void>((go) => { waiting.push({ text, go }) })
-const settled = () => new Promise((r) => setTimeout(r, 30))
+// turns of the event loop, for React's renders and effects to have had theirs on a busy machine too
+const settled = async () => {
+  for (let i = 0; i < 10; i += 1) await new Promise((r) => setTimeout(r, 3))
+}
 
 const open = async (children: ReactNode) => {
   root = createRoot(element('div') as HTMLElement)
@@ -168,6 +182,17 @@ describe('an editor whose page keeps the text (value and onChange)', () => {
     editor.type('c')
     expect(shown).toEqual(['a', 'ab', 'abc'])
     expect(editor.listeners()).toBe(1)
+  })
+
+  it('takes a long text put in at once, told a character at a time', async () => {
+    const editor = await open(createElement(Page, { start: '' }))
+    const yaml = 'kind: ConfigMap\n'.repeat(20)
+    editor.insert(yaml)
+    expect(shown).toEqual(['', yaml])
+    await settled()
+    expect(shown).toEqual(['', yaml])
+    expect(editor.written).toEqual([])
+    expect(new Set(given)).toEqual(new Set([yaml]))
   })
 
   it('takes a text set outside it: an example, a clear, the text it opened with', async () => {
