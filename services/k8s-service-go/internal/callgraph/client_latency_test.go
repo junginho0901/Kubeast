@@ -113,6 +113,7 @@ func TestClientSideOfCallsThatAreNotTwoEnds(t *testing.T) {
 		"a database alone":               {[]Sample{typed(0.8, "database")}, 800, "database"},
 		"a queue alone":                  {[]Sample{typed(0.8, "messaging_system")}, 800, "messaging_system"},
 		"a virtual node's untraced side": {[]Sample{typed(0, "virtual_node")}, 0, ""},
+		"a database, then a 0":           {[]Sample{typed(0.3, "database"), plain(0)}, 300, "database"},
 	} {
 		edges, _, _ := Build(shopIndex(), &Traces{Shape: Shape{Connection: true}, Requests: []Sample{plain(10)}, P90: []Sample{plain(0.002)}, ClientP90: c.answer}, nil)
 		if len(edges) != 1 || edges[0].ClientP90Ms != c.ms || edges[0].ConnectionType != c.kind {

@@ -257,8 +257,8 @@ func TestResourceGraphCallsMostReads(t *testing.T) {
 	}
 }
 
-// The narrowing's call order never reads the client side: with it on, anomaly_rank makes the same twelve store queries
-// and answers the same.
+// The narrowing's call order never reads the client side: with it on, anomaly_rank makes the same store queries and
+// answers the same, when the stores take all twelve and when the checks leave the call order room for more.
 func TestAnomaliesCallOrderDoesNotReadTheClientSide(t *testing.T) {
 	f, src, calls := threeStores(t, clientOn)
 	res := f.get(t, "shop", flowReader)
@@ -266,10 +266,16 @@ func TestAnomaliesCallOrderDoesNotReadTheClientSide(t *testing.T) {
 	if metrics != 3 || logs != 3 || spans != 3 || order != 3 || res.StoreQueries != 12 || calls.count(callgraph.ClientSeconds) != 0 {
 		t.Fatalf("read %d metric, %d log, %d trace and %d call graph queries, %d counted, client side %d", metrics, logs, spans, order, res.StoreQueries, calls.count(callgraph.ClientSeconds))
 	}
-	g, _, _ := threeStores(t, config.Config{CallGraphEnabled: true})
-	a, _ := json.Marshal(res)
-	b, _ := json.Marshal(g.get(t, "shop", flowReader))
-	if string(a) != string(b) {
-		t.Fatalf("with the client side on and off:\n%s\n%s", a, b)
+	var answers []string
+	for _, cfg := range []config.Config{{CallGraphEnabled: true}, clientOn} {
+		h, _, calls, _ := callOrderHandler(cfg)
+		w, res := getAnomalies(h, "/api/v1/namespaces/shop/anomalies", flowReader)
+		if calls.count(callgraph.ClientSeconds) != 0 || res.StoreQueries != 3+len(calls.at)+len(calls.between) || res.StoreQueries >= 12 {
+			t.Errorf("client side read %d times, %d store queries: %v", calls.count(callgraph.ClientSeconds), res.StoreQueries, calls.queries)
+		}
+		answers = append(answers, w.Body.String())
+	}
+	if answers[0] != answers[1] {
+		t.Fatalf("with the client side off and on:\n%s\n%s", answers[0], answers[1])
 	}
 }
