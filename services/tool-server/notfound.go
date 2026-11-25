@@ -36,11 +36,14 @@ var (
 	// What kubectl logs says first, on stderr, when no container was named, and what --prefix puts before a container's line.
 	reDefaulted = regexp.MustCompile(`^(?:Default container name "[^"\n]*" not found in pod [^\n]*\n)?(?:Defaulted container "([^"\n]+)" out of: [^\n]*\n)?`)
 	reLogPrefix = regexp.MustCompile(`\[pod/[^/\]\s]+/([^\]\s]+)\] `)
-	// What ends kubectl logs at a container without a previous run, what --ignore-errors prints of it instead, and the time
-	// --timestamps puts before a line.
-	reEndsNoPrevious = regexp.MustCompile(`previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found$`)
-	reNoPreviousLine = regexp.MustCompile(`error: previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found\n$`)
-	reLineTime       = regexp.MustCompile(`(^|\n|\[pod/[^/\]\s]+/[^\]\s]+\] )\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+(?:Z|[+-]\d\d:\d\d) `)
+	// What ends kubectl logs at a container without a previous run, what --ignore-errors prints of it instead (after the
+	// text of a line too), and the time --timestamps puts before a line.
+	reEndsNoPrevious  = regexp.MustCompile(`previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found$`)
+	reNoPreviousLine  = regexp.MustCompile(`error: previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found\n$`)
+	reNoPreviousAfter = regexp.MustCompile(`[^\n]error: previous terminated container "[^"\n]+" in pod "[^"\n]+" not found\n`)
+	reLineTime        = regexp.MustCompile(`(^|\n|\[pod/[^/\]\s]+/[^\]\s]+\] )\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+(?:Z|[+-]\d\d:\d\d) `)
+	// A line of podContainers' output.
+	rePodContainer = regexp.MustCompile(`(?m)^container/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$`)
 	// A ReplicaSet pod template hash or a pod's random suffix: 5–10 characters
 	// from Kubernetes' safe-encoding alphabet (no vowels, so "cache" or "redis"
 	// are not stripped).

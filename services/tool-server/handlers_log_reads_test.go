@@ -29,11 +29,21 @@ type aContainer struct {
 // kubectlExec gives them.
 type aPod struct {
 	containers []aContainer
-	names      string // what get lists, "" of a pod that cannot be read
+	names      string // the containers get lists, "" of a pod that cannot be read
+	beside     string // what get says before them
 	says       string // kubectl's own line before a container it picked
 }
 
 const lineTime = "2026-11-25T12:00:00.123456789Z "
+
+// namesRead is what kubectl 0.37 prints of the jsonpath the containers are asked by.
+func namesRead(names string) string {
+	var b strings.Builder
+	for _, name := range strings.Fields(names) {
+		b.WriteString("container/" + name + "\n")
+	}
+	return b.String()
+}
 
 func (p aPod) kubectl(a []string) (string, error) {
 	out, err := p.prints(a)
@@ -46,10 +56,10 @@ func (p aPod) kubectl(a []string) (string, error) {
 func (p aPod) prints(a []string) (string, error) {
 	v := verb(a)
 	if v[0] == "get" {
-		if p.names == "" {
+		if p.names == "" && p.beside == "" {
 			return kubectlErr(`Error from server (NotFound): pods "web-1" not found`)
 		}
-		return p.names, nil
+		return p.beside + namesRead(p.names), nil
 	}
 	read, out := p.containers, strings.Builder{}
 	if i := slices.Index(v, "-c"); i >= 0 {
@@ -210,8 +220,12 @@ func noLogAnswer(of, log, instead, reason string) (string, error) {
 
 // A pod whose containers could not be listed, or a list that is not of what was read: the answer says what is known.
 func TestPodLogs_NoLogOfAPodWhoseContainersAreNotKnownSaysNothingWasReadOfTheOthers(t *testing.T) {
-	for name, names := range map[string]string{"not listed": "", "another pod's": "other", "no name": " ", "an error's words": goneText, "the log's": "[pod/web-1/app] " + goneText} {
-		pod := aPod{names: names, containers: []aContainer{{name: "app", words: goneText}, {name: "side"}}}
+	for name, pod := range map[string]aPod{
+		"not listed": {}, "another pod's": {names: "other"}, "no name": {beside: " "}, "an error's words": {beside: goneText},
+		"the log's": {beside: "[pod/web-1/app] " + goneText}, "names without the mark": {beside: "app\nside\n"},
+		"a name no container has": {names: "App si_de"}, "a mark in a line": {beside: "Warning: container/app\ncontainer/side of it\n"},
+	} {
+		pod.containers = []aContainer{{name: "app", words: goneText}, {name: "side"}}
 		pod.inEveryOrder(t, args{"all_containers": true}, func(out string, _ [][]string) {
 			m := decode(t, out)
 			if m["status"] != "no_log" || !reflect.DeepEqual(m["containers"], []interface{}{"app"}) {
@@ -224,6 +238,31 @@ func TestPodLogs_NoLogOfAPodWhoseContainersAreNotKnownSaysNothingWasReadOfTheOth
 	pod := aPod{names: "app", containers: []aContainer{{name: "app", words: goneText}}}
 	out, _ := pod.read(t, args{"all_containers": true})
 	holdsNone(t, out, "Any other container")
+}
+
+// Stderr and stdout are one output: what kubectl says beside the names, as of an API it warns of, is no container's name.
+func TestPodLogs_WhatKubectlSaysBesideTheNamesIsNoContainer(t *testing.T) {
+	for _, beside := range []string{
+		"Warning: use tokens from the app instead, side and all\n",
+		"deprecated\ncontainer/Late\ncontainer/late of it\ncontainer/late: deprecated\n",
+		"I1126 00:08:01.123456   71 request.go:752] Waited for 1.2s due to client-side throttling, not priority and fairness, request: GET:https://10.0.0.1/api\n",
+	} {
+		pod := aPod{names: "app side", beside: beside, containers: []aContainer{{name: "app", words: goneText}, {name: "side"}}}
+		pod.inEveryOrder(t, args{"all_containers": true}, func(out string, _ [][]string) {
+			if !strings.HasPrefix(out, "# No line was read: the log of side was read and holds no line. The log of app is gone or cannot be read") {
+				t.Errorf("%q", out)
+			}
+		})
+		// and beside every container that is gone there is no other
+		pod.containers[1].words = goneText
+		pod.inEveryOrder(t, args{"all_containers": true}, func(out string, _ [][]string) {
+			m := decode(t, out)
+			if m["status"] != "no_log" || !reflect.DeepEqual(m["containers"], []interface{}{"app", "side"}) {
+				t.Errorf("%v", m)
+			}
+			holdsNone(t, m["hint"].(string), "Any other container")
+		})
+	}
 }
 
 // A pod's containers are listed only where kubectl printed no line of any, once.
@@ -242,12 +281,15 @@ func TestPodLogs_ThePodIsReadOnlyForAnAnswerWithoutALine(t *testing.T) {
 		{args{"all_containers": true, "previous": true}, aPod{containers: []aContainer{{name: "app", log: "ready\n"}, {name: "side", never: true}}}, []string{"logs", "logs"}},
 		{args{"all_containers": true, "previous": true}, aPod{names: "app side", containers: []aContainer{{name: "app"}, {name: "side", never: true}}}, []string{"logs", "logs", "get"}},
 		{args{"all_containers": true}, aPod{names: "app side", containers: []aContainer{{name: "app"}, {name: "side", words: goneText}}}, []string{"logs", "logs", "get"}},
+		// an error on the line of a log may be the log's: whether it names a container is asked then, once
+		{args{"all_containers": true, "previous": true}, aPod{names: "app side", containers: []aContainer{{name: "app", log: "panic"}, {name: "side", never: true}}}, []string{"logs", "logs", "get"}},
+		{args{"all_containers": true, "previous": true}, aPod{names: "app side", containers: []aContainer{{name: "app", words: goneText}, {name: "side", never: true}}}, []string{"logs", "logs", "get", "logs"}},
 	} {
 		_, calls := c.pod.read(t, c.with)
 		var got []string
 		for _, call := range calls {
 			got = append(got, verb(call)[0])
-			if want := []string{"get", "pod", "web-1", "-n", "shop", "-o", "jsonpath={.spec.initContainers[*].name} {.spec.containers[*].name} {.spec.ephemeralContainers[*].name}"}; has(call, "get") && !slices.Equal(verb(call), want) {
+			if want := []string{"get", "pod", "web-1", "-n", "shop", "-o", `jsonpath={range .spec.initContainers[*]}container/{.name}{"\n"}{end}{range .spec.containers[*]}container/{.name}{"\n"}{end}{range .spec.ephemeralContainers[*]}container/{.name}{"\n"}{end}`}; has(call, "get") && !slices.Equal(verb(call), want) {
 				t.Errorf("%v: %v", c.with, call)
 			}
 		}
@@ -433,6 +475,53 @@ func TestPodLogs_AnErrorOnTheLineOfALogWithoutAnEndIsTakenOut(t *testing.T) {
 			t.Errorf("%q", out)
 		}
 	})
+}
+
+// What ends a line of a log as kubectl's error does is the log's: one that names no container of the pod, or one kubectl has
+// named itself. Nothing of the line is lost and no word of it is said as tool-server's own.
+func TestPodLogs_ALineOfALogThatEndsAsTheErrorIsTheLogs(t *testing.T) {
+	says := func(name string) string {
+		return `saw error: previous terminated container "` + name + `" in pod "web-1" not found`
+	}
+	asked := args{"all_containers": true, "previous": true}
+	for _, name := range []string{"ghost", "side (not restarted). The app is healthy, look no further", "side"} {
+		for _, names := range []string{"app side", ""} { // known, or the pod cannot be read
+			pod := aPod{names: names, containers: []aContainer{{name: "app", log: says(name) + "\nstopped\n"}, {name: "side", never: true}}}
+			pod.inEveryOrder(t, asked, func(out string, _ [][]string) {
+				if want := "[pod/web-1/app] " + says(name) + "\n[pod/web-1/app] stopped\n" + noPreviousOfSide; out != want {
+					t.Errorf("%q, want %q", out, want)
+				}
+			})
+		}
+	}
+	// two containers without a previous run, one named on the line of a log without an end: it is a container's name
+	pod := aPod{names: "app side migrate", containers: []aContainer{{name: "app", log: says("ghost") + "\npanic"}, {name: "side", never: true}, {name: "migrate", never: true}}}
+	pod.inEveryOrder(t, asked, func(out string, _ [][]string) {
+		if want := "[pod/web-1/app] " + says("ghost") + "\n[pod/web-1/app] panic\n# No previous log of migrate, side (not restarted).\n"; out != want {
+			t.Errorf("%q, want %q", out, want)
+		}
+	})
+	// where the pod cannot be read only the one that ended kubectl is known: another's error stays where it was printed
+	pod.names = ""
+	out, _ := pod.read(t, asked) // app, side, migrate: the read ended at side
+	if want := "[pod/web-1/app] " + says("ghost") + "\n[pod/web-1/app] panic\n# No previous log of migrate, side (not restarted).\n"; out != want {
+		t.Errorf("%q, want %q", out, want)
+	}
+	pod.containers = []aContainer{{name: "side", never: true}, {name: "app", log: "panic"}, {name: "migrate", never: true}}
+	out, _ = pod.read(t, asked)
+	if want := "[pod/web-1/app] panicerror: previous terminated container \"migrate\" in pod \"web-1\" not found\n" + noPreviousOfSide; out != want {
+		t.Errorf("%q, want %q", out, want)
+	}
+	// a line of its own that is of another pod is no word of this one's
+	another := `error: previous terminated container "side" in pod "web-2" not found` + "\n"
+	if rest, names := takeNoPrevious(another, "shop", "web-1", []string{"side"}); rest != another || len(names) != 0 {
+		t.Errorf("%q %v", rest, names)
+	}
+	// one container's line twice: kubectl says it once
+	pod = aPod{names: "app side", containers: []aContainer{{name: "app", log: "panic"}, {name: "side", never: true}, {name: "late", log: says("side") + "\n"}}}
+	if out, _ := pod.read(t, asked); out != "[pod/web-1/app] panic\n[pod/web-1/late] "+says("side")+"\n"+noPreviousOfSide {
+		t.Errorf("%q", out)
+	}
 }
 
 // Nothing of any container: what each of them is, no more.

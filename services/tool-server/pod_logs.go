@@ -21,12 +21,15 @@ type podLogRead struct {
 	cut    bool     // out is the end of it
 	said   string   // its own line, before the log of a container it picked itself
 	picked string   // the container read, "" where it is not known
+	ended  string   // the container without a previous run that ended kubectl
 	never  []string // the containers without a previous run
 	names  []string // the pod's containers, once they were asked for
 }
 
-// podContainers lists the containers kubectl logs --all-containers reads.
-const podContainers = "jsonpath={.spec.initContainers[*].name} {.spec.containers[*].name} {.spec.ephemeralContainers[*].name}"
+// podContainers lists the containers kubectl logs --all-containers reads, each on a line of its own that rePodContainer
+// knows: what kubectl says on stderr, as of an API it warns of, is in the same output.
+const podContainers = `jsonpath={range .spec.initContainers[*]}container/{.name}{"\n"}{end}{range .spec.containers[*]}container/{.name}{"\n"}{end}` +
+	`{range .spec.ephemeralContainers[*]}container/{.name}{"\n"}{end}`
 
 // lineTimesWait bounds the read that only tells words from lines.
 const lineTimesWait = 10 * time.Second
@@ -44,10 +47,13 @@ func (l *podLogRead) read(ctx context.Context, headers http.Header, args []strin
 	if ended == "" || !l.previous || !l.allContainers {
 		return err
 	}
-	l.args = append(slices.Clone(args), "--ignore-errors")
+	l.args, l.ended = append(slices.Clone(args), "--ignore-errors"), ended
 	out, cut, againErr := runKubectlKeepingEnd(ctx, l.args...)
 	if againErr != nil {
 		return err
+	}
+	if reNoPreviousAfter.MatchString(out) {
+		l.list(ctx, headers)
 	}
 	l.take(out, cut)
 	if cut && len(l.never) == 0 { // its line is in the front left out
@@ -82,7 +88,11 @@ func (l *podLogRead) take(out string, cut bool) {
 	l.out, l.cut, l.said, l.picked = out, cut, "", l.container
 	switch {
 	case slices.Contains(l.args, "--ignore-errors"):
-		l.out, l.never = takeNoPrevious(out, l.namespace, l.pod)
+		containers := l.names
+		if len(containers) == 0 {
+			containers = []string{l.ended}
+		}
+		l.out, l.never = takeNoPrevious(out, l.namespace, l.pod, containers)
 	case l.container == "" && !l.allContainers && !cut:
 		m := reDefaulted.FindStringSubmatch(out)
 		l.said, l.picked, l.out = m[0], m[1], out[len(m[0]):]
@@ -91,17 +101,29 @@ func (l *podLogRead) take(out string, cut bool) {
 
 // takeNoPrevious takes kubectl's own lines of the containers without a previous run out of what --ignore-errors printed,
 // and names them. One is on the line of what was printed before it where that has no end: a log's last line, which ends
-// here, or the kubelet's words, which noLogOf reads.
-func takeNoPrevious(out, namespace, pod string) (string, []string) {
+// here, or the kubelet's words, which noLogOf reads. What a container wrote may end a line the same, so one that is not a
+// line of its own is kubectl's only where it names one of containers, which kubectl has not named yet: it names each once.
+func takeNoPrevious(out, namespace, pod string, containers []string) (string, []string) {
 	var rest strings.Builder
 	var names []string
+	for line := range strings.SplitAfterSeq(out, "\n") {
+		if m := reNoPreviousLine.FindStringSubmatchIndex(line); m != nil && m[0] == 0 && line[m[4]:m[5]] == pod {
+			names = append(names, line[m[2]:m[3]])
+		}
+	}
 	for line := range strings.SplitAfterSeq(out, "\n") {
 		m := reNoPreviousLine.FindStringSubmatchIndex(line)
 		if m == nil || line[m[4]:m[5]] != pod {
 			rest.WriteString(line)
 			continue
 		}
-		names = append(names, line[m[2]:m[3]])
+		if name := line[m[2]:m[3]]; m[0] > 0 {
+			if !slices.Contains(containers, name) || slices.Contains(names, name) {
+				rest.WriteString(line)
+				continue
+			}
+			names = append(names, name)
+		}
 		before := line[:m[0]]
 		rest.WriteString(before)
 		if _, _, words := noLogOf(before, namespace, pod, "", true); before != "" && !words {
@@ -139,16 +161,25 @@ func (l *podLogRead) wrote(ctx context.Context) bool {
 	return words
 }
 
+// list asks for the pod's containers, once; none is known of a pod that could not be read.
+func (l *podLogRead) list(ctx context.Context, headers http.Header) {
+	if l.names != nil {
+		return
+	}
+	l.names = []string{}
+	out, err := runKubectl(ctx, headers, "get", "pod", l.pod, "-n", l.namespace, "-o", podContainers)
+	if err != nil {
+		return
+	}
+	for _, m := range rePodContainer.FindAllStringSubmatch(out, -1) {
+		l.names = append(l.names, m[1])
+	}
+}
+
 // others are the pod's containers but those seen. They are not known when the pod could not be read, or when what was read
 // does not hold every one of seen.
 func (l *podLogRead) others(ctx context.Context, headers http.Header, seen []string) (names []string, known bool) {
-	if l.names == nil {
-		out, err := runKubectl(ctx, headers, "get", "pod", l.pod, "-n", l.namespace, "-o", podContainers)
-		if err != nil {
-			return nil, false
-		}
-		l.names = strings.Fields(out)
-	}
+	l.list(ctx, headers)
 	for _, name := range l.names {
 		if !slices.Contains(seen, name) {
 			names = append(names, name)
