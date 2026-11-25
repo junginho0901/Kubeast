@@ -87,5 +87,5 @@ def test_the_prompt_says_nothing_of_it(monkeypatch):
 
 def test_the_words_name_the_answers_fields():
     # k8s-service's field names (internal/callgraph): a renamed one changes the words
-    for words in ("p90_ms", "client_p90_ms", "time_outside_callee", "name both ends", "no longer than the slow time"):
+    for words in ("p90_ms", "client_p90_ms", "time_outside_callee", "name both ends as candidates, not as causes", "what would tell them apart", "no longer than the slow time"):
         assert words in tools.CALLS_CLIENT_DESCRIPTION

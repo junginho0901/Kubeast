@@ -610,7 +610,8 @@ const graphCallsNote = "calls: who calls whom over the range, from the traces' s
 // (features.callGraph.clientLatency).
 const graphClientLatencyNote = " client_p90_ms is the p90 the caller measured for the same calls, beside p90_ms, its callee's. About equal: the time is " +
 	"spent in the callee or in what it calls. Well above it: outside the callee's handling, between the two (the network, a proxy, waiting " +
-	"for a connection) or in the caller; name both ends and read a trace of that call. Well below it: the caller stopped waiting (a timeout) " +
+	"for a connection) or in the caller; it does not show which is at fault, so name both ends as candidates, not as causes, and read a " +
+	"trace of that call to tell them apart. Well below it: the caller stopped waiting (a timeout) " +
 	"or the callee worked on after answering. Both cover the whole range, so slowness of fewer than a tenth of its calls does not show: ask " +
 	"over the slow time alone. time_outside_callee lists the edges (at most 5, the largest difference first) whose caller's p90 is at least " +
 	"three times the callee's and 50 ms above it. An edge with connection_type (database, virtual_node, messaging_system) is not the two ends of " +

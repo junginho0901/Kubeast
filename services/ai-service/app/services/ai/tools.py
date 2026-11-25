@@ -27,8 +27,9 @@ CALLS_DESCRIPTION = (
 # CALLS_DESCRIPTION, so only where the calls are offered (offer_client_latency).
 CALLS_CLIENT_DESCRIPTION = (
     " Read it too when calls are slow and nothing fails: beside p90_ms, the p90 the callee measured, client_p90_ms is the p90 its caller "
-    "measured, and time_outside_callee lists the calls whose caller waited much longer than its callee worked — that time is spent "
-    "between the two (the network, a proxy, waiting for a connection) or in the caller, not in the callee, so name both ends. Ask over a "
+    "measured, and time_outside_callee lists the calls whose caller waited much longer than its callee worked — that time is spent outside "
+    "the callee's own work, between the two (the network, a proxy, waiting for a connection) or in the caller. It does not show which is at "
+    "fault: name both ends as candidates, not as causes, and what would tell them apart (a trace of the call). Ask over a "
     "window no longer than the slow time: a p90 hides what fewer than a tenth of the calls did."
 )
 

@@ -448,7 +448,7 @@ func TestResourceGraphCallsClientLatency(t *testing.T) {
 	if m["calls_note"] != graphCallsNote+graphClientLatencyNote || source["client_p90"].(map[string]interface{})["detail"] != "not available: no such metric" {
 		t.Fatalf("not available: %v", m)
 	}
-	for _, words := range []string{"client_p90_ms", "p90_ms", "time_outside_callee", "at most 5", "three times", "50 ms", "name both ends", "a timeout", "a tenth of its calls", "connection_type", "database",
+	for _, words := range []string{"client_p90_ms", "p90_ms", "time_outside_callee", "at most 5", "three times", "50 ms", "name both ends as candidates, not as causes", "to tell them apart", "a timeout", "a tenth of its calls", "connection_type", "database",
 		"virtual_node", "messaging_system", "client_p90 with read false", "no_metrics: not available", "truncated true"} {
 		if !strings.Contains(graphClientLatencyNote, words) {
 			t.Errorf("the note says nothing of %q", words)
