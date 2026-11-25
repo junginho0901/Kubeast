@@ -50,6 +50,8 @@ type Replica interface {
 	DropStale(id cluster.ID, builtFrom int64)
 	// DropCluster drops id on another replica's notice.
 	DropCluster(id cluster.ID)
+	// Registered says how many clusters the registry holds, at each read of the versions.
+	Registered(clusters int)
 }
 
 // Sync follows the cluster versions for one replica.
@@ -128,8 +130,8 @@ func (s *Sync) Run(ctx context.Context, r Replica) {
 	}
 }
 
-// Compare reads the versions once and drops each bundle built from another version or of a cluster gone. A read that
-// fails drops nothing; the next one compares again.
+// Compare reads the versions once, says how many clusters there are and drops each bundle built from another version or
+// of a cluster gone. A read that fails does neither; the next one compares again.
 func (s *Sync) Compare(ctx context.Context, r Replica) {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
@@ -138,6 +140,7 @@ func (s *Sync) Compare(ctx context.Context, r Replica) {
 		s.warn("clustersync: cluster versions not read, compared on a later read", "err", err)
 		return
 	}
+	r.Registered(len(versions))
 	for id, built := range r.ClusterVersions() {
 		v, ok := versions[id]
 		if ok && v == built {

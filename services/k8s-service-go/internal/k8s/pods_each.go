@@ -22,6 +22,9 @@ const defaultBigReads = 2
 // it never waits for anything else that waits for it.
 var bigReadSlots = limits.NewSlots("big read", bigReadConcurrency())
 
+// bigReadShare gives out bigReadSlots, with more than one cluster at most half of them to one.
+var bigReadShare = newClusterShare("big read", bigReadSlots)
+
 // bigReadWaited times each take of bigReadSlots (kubeast_k8s_read_place_wait_seconds{places="big_read"}).
 var bigReadWaited = clientWait.forPlaces(placesBigRead)
 
@@ -42,7 +45,7 @@ func (r *pagedRead) nextPage(ctx context.Context) error {
 		return nil
 	}
 	start := time.Now()
-	release, err := bigReadSlots.Take(ctx)
+	release, err := bigReadShare.take(ctx, clusterOf(ctx))
 	bigReadWaited.Observe(time.Since(start).Seconds())
 	if err != nil {
 		return err

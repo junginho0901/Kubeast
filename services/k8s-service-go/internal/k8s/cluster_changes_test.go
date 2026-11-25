@@ -82,6 +82,7 @@ func TestABundleCarriesTheVersionItWasBuiltFrom(t *testing.T) {
 // A bundle built from a row read just before a change is not taken as current: the next read of the versions drops
 // it, whether or not any replica was told. The bundle built from the new row stays, and so does the other cluster's.
 func TestABundleBuiltJustBeforeAChangeIsDroppedAtTheNextRead(t *testing.T) {
+	t.Cleanup(func() { bigReadShare.registered(1) }) // the registry read here has two
 	reg := &mockRegistry{def: "prod", clusters: map[cluster.ID]cluster.Info{"prod": versioned("prod", 1), "dev": versioned("dev", 5)}}
 	s := newTestService(t, reg)
 	sync := clustersync.New(registryVersions{reg}, nil)
@@ -162,6 +163,7 @@ func TestDropStaleFlushesTheCacheInRedis(t *testing.T) {
 // auth-service's invalidation reaches one replica. With Redis, the others drop the cluster's bundle on its notice, and
 // keep the other clusters'.
 func TestAnInvalidationOnOneReplicaDropsTheBundleOnTheOthers(t *testing.T) {
+	t.Cleanup(func() { bigReadShare.registered(1) }) // the registry read here has two
 	mr := miniredis.RunT(t)
 	reg := &mockRegistry{clusters: map[cluster.ID]cluster.Info{"prod": versioned("prod", 0), "dev": versioned("dev", 0)}}
 	var services []*Service
