@@ -9,9 +9,11 @@ the last one may call no tool, so it must answer (as HolmesGPT does) — the loo
 app.services.ai.tool_turn, which hands it to Claude Code on a Claude subscription.
 The whole run is bounded by timeout_seconds. With rules, changes_first or
 narrow_first on, the first message also holds the time windows counted from the
-alert's start, with changes_first what changed in the change window and with
-narrow_first anomaly_rank over the metrics window, read as step 0 before the
-first model call in that order (investigation/windows.py). With ai.ruleCards.investigations on,
+alert's start. With changes_first the server reads what changed in the change window and
+with narrow_first anomaly_rank over the metrics window, as step 0 before the first model
+call in that order (investigation/windows.py); the first message names each read, and its
+answer follows that message as the call's tool result (tool_turn.server_calls), or on a
+Claude subscription is in it between markers. With ai.ruleCards.investigations on,
 the first message also holds, after those, at most two rule cards the alert's name and labels
 pick (app/services/rule_cards.py). With any of rules, changes_first,
 narrow_first, evidence_check, ledger or call_paths on, each tool result
@@ -224,7 +226,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     from app.services.ai import permissions as perm
     from app.services.ai import usage as usage_acct
     from app.services.ai.streaming import tool_outcome
-    from app.services.ai.tool_turn import run_tool_turn
+    from app.services.ai.tool_turn import run_tool_turn, server_calls
     from app.services.ai.tools import anomaly_rank_on
     from app.services.ai_service import ToolContext
     from app.services.tool_whitelists import READONLY_TOOL_NAMES, readonly_tool_filter
@@ -259,6 +261,9 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     reads: Optional[list[evidence.Read]] = [] if cfg.evidence_check else None
     same_as: dict[int, int] = {}  # a refused repeat's number → the number of the call it repeated
     numbered = numbers.on(cfg)  # each result the model reads starts with its call number
+    # Step 0's answers the model reads as tool results after the first message: (tool, arguments, the text it reads).
+    step_zero: list[tuple[str, dict, str]] = []
+    on_subscription = getattr(service, "provider", None) == "claude-code"
 
     async def call_tool(name: str, args: dict, step: int) -> tuple[str, Any, dict[str, Any]]:
         """The text the model reads, the tool's own answer (None when it did not run) and the call's log entry."""
@@ -369,7 +374,11 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             unused = f"{inv_windows.CHANGES_TOOL} did not answer the {inv_windows.CHANGES_VIEW} view"
         if unused:
             return inv_prompt.no_changes_block(unused)
-        return inv_prompt.changes_block(numbers.tag(number_of(entry), text) if numbered else text, args)
+        text = numbers.tag(number_of(entry), text) if numbered else text
+        if on_subscription:
+            return inv_prompt.changes_block(text, args)
+        step_zero.append((inv_windows.CHANGES_TOOL, args, text))
+        return inv_prompt.changes_call(args)
 
     async def narrow_first(windows: inv_windows.Windows) -> str:
         """Step 0, after the changes: anomaly_rank over the metrics window of the alert's namespace through the same call,
@@ -392,7 +401,11 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             unnarrowed = f"{inv_windows.NARROW_TOOL} did not answer with findings"
         if unnarrowed:
             return inv_prompt.no_narrowing_block(unnarrowed)
-        return inv_prompt.narrowing_block(numbers.tag(number_of(entry), text) if numbered else text, args)
+        text = numbers.tag(number_of(entry), text) if numbered else text
+        if on_subscription:
+            return inv_prompt.narrowing_block(text, args)
+        step_zero.append((inv_windows.NARROW_TOOL, args, text))
+        return inv_prompt.narrowing_call(args)
 
     first: list[str] = []
     unused = ""  # why step 0 gave nothing to use
@@ -417,6 +430,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         {"role": "user", "content": inv_prompt.alert_message(
             cluster=row.cluster, alert=alert_view(row), context="\n\n".join(first),
             numbers=getattr(service.tool_server, "numbers", None))},
+        *server_calls(service, step_zero),
     ]
     final_message = inv_prompt.final_step_message(cfg.rules) + (rca.FINAL_NOTE if rca.on(cfg) else "")
     # With the block the answer is longer: every call may answer at rca.ANSWER_TOKENS (the model's own limit first).

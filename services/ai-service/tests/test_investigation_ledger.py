@@ -23,7 +23,7 @@ from tests.test_alert_investigation import (
     row,
     tool_call,
 )
-from tests.test_investigation_window import STARTED, ChangesService, at_now, first_message
+from tests.test_investigation_window import STARTED, ChangesService, at_now, step_zero_reads
 
 LOG = [
     {"tool": "timeline", "args": {"view": "changes"}, "step": 0, "result_chars": 40},
@@ -278,7 +278,7 @@ async def test_step_zero_is_call_one_of_the_ledger(monkeypatch):
     install_loop(monkeypatch, service, [])
     at_now(monkeypatch)
     out = await runner.investigate(cfg(max_steps=5, changes_first=True, ledger=True), row(starts_at=STARTED))
-    assert "<<<CHANGES\n[call 1]\n" in first_message(service)
+    assert step_zero_reads(service)[1][0].startswith("[call 1]\n")
     assert out["result"]["causes"][0]["evidence"] == [{"call": 1, "tool": "timeline"}]
     assert out["result"]["hypotheses"][0]["for"] == [{"call": 1, "tool": "timeline"}] and out["result"]["asked_again"] is False
     assert out["tool_calls"][0]["step"] == 0 and len(service.completions.calls) == 1
