@@ -52,6 +52,15 @@ func TestPodLogs_AFailureIsWhatKubectlSaysAndNoLineOfALog(t *testing.T) {
 			"starting\n" + line + "error: unexpected EOF\n",
 			"starting\n" + line + "\nError from server: etcdserver: request timed out\n",
 			line + "\nerror: unexpected EOF\n",
+			line + "\nreadyerror: unexpected EOF\n",
+			line + "error: unexpected EOF\n",
+			line + "\nready error: http2: server sent GOAWAY and closed the connection; LastStreamID=1, ErrCode=NO_ERROR, debug=\"\"\n",
+			line + "error: stream error: stream ID 1; INTERNAL_ERROR; received from peer\n",
+			line + "\nreadyerror: read tcp 10.0.0.1:40000->10.0.0.2:443: read: connection reset by peer\n",
+			line + "\nreadyerror: context canceled\n",
+			line + "error: context deadline exceeded\n",
+			line + "\nready error: net/http: request canceled\n",
+			line + "\nx error: http: " + line + "error: context deadline exceeded\n",
 			"starting\n" + line + "\nready\n",
 			"starting\n" + line + "\nready",
 		} {
@@ -59,6 +68,29 @@ func TestPodLogs_AFailureIsWhatKubectlSaysAndNoLineOfALog(t *testing.T) {
 				out, err, n := logsFail(t, func([]string) (string, error) { return text, errors.New("exit status 1") }, with)
 				if err == nil || out != "" || n != 1 || err.Error() != "kubectl failed: "+strings.TrimSpace(text) {
 					t.Errorf("%q, %v: %q %v, kubectl ran %d times", text, with, out, err, n)
+				}
+			}
+		}
+	}
+}
+
+// kubectl that is stopped at the end of the call's time says nothing: what it printed is of logs, its first line and its last.
+func TestPodLogs_AReadThatIsStoppedFailsWithNoLineOfALog(t *testing.T) {
+	for _, line := range linesOfFailures {
+		for _, log := range []string{line, line + "\nready\n", "starting\n" + line + "\n"} {
+			for _, with := range []args{{"container": "app"}, {}, {"all_containers": true}} {
+				ctx, stop := context.WithCancel(context.Background())
+				calls := fakeKubectl(t, func([]string) (string, error) {
+					stop()
+					return log, errors.New("signal: killed")
+				})
+				given := args{"pod_name": "web-1", "namespace": "shop"}
+				for k, v := range with {
+					given[k] = v
+				}
+				out, err := handleGetPodLogs(ctx, given, nil)
+				if err == nil || out != "" || len(*calls) != 1 || err.Error() != "kubectl failed: "+strings.TrimSpace(log) {
+					t.Errorf("%q, %v: %q %v, kubectl ran %d times", log, with, out, err, len(*calls))
 				}
 			}
 		}

@@ -105,6 +105,9 @@ func classifyKubectlFailure(err error) (kubectlFailure, bool) {
 // reKubectlSays is how what kubectl fails with begins (kubectl util.StandardErrorMessage and its default).
 var reKubectlSays = regexp.MustCompile(`Error from server(?: \([A-Za-z]+\))?: |error: |Unable to connect to the server|The connection to the server `)
 
+// reLogBroke is how kubectl logs ends when the connection does in the middle of a log, whose lines come before it.
+var reLogBroke = regexp.MustCompile(`error: (?:unexpected EOF|context (?:canceled|deadline exceeded)|(?:stream error|http2|net/http|http): .*|read tcp .*)$`)
+
 // logFailure is a failed kubectl logs without the lines of the containers it read before it failed, which are no failure:
 // what it failed with comes last, on the line of a log's last line where that has no end.
 func logFailure(err error) error {
@@ -118,7 +121,7 @@ func logFailure(err error) error {
 	text = text[len(reDefaulted.FindString(text)):]
 	last := text[strings.LastIndex(text, "\n")+1:]
 	lead, says := reKubectlSays.FindStringIndex(text), reKubectlSays.FindAllStringIndex(last, -1)
-	switch begins := lead != nil && lead[0] == 0; {
+	switch begins := lead != nil && lead[0] == 0 && !reLogBroke.MatchString(last); {
 	case begins && len(says) > 0 && says[0][0] == 0:
 		text = last
 	case begins: // it says it in several lines, with no log before them
