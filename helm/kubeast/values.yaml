@@ -1451,8 +1451,17 @@ features:
   # resource.networkflow.read. Off: include calls reads nothing and says so,
   # and the AI (the chat, investigations and the MCP tool list) is not offered it.
   # Stage: alpha, tested: the e2e ai-call-graph.spec.ts in whole e2e runs on kind (2026-11-25); not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  # clientLatency (off by default, nothing without enabled): the p90 the caller
+  # measured of each call (traces_service_graph_request_client_seconds) beside
+  # the p90 its callee measured, one query more a read, and the calls whose
+  # caller waited much longer than its callee worked, so a slow call says on
+  # which side its time is spent. Read as the traces are; a Prometheus without
+  # that metric says "not available" and the rest is answered. Off: that query
+  # is not made and the answer and the AI's tool are as without it.
+  # Stage: alpha, not run yet: any run with it on.
   callGraph:
     enabled: false
+    clientLatency: false
   # Alert store reads for the AI's alerts_list (off by default): an
   # Alertmanager's API v2 at url (http://alertmanager.monitoring:9093), a
   # Grafana data source proxy to one (https://<grafana>/api/datasources/proxy/uid/<Alertmanager UID>)

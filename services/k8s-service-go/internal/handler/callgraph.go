@@ -109,8 +109,8 @@ func (h *Handler) resourceGraphCalls(r *http.Request, namespace string, graph ma
 // callsIn is who calls whom over w from the traces' service graph metrics and the Hubble metrics, both in the
 // cluster's Prometheus and read through src as the user, placed on the graph's boxes, with the failing workloads
 // ordered and the paths between them. Each source that could not be read says why; a source's failure does not fail
-// the graph. At most 1 + 3 queries for the traces (1 + 2 without the 90th percentile, which ranks nothing) and the
-// traffic lines' reads (3 or 4).
+// the graph. At most 1 + 3 queries for the traces (1 + 2 without the 90th percentile, which ranks nothing, 1 + 4 with
+// features.callGraph.clientLatency) and the traffic lines' reads (5 at most).
 func (h *Handler) callsIn(r *http.Request, namespace string, graph map[string]interface{}, w promWindow, src netdropsSource, p90 bool) (callgraph.Result, error) {
 	if !h.cfg.CallGraphEnabled {
 		return callgraph.Off(), nil
@@ -157,6 +157,7 @@ func (h *Handler) callsIn(r *http.Request, namespace string, graph map[string]in
 	res.Edges, res.EdgesTotal, res.Truncated = callgraph.Build(ix, traces, lines)
 	rk := callgraph.Suspects(ix, res.Edges)
 	res.Suspects, res.SuspectsTotal, res.Paths, res.NoStart = rk.Suspects, rk.Total, rk.Paths, rk.NoStart
+	res.TimeOutsideCallee = callgraph.TimeOutsideCallee(res.Edges)
 	if res.Suspects == nil {
 		res.Suspects = []callgraph.Suspect{}
 	}
@@ -167,7 +168,8 @@ func (h *Handler) callsIn(r *http.Request, namespace string, graph map[string]in
 }
 
 // callGraphTraces reads the service graph metrics: the label names, then requests, failed requests and (p90) the 90th
-// percentile; one capped at callgraph.MaxSeries that came back full marks the source truncated. A grant limited to
+// percentile, with features.callGraph.clientLatency the client side's too, which fails nothing when it cannot be read;
+// one capped at callgraph.MaxSeries that came back full marks the source truncated. A grant limited to
 // namespaces reads none of them, as the Prometheus screens refuse it: a metric without namespace labels names every
 // namespace's services.
 func (h *Handler) callGraphTraces(ctx context.Context, r *http.Request, src netdropsSource, namespace string, w promWindow, p90 bool) (*callgraph.Traces, callgraph.SourceState) {
@@ -214,7 +216,27 @@ func (h *Handler) callGraphTraces(ctx context.Context, r *http.Request, src netd
 	if shape.Namespace == "" {
 		state.Detail = callgraph.DetailUnscoped
 	}
+	if p90 && h.cfg.CallGraphClientLatency {
+		state.ClientP90 = callGraphClientP90(ctx, src, w, q.ClientP90, tr)
+	}
 	return tr, state
+}
+
+// callGraphClientP90 reads the client side's 90th percentile into tr, one query, not asked when the traces count no
+// call. An empty answer for calls they do count is a Prometheus without that metric.
+func callGraphClientP90(ctx context.Context, src netdropsSource, w promWindow, query string, tr *callgraph.Traces) *callgraph.ClientP90 {
+	if len(tr.Requests) == 0 {
+		return &callgraph.ClientP90{Reason: callgraph.ReasonNoCalls}
+	}
+	answer, err := w.query(ctx, src, query)
+	switch {
+	case err != nil:
+		return &callgraph.ClientP90{Reason: callgraph.ReasonFailed, Detail: err.Error()}
+	case len(answer) == 0:
+		return &callgraph.ClientP90{Reason: callgraph.ReasonNoMetrics, Detail: callgraph.DetailNoClientSeconds}
+	}
+	tr.ClientP90 = callGraphSamples(answer)
+	return &callgraph.ClientP90{Read: true, Series: len(answer), Truncated: tr.ClientCut()}
 }
 
 func callGraphSamples(answer []k8s.PrometheusQueryResult) []callgraph.Sample {

@@ -384,6 +384,7 @@ data:
 {{- end }}
 {{- end }}
   CALL_GRAPH_ENABLED: {{ .Values.features.callGraph.enabled | quote }}
+  CALL_GRAPH_CLIENT_LATENCY: {{ dig "clientLatency" false .Values.features.callGraph | quote }}
 {{- with .Values.features.alertStore }}
   ALERT_STORE_ENABLED: {{ .enabled | quote }}
 {{- if .enabled }}

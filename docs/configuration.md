@@ -347,6 +347,8 @@ features:
   callGraph:
     enabled: false           # (alpha) true: the AI tool resource_graph takes include calls, who calls whom from the traces' service graph
                              # metrics and Hubble (cluster-requirements.md); off: include calls reads nothing and the AI is not offered it
+    clientLatency: false     # (alpha) true, with enabled: each call also has the p90 its caller measured, beside its callee's, one query
+                             # more a read (cluster-requirements.md §20); off: that query is not made and the answer is as without it
 
 # Multi-cluster load/failure isolation tuning
 multicluster:
@@ -413,6 +415,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `features.nodeNeighbors.enabled` | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on, and a run on the kind dev install with it on |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | A `loki_query` on the kind dev install with it set |
 | `features.callGraph.enabled` | false | alpha | The AI evaluation with it off and on. Tested: the e2e `ai-call-graph.spec.ts` in whole e2e runs on kind (2026-11-25) |
+| `features.callGraph.clientLatency` | false | alpha | Any run with it on against a Prometheus that holds the client histogram, and the AI evaluation's `07_one_segment_slow` with it off and on beside `features.callGraph.enabled` |
 | `gateway.servedByHeader` | false | alpha | Any run with it on |
 
 ## Redis users

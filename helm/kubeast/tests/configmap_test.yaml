@@ -835,6 +835,31 @@ tests:
       - equal:
           path: data.CALL_GRAPH_ENABLED
           value: "true"
+      - equal:
+          path: data.CALL_GRAPH_CLIENT_LATENCY
+          value: "false"
+  - it: keeps the calls' client side off by default
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_CLIENT_LATENCY
+          value: "false"
+  - it: takes the calls' client side from features.callGraph.clientLatency
+    set:
+      features.callGraph.clientLatency: true
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_CLIENT_LATENCY
+          value: "true"
+      - equal:
+          path: data.CALL_GRAPH_ENABLED
+          value: "false"
+  - it: values without the calls' client side, as an earlier chart's --reuse-values keeps them, render this chart's default
+    set:
+      features.callGraph.clientLatency: null
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_CLIENT_LATENCY
+          value: "false"
 
   - it: renders the step 0 narrowing as this chart's default for values from a chart without it (--reuse-values)
     set:

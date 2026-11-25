@@ -23,6 +23,14 @@ CALLS_DESCRIPTION = (
     "p90 latency from the traces, connections and drops from the network — with the failing workloads that call nothing failing first "
     "and the cause → … → symptom paths between them: a caller of a failing service is more often its victim than its cause."
 )
+# What the calls add with CALL_GRAPH_CLIENT_LATENCY (chart features.callGraph.clientLatency, off by default): the words after
+# CALLS_DESCRIPTION, so only where the calls are offered (offer_client_latency).
+CALLS_CLIENT_DESCRIPTION = (
+    " Read it too when calls are slow and nothing fails: beside p90_ms, the p90 the callee measured, client_p90_ms is the p90 its caller "
+    "measured, and time_outside_callee lists the calls whose caller waited much longer than its callee worked — that time is spent "
+    "between the two (the network, a proxy, waiting for a connection) or in the caller, not in the callee, so name both ends. Ask over a "
+    "window no longer than the slow time: a p90 hides what fewer than a tenth of the calls did."
+)
 
 # get_node_metrics' view of one node, offered only where the cluster has features.nodeNeighbors on (features.PARAM_GATES),
 # and in the MCP server's list only with NODE_NEIGHBORS_ENABLED (offer_node_neighbors).
@@ -2116,6 +2124,26 @@ def offer_node_neighbors(tools: List[Dict]) -> List[Dict]:
         return tools
     return [without_params(t, NODE_PARAMS, NODE_DESCRIPTION) if ((t or {}).get("function") or {}).get("name") == "get_node_metrics" else t
             for t in tools]
+
+
+def client_latency_on() -> bool:
+    """CALL_GRAPH_CLIENT_LATENCY (chart features.callGraph.clientLatency, default off; in the ConfigMap every service reads),
+    read with the one switch rule (app/services/switch.py)."""
+    return switch.env_on("CALL_GRAPH_CLIENT_LATENCY")
+
+
+def offer_client_latency(tools: List[Dict]) -> List[Dict]:
+    """tools as the gates leave them: with CALL_GRAPH_CLIENT_LATENCY on, resource_graph's words about its calls go on to the
+    callers' p90, where the calls are offered; off, the same list."""
+    if not client_latency_on():
+        return tools
+    out = []
+    for t in tools:
+        fn = (t or {}).get("function") or {}
+        if fn.get("name") == "resource_graph" and CALLS_DESCRIPTION in fn.get("description", ""):
+            t = {**t, "function": {**fn, "description": fn["description"].replace(CALLS_DESCRIPTION, CALLS_DESCRIPTION + CALLS_CLIENT_DESCRIPTION)}}
+        out.append(t)
+    return out
 
 
 def offer_call_graph(tools: List[Dict]) -> List[Dict]:

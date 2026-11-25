@@ -91,6 +91,10 @@ type Config struct {
 	// nothing and answers that it is off.
 	CallGraphEnabled bool
 
+	// The calls' client side (chart features.callGraph.clientLatency, off by default): the 90th percentile the caller
+	// measured beside its callee's, one query more. Off = that query is not made and the answer is as before it.
+	CallGraphClientLatency bool
+
 	// Log files inside containers (chart features.logFiles). Off = the routes
 	// answer 404. Only files matching LogFilesPaths (absolute, glob in the file
 	// name only) can be listed or read; with LogFilesNamespaces set, only pods
@@ -233,7 +237,8 @@ func Load() Config {
 		AnomalyRankCacheSec:        pkgconfig.GetEnvInt("ANOMALY_RANK_CACHE_SEC", 60),
 		AnomalyRankLogMaxBytes:     int64(pkgconfig.GetEnvInt("ANOMALY_RANK_LOG_MAX_BYTES", 10<<30)),
 
-		CallGraphEnabled: pkgconfig.EnvSwitch("CALL_GRAPH_ENABLED"),
+		CallGraphEnabled:       pkgconfig.EnvSwitch("CALL_GRAPH_ENABLED"),
+		CallGraphClientLatency: pkgconfig.EnvSwitch("CALL_GRAPH_CLIENT_LATENCY"),
 
 		LogFilesEnabled:    pkgconfig.GetEnvBool("LOG_FILES_ENABLED", false),
 		LogFilesPaths:      pkgconfig.GetEnvList("LOG_FILES_PATHS", ""),

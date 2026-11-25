@@ -336,6 +336,8 @@ features:
   callGraph:
     enabled: false           # (alpha) true면 AI 도구 resource_graph가 include calls를 받습니다 — 트레이스 서비스 그래프 지표와 Hubble로 본
                              # 호출 관계(cluster-requirements.md). 끄면 include calls는 아무것도 읽지 않고 AI에 주지 않습니다
+    clientLatency: false     # (alpha) enabled와 함께 true면 호출마다 부른 쪽이 잰 p90을 받은 쪽 p90 옆에 붙입니다. 한 번에 질의 하나가
+                             # 늘어납니다(cluster-requirements.md §20). 끄면 그 질의를 하지 않고 답은 이 값이 없을 때와 같습니다
 
 # 멀티클러스터 부하/장애 격리 튜닝
 multicluster:
@@ -402,6 +404,7 @@ multicluster:
 | `features.nodeNeighbors.enabled` | false | alpha | 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | 값을 정한 채 kind 개발 설치에서 한 `loki_query` |
 | `features.callGraph.enabled` | false | alpha | 끄고 켠 AI 평가. 돌려 봄: kind의 전체 e2e에서 `ai-call-graph.spec.ts`(2026-11-25) |
+| `features.callGraph.clientLatency` | false | alpha | 클라이언트 히스토그램이 있는 Prometheus에서 켠 상태로 한 번도 안 돌림, `features.callGraph.enabled`를 켠 채 끄고 켠 AI 평가의 `07_one_segment_slow` |
 | `gateway.servedByHeader` | false | alpha | 켠 상태로 한 번도 안 돌림 |
 
 ## Redis 사용자
