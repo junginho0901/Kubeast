@@ -540,10 +540,13 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         function_response = AUDIT_UNAVAILABLE_RESULT
     else:
         ran = True
+        writes_before = repeats.writes if repeats is not None else None
         access_mod.reset(service)
         function_response = await service._execute_function_with_context(
             function_name, function_args, tool_context
         )
+        if repeats is not None:
+            repeats.changed(function_name)
         call_access = access_mod.of_call(service, function_name)
         call_requests = access_mod.requests_of_call(service)
 
@@ -603,10 +606,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         if stored is False and ran and function_name not in WRITE_TOOL_NAMES and fail_closed_enabled():
             # As on the screens, a read nobody could find later gives no answer. A write has happened, so it keeps its own.
             function_response = AUDIT_UNAVAILABLE_RESULT
-    if repeats is not None and ran:
-        repeats.changed(function_name)
-        if read_outcome(function_name, function_response, service)[0] == "success":
-            repeats.note(function_name, function_args, step=iteration, call=call_id)
+    if repeats is not None and ran and read_outcome(function_name, function_response, service)[0] == "success":
+        repeats.note(function_name, function_args, step=iteration, call=call_id, writes=writes_before)
 
     log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
 

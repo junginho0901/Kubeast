@@ -81,11 +81,41 @@ def test_after_a_write_every_read_may_be_made_again():
     guard.note("k8s_get_resources", PODS, step=1)
     guard.note("k8s_get_pod_logs", LOGS, step=1)
     guard.changed("k8s_get_events")  # a read changes nothing
-    assert guard.earlier("k8s_get_resources", PODS) is not None
+    assert guard.earlier("k8s_get_resources", PODS) is not None and guard.writes == 0
     guard.changed("k8s_scale")
     assert guard.earlier("k8s_get_resources", PODS) is None and guard.earlier("k8s_get_pod_logs", LOGS) is None
     guard.note("k8s_get_resources", PODS, step=3)  # held again from its next answer
     assert guard.earlier("k8s_get_resources", PODS).step == 3
+
+
+def test_only_a_write_clears_what_is_held():
+    """A read outside the read-only list (an admin's, the write's preview), an action that changes no cluster and a name no
+    tool has are no write."""
+    from app.services.ai.tools import ADMIN_READ_TOOLS, WRITE_PREVIEW_TOOLS
+    from app.services.tool_whitelists import ACTION_TOOL_NAMES, READONLY_TOOL_NAMES, WRITE_TOOL_NAMES
+
+    others = {t["function"]["name"] for t in ADMIN_READ_TOOLS + WRITE_PREVIEW_TOOLS} | ACTION_TOOL_NAMES | {"no_such_tool", ""}
+    assert "hygiene" in others and "k8s_diff" in others and not others & (READONLY_TOOL_NAMES | WRITE_TOOL_NAMES)
+    for name in sorted(others | READONLY_TOOL_NAMES):
+        guard = repeats.RepeatGuard(clock=lambda: 0.0)
+        guard.note("k8s_get_resources", PODS, step=1)
+        guard.changed(name)
+        assert guard.earlier("k8s_get_resources", PODS) is not None, name
+    for name in sorted(WRITE_TOOL_NAMES):
+        guard = repeats.RepeatGuard(clock=lambda: 0.0)
+        guard.note("k8s_get_resources", PODS, step=1)
+        guard.changed(name)
+        assert guard.earlier("k8s_get_resources", PODS) is None and guard.writes == 1, name
+
+
+def test_a_read_begun_before_a_write_is_not_held_after_it():
+    guard = repeats.RepeatGuard(clock=lambda: 0.0)
+    began = guard.writes
+    guard.changed("k8s_scale")
+    guard.note("k8s_get_resources", PODS, step=1, writes=began)
+    assert guard.earlier("k8s_get_resources", PODS) is None
+    guard.note("k8s_get_resources", PODS, step=2, writes=guard.writes)
+    assert guard.earlier("k8s_get_resources", PODS).step == 2
 
 
 def test_the_refusal_says_where_the_result_is_and_asks_for_other_arguments():
@@ -239,6 +269,146 @@ async def test_a_write_that_waits_for_its_approval_changes_nothing_yet(monkeypat
                                {"resource_name": "web"}, iteration=2, audit_actor=ACTOR, audit_http=None, call_id=1, repeats=guard)
     told = json.loads((await _call(service, guard, dict(PODS), 3, 2))[2])
     assert told["status"] == "repeated" and service.executed == ["k8s_get_resources"]
+
+
+# --- through the real dispatch, whose answers the conversation keeps for five minutes --------------------------------
+
+
+class _Cluster:
+    """A chat's service with the real dispatch in front of a cluster of one Deployment."""
+
+    def __init__(self, write_fails=False):
+        self.replicas, self.write_fails = 1, write_fails
+        self.asked = []  # what reached tool-server
+        self.hold = {}  # a read that waits here after it read: its number among those asked → the event
+        self.user_role, self.tool_server = "admin", SimpleNamespace(last_redacted=None)
+
+    def _is_tool_allowed(self, name):
+        return True
+
+    async def _call_tool_server(self, name, args, **_):
+        self.asked.append(name)
+        if name == "k8s_scale":
+            self.replicas = args["replicas"]
+            if self.write_fails:
+                raise Exception("timed out")
+            return '{"status": "scaled"}'
+        answer = json.dumps({"replicas": self.replicas})
+        if len(self.asked) in self.hold:
+            await self.hold[len(self.asked)].wait()
+        return answer
+
+    async def _execute_function_with_context(self, name, args, ctx):
+        from app.services.ai.tool_dispatch import execute_function_with_context
+
+        return await execute_function_with_context(self, name, args, ctx)
+
+
+@pytest.fixture
+def writes_run(monkeypatch):
+    """ai.writeApproval off."""
+    from app.services import tool_whitelists
+    from app.services.ai import permissions
+
+    monkeypatch.setattr(tool_whitelists, "write_approval_required", lambda: False)
+    monkeypatch.setattr(permissions, "tool_refusal", lambda *a, **k: None)
+
+
+async def _ask(service, guard, ctx, step, tool="k8s_get_resources", args=None):
+    from app.services.ai import streaming
+
+    return (await streaming._call_tool(service, None, None, "s1", [], ctx, tool, dict(PODS if args is None else args), iteration=step,
+                                       audit_actor=ACTOR, audit_http=None, call_id=step - 1, repeats=guard))[2]
+
+
+async def _scale(service, guard, ctx, step, replicas=3):
+    return await _ask(service, guard, ctx, step, "k8s_scale", {"resource_type": "deployment", "resource_name": "web", "namespace": "apps", "replicas": replicas})
+
+
+def _guard(refuses):
+    return repeats.RepeatGuard(clock=lambda: 50.0) if refuses else None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("refuses", [True, False], ids=["refuseRepeatedReads", "off"])
+@pytest.mark.parametrize("write_fails", [False, True], ids=["written", "failed part of the way"])
+async def test_the_read_after_a_write_reads_the_cluster_again(monkeypatch, writes_run, refuses, write_fails):
+    from app.services.ai_service import ToolContext
+
+    _patch_audit(monkeypatch)
+    service, guard, ctx = _Cluster(write_fails), _guard(refuses), ToolContext("s1")
+    assert json.loads(await _ask(service, guard, ctx, 1)) == {"replicas": 1}
+    await _scale(service, guard, ctx, 2)
+    assert json.loads(await _ask(service, guard, ctx, 3)) == {"replicas": 3}
+    assert service.asked == ["k8s_get_resources", "k8s_scale", "k8s_get_resources"]
+    # and what it read is kept as any answer
+    again = json.loads(await _ask(service, guard, ctx, 4))
+    assert (again["status"] == "repeated" if refuses else again == {"replicas": 3}) and len(service.asked) == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("refuses", [True, False], ids=["refuseRepeatedReads", "off"])
+async def test_a_read_that_a_write_overtook_is_not_kept(monkeypatch, writes_run, refuses):
+    """Claude Code may call tools at once: the read was made before the write and ends after it."""
+    import asyncio
+
+    from app.services.ai_service import ToolContext
+
+    _patch_audit(monkeypatch)
+    service, guard, ctx = _Cluster(), _guard(refuses), ToolContext("s1")
+    service.hold[1] = asyncio.Event()
+    slow = asyncio.create_task(_ask(service, guard, ctx, 1))
+    while not service.asked:
+        await asyncio.sleep(0)
+    await _scale(service, guard, ctx, 1)
+    service.hold[1].set()
+    assert json.loads(await slow) == {"replicas": 1}  # the model reads what was there
+    assert json.loads(await _ask(service, guard, ctx, 2)) == {"replicas": 3}
+    assert service.asked == ["k8s_get_resources", "k8s_scale", "k8s_get_resources"]
+
+
+@pytest.mark.asyncio
+async def test_a_read_while_the_writes_row_is_stored_is_made(monkeypatch, writes_run):
+    from app.services.ai_service import ToolContext
+
+    service, guard, ctx, inside = _Cluster(), _guard(True), ToolContext("s1"), []
+
+    async def ready():
+        return True, None
+
+    async def write_audit(**kw):
+        if kw["after"]["tool"] == "k8s_scale" and not inside:
+            inside.append(None)
+            inside[0] = await _ask(service, guard, ctx, 2)
+        return True
+
+    monkeypatch.setattr("app.services.audit_writer.audit_ready", ready)
+    monkeypatch.setattr("app.services.audit_writer.write_audit", write_audit)
+    await _ask(service, guard, ctx, 1)
+    await _scale(service, guard, ctx, 2)
+    assert json.loads(inside[0]) == {"replicas": 3}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("refuses", [True, False], ids=["refuseRepeatedReads", "off"])
+async def test_a_write_that_waits_for_its_approval_leaves_the_kept_answers(monkeypatch, refuses):
+    from app.services import tool_whitelists
+    from app.services.ai import permissions, streaming
+    from app.services.ai_service import ToolContext
+
+    async def made(**kw):
+        return SimpleNamespace(id="a1", cluster="c", args={}, expires_at=SimpleNamespace(isoformat=lambda: "2026-11-25T00:00:00"))
+
+    monkeypatch.setattr(tool_whitelists, "write_approval_required", lambda: True)
+    monkeypatch.setattr(permissions, "tool_refusal", lambda *a, **k: None)
+    monkeypatch.setattr(permissions, "may_request_approval", lambda *a, **k: True)
+    _patch_audit(monkeypatch)
+    service, guard, ctx = _Cluster(), _guard(refuses), ToolContext("s1")
+    await _ask(service, guard, ctx, 1)
+    await streaming._call_tool(service, SimpleNamespace(create_tool_approval=made), SimpleNamespace(user_id="u1"), "s1", [], ctx, "k8s_scale",
+                               {"resource_name": "web", "replicas": 3}, iteration=2, audit_actor=ACTOR, audit_http=None, call_id=1, repeats=guard)
+    await _ask(service, guard, ctx, 3)
+    assert service.asked == ["k8s_get_resources"]
 
 
 @pytest.mark.asyncio
