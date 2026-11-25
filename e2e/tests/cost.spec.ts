@@ -207,10 +207,19 @@ test.describe('cost (OpenCost)', () => {
     await page.locator('button').filter({ hasText: /Optimization suggestions|최적화 제안/ }).first().click()
     await expect(page.locator('h2').filter({ hasText: /Optimization suggestions|최적화 제안/ })).toBeVisible()
     await page.locator('button[title="Select namespace"], button[title="Namespace 선택"]').first().click()
-    await page.getByRole('button', { name: 'kube-system', exact: true }).click()
+    // the prices are OpenCost's over a moving 24 h, which each k8s-service pod keeps for 60 s: a read of its own after the
+    // screen's can be a cent off, so the screen is held to the answer it was given
+    const [answer] = await Promise.all([
+      page.waitForResponse((r) => {
+        const u = new URL(r.url())
+        return u.pathname === '/api/v1/cluster/optimization' && u.searchParams.get('namespace') === 'kube-system'
+      }),
+      page.getByRole('button', { name: 'kube-system', exact: true }).click(),
+    ])
+    expect(answer.status()).toBe(200)
     await expect(page.getByTestId('optimization-table')).toBeVisible({ timeout: 20_000 })
 
-    const api: OptimizationResponse = await (await page.request.get('/api/v1/cluster/optimization?cluster=default&namespace=kube-system')).json()
+    const api: OptimizationResponse = await answer.json()
     expect(api.pricing).toMatchObject({ source: 'opencost', window: '24h' })
     expect(api.pricing!.cpu_core_hour_usd).toBeGreaterThan(0)
     expect(api.rows.length).toBeGreaterThan(0)
