@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The AI tool anomaly_rank through the MCP endpoint, so the checks are exact. A namespace of this run on self holds a
 // crashing Deployment; the same namespace on the second cluster (default, which has a Prometheus) holds a pod that exits
@@ -73,7 +74,7 @@ function kubectlFor(kindName: string): ((args: string, input?: string) => string
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function call(request: APIRequestContext, token: string, name: string, args: Record<string, unknown>) {

@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The AI tool resource_graph with include ["calls"] through the MCP endpoint, so the checks are exact, against the
 // service graph metrics Tempo's metrics-generator writes into the second cluster's Prometheus (scripts/kind-tracing.sh
@@ -58,7 +59,7 @@ function kubectlFor(kindName: string): ((args: string, input?: string) => string
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function call(request: APIRequestContext, token: string, args: Record<string, unknown>) {
