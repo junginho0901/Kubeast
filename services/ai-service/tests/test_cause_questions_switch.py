@@ -18,8 +18,8 @@ SWITCH = "AI_CAUSE_QUESTIONS"
 OTHERS = ("AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED")
 COMBINATIONS = [on for n in range(len(OTHERS) + 1) for on in itertools.combinations(OTHERS, n)]
 
-# The prompt before this switch (31cec8f9c) with each set of the other switches on: characters, bytes, sha256. With
-# anomaly_rank's on, 31cec8f9c's with that tool's two lines as test_anomaly_rank_switch.py holds them.
+# The prompt before this switch (81f6eda1e) with each set of the other switches on: characters, bytes, sha256. With
+# anomaly_rank's on, 81f6eda1e's with that tool's two lines as test_anomaly_rank_switch.py holds them.
 CHANGES, ANOMALY, CALLS = OTHERS
 BEFORE = {
     (): (25850, 35837, "2a1b00a8b9bead52beded5f8b6fbcd11467e8e52c4f7a5578fd4fa9e7b5b9a47"),

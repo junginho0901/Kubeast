@@ -93,7 +93,9 @@ describe('an investigation result', () => {
     expect(notVerifiedText({ ...RESULT.causes[0], raw_evidence: [1, 999], verified: false, reason: 'bad_calls' }, tr))
       .toBe('Not verified: a call given is not a call of this investigation that answered')
     expect(en.investigations.result.unverified.bad_calls).toBe('a call given is not a call of this investigation that answered')
-    for (const reason of ['no_evidence', 'bad_calls', 'name_missing', 'after_alert']) {
+    expect(notVerifiedText({ ...RESULT.causes[0], verified: false, reason: 'empty_answer' }, tr))
+      .toBe('Not verified: the calls given read nothing or their answer holds nothing')
+    for (const reason of ['no_evidence', 'bad_calls', 'empty_answer', 'name_missing', 'after_alert']) {
       expect((en.investigations.result.unverified as Record<string, string>)[reason]).toBeTruthy()
       expect((ko.investigations.result.unverified as Record<string, string>)[reason]).toBeTruthy()
     }

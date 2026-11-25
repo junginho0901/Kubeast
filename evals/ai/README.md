@@ -383,14 +383,35 @@ A hard case's row holds two scorings. The first is what is described above: `pas
 is the row's `second`. `rules` in it is the number of the rules; numbers are read together only under one number, and a
 comparison gives both scorings.
 
-**A decision is made on blocks.** `second.pass` is a block's: true or false for an answer with an rca block (every chat
-answer, and an investigation with `evidenceCheck` or `ledger` on), and null for a report read in its words. The words'
-scoring (`second.text`) is reported and decides nothing. Words that name the right object beside another mechanism pass
+**A decision is made on blocks.** `second.pass` is a block's: true or false for an answer that has an rca block to score
+(a chat answer, with or without it, and an investigation whose block the server kept or left in its report), and null for
+a report without one ("An answer without a block" below). The words' scoring (`second.text`) is reported and decides
+nothing; of a block, an answer's words decide one thing, whether a kind its case's `scoring.json` lets in by `needs` is
+taken. Words that name the right object beside another mechanism pass
 it, and right ones told another way do not: of the review's 22 wrong incident reports the rules of before passed 17 (the
 first scoring 13) and of its 22 right ones 12 (8). The rules now in place fail all 22 and take 20, but they were written on
 those; of 20 wrong and 17 right reports written after them and scored once, they passed 6 of the wrong (the first 5) and 15
 of the right (12). An off round of investigations has no blocks, so off and on are not compared on this scoring at all:
 they are read by judges (a rubric from `truth.json`, the arm hidden), and the numbers here stand beside that.
+
+### An answer without a block
+
+What the number 3 says of it (`scripts/test_ai_eval_second.py` holds it):
+
+| Answer | First scoring | Second scoring |
+|---|---|---|
+| A chat answer without its block, or with one that cannot be read | `rca.block` missing or invalid, `pass` false | `by` block, `pass` false, `outcome` no_block: a miss |
+| A chat turn that ended in an error or a timeout | `pass` false | `pass` false, `outcome` error |
+| An investigation of an off round (no switch that makes a block) | `pass` is its words' | `by` text, `pass` null, `outcome` its words' |
+| An investigation of an on round whose block is missing, invalid or cut | `pass` is its words', `rca` with that status and `rca.pass` false | the same: `pass` null |
+| An investigation that failed or timed out, in either arm | `pass` false | `pass` null, `outcome` error; false when it stored a block first |
+| A run whose setup failed | a row without scores | none |
+
+The tables count the second's passes out of `블록 있는 회` and show `회` beside it: the two differ by the investigations
+without a block, in an off round all of them, in an on round those that lost theirs. The number 3 says neither that such a
+run failed nor that it did not; a comparison that needs one of the two says which before the round, for both arms, and a
+saved row is scored again (`score`) rather than read by its number: on 2026-11-25 two earlier states of the rules also
+carried the number 3 and say other things of some answers.
 
 It was added because a reading of 72 saved incident reports (by a model, the rounds shuffled) took 57 as right where the
 first scoring had passed 38, no wrong one among them: the first reads one section, counts an object as a guess when it is

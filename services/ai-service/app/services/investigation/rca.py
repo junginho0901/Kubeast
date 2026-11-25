@@ -42,7 +42,8 @@ FAILURES = (
     # ledger: a hypothesis not closed (ledger.check's reasons, not_verified with both on), or none while the block finds a fault
     "hypothesis_open", "hypothesis_no_evidence", "hypothesis_no_reason", "hypothesis_bad_calls", "hypothesis_not_verified",
     "no_hypotheses",
-    # verdict: an outcome the block or the calls do not hold (verdict.check's reasons)
+    # verdict: a cause whose calls hold nothing, an outcome the block or the calls do not hold (verdict.check's reasons)
+    "cause_empty_answer",
     "outcome_missing", "outcome_contradicts", "outcome_no_symptom", "outcome_symptom_bad_calls",
     "outcome_symptom_name_missing", "outcome_symptom_not_shown", "outcome_cause_not_shown", "outcome_nothing_read",
     "outcome_not_read",

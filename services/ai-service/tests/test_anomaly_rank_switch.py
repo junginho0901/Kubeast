@@ -26,7 +26,7 @@ def test_the_switch_is_off_otherwise(monkeypatch, value):
     assert not tools.anomaly_rank_on()
 
 
-# sha256 of the chat's system prompt with the switch on: the prompt of bc7ed386 (04927b8a0fc8…) with what a finding's window
+# sha256 of the chat's system prompt with the switch on: the prompt of 81f6eda1e (04927b8a0fc8…) with what a finding's window
 # before says ("no earlier data") and the node check's name for what it reads in the tool's guide and signature lines
 ANOMALY_RANK_PROMPT = "774798c9b4fd7c5adbc7d7ac8dc4575f93289b27e30826a80bd264441ee1593e"
 SWITCHES = ("AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED")

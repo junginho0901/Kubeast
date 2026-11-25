@@ -321,7 +321,7 @@ def test_of_several_symptoms_the_two_cards_with_the_stronger_place_go():
 
 # --- the switch off -----------------------------------------------------------------------------------------------
 
-# Both worked out with rule_cards.py and rule_cards.json of 31cec8f9c, which had no symptoms: the alert names above that
+# Both worked out with rule_cards.py and rule_cards.json of 81f6eda1e, which had no symptoms: the alert names above that
 # picked a card (no other name and no text here did), and the sha256 of every card as the model reads it.
 OFF_PICKS = {
     "TargetDown": "dependency_down", "CPUThrottlingHigh": "resource_limit", "NodeMemoryHighUtilization": "node",

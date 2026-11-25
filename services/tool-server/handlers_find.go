@@ -19,6 +19,8 @@ var findDefaultKinds = []string{"pods", "deployments", "statefulsets", "daemonse
 const (
 	findMaxKinds   = 12
 	findMaxMatches = 50
+	// findNotedNames: the most names a note lists of the namespaces that could not be read.
+	findNotedNames = 5
 	// explainMaxBytes caps kubectl explain --recursive, which can run to hundreds of KB.
 	explainMaxBytes = 64 << 10
 
@@ -185,7 +187,8 @@ func handleFindResource(ctx context.Context, args map[string]interface{}, header
 
 // namespacesNamed lists at most the given number of namespaces whose name holds needle: of those the caller may list or,
 // for a grant limited to namespaces, of its own. Those are read by name (such a grant may not list the cluster's) and one
-// by one: a kubectl run of several names is an error when one of them is refused, and its other names are lost with it.
+// by one, as many as may be listed: a kubectl run of several names is an error when one of them is refused, and its other
+// names are lost with it.
 func namespacesNamed(ctx context.Context, headers http.Header, needle string, grant []string, most int) (names []string, note string) {
 	holds := func(name string) bool { return strings.Contains(strings.ToLower(name), needle) }
 	read := func(args ...string) error {
@@ -209,15 +212,19 @@ func namespacesNamed(ctx context.Context, headers http.Header, needle string, gr
 		}
 		return names, ""
 	}
+	// A refused or a gone one counts as well: the runs are bounded, whatever each answers.
 	var unread []string
 	var first error
+	tried, named := 0, 0
 	for _, ns := range grant {
 		if !holds(ns) {
 			continue
 		}
-		if len(names) >= most || ctx.Err() != nil {
-			break
+		named++
+		if tried >= most || ctx.Err() != nil {
+			continue
 		}
+		tried++
 		if err := read(ns, "--ignore-not-found"); err != nil {
 			unread = append(unread, ns)
 			if first == nil {
@@ -225,8 +232,19 @@ func namespacesNamed(ctx context.Context, headers http.Header, needle string, gr
 			}
 		}
 	}
+	var parts []string
 	if first != nil {
-		note = "namespaces: " + strings.Join(unread, ", ") + ": " + why(first)
+		listed := strings.Join(unread[:min(len(unread), findNotedNames)], ", ")
+		if more := len(unread) - findNotedNames; more > 0 {
+			listed += fmt.Sprintf(" and %d more", more)
+		}
+		parts = append(parts, listed+": "+why(first))
+	}
+	if tried < named && len(names) < most {
+		parts = append(parts, fmt.Sprintf("%d of the grant's %d namespaces with such a name were looked at", tried, named))
+	}
+	if len(parts) > 0 {
+		note = "namespaces: " + strings.Join(parts, "; ")
 	}
 	return names, note
 }

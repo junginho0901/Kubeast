@@ -65,7 +65,7 @@ export interface InvestigationHypothesis {
   cut?: { for?: InvestigationCut; against?: InvestigationCut }
 }
 
-export type UnverifiedReason = 'no_evidence' | 'bad_calls' | 'name_missing' | 'after_alert'
+export type UnverifiedReason = 'no_evidence' | 'bad_calls' | 'empty_answer' | 'name_missing' | 'after_alert'
 
 // A list the server cut at what it keeps of it: how many items the model gave and how many are kept (the first ones).
 export interface InvestigationCut {

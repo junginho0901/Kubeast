@@ -19,7 +19,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # python3 -I leaves th
 import ai_eval_rca as rca  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-RULES = 3  # goes up when a rule below changes, so two runs' numbers are read together only under one number
+# Goes up when what the rules say of an answer changes (test_ai_eval_second.py THE_RULES_SAY holds each number to it), so two
+# runs' numbers are read together only under one number.
+RULES = 3
 RULES_FILE = "scoring.json"
 # What an answer says, on an incident and on a control: a cause, no fault, or that the cause cannot be told. Besides:
 # no_block (a chat answer without the block it was asked for), error, and unread (words that say none of the three).
@@ -119,7 +121,8 @@ def says(prose: str, tc: dict, pattern: str) -> bool:
 
 
 def accepted_kinds(tc: dict, rules: dict | None, prose: str) -> set[str]:
-    """The kinds a truth cause takes: its own, accept_kinds, and the case's scoring.json where the words say its needs."""
+    """The kinds a truth cause takes: its own, accept_kinds, and the case's scoring.json where the words say its needs — the
+    one thing an answer's words decide of its block (05)."""
     kinds = {tc["kind"], *(tc.get("accept_kinds") or [])}
     for e in (rules or {}).get("accept_kinds") or []:
         if _same_object(e["cause"], tc["resource"]) and (not e.get("needs") or says(prose, tc, e["needs"])):
@@ -640,7 +643,8 @@ def score_text(report: str, truth: dict, rules: dict | None = None) -> dict:
 # --- one answer, as a row records it ---
 
 def _row(truth: dict, by: str, scored: dict, error) -> dict:
-    """pass is a block's only: None for an answer read in its words, which decide nothing (README "The second scoring")."""
+    """pass is a block's only: None for a report without a block, read in its words, in every arm and after an error (README
+    "An answer without a block")."""
     return {"rules": RULES, "by": by, "control": bool(truth.get("control")), "pass": (scored["pass"] and not error) if by == "block" else None,
             "outcome": "error" if error else scored["outcome"], "miss": "error" if error else scored["miss"]}
 

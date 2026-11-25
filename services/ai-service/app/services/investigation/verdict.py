@@ -5,13 +5,15 @@ With it on the rca block (investigation/rca.py) also says which of three answers
 fault found, or that the results cannot tell — and the calls that show the symptom the alert names. The server holds
 the block to this run's calls (check()):
 
-- a report that names a cause needs a call that answered and shows the symptom: the symptom's object, or one the alert
-  names, is in what the call returned, and the call is no read of what changed, of an alert or its rule or of names;
+- a report that names a cause needs a call that answered and shows the symptom: the workload the alert's labels name, or
+  without one the symptom's object or another the alert names, is in what the call returned, and the call is no read of
+  what changed, of an alert or its rule or of names;
 - cause_found also needs a cause the calls show (with evidenceCheck its checks, without it a call that answered);
 - no_fault needs such a call that names the alert's object (any of them, when the alert names nothing);
 - an answer that read or holds nothing shows none of these, whatever names it repeats (investigation/answers.py), and an
   alert about a workload is about that workload, not the pod its labels name beside it, which may be the one that
-  collected the metric;
+  collected the metric; an object that belongs to a workload (an Ingress, an HPA, a PVC, a PDB, a quota) is no workload,
+  and an alert about one is answered by a read of its namespace too;
 - the outcome, "no_fault" and "causes" say the same.
 
 What does not hold is asked about once, in the one second ask with the other checks' problems (rca.ask_again). Of an
@@ -46,13 +48,16 @@ MAX_NOT_LOOKED_AT = 20
 MAX_DETAIL = 200
 
 # An alert's labels that name an object; its namespace, scrape job and instance name none. The first of these it has is
-# what the alert is about: a metric about a workload carries the pod, container and service that were scraped for it.
-WORKLOAD_LABELS = ("deployment", "statefulset", "daemonset", "replicaset", "workload", "job_name", "cronjob",
-                   "persistentvolumeclaim", "horizontalpodautoscaler", "hpa", "poddisruptionbudget", "resourcequota", "ingress")
-OBJECT_LABELS = (WORKLOAD_LABELS, ("exported_pod",), ("pod",), ("node",),
+# what the alert is about: a metric about a workload carries the pod, container and service that were scraped for it. An
+# attached object belongs to a workload, whose own reads need not name it.
+WORKLOAD_LABELS = ("deployment", "statefulset", "daemonset", "replicaset", "workload", "job_name", "cronjob")
+ATTACHED_LABELS = ("persistentvolumeclaim", "horizontalpodautoscaler", "hpa", "poddisruptionbudget", "resourcequota", "ingress")
+OBJECT_LABELS = (WORKLOAD_LABELS, ATTACHED_LABELS, ("exported_pod",), ("pod",), ("node",),
                  ("exported_service", "service", "service_name", "app", "exported_container", "container"))
-# What collects metrics about other objects: its own name in a label is not what the alert is about, unless it is all there is.
+# What collects metrics about other objects: its own name in a label a scrape adds is not what the alert is about, unless
+# it is all there is.
 COLLECTORS = ("kube-state-metrics", "node-exporter")
+SCRAPE_LABELS = frozenset({"pod", "service", "service_name", "app", "container"})
 
 # Reads that show no symptom: what an alert or its rule says and which names there are (and what changed, can_show).
 NO_SYMPTOM = frozenset({
@@ -100,23 +105,42 @@ def _text(value: Any) -> str:
     return _SURROGATE.sub("", inv_result.text(value))
 
 
+def writable(value: Any) -> Any:
+    """`value` with lone surrogates taken out of every string at any depth: neither text nor JSON of the database holds one."""
+    if isinstance(value, str):
+        return _SURROGATE.sub("", value)
+    if isinstance(value, (list, tuple)):
+        return [writable(v) for v in value]
+    if isinstance(value, dict):
+        return {writable(k): writable(v) for k, v in value.items()}
+    return value
+
+
 @dataclass(frozen=True)
 class Alert:
     """What an alert gives its object by: the names in its labels, and its namespace. `workload`: they name a workload,
-    so the report is about that and no other."""
+    so the report is about that and no other. `attached`: they name an object that belongs to one."""
     names: tuple[str, ...] = ()
     namespace: str = ""
     workload: bool = False
+    attached: bool = False
+
+    @property
+    def by_namespace(self) -> bool:
+        """Whether a read of its namespace is about it."""
+        return bool(self.namespace) and (self.attached or not self.names)
 
     @property
     def wanted(self) -> list[str]:
-        """Its object's names, or its namespace when its labels name none."""
-        return list(self.names) or ([self.namespace] if self.namespace else [])
+        """Its object's names, its namespace too where a read of that is about it."""
+        return [*self.names, *([self.namespace] if self.by_namespace else [])]
 
 
 # The end of a generated pod name: the ReplicaSet's hash and the API server's five letters (k8s.io/apimachinery util/rand).
 _POD_END = re.compile(r"-[bcdfghjklmnpqrstvwxz2456789]{5}$")
 _HASH_END = re.compile(r"-[bcdfghjklmnpqrstvwxz2456789]{6,10}$")
+# The end of a CronJob's Job: the schedule's minute, or Kubeast's manual run's second.
+_RUN_END = re.compile(r"-(manual-)?\d{6,}$")
 
 
 def _pod_names(pod: str) -> list[str]:
@@ -125,15 +149,24 @@ def _pod_names(pod: str) -> list[str]:
     return [pod] if owner == pod else list(dict.fromkeys((pod, _HASH_END.sub("", owner))))
 
 
+def _names_by(key: str, name: str) -> list[str]:
+    """The names an alert's label gives its object by: its own, and its workload's where the name is made from it."""
+    if key in ("pod", "exported_pod"):
+        return _pod_names(name)
+    end = {"replicaset": _HASH_END, "job_name": _RUN_END}.get(key)
+    return list(dict.fromkeys((name, end.sub("", name)))) if end else [name]
+
+
 def alert_of(labels: Any, namespace: str = "") -> Alert:
     given = labels if isinstance(labels, dict) else {}
     for collectors in (False, True):  # a collector's own name only where the labels name nothing else
         for keys in OBJECT_LABELS:
-            found = [given[key].strip() for key in keys if isinstance(given.get(key), str)]
-            found = [n for n in found if n and len(n) <= 253 and (collectors or not any(evidence._names(n, c) for c in COLLECTORS))]
-            if found:
-                names = [name for n in found for name in (_pod_names(n) if "pod" in keys[0] else [n])]
-                return Alert(tuple(dict.fromkeys(names)), namespace or "", keys is WORKLOAD_LABELS)
+            found = [(key, given[key].strip()) for key in keys if isinstance(given.get(key), str)]
+            names = [name for key, n in found if n and len(n) <= 253 and
+                     (collectors or key not in SCRAPE_LABELS or not any(evidence._names(n, c) for c in COLLECTORS))
+                     for name in _names_by(key, n)]
+            if names:
+                return Alert(tuple(dict.fromkeys(names)), namespace or "", keys is WORKLOAD_LABELS, keys is ATTACHED_LABELS)
     return Alert((), namespace or "")
 
 
@@ -182,15 +215,22 @@ def can_show(read: evidence.Read) -> bool:
     return not changes and read.tool not in NO_SYMPTOM
 
 
-def _wanted(resource: str, alert: Alert) -> list[str]:
-    """The names one of which a symptom's call must have returned: the workload the alert is about; without one the
-    symptom's object or one the alert names, the alert's namespace only where neither is given. A cluster is not named by
-    what is read in it."""
+def _is_about(read: evidence.Read, names: Iterable[str], namespace: str) -> bool:
+    """Whether a call returned one of the names or, where one is given, read that namespace."""
+    if any(evidence._names(read.text, name) for name in names):
+        return True
+    return bool(namespace) and (read.args.get("namespace") == namespace or evidence._names(read.text, namespace))
+
+
+def _wanted(resource: str, alert: Alert) -> tuple[list[str], str]:
+    """What a symptom's call must be about: one of the names, or the namespace where one is given. The workload the alert
+    is about; without one the symptom's object or one the alert names, and the alert's namespace only where no object is
+    given or the alert's is attached to another. A cluster is not named by what is read in it."""
     if alert.workload:
-        return list(alert.names)
+        return list(alert.names), ""
     whole = resource.lower().startswith("cluster/")
     own = "" if whole else evidence.resource_name(resource)
-    return [n for n in dict.fromkeys((own, *alert.names)) if n] or ([] if whole else alert.wanted)
+    return [n for n in dict.fromkeys((own, *alert.names)) if n], "" if own or whole or not alert.by_namespace else alert.namespace
 
 
 def _symptom_problem(block: dict, reads: list[evidence.Read], alert: Alert) -> Optional[Problem]:
@@ -200,14 +240,14 @@ def _symptom_problem(block: dict, reads: list[evidence.Read], alert: Alert) -> O
     good, bad = evidence.answered(given, reads)
     if not good:
         return Problem("symptom_bad_calls", {"calls": [n for n, _ in bad]})
-    numbers = [n for n, _ in good]
-    shows = [read for _, read in good if can_show(read) and read.shows]
+    shows = [(n, read) for n, read in good if can_show(read) and read.shows]
     if not shows:
-        return Problem("symptom_not_shown", {"calls": numbers})
-    wanted = _wanted(resource, alert)
-    if wanted and not any(evidence._names(read.text, name) for read in shows for name in wanted):
+        return Problem("symptom_not_shown", {"calls": [n for n, _ in good]})
+    names, namespace = _wanted(resource, alert)
+    if (names or namespace) and not any(_is_about(read, names, namespace) for _, read in shows):
         # the block's own name for it: an alert's label is another system's text and goes in no message outside its fence
-        return Problem("symptom_name_missing", {"name": evidence.resource_name(resource), "calls": numbers})
+        return Problem("symptom_name_missing", {"name": "" if alert.workload else evidence.resource_name(resource),
+                                                "workload": alert.workload, "calls": [n for n, _ in shows]})
     if bad:  # a call that shows it does not make the other numbers right, and they do not make it wrong
         return Problem("symptom_bad_calls", {"calls": [n for n, _ in bad]}, lowers=False)
     return None
@@ -216,11 +256,12 @@ def _symptom_problem(block: dict, reads: list[evidence.Read], alert: Alert) -> O
 def _read_problem(reads: list[evidence.Read], alert: Alert) -> Optional[Problem]:
     """no_fault needs a call that answered and names the alert's object. An issue check of every severity that lists
     nothing is such an answer, about the namespace it was asked for."""
-    texts = [read.text for read in reads if not read.failed and read.text and can_show(read) and
+    given = [read for read in reads if not read.failed and read.text and can_show(read) and
              (read.shows or (read.tool == "issues" and read.nothing == "empty" and not read.args.get("severity")))]
-    if not texts:
+    if not given:
         return Problem("nothing_read")
-    if alert.wanted and not any(evidence._names(text, name) for text in texts for name in alert.wanted):
+    namespace = alert.namespace if alert.by_namespace else ""
+    if alert.wanted and not any(_is_about(read, alert.names, namespace) for read in given):
         return Problem("not_read")
     return None
 
@@ -283,7 +324,7 @@ _REASONS = {
         "contradicts": '"outcome"은 {said}인데 원인이 {causes}개이고 "no_fault"는 {no_fault}임',
         "no_symptom": "알림의 증상을 보여 주는 호출을 대지 않음",
         "symptom_bad_calls": "증상의 근거로 댄 {calls}번 호출은 이 조사에서 답을 받은 호출이 아님",
-        "symptom_name_missing": "증상의 근거로 댄 {calls}번 호출이 돌려준 결과에 {name}이(가) 나오지 않음",
+        "symptom_name_missing": "증상의 근거로 댄 {calls}번 호출이 돌려준 결과에 {name}{subject} 나오지 않음",
         "symptom_not_shown": "증상의 근거로 댄 {calls}번 호출은 담긴 것이 없거나 바뀐 것, 알림이나 그 규칙, 이름만 읽음",
         "cause_not_shown": "원인을 보여 주는 호출이 하나도 없음",
         "nothing_read": "이 조사에서 상태를 읽어 무엇이든 답을 받은 호출이 없음",
@@ -291,14 +332,18 @@ _REASONS = {
     },
 }
 REASONS = tuple(_REASONS["en"])
-_ITS_OBJECT = {"en": "the symptom's object", "ko": "증상의 대상"}  # in place of a name the block does not give
+# In place of a name: the block gives none, or it is the alert's label's, which goes in no message outside its fence.
+_ITS_OBJECT = {"en": "the symptom's object", "ko": "증상의 대상"}
+_ITS_WORKLOAD = {"en": "the workload the alert's labels name", "ko": "알림의 레이블이 가리키는 워크로드"}
 _CALL_CHARS = 20
 
 
 def reason_text(p: Problem, language: str = "en") -> str:
     language = language if language in _REASONS else "en"
     calls = ", ".join(_text(str(n))[:_CALL_CHARS] for n in (p.values.get("calls") or [])[:inv_result.MAX_CALLS])
-    return _REASONS[language][p.reason].format(**{**p.values, "calls": calls, "name": p.values.get("name") or _ITS_OBJECT[language]})
+    stand_in = (_ITS_WORKLOAD if p.values.get("workload") else _ITS_OBJECT)[language]
+    return _REASONS[language][p.reason].format(**{**p.values, "calls": calls, "name": p.values.get("name") or stand_in,
+                                                  "subject": "이(가)" if p.values.get("name") else "가" if p.values.get("workload") else "이"})
 
 
 def kinds(failures: Iterable[dict[str, Any]]) -> list[str]:
@@ -314,7 +359,9 @@ def _items(value: Any) -> list:
 
 
 def _detail(value: Any) -> str:
-    return _text(value)[:MAX_DETAIL]
+    """A reason as the lists keep it: its first MAX_DETAIL characters, an ellipsis the last where it was cut."""
+    text = _SURROGATE.sub("", str(value).replace("\x00", "")).strip() if value is not None else ""
+    return text if len(text) <= MAX_DETAIL else text[:MAX_DETAIL - 1] + "…"
 
 
 class Facts:
@@ -329,7 +376,8 @@ class Facts:
         self.ran: set[tuple[str, str]] = set()      # (namespace, check) that ran, whatever it found
         self.unread: dict[int, tuple[str, str]] = {}  # a call that read nothing → (why, in the lists' words, its detail)
         self.empty: set[int] = set()                # calls whose answer holds nothing
-        self.missed: set[int] = set()               # issue checks that could not read some of their lists (not_read)
+        self.missed: set[int] = set()               # issue checks that could not read some of their lists
+        self.no_issue: set[int] = set()             # issue checks that list no object
         self.checked: dict[str, dict[int, str]] = {}   # source → {call: tool} of the checks that read it
 
     def note(self, number: int, tool: str, args: Any, raw: Any, status: Optional[str]) -> None:
@@ -346,13 +394,13 @@ class Facts:
 
     def held_none(self, number: int) -> str:
         """evidence.Read.nothing of a call. An issue check that lists nothing and missed lists did not read what they hold."""
-        if number in self.unread or (number in self.empty and number in self.missed):
+        if number in self.unread or (number in self.no_issue and number in self.missed):
             return "unread"
-        return "empty" if number in self.empty else ""
+        return "empty" if number in self.empty or number in self.no_issue else ""
 
     @property
     def none_held(self) -> set[int]:
-        return self.empty | set(self.unread)
+        return self.empty | self.no_issue | set(self.unread)
 
     def _narrowing(self, number: int, tool: str, data: dict) -> None:
         namespace = _text(data.get("namespace"))
@@ -378,22 +426,31 @@ class Facts:
                                      "call": number, "tool": tool, **place})
 
     def _issues(self, number: int, tool: str, args: dict, data: dict) -> None:
-        """The issue check: normal when it lists nothing in its scope, whatever the severity, and read every list of it.
-        The lists it could not read (not_read) are not looked at, whatever else it lists."""
+        """The issue check: normal when it lists no object in its scope, whatever the severity, and read every list of it.
+        The lists it could not read — not_read, and the Collector rows of an answer that is not narrowed — are not looked
+        at, whatever else it lists. A grant limited to namespaces, whose answer names them, reads no nodes."""
         listed = data.get("issues")
         if not isinstance(listed, list) or not isinstance(data.get("total"), int):
             return
-        namespace = _text(args.get("namespace"))
-        if missed := data.get("not_read"):
+        limited = [_text(n) for n in _items(data.get("namespace")) if isinstance(n, str)]
+        namespace = _text(args.get("namespace")) or ", ".join(limited)
+        place = {"namespace": namespace} if namespace else {}
+        collectors = [row for row in listed if isinstance(row, dict) and row.get("kind") == "Collector"]
+        missed = _not_read(data.get("not_read"))
+        for row in collectors:
+            if not (limited and row.get("name") == "nodes"):
+                missed.setdefault(_text(row.get("name")), _detail(row.get("message")))
+        for name, why in missed.items():
             self.missed.add(number)
-            self.not_run.append({"check": "issues", "reason": "not_run", "detail": _detail(_not_read(missed)),
-                                 "call": number, "tool": tool, **({"namespace": namespace} if namespace else {})})
-        if listed or data["total"]:
+            self.not_run.append({"check": f"issues/{name}" if name else "issues", "reason": "not_run", "detail": why, "call": number,
+                                 "tool": tool, **place})
+        if len(listed) > len(collectors) or data["total"] > len(listed):
             self._ran(namespace, "issues", number, tool, found=True, whole=not missed)
-        elif not missed and not args.get("severity") and not data.get("truncated"):
+            return
+        self.no_issue.add(number)
+        if not missed and not args.get("severity") and not data.get("truncated"):
             self._ran(namespace, "issues", number, tool)
-            self.normal.append({"check": "issues", "call": number, "tool": tool,
-                                **({"namespace": namespace} if namespace else {})})
+            self.normal.append({"check": "issues", "call": number, "tool": tool, **place})
 
     def _ran(self, namespace: str, check: str, number: int, tool: str, found: bool = False, whole: bool = True) -> None:
         if whole:  # a check that missed lists did not read what they hold
@@ -404,11 +461,13 @@ class Facts:
             self.checked.setdefault(source, {})[number] = tool
 
 
-def _not_read(missed: Any) -> str:
-    """An issue check's lists that could not be read, by name with why."""
-    if not isinstance(missed, dict):
-        return _text(str(missed))
-    return "; ".join(f"{name}: {why}" if isinstance(why, str) and why else str(name) for name, why in missed.items())
+def _not_read(missed: Any) -> dict[str, str]:
+    """An issue check's lists that could not be read, each with why ("" where the answer does not say)."""
+    if isinstance(missed, dict):
+        return {_text(name): _detail(why) if isinstance(why, str) else "" for name, why in missed.items()}
+    if isinstance(missed, list):
+        return {_text(name) if isinstance(name, str) else "": "" for name in missed}
+    return {"": _detail(missed) if isinstance(missed, str) else ""} if missed else {}
 
 
 def sources_of(tool: str, args: Any) -> list[str]:
@@ -467,7 +526,7 @@ def lists(tool_log: list[dict[str, Any]], facts: Facts, offered: Iterable[str]) 
         normal.append(item)
     for item in facts.not_run:
         place = (item.get("namespace", ""), item["check"])
-        if place in facts.ran or (*place, "not_run") in seen:
+        if (place[0], item["check"].partition("/")[0]) in facts.ran or (*place, "not_run") in seen:  # a list of a check: check/list
             continue
         seen.add((*place, "not_run"))
         not_looked_at.append(item)

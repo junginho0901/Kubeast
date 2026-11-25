@@ -371,6 +371,35 @@ func TestIssues_ANarrowedAnswerNamesTheListsThatCouldNotBeRead(t *testing.T) {
 	}
 }
 
+// A grant limited to namespaces never lists the nodes: they are no part of its answers, with a namespace named or not, so
+// an answer that missed the nodes alone is what it was before not_read. The rows of an answer that is not narrowed stay.
+func TestIssues_ALimitedGrantsAnswerDoesNotMissTheNodes(t *testing.T) {
+	const head = `{"counts":{"critical":0,"info":0,"warning":0},"generated_at":"2026-10-15T00:00:00Z",` + issuesQuietEnd
+	const tail = `"namespace":["shop"],"total":0,"window_minutes":30}`
+	for _, severity := range []string{"critical", "warning"} {
+		out := issuesOf(t, ctxFor("c1", "shop"), args{"severity": severity}, unreadNodes)
+		if out != head+tail {
+			t.Errorf("%s: %s", severity, out)
+		}
+		// a list of its namespaces that was refused is still named, alone
+		m := decode(t, issuesOf(t, ctxFor("c1", "shop"), args{"severity": severity}, unreadNodes, unreadDeploys))
+		if !reflect.DeepEqual(m["not_read"], map[string]interface{}{"deployments": "deployments.apps is forbidden"}) || m["hint"] != nil {
+			t.Errorf("%s: %v", severity, m)
+		}
+	}
+	for _, a := range []args{{}, {"severity": "info"}} {
+		m := decode(t, issuesOf(t, ctxFor("c1", "shop"), a, unreadNodes))
+		if m["total"] != float64(1) || m["not_read"] != nil {
+			t.Errorf("%v: %v", a, m)
+		}
+	}
+	// whoever reads the whole cluster may list the nodes: an answer that missed them says so
+	m := decode(t, issuesOf(t, ctxFor("c1"), args{"severity": "critical"}, unreadNodes))
+	if !reflect.DeepEqual(m["not_read"], map[string]interface{}{"nodes": "nodes is forbidden"}) || m["hint"] != nil {
+		t.Errorf("the whole cluster: %v", m)
+	}
+}
+
 func TestFeatureFailure_Mapping(t *testing.T) {
 	if out, ok, _ := featureFailure("x", "alt", 404, []byte(`{"detail":"x is not configured for this cluster"}`)); !ok || decode(t, out)["status"] != "unavailable" {
 		t.Fatal("404 not configured → unavailable")

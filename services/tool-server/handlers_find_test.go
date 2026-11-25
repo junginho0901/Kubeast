@@ -372,6 +372,74 @@ func TestFindResource_OnNamespacesThatCannotBeReadAreANote(t *testing.T) {
 	}
 }
 
+// The namespaces of a grant read by name are bounded by the answer's limit whatever is found: refused and gone ones count.
+func TestFindResource_OnTheNamespacesReadOfAGrantAreBounded(t *testing.T) {
+	names := make([]string, 200)
+	for i := range names {
+		names[i] = fmt.Sprintf("team-%03d", i)
+	}
+	ctx := auth.WithPayload(withClusterID(context.Background(), "c"), auth.TokenPayload{Namespaces: map[string][]string{"c": names}})
+	answering := func(namespaces func(name string) (string, error)) func([]string) (string, error) {
+		return func(a []string) (string, error) {
+			v := verb(a)
+			if v[1] != "namespaces" {
+				return kubectlErr(`error: the server doesn't have a resource type "foo"`)
+			}
+			return namespaces(v[2])
+		}
+	}
+	refused := func(name string) (string, error) {
+		return kubectlErr(`Error from server (Forbidden): namespaces "` + name + `" is forbidden`)
+	}
+	for _, c := range []struct {
+		name  string
+		limit int
+		reads int
+		found int
+		read  func(string) (string, error)
+		note  string
+	}{
+		{"all refused", 0, 21, 0, refused, "team-000, team-001, team-002, team-003, team-004 and 16 more: "},
+		{"all refused, a limit given", 2, 3, 0, refused, "team-000, team-001, team-002: "},
+		{"all gone", 0, 21, 0, func(string) (string, error) { return "", nil }, "namespaces: 21 of "},
+		{"every other refused", 0, 21, 11, func(name string) (string, error) {
+			if strings.HasSuffix(name, "1") || strings.HasSuffix(name, "3") || strings.HasSuffix(name, "5") || strings.HasSuffix(name, "7") || strings.HasSuffix(name, "9") {
+				return refused(name)
+			}
+			return name + "\n", nil
+		}, "team-001, team-003, team-005, team-007, team-009 and 5 more: "},
+		{"all there", 0, 21, 20, func(name string) (string, error) { return name + "\n", nil }, ""},
+	} {
+		a := args{"query": "team", "kinds": []interface{}{"foo"}}
+		if c.limit > 0 {
+			a["limit"] = c.limit
+		}
+		out, argv := findWith(t, "true", ctx, a, answering(c.read))
+		if n := len(namespaceReads(argv)); n != c.reads {
+			t.Errorf("%s: %d reads, want %d", c.name, n, c.reads)
+		}
+		if n := len(matchNames(t, out)); n != c.found {
+			t.Errorf("%s: %d found, want %d", c.name, n, c.found)
+		}
+		var note string
+		for _, n := range decode(t, out)["notes"].([]interface{}) {
+			if s := n.(string); strings.HasPrefix(s, "namespaces: ") {
+				note += s
+			}
+		}
+		if (c.note == "") != (note == "") || !strings.Contains(note, c.note) || len(note) > 400 {
+			t.Errorf("%s: note of %d bytes: %s", c.name, len(note), note)
+		}
+		// the ones that were not looked at are counted where the answer is not full
+		if said := strings.Contains(note, fmt.Sprintf("%d of the grant's 200 namespaces", c.reads)); said != (c.note != "") {
+			t.Errorf("%s: note %s", c.name, note)
+		}
+		if truncated := decode(t, out)["truncated"]; truncated != (c.note == "") {
+			t.Errorf("%s: truncated %v", c.name, truncated)
+		}
+	}
+}
+
 // The text for a search that found nothing is about the search, not about the work it was part of.
 func TestFindResource_OnNothingFoundDoesNotEndTheInvestigation(t *testing.T) {
 	out, _ := findWith(t, "true", context.Background(), args{"query": "orders"}, findInCluster("shop"))

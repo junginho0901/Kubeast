@@ -55,7 +55,7 @@ class Read:
 @dataclass
 class Problem:
     resource: str
-    reason: str                  # no_evidence | bad_calls | name_missing | after_alert
+    reason: str                  # no_evidence | bad_calls | empty_answer (the verdict on) | name_missing | after_alert
     values: dict[str, Any] = field(default_factory=dict)
     index: int = -1              # the cause's place in the block's causes, from 0
 
@@ -132,8 +132,12 @@ def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tu
         if not good:
             problems.append(Problem(resource, "bad_calls", {"calls": [n for n, _ in bad]}, index))
             continue
-        if not any(read.shows and _names(read.text, resource_name(resource)) for _, read in good):
-            problems.append(Problem(resource, "name_missing", {"name": resource_name(resource), "calls": [n for n, _ in good]},
+        held = [(n, read) for n, read in good if read.shows]
+        if not held:
+            problems.append(Problem(resource, "empty_answer", {"calls": [n for n, _ in good]}, index))
+            continue
+        if not any(_names(read.text, resource_name(resource)) for _, read in held):
+            problems.append(Problem(resource, "name_missing", {"name": resource_name(resource), "calls": [n for n, _ in held]},
                                     index))
             continue
         started = _time(c.get("started_at"))
@@ -157,12 +161,14 @@ _REASONS = {
     "en": {
         "no_evidence": "no call is given for it",
         "bad_calls": "calls {calls} are not calls of this investigation that answered",
+        "empty_answer": "calls {calls} read nothing or their answer holds nothing",
         "name_missing": "{name} does not appear in what calls {calls} returned",
         "after_alert": "it starts at {at}, after the alert's start at {start}",
     },
     "ko": {
         "no_evidence": "근거로 댄 호출이 없음",
         "bad_calls": "{calls}번 호출은 이 조사에서 답을 받은 호출이 아님",
+        "empty_answer": "{calls}번 호출은 읽은 것이 없거나 답에 담긴 것이 없음",
         "name_missing": "{calls}번 호출이 돌려준 결과에 {name}이(가) 나오지 않음",
         "after_alert": "시작 시각 {at}이(가) 알림 시작 {start}보다 늦음",
     },

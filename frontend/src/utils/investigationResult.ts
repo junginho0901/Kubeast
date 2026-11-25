@@ -73,6 +73,7 @@ const UNVERIFIED_TEXT: Record<string, string> = {
   bad_calls: 'a call given is not a call of this investigation that answered',
   name_missing: 'its name does not appear in what the calls returned',
   after_alert: 'it starts after the alert did',
+  empty_answer: 'the calls given read nothing or their answer holds nothing',
 }
 
 // A cause the run's calls do not show (evidenceCheck), as the window and the floating chat say it.
@@ -99,7 +100,7 @@ const WHY_TEXT: Record<string, string> = {
   contradicts: 'the outcome, "no_fault" and the causes say different things',
   no_symptom: "no call is given that shows the alert's symptom",
   symptom_bad_calls: 'the calls given for the symptom are not calls of this investigation that answered',
-  symptom_name_missing: "the symptom's object does not appear in what its calls returned",
+  symptom_name_missing: "what the calls given for the symptom returned does not name the workload the alert's labels name, or without one the symptom's object",
   symptom_not_shown: 'the calls given for the symptom hold nothing or read only what changed, an alert or its rule, or names',
   cause_not_shown: 'no call shows any of its causes',
   nothing_read: 'no call of this investigation that read a state answered with something',

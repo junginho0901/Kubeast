@@ -54,7 +54,7 @@ CANNOT = answer("Cannot tell: no call shows the symptom.", "cannot_tell", [], {"
 
 # --- off: to the byte ------------------------------------------------------------------------------------------------
 
-# sha256 of what main 31cec8f9c, before the switch, builds.
+# sha256 of what main 81f6eda1e, before the switch, builds.
 OFF_PROMPTS = {
     "instruction evidence=True hypotheses=False": "b39ced01d9ba4f29128e3f651b1a1b9cd73f0134e3fdc140a53d38fdc0d5f804",
     "instruction evidence=False hypotheses=True": "6b61aa568fb5ffa8ab928c7aae52acf8ad5a64d54253f876a7d3d9349b32dcd5",
@@ -412,7 +412,8 @@ def test_the_names_an_alert_gives_its_object_by():
     assert verdict.alert_of(labels, "apps") == verdict.Alert(("web",), "apps", True)  # the workload, not what was scraped for it
     assert verdict.alert_of(labels, "apps").wanted == ["web"]
     two = {"statefulset": "db", "persistentvolumeclaim": "data-db-0", "pod": "web-1"}
-    assert verdict.alert_of(two).names == ("db", "data-db-0")
+    assert verdict.alert_of(two).names == ("db",)  # what belongs to the workload does not stand for it
+    assert verdict.alert_of({"statefulset": "db", "cronjob": "backup"}).names == ("db", "backup")
     # no workload: the pod, not the Service or the container beside it, with the workload of a generated name
     pod = {"pod": "web-1", "container": "app", "service": "kps-kube-state-metrics", "node": "n1"}
     assert verdict.alert_of(pod) == verdict.Alert(("web-1",), "")
@@ -710,9 +711,9 @@ def test_an_issue_check_that_could_not_read_a_list_is_never_checked_and_normal(a
     facts, log = facts_of(("issues", args, json.dumps(data)))
     got = verdict.lists(log, facts, [])
     assert got["checked_normal"] == []
-    (item,) = [i for i in got["not_looked_at"] if i.get("check") == "issues"]
-    assert item["reason"] == "not_run" and item["call"] == 1 and item["tool"] == "issues" and item.get("namespace") == listed
-    assert item["detail"] == "deployments: deployments.apps is forbidden; events: timed out"
+    items = [i for i in got["not_looked_at"] if "check" in i]
+    assert [(i["check"], i["detail"]) for i in items] == [("issues/deployments", "deployments.apps is forbidden"), ("issues/events", "timed out")]
+    assert all((i["reason"], i["call"], i["tool"], i.get("namespace")) == ("not_run", 1, "issues", listed) for i in items)
     # a call that read nothing but the lists it missed shows nothing, one that listed something does
     assert facts.held_none(1) == ("" if data["issues"] else "unread")
 
@@ -724,11 +725,11 @@ def test_an_issue_check_that_read_every_list_takes_the_ones_missed_back():
         facts, log = facts_of(*calls)
         got = verdict.lists(log, facts, [])
         assert [i["check"] for i in got["checked_normal"]] == ["issues"]
-        assert [i for i in got["not_looked_at"] if i.get("check") == "issues"] == []
+        assert [i for i in got["not_looked_at"] if "check" in i] == []
     # of another namespace it takes nothing back
     facts, log = facts_of(missed, ("issues", {"namespace": "other"}, json.dumps({"total": 0, "issues": []})))
     got = verdict.lists(log, facts, [])
-    assert [(i["check"], i["namespace"]) for i in got["not_looked_at"] if "check" in i] == [("issues", "apps")]
+    assert [(i["check"], i["namespace"]) for i in got["not_looked_at"] if "check" in i] == [("issues/deployments", "apps"), ("issues/events", "apps")]
     assert [(i["check"], i["namespace"]) for i in got["checked_normal"]] == [("issues", "other")]
 
 
@@ -737,8 +738,8 @@ def test_whatever_not_read_holds_the_check_did_not_read_it(not_read):
     facts, log = facts_of(("issues", {"namespace": "apps"}, json.dumps({"total": 0, "issues": [], "not_read": not_read})))
     got = verdict.lists(log, facts, [])
     assert got["checked_normal"] == []
-    (item,) = [i for i in got["not_looked_at"] if i.get("check") == "issues"]
-    assert "deployments" in item["detail"] and len(item["detail"]) <= verdict.MAX_DETAIL
+    (item, *_rest) = [i for i in got["not_looked_at"] if "check" in i]
+    assert "deployments" in item["check"] + item["detail"] and len(item["detail"]) <= verdict.MAX_DETAIL
 
 
 @pytest.mark.parametrize("empty", [{}, None, "", []])
@@ -750,8 +751,9 @@ def test_a_not_read_that_names_no_list_is_none(empty):
 def test_the_lists_an_issue_check_missed_are_cut_and_hold_no_lone_surrogate():
     missed = {"deployments": "x" * 1000, SURROGATE + "events": "refused " + SURROGATE}
     facts, log = facts_of(("issues", {"namespace": "apps"}, json.dumps({"total": 0, "issues": [], "not_read": missed})))
-    (item,) = [i for i in verdict.lists(log, facts, [])["not_looked_at"] if i.get("check") == "issues"]
-    assert len(item["detail"]) <= verdict.MAX_DETAIL and "x" in item["detail"] and SURROGATE not in item["detail"]
+    items = [i for i in verdict.lists(log, facts, [])["not_looked_at"] if "check" in i]
+    assert [i["check"] for i in items] == ["issues/deployments", "issues/events"] and items[1]["detail"] == "refused"
+    assert len(items[0]["detail"]) <= verdict.MAX_DETAIL and items[0]["detail"].endswith("x…")
 
 
 @pytest.mark.parametrize("extra", [{}, {"truncated": True}])
@@ -941,7 +943,7 @@ async def test_a_cause_is_not_kept_on_an_empty_answer_that_repeats_the_name(monk
     kept = out["result"]
     assert (kept["verdict"]["outcome"], kept["verdict"]["why"]) == ("cannot_tell", ["symptom_not_shown", "cause_not_shown"])
     # the evidence check, with the verdict on, does not take it for the cause either
-    assert (kept["causes"][0]["verified"], kept["causes"][0]["reason"]) == (False, "name_missing")
+    assert (kept["causes"][0]["verified"], kept["causes"][0]["reason"]) == (False, "empty_answer")
     ask = service.completions.calls[2]["messages"][-1]["content"]
     assert '[call 1] prometheus_query {"promql": "up{pod=\\"web-1\\"}"} — answered, holding nothing' in ask
     # the symptom shown by another call does not make the empty one show the cause
@@ -991,7 +993,7 @@ async def test_an_alert_of_a_namespace_is_answered_by_an_issue_check_that_lists_
     missed = json.dumps({"not_read": NOT_READ, "not_read_note": "n", "namespace": "apps", "counts": {"critical": 0}, "total": 0, "issues": []})
     out, _ = await run_of(monkeypatch, [("issues", {"namespace": "apps"}, missed)], NONE_FOUND, {})
     assert out["result"]["verdict"]["outcome"] == "cannot_tell" and out["result"]["verdict"]["why"] == ["nothing_read"]
-    assert [i["check"] for i in out["result"]["verdict"]["not_looked_at"] if "check" in i] == ["issues"]
+    assert [i["check"] for i in out["result"]["verdict"]["not_looked_at"] if "check" in i] == ["issues/deployments", "issues/events"]
     # it shows no symptom, though it repeats the namespace
     given = answer("A cause was found.", "cause_found", [cause(POD, [1])], {"evidence": [1]})
     out, _ = await run_of(monkeypatch, [("issues", {"namespace": "apps"}, issues)], given, {})
@@ -1156,3 +1158,189 @@ async def test_a_call_number_int_cannot_read_does_not_end_the_run(monkeypatch):
     for switches in ({}, {"ledger": True}, {"verdict": False}):
         out, _ = await run_of(monkeypatch, [("k8s_get_resources", PODS, POD_TABLE)], given, {"deployment": "web"}, **switches)
         assert out["result"]["causes"][0]["reason"] == "bad_calls", switches
+
+
+# --- an alert's object, the lists an issue check missed, an empty answer, lone surrogates -------------------------------------
+
+DEPLOYMENT = "Name: web\nReplicas: 2 desired | 0 available\nprogress deadline exceeded"
+
+
+@pytest.mark.parametrize("labels", [
+    {"ingress": "web-ing", "service": "web"}, {"horizontalpodautoscaler": "web-hpa"}, {"hpa": "web-hpa"}, {"persistentvolumeclaim": "data-web-0"},
+    {"poddisruptionbudget": "web-pdb"}, {"resourcequota": "compute"},
+])
+@pytest.mark.asyncio
+async def test_an_object_that_belongs_to_a_workload_is_not_the_workload(monkeypatch, labels):
+    given = answer("A cause was found.", "cause_found", [cause(WEB, [1])], shown(WEB, 1))
+    out, service = await run_of(monkeypatch, [("k8s_describe_resource", {"name": "web", "namespace": "apps"}, DEPLOYMENT)], given, labels)
+    assert (out["result"]["verdict"]["outcome"], out["result"]["verdict"]["why"]) == ("cause_found", [])
+    assert len(service.completions.calls) == 2 and "does not appear" not in out["report"]
+    # nothing wrong: a read of the alert's namespace is about it, whether its answer prints the namespace or not
+    for namespace, outcome in (("apps", "no_fault"), ("shop", "cannot_tell")):
+        read = ("k8s_get_resources", {"resource_type": "deployments", "namespace": namespace}, "NAME READY\nweb 2/2")
+        out, _ = await run_of(monkeypatch, [read], NONE_FOUND, labels)
+        assert out["result"]["verdict"]["outcome"] == outcome, namespace
+
+
+@pytest.mark.parametrize("labels, text", [
+    ({"job_name": "backup-28712340"}, "NAME SCHEDULE SUSPEND\nbackup * * * * * False"), ({"job_name": "backup-manual-1763950000"}, "Name: backup"),
+    ({"replicaset": "web-7d9f4c6b8", "pod": "web-7d9f4c6b8-x2kzp"}, "NAME READY\nweb-5c8d7f9b6f-k4x2z 1/1"), ({"cronjob": "backup"}, "Name: backup"),
+    ({"job_name": "migrate"}, "Name: migrate"),
+])
+@pytest.mark.asyncio
+async def test_a_job_or_a_replicaset_of_a_workload_is_named_by_the_workload_too(monkeypatch, labels, text):
+    out, _ = await run_of(monkeypatch, [("k8s_get_resources", {"namespace": "x"}, text)], NONE_FOUND, labels)
+    assert out["result"]["verdict"]["outcome"] == "no_fault"
+    out, _ = await run_of(monkeypatch, [("k8s_get_resources", {"namespace": "x"}, "Name: other")], NONE_FOUND, labels)
+    assert out["result"]["verdict"]["why"] == ["not_read"]
+
+
+@pytest.mark.asyncio
+async def test_why_a_workloads_alert_is_not_answered_says_the_workload_is_missing_not_the_object_that_is_there(monkeypatch):
+    given = answer("A cause was found.", "cause_found", [cause(DB, [1])], shown(DB, 1))
+    out, service = await run_of(monkeypatch, [("k8s_describe_resource", {"name": "db"}, "Name: db\nReady: 0/1")], given, {"deployment": "web"})
+    assert out["result"]["verdict"]["why"] == ["symptom_name_missing"]
+    ask = service.completions.calls[2]["messages"][-1]["content"]
+    line = "the workload the alert's labels name does not appear in what calls 1, given for the symptom, returned"
+    assert "- " + line in ask and out["report"].endswith("- " + line) and "db does not appear" not in ask + out["report"]
+    out, _ = await run_of(monkeypatch, [("k8s_describe_resource", {"name": "db"}, "Name: db")], given, {"deployment": "web"}, language="ko")
+    assert out["report"].endswith("- 증상의 근거로 댄 1번 호출이 돌려준 결과에 알림의 레이블이 가리키는 워크로드가 나오지 않음")
+    # without a workload it is the symptom's object, and only the calls that hold something are named
+    calls = [("prometheus_query", {"promql": 'up{pod="cache"}'}, json.dumps({"promql": 'up{pod="cache"}', "series": 0, "results": []})),
+             ("k8s_describe_resource", {"name": "x"}, "Name: other")]
+    given = answer("A cause was found.", "cause_found", [cause(DB, [2])], shown("Pod/apps/cache", 1, 2))
+    out, _ = await run_of(monkeypatch, calls, given, {})
+    assert "- cache does not appear in what calls 2, given for the symptom, returned" in out["report"]
+
+
+def test_a_collectors_own_workload_is_what_an_alert_of_that_workload_is_about():
+    assert verdict.alert_of({"deployment": "kube-state-metrics", "pod": "kps-kube-state-metrics-0", "node": "n1"}) == verdict.Alert(
+        ("kube-state-metrics",), "", True)
+    assert verdict.alert_of({"daemonset": "kps-node-exporter", "node": "n1"}).names == ("kps-node-exporter",)
+    assert verdict.alert_of({"replicaset": "web-7d9f4c6b8"}).names == ("web-7d9f4c6b8", "web")
+    ingress = verdict.alert_of({"ingress": "web-ing", "service": "web", "pod": "controller-0"}, "apps")
+    assert (ingress.names, ingress.workload, ingress.wanted) == (("web-ing",), False, ["web-ing", "apps"])
+
+
+def collectors(*names):
+    return [{"id": f"Collector/{n}", "kind": "Collector", "name": n, "severity": "info", "reason": "ListFailed", "message": f"{n} is forbidden"} for n in names]
+
+
+def issue_list(rows, namespace="all namespaces", **more):
+    return json.dumps({"counts": {"critical": 0, "warning": 0, "info": len(rows)}, "generated_at": "x", "issues": rows, "namespace": namespace,
+                       "window_minutes": 30, **{"total": len(rows), **more}})
+
+
+@pytest.mark.asyncio
+async def test_an_issue_check_that_could_not_read_its_lists_shows_neither_a_fault_nor_none(monkeypatch):
+    rows = collectors("nodes", "deployments", "events")
+    for raw in (issue_list(rows), issue_list(rows, ["apps"])):
+        out, _ = await run_of(monkeypatch, [("issues", {}, raw)], NONE_FOUND, {})
+        kept = out["result"]["verdict"]
+        assert (kept["outcome"], kept["why"], kept["checked_normal"]) == ("cannot_tell", ["nothing_read"], [])
+        assert {"check": "issues/deployments", "reason": "not_run", "detail": "deployments is forbidden", "call": 1, "tool": "issues"}.items() <= next(
+            n for n in kept["not_looked_at"] if n.get("check") == "issues/deployments").items()
+        given = answer("A cause was found.", "cause_found", [cause("Namespace/apps", [1])], {"resource": "", "evidence": [1]})
+        out, _ = await run_of(monkeypatch, [("issues", {}, raw)], given, {})
+        assert out["result"]["verdict"]["outcome"] == "cannot_tell"
+    # a page of the rows that holds only lists it missed, with more rows past it, found something
+    facts, log = facts_of(("issues", {}, issue_list(rows, total=60, truncated=True)))
+    assert facts.held_none(1) == "" and ("", "issues") in facts.found
+    # with an object beside them it read something, and the lists it missed stay in the list
+    facts, log = facts_of(("issues", {}, issue_list([*rows, {"kind": "Pod", "namespace": "apps", "name": "web-1", "severity": "critical"}])))
+    assert facts.held_none(1) == "" and [n["check"] for n in verdict.lists(log, facts, [])["not_looked_at"] if "check" in n] == [
+        "issues/nodes", "issues/deployments", "issues/events"]
+
+
+@pytest.mark.asyncio
+async def test_a_grant_limited_to_namespaces_does_not_read_nodes_and_its_issue_check_is_whole_without_them(monkeypatch):
+    out, _ = await run_of(monkeypatch, [("issues", {}, issue_list(collectors("nodes"), ["apps"]))], NONE_FOUND, {})
+    kept = out["result"]["verdict"]
+    assert (kept["outcome"], kept["why"]) == ("no_fault", [])
+    assert kept["checked_normal"] == [{"check": "issues", "call": 1, "tool": "issues", "namespace": "apps"}]
+    assert not [n for n in kept["not_looked_at"] if "check" in n]
+    facts, log = facts_of(("issues", {}, issue_list(collectors("nodes"), ["apps"])))
+    assert facts.held_none(1) == "empty" and facts.none_held == {1}  # its one row is no object
+    given = answer("A cause was found.", "cause_found", [cause("Namespace/apps", [1])], {"resource": "", "evidence": [1]})
+    out, _ = await run_of(monkeypatch, [("issues", {}, issue_list(collectors("nodes"), ["apps"]))], given, {})
+    assert out["result"]["verdict"]["why"][0] == "symptom_not_shown"
+    out, _ = await run_of(monkeypatch, [("issues", {}, issue_list(collectors("nodes")))], NONE_FOUND, {})  # the whole cluster's read them
+    assert out["result"]["verdict"]["outcome"] == "cannot_tell"
+
+
+@pytest.mark.parametrize("raw, tool, args", [
+    (NO_SERIES, "prometheus_query", {"promql": 'up{pod="web-1"}'}), (not_found("web-1"), "k8s_describe_resource", {"name": "web-1"}),
+])
+@pytest.mark.asyncio
+async def test_a_cause_whose_calls_hold_nothing_says_so_and_not_that_its_name_is_missing(monkeypatch, raw, tool, args):
+    calls = [(tool, args, raw), ("k8s_get_resources", {}, "NAME STATUS\nweb-1 CrashLoopBackOff")]
+    given = answer("A cause was found.", "cause_found", [cause(POD, [1])], shown(POD, 2))
+    out, service = await run_of(monkeypatch, calls, given, {"pod": "web-1"})
+    (c,) = out["result"]["causes"]
+    assert (c["verified"], c["reason"]) == (False, "empty_answer")
+    assert {"kind": "cause_empty_answer", "resource": POD} in out["result"]["failures"] and "cause_empty_answer" in rca.FAILURES
+    line = "- Pod/apps/web-1: calls 1 read nothing or their answer holds nothing"
+    ask = service.completions.calls[2]["messages"][-1]["content"]
+    assert line in ask and line in out["report"] and "web-1 does not appear" not in ask + out["report"]
+    out, _ = await run_of(monkeypatch, calls, given, {"pod": "web-1"}, language="ko")
+    assert "- Pod/apps/web-1: 1번 호출은 읽은 것이 없거나 답에 담긴 것이 없음" in out["report"]
+    # beside a call that holds something and does not name it, the name is missing from that one
+    given = answer("A cause was found.", "cause_found", [cause("Pod/apps/cache", [1, 2])], shown(POD, 2))
+    out, _ = await run_of(monkeypatch, calls, given, {"pod": "web-1"})
+    assert "- Pod/apps/cache: cache does not appear in what calls 2 returned" in out["report"]
+
+
+def unwritable(value) -> bool:
+    try:
+        json.dumps(value, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError:
+        return True
+    return False
+
+
+@pytest.mark.parametrize("switches", [{}, {"ledger": True}, {"evidence_check": False, "ledger": True}])
+@pytest.mark.asyncio
+async def test_a_lone_surrogate_is_in_no_field_a_run_keeps(monkeypatch, switches):
+    lone = f"Pod/apps/w{SURROGATE}eb-1"
+    given = answer(f"A cause{SURROGATE} was found.", "cause_found", [{**cause(lone, [1, SURROGATE]), "kind": f"cr{SURROGATE}ash"}], shown(lone, 1),
+                   path=[lone], ruled_out=[lone], hypotheses=[hypothesis(id=f"h{SURROGATE}", resource=lone, statement=SURROGATE, **{"for": [1]})])
+    calls = [("k8s_describe_resource", {"name": f"web{SURROGATE}-1"}, "Name: web-1")]
+    out, _ = await run_of(monkeypatch, calls, given, {"pod": "web-1"}, **switches)
+    for field_ in ("report", "result", "tool_calls"):
+        assert not unwritable(out[field_]), field_
+    assert out["result"]["causes"][0]["resource"] == "Pod/apps/web-1" and out["tool_calls"][0]["args"] == {"name": "web-1"}
+    # with the verdict off a run keeps what it kept
+    out, _ = await run_of(monkeypatch, calls, given, {"pod": "web-1"}, **{"evidence_check": True, **switches, "verdict": False})
+    assert unwritable(out["result"])
+
+
+def test_writable_takes_lone_surrogates_out_at_any_depth_and_leaves_the_rest():
+    kept = verdict.writable({f"k{SURROGATE}": [f"a{SURROGATE}", (f"b{SURROGATE}", 1)], "n": None, "t": True, "whole": "\U0001F600"})
+    assert kept == {"k": ["a", ["b", 1]], "n": None, "t": True, "whole": "\U0001F600"}
+
+
+def test_each_list_an_issue_check_missed_is_in_the_lists_whole():
+    missed = {name: f'{name} is forbidden: User "system:kubeast:investigator" cannot list resource "{name}" in API group "x" in the namespace "shop"'
+              for name in ("deployments", "statefulsets", "daemonsets", "jobs", "cronjobs", "hpas", "pvcs", "events")}
+    facts, log = facts_of(("issues", {"namespace": "apps"}, json.dumps({"total": 0, "issues": [], "not_read": missed})))
+    got = [n for n in verdict.lists(log, facts, [])["not_looked_at"] if "check" in n]
+    assert [(n["check"], n["detail"]) for n in got] == [(f"issues/{name}", why) for name, why in missed.items()]
+    # a second check that missed others adds them, the same list once; one that read them all takes them away
+    second = ("issues", {"namespace": "apps"}, json.dumps({"total": 0, "issues": [], "not_read": {"events": "y", "nodes": ""}}))
+    calls = [("issues", {"namespace": "apps", "n": 1}, json.dumps({"total": 0, "issues": [], "not_read": {"deployments": "x", "events": "z"}})), second]
+    facts, log = facts_of(*calls)
+    assert [(n["check"], n.get("detail", "")) for n in verdict.lists(log, facts, [])["not_looked_at"] if "check" in n] == [
+        ("issues/deployments", "x"), ("issues/events", "z"), ("issues/nodes", "")]
+    facts, log = facts_of(*calls, ("issues", {"namespace": "apps"}, json.dumps({"total": 0, "issues": []})))
+    assert not [n for n in verdict.lists(log, facts, [])["not_looked_at"] if "check" in n]
+    # a reason past what is kept of one says it was cut
+    facts, log = facts_of(("issues", {"namespace": "apps"}, json.dumps({"total": 0, "issues": [], "not_read": {"pods": "p" * 500}})))
+    (n,) = [n for n in verdict.lists(log, facts, [])["not_looked_at"] if "check" in n]
+    assert len(n["detail"]) == verdict.MAX_DETAIL and n["detail"].endswith("p…")
+    many = {f"list{i}": "why" for i in range(30)}
+    facts, log = facts_of(("issues", {"namespace": "apps"}, json.dumps({"total": 0, "issues": [], "not_read": many})))
+    assert verdict.lists(log, facts, [])["cut"]["not_looked_at"]["given"] == 30 + 7  # 7 sources
+    for odd in (["pods"], "pods", 3, True, {"pods": 3}, [None, {}]):
+        facts, log = facts_of(("issues", {"namespace": "apps"}, json.dumps({"total": 0, "issues": [], "not_read": odd})))
+        got = [n["check"] for n in verdict.lists(log, facts, [])["not_looked_at"] if "check" in n]
+        assert got and all(c.startswith("issues") for c in got) and not facts.normal, odd

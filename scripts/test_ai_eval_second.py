@@ -7,6 +7,7 @@ the truths are the shown cases' own (a hidden case's folder is not read here).
   python3 scripts/test_ai_eval_second.py        # the same checks without pytest
 """
 import copy
+import hashlib
 import importlib.util
 import io
 import json
@@ -912,13 +913,123 @@ def test_a_path_hop_is_not_a_guess_but_a_decoy_hop_is():
     assert not both_block("12", blk(right, ("Deployment/x/a", "crash"), ("Deployment/x/b", "crash")))[1]["pass"]
 
 
+# --- the number of the rules ---
+
+# Made-up truths, so a change of a case does not change what is pinned: a ConfigMap, a NetworkPolicy, a node, a workload
+# whose fault is over, the two ends of one call, a workload with a kind of its own rules, a control.
+def _hop(resource, role, required=True, accept=()):
+    return {"resource": resource, "role": role, "required": required, "accept": list(accept)}
+
+
+PINNED = {
+    "config": {"causes": [{"resource": "ConfigMap/shop-x/settings-b", "kind": "config_change", "accept_resources": ["settings-b"], "accept_kinds": ["rollout"]}],
+               "path": [_hop("ConfigMap/shop-x/settings-b", "cause"), _hop("Deployment/shop-x/api", "via", False), _hop("Deployment/shop-x/web", "symptom")],
+               "also_ok": ["Deployment/shop-x/api"], "decoys": ["Deployment/shop-x/web", "Deployment/shop-x/noisy", "Node/*"]},
+    "policy": {"causes": [{"resource": "NetworkPolicy/shop-x/allow-a", "kind": "network_policy", "accept_resources": ["allow-a"], "accept_kinds": []}],
+               "path": [_hop("NetworkPolicy/shop-x/allow-a", "cause"), _hop("Deployment/shop-x/api", "via", False, ["api"]), _hop("Deployment/shop-x/web", "symptom")],
+               "also_ok": [], "decoys": ["Deployment/shop-x/api", "NetworkPolicy/shop-x/allow-old"]},
+    "node": {"causes": [{"resource": "Node/n1", "kind": "node", "accept_resources": ["batch-job"], "accept_kinds": ["resource_limit"]}],
+             "path": [_hop("Node/n1", "cause"), _hop("Deployment/shop-x/web", "symptom")], "also_ok": [], "decoys": ["Deployment/shop-x/api"]},
+    "over": {"causes": [{"resource": "Deployment/shop-x/pay", "kind": "dependency_down", "accept_resources": ["^pay"], "accept_kinds": ["config_change"]}],
+             "path": [_hop("Deployment/shop-x/pay", "cause"), _hop("Deployment/shop-x/web", "symptom")], "also_ok": ["Service/shop-x/pay"],
+             "decoys": ["Deployment/shop-x/web"], "fault_end": "2026-01-01T00:10:00Z"},
+    "segment": {"causes": [{"resource": "Deployment/shop-x/web", "kind": "dependency_slow", "accept_resources": ["web.*api"], "accept_kinds": []},
+                           {"resource": "Deployment/shop-x/api", "kind": "dependency_slow", "accept_resources": ["web.*api"], "accept_kinds": []}],
+                "path": [_hop("Deployment/shop-x/api", "cause"), _hop("Deployment/shop-x/web", "symptom")], "also_ok": [], "decoys": ["Deployment/shop-x/noisy"]},
+    "kinds": {"causes": [{"resource": "Deployment/shop-x/web", "kind": "dns", "accept_resources": ["^web"], "accept_kinds": []}],
+              "path": [_hop("Deployment/shop-x/web", "cause"), _hop("Service/shop-x/stock", "symptom", False)], "also_ok": [],
+              "decoys": ["Service/shop-x/stock", "Deployment/kube-system/coredns"]},
+    "control": {"causes": [], "path": [], "also_ok": [], "decoys": ["Deployment/shop-x/web", "ReplicaSet/shop-x/web-<new>"], "control": True},
+}
+PINNED_RULES = {"kinds": {"accept_kinds": [{"cause": "Deployment/shop-x/web", "kinds": ["config_change", "rollout"], "needs": "dns ?config|search list",
+                                            "notes": "takes `config_change` or `rollout`"}], "facts": [["dns"]]},
+                "config": {"facts": [["settings-b"], ["changed", "edited", "lacks"]]}}
+PINNED_WORDS = ("{0} was changed.", "{0} {1}.", "{0} {1}, which caused the failures.", "The cause is {0}: it {1}.", "The failures are due to {0}.", "{0} is unrelated and healthy.",
+                "No evidence that {0} {1}.", "The cause could not be determined; {0} {1}.", "No fault found: {0} {1}.", "The failures are caused by {0} or settings-b.",
+                "Possible causes:\n- {0} {1}\n- settings-b was changed", "{0} {1}. No fault remains. It was edited by hand.", "{0} lacks the key and {1}, but only a comment.",
+                "web's dnsConfig lacks shop-x, and {0} {1}.")
+
+
+def what_the_rules_say() -> str:
+    """The sha256 of what the rules say of a fixed set of blocks, answers and reports: each one's pass, outcome and miss."""
+    said = []
+
+    def keep(*key_and_result):
+        *key, r = key_and_result
+        said.append([*key, r.get("pass"), r.get("outcome"), r.get("miss"), r.get("by")])
+
+    for name, made in PINNED.items():
+        truth = {"id": name, "control": False, "fault_start": "2026-01-01T00:00:00Z", "fault_end": None, "symptom": "web fails and is slow", **made,
+                 "decoys": [{"resource": d, "why": "x"} for d in made["decoys"]]}
+        rules = PINNED_RULES.get(name, {})
+        objects = sorted({as_answered(x) for x in [*(c["resource"] for c in truth["causes"]), *(h["resource"] for h in truth["path"]), *made["also_ok"], *made["decoys"],
+                                                   "Deployment/elsewhere/other", "web-x"]})
+        right = [(as_answered(c["resource"]), c["kind"]) for c in truth["causes"]]
+        blocks = [blk(), blk(no_fault=True), blk(*right), blk(*right, no_fault=True), {"no_fault": False, "causes": ["words only"]}]
+        blocks += [blk((o, k)) for o in objects for k in rca.KINDS] + [blk(*right, (o, "crash")) for o in objects]
+        blocks += [blk(*right, *[(o, k) for k in kinds]) for o in objects for kinds in (("crash", "oom"), ("crash", "oom", "dns"))] + [blk(*right, *[(f"Secret/shop-x/{o.rsplit('/', 1)[-1]}-x", "dns") for o in objects])]
+        for i, block in enumerate(blocks):
+            for prose in ("", "web's dnsConfig lacks the namespace.", "The dnsConfig lacks the namespace.", "web was changed. Its dnsConfig is fine.", "web's dnsConfig is set."):
+                keep(name, "block", i, second.score_block(block, "ok", truth, CALLS, prose, rules))
+            for kept in ("cause", "no_fault", "cannot_tell"):
+                keep(name, "kept", i, second.score_block(block, "ok", truth, CALLS, "", rules, kept))
+        keep(name, "no block", second.score_block(None, "missing", truth, CALLS, "", rules))
+        phrases = list(KIND_PHRASES.values())
+        for n, o in enumerate(objects):
+            for j, words in enumerate(PINNED_WORDS):
+                for phrase in (phrases[(n + j) % len(phrases)], phrases[(n + j + 5) % len(phrases)]):
+                    said_words = words.format(o.rsplit("/", 1)[-1], phrase)
+                    keep(name, "words", second.score_text(report("web fails.", said_words), truth, rules))
+                    keep(name, "summary", second.score_text(report(said_words, "A change of the config."), truth, rules))
+        # an answer without a block: a chat's is a miss, an investigation's has no pass, in both arms and after an error
+        fence = "words\n\n```rca\n" + json.dumps(blk(*right)) + "\n```\n"
+        for error in (None, "timed out"):
+            for answer in ("", "settings-b was changed.", fence, "words\n\n```rca\n{\n```\n"):
+                keep(name, "chat", second.score_answer(answer, truth, CALLS, error, rules))
+            for status in ("missing", "invalid", "cut"):
+                keep(name, "alert", status, second.score_report("settings-b was changed.", None, status, truth, CALLS, error, rules))
+            keep(name, "alert", "ok", second.score_report("settings-b was changed.", blk(*right), "ok", truth, CALLS, error, rules))
+    return hashlib.sha256(json.dumps(said, sort_keys=True).encode()).hexdigest()
+
+
+# What each number of the rules says. A change of the rules that changes it goes up one number and adds its line here; a
+# line already here is not changed, since saved answers were scored under it.
+THE_RULES_SAY = {3: "71df489db2bf3dc5b070c293007298f3f90ca4a4a103869f4965bca0f3dcebae"}
+
+
+def test_the_number_of_the_rules_goes_up_when_what_they_say_changes():
+    assert second.RULES == 3 and set(THE_RULES_SAY) == set(range(3, second.RULES + 1))
+    assert what_the_rules_say() == THE_RULES_SAY[second.RULES]
+
+
+def test_an_answer_without_a_block_under_rules_3():
+    """What the number 3 says of an answer without a block (README "An answer without a block"): a chat's is a miss; an
+    investigation's has no pass, whatever the arm, whether it timed out or left its block out, and is counted as a run
+    without a block."""
+    truth, words = TRUTHS["12"], report(*RIGHT_REPORTS["12"])
+    for answer in ("", "The ConfigMap storefront-config was changed.", "x\n\n```rca\n{\n```\n"):
+        s = second.score_answer(answer, truth, CALLS, None, RULES["12"])
+        assert (s["by"], s["pass"], s["outcome"]) == ("block", False, "no_block"), answer
+    s = second.score_answer("", truth, CALLS, "request failed: timed out", RULES["12"])
+    assert (s["by"], s["pass"], s["outcome"]) == ("block", False, "error")
+    for status in ("missing", "invalid", "cut"):  # off has no block at all ("missing"); on may lose it in three ways
+        s = second.score_report(words, None, status, truth, CALLS, None, RULES["12"])
+        assert (s["by"], s["pass"], s["outcome"]) == ("text", None, "cause"), status
+    s = second.score_report("", None, "missing", truth, CALLS, "investigation failed: timed out after 300s", RULES["12"])
+    assert (s["by"], s["pass"], s["outcome"]) == ("text", None, "error")
+    rows = [{"id": "12_x", "pass": False, "second": s}, {"id": "12_x", "pass": True, "second": second.score_report(
+        words, blk(("ConfigMap/shop-12/storefront-config", "config_change")), "ok", truth, CALLS, None, RULES["12"])}]
+    c = second.counts(rows)
+    assert (c["runs"], c["blocks"], c["second"], c["other"]) == (2, 1, 1, 1)  # out of 블록 있는 회, not of 회
+
+
 # --- what a run records ---
 
 def test_score_answer_reads_the_block_and_score_report_the_words_without_one():
     truth = TRUTHS["12"]
     answer = "cart_url changed.\n\n```rca\n" + json.dumps(blk(("ConfigMap/shop-12/storefront-config", "config_change"))) + "\n```\n"
     s = second.score_answer(answer, truth, CALLS, None, RULES["12"])
-    assert s["rules"] == second.RULES and s["by"] == "block" and s["pass"] and s["outcome"] == "cause"
+    assert s["rules"] == 3 and s["by"] == "block" and s["pass"] and s["outcome"] == "cause"
     s = second.score_answer(answer, truth, CALLS, "HTTP 502", RULES["12"])
     assert not s["pass"] and s["outcome"] == "error"
     s = second.score_answer("The ConfigMap storefront-config was changed.", truth, CALLS, None, RULES["12"])

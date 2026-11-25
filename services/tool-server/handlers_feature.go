@@ -426,10 +426,11 @@ func handleIssues(ctx context.Context, args map[string]interface{}, headers http
 		ns, _ := issue["namespace"].(string)
 		sev, _ := issue["severity"].(string)
 		// A list that could not be read holds no object and says the answer is partial, as on the screen: a row where the
-		// answer is not narrowed, else its name in not_read. The nodes are no part of a namespace's answer, read or not.
+		// answer is not narrowed, else its name in not_read. The nodes are no part of a namespace's answer, read or not, nor
+		// of a grant's that is limited to namespaces, which never lists them.
 		unread := issue["kind"] == "Collector"
 		if unread && (namespace != "" || (severity != "" && sev != severity)) {
-			if list, _ := issue["name"].(string); list != "nodes" || namespace == "" {
+			if list, _ := issue["name"].(string); list != "nodes" || (namespace == "" && len(scope) == 0) {
 				notRead[list], _ = issue["message"].(string)
 			}
 			continue

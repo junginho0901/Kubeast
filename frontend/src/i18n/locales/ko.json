@@ -5668,7 +5668,8 @@
         "no_evidence": "근거로 댄 호출이 없음",
         "bad_calls": "댄 호출 중 이 조사에서 답을 받은 호출이 아닌 것이 있음",
         "name_missing": "댄 호출이 돌려준 결과에 이름이 나오지 않음",
-        "after_alert": "알림보다 늦게 시작함"
+        "after_alert": "알림보다 늦게 시작함",
+        "empty_answer": "댄 호출은 읽은 것이 없거나 답에 담긴 것이 없음"
       },
       "outcomeTitle": "결론",
       "outcome": {
@@ -5682,7 +5683,7 @@
         "contradicts": "결론과 \"no_fault\", 원인이 서로 맞지 않음",
         "no_symptom": "알림의 증상을 보여 주는 호출을 대지 않음",
         "symptom_bad_calls": "증상의 근거로 댄 호출이 이 조사에서 답을 받은 호출이 아님",
-        "symptom_name_missing": "증상의 대상이 근거로 댄 호출의 결과에 나오지 않음",
+        "symptom_name_missing": "증상의 근거로 댄 호출의 결과에 알림의 레이블이 가리키는 워크로드(없으면 증상의 대상)의 이름이 나오지 않음",
         "symptom_not_shown": "증상의 근거로 댄 호출에 담긴 것이 없거나 바뀐 것, 알림이나 그 규칙, 이름만 읽음",
         "cause_not_shown": "원인을 보여 주는 호출이 하나도 없음",
         "nothing_read": "이 조사에서 상태를 읽어 무엇이든 답을 받은 호출이 없음",

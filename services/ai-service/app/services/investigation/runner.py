@@ -256,6 +256,8 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
     result = inv_result.shape(kept.block, kept.status, tool_log, kept.hypotheses, asked_again=asked, ask_failed=ask_failed,
                               failures=kept.failures, cause_problems=kept.cause_problems if cfg.evidence_check else None,
                               checks={"evidence": cfg.evidence_check, "ledger": cfg.ledger}, verdict=outcome)
+    if facts is not None:  # the model's text in them can hold a lone surrogate, which the row could not take
+        report, result = inv_verdict.writable(report), inv_verdict.writable(result)
     return report, result, int(asked)
 
 
@@ -507,7 +509,7 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     return {
         "report": answer + (inv_prompt.step_zero_note(unused, cfg.language) if unused else "")
         + (inv_prompt.narrowing_note(unnarrowed, cfg.language) if unnarrowed else ""),
-        "tool_calls": tool_log,
+        "tool_calls": inv_verdict.writable(tool_log) if verdict_on else tool_log,
         "iterations": steps,
         "provider": service.provider or "",
         "model": service.model or "",
