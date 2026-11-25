@@ -26,12 +26,23 @@ type podLogRead struct {
 	past   []string          // the containers kubectl was run past: without a previous run, or with no log yet
 	why    map[string]string // why each of past has no log yet
 	names  []string          // the pod's containers, once they were asked for
+	logged []string          // those of names that have the log asked for, as the pod's status says
 }
 
-// podContainers lists the containers kubectl logs --all-containers reads, each on a line of its own that rePodContainer
-// knows: what kubectl says on stderr, as of an API it warns of, is in the same output.
-const podContainers = `jsonpath={range .spec.initContainers[*]}container/{.name}{"\n"}{end}{range .spec.containers[*]}container/{.name}{"\n"}{end}` +
-	`{range .spec.ephemeralContainers[*]}container/{.name}{"\n"}{end}`
+// podContainers lists the containers kubectl logs --all-containers reads, and those the kubelet has the log of as it looks for
+// it (validateContainerLogStatus), each on a line of its own that rePodContainer or rePodLogged knows: what kubectl says on
+// stderr, as of an API it warns of, is in the same output.
+func podContainers(previous bool) string {
+	has := `{.lastState.terminated.containerID}`
+	if !previous {
+		has = `{.state.running.startedAt}{.state.terminated.containerID}` + has
+	}
+	out := "jsonpath="
+	for _, kind := range []string{"initContainer", "container", "ephemeralContainer"} {
+		out += `{range .spec.` + kind + `s[*]}container/{.name}{"\n"}{end}{range .status.` + kind + `Statuses[*]}logged/{.name}/` + has + `{"\n"}{end}`
+	}
+	return out
+}
 
 // lineTimesWait bounds the read that only tells words from lines.
 const lineTimesWait = 10 * time.Second
@@ -100,9 +111,9 @@ func (l *podLogRead) take(out string, cut bool) {
 	l.out, l.cut, l.said, l.picked = out, cut, "", l.container
 	switch {
 	case slices.Contains(l.args, "--ignore-errors"):
-		containers := l.names
-		if len(containers) == 0 {
-			containers = []string{l.ended}
+		containers := []string{l.ended}
+		if len(l.names) > 0 {
+			containers = slices.DeleteFunc(slices.Clone(l.names), func(name string) bool { return slices.Contains(l.logged, name) })
 		}
 		line, _ := l.pastLine()
 		l.out, l.past, l.why = takePast(out, l.namespace, l.pod, line, containers)
@@ -123,12 +134,15 @@ func (l *podLogRead) pastLine() (line, after *regexp.Regexp) {
 // takePast takes kubectl's own lines (own) of the containers it was run past out of what --ignore-errors printed, and names
 // them, with why a line says a container has no log. One is on the line of what was printed before it where that has no end:
 // a log's last line, which ends here, or the kubelet's words, which noLogOf reads. What a container wrote may end a line the
-// same, so one that is not a line of its own is kubectl's only where it names one of containers, which kubectl has not named
-// yet: it names each once.
+// same, so one that is not a line of its own is kubectl's only where it names one of containers, the ones that may have no
+// log, of which no line was read and which kubectl has not named yet: it names each once.
 func takePast(out, namespace, pod string, own *regexp.Regexp, containers []string) (string, []string, map[string]string) {
 	var rest strings.Builder
 	var names []string
 	why := map[string]string{}
+	containers = slices.DeleteFunc(slices.Clone(containers), func(name string) bool {
+		return strings.Contains(out, "[pod/"+pod+"/"+name+"] ")
+	})
 	named := func(line string, m []int) {
 		name := line[m[2]:m[3]]
 		names = append(names, name)
@@ -197,12 +211,15 @@ func (l *podLogRead) list(ctx context.Context, headers http.Header) {
 		return
 	}
 	l.names = []string{}
-	out, err := runKubectl(ctx, headers, "get", "pod", l.pod, "-n", l.namespace, "-o", podContainers)
+	out, err := runKubectl(ctx, headers, "get", "pod", l.pod, "-n", l.namespace, "-o", podContainers(l.previous))
 	if err != nil {
 		return
 	}
 	for _, m := range rePodContainer.FindAllStringSubmatch(out, -1) {
 		l.names = append(l.names, m[1])
+	}
+	for _, m := range rePodLogged.FindAllStringSubmatch(out, -1) {
+		l.logged = append(l.logged, m[1])
 	}
 }
 

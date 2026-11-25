@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/client-go/util/jsonpath"
+
 	"github.com/junginho0901/kubeast/services/pkg/auth"
 	"github.com/junginho0901/kubeast/services/pkg/redact"
 )
@@ -36,11 +38,16 @@ type aPod struct {
 
 const lineTime = "2026-11-25T12:00:00.123456789Z "
 
-// namesRead is what kubectl 0.37 prints of the jsonpath the containers are asked by.
-func namesRead(names string) string {
+// namesRead is what kubectl 0.37 prints of the jsonpath the containers are asked by, of which logged have the log asked for.
+func namesRead(names string, logged ...string) string {
 	var b strings.Builder
 	for _, name := range strings.Fields(names) {
 		b.WriteString("container/" + name + "\n")
+		if slices.Contains(logged, name) {
+			b.WriteString("logged/" + name + "/containerd://0123456789abcdef\n")
+		} else {
+			b.WriteString("logged/" + name + "/\n")
+		}
 	}
 	return b.String()
 }
@@ -59,7 +66,13 @@ func (p aPod) prints(a []string) (string, error) {
 		if p.names == "" && p.beside == "" {
 			return kubectlErr(`Error from server (NotFound): pods "web-1" not found`)
 		}
-		return p.beside + namesRead(p.names), nil
+		var logged []string
+		for _, c := range p.containers {
+			if c.fails == "" && !(c.never && v[len(v)-1] == podContainers(true)) {
+				logged = append(logged, c.name)
+			}
+		}
+		return p.beside + namesRead(p.names, logged...), nil
 	}
 	read, out := p.containers, strings.Builder{}
 	if i := slices.Index(v, "-c"); i >= 0 {
@@ -289,12 +302,44 @@ func TestPodLogs_ThePodIsReadOnlyForAnAnswerWithoutALine(t *testing.T) {
 		var got []string
 		for _, call := range calls {
 			got = append(got, verb(call)[0])
-			if want := []string{"get", "pod", "web-1", "-n", "shop", "-o", `jsonpath={range .spec.initContainers[*]}container/{.name}{"\n"}{end}{range .spec.containers[*]}container/{.name}{"\n"}{end}{range .spec.ephemeralContainers[*]}container/{.name}{"\n"}{end}`}; has(call, "get") && !slices.Equal(verb(call), want) {
+			if want := []string{"get", "pod", "web-1", "-n", "shop", "-o", podContainers(c.with["previous"] == true)}; has(call, "get") && !slices.Equal(verb(call), want) {
 				t.Errorf("%v: %v", c.with, call)
 			}
 		}
 		if !slices.Equal(got, c.want) {
 			t.Errorf("%v: kubectl ran %v, want %v", c.with, got, c.want)
+		}
+	}
+}
+
+// The jsonpath the containers are asked by, read as kubectl reads it: each of the pod's, and those the kubelet gives the log
+// asked for of.
+func TestPodLogs_TheContainersAreAskedWithWhetherTheyHaveALog(t *testing.T) {
+	var pod map[string]interface{}
+	if err := json.Unmarshal([]byte(`{"spec": {"initContainers": [{"name": "migrate"}], "ephemeralContainers": [{"name": "debug"}],
+		"containers": [{"name": "app"}, {"name": "side"}, {"name": "ended"}, {"name": "late"}, {"name": "back"}]},
+		"status": {"initContainerStatuses": [{"name": "migrate", "state": {"terminated": {"exitCode": 0, "containerID": "containerd://aa"}}}],
+		"containerStatuses": [{"name": "app", "state": {"running": {"startedAt": "2026-11-25T12:00:00Z"}}, "lastState": {}},
+			{"name": "side", "state": {"waiting": {"reason": "PodInitializing"}}}, {"name": "ended", "state": {"terminated": {"exitCode": 1}}},
+			{"name": "back", "state": {"waiting": {"reason": "CrashLoopBackOff"}}, "lastState": {"terminated": {"exitCode": 1, "containerID": "containerd://bb"}}}],
+		"ephemeralContainerStatuses": [{"name": "debug", "state": {"running": {"startedAt": "2026-11-25T12:00:00Z"}}}]}}`), &pod); err != nil {
+		t.Fatal(err)
+	}
+	for previous, want := range map[bool][]string{false: {"migrate", "app", "back", "debug"}, true: {"back"}} {
+		path, ok := strings.CutPrefix(podContainers(previous), "jsonpath=")
+		asked := jsonpath.New("pod").AllowMissingKeys(true)
+		var printed bytes.Buffer
+		if err := asked.Parse(path); !ok || err != nil {
+			t.Fatal(ok, err)
+		}
+		if err := asked.Execute(&printed, pod); err != nil {
+			t.Fatal(err)
+		}
+		fakeKubectl(t, func([]string) (string, error) { return printed.String(), nil })
+		l := podLogRead{pod: "web-1", namespace: "shop", previous: previous, allContainers: true}
+		l.list(context.Background(), nil)
+		if !slices.Equal(l.names, []string{"migrate", "app", "side", "ended", "late", "back", "debug"}) || !slices.Equal(l.logged, want) {
+			t.Errorf("previous %v: %v, %v with a log", previous, l.names, l.logged)
 		}
 	}
 }

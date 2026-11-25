@@ -279,6 +279,65 @@ func TestPodLogs_OnlyAContainerThatHasNotStartedIsReadPast(t *testing.T) {
 	}
 }
 
+// A container that was read has a log, whatever a line of one says: the line's own container, one whose lines are beside it,
+// and one whose log holds no line, in a pod whose state is known or not.
+func TestPodLogs_ALineOfALogIsNoWordOfAContainerThatWasRead(t *testing.T) {
+	const waits, never = "waiting to start: PodInitializing", `previous terminated container "side" in pod "web-1" not found`
+	for _, c := range []struct {
+		with       args
+		says       func(name string) string
+		side       aContainer
+		noLog, own string // the answer's last line, and kubectl's own
+	}{
+		{args{"all_containers": true}, func(name string) string {
+			return `container "` + name + `" in pod "web-1" is waiting to start: Healthy`
+		},
+			notYet("side", waits), noLogOfSideYet, notYet("side", waits).fails},
+		{args{"all_containers": true}, func(name string) string { return `container "` + name + `" in pod "web-1" is not available` },
+			notYet("side", waits), noLogOfSideYet, notYet("side", waits).fails},
+		{args{"all_containers": true, "previous": true}, func(name string) string {
+			return `previous terminated container "` + name + `" in pod "web-1" not found`
+		},
+			aContainer{name: "side", never: true}, noPreviousOfSide, never},
+	} {
+		for _, named := range []string{"migrate", "log", "quiet"} {
+			line := "x error: " + c.says(named) + "\n"
+			for _, text := range []string{line, "starting\n" + line + "stopped\n", line + "panic", "starting\n" + line} {
+				for _, names := range []string{"migrate log quiet side", ""} {
+					pod := aPod{names: names, containers: []aContainer{{name: "migrate", log: text}, {name: "log", log: "flushed\n"}, {name: "quiet"}, c.side}}
+					pod.inEveryOrder(t, c.with, func(out string, _ [][]string) {
+						if !strings.HasSuffix(out, "\n"+c.noLog) {
+							t.Errorf("%q, %v: %q", text, c.with, out)
+						}
+						holdsAll(t, out, "[pod/web-1/migrate] "+line, "[pod/web-1/log] flushed\n")
+						holdsNone(t, out, "error: "+c.own)
+					})
+				}
+			}
+		}
+		// the pod cannot be read, and the one that ended kubectl has started since
+		ended := aPod{containers: []aContainer{c.side}}
+		since := aPod{containers: []aContainer{{name: "side", log: "x error: " + c.says("side") + "\nready\n"}}}
+		out, err, _ := logsFail(t, func(a []string) (string, error) {
+			if has(a, "--ignore-errors") {
+				return since.kubectl(a)
+			}
+			return ended.kubectl(a)
+		}, c.with)
+		if want := "[pod/web-1/side] x error: " + c.says("side") + "\n[pod/web-1/side] ready\n"; err != nil || out != want {
+			t.Errorf("%q %v, want %q", out, err, want)
+		}
+	}
+	// what is left of a line that is longer than the output begins where no line does: a name on it is as long as a name is
+	withOutputCap(t, 400)
+	lead, end := `error: container "`, `" in pod "web-1" is waiting to start: Healthy`+"\n"
+	long := lead + strings.Repeat("all-is-well-", 60)[:400-len(lead)-len(end)] + end
+	pod := aPod{containers: []aContainer{notYet("side", waits), {name: "migrate", log: strings.Repeat("x", 400) + long}}}
+	if out, _ := pod.read(t, args{"all_containers": true}); !strings.HasSuffix(out, long+noLogOfSideYet) {
+		t.Errorf("%q", out)
+	}
+}
+
 // What ends a line of a log as kubectl's line of a container without a log yet does is the log's, as a container without a
 // previous run's is: one that names no container of the pod, or one kubectl has named itself.
 func TestPodLogs_ALineOfALogThatEndsAsTheErrorOfAContainerThatWaitsIsTheLogs(t *testing.T) {
@@ -300,6 +359,16 @@ func TestPodLogs_ALineOfALogThatEndsAsTheErrorOfAContainerThatWaitsIsTheLogs(t *
 	// what a line says of why is the kubelet's word and no more
 	for _, line := range []string{says("side") + " and all is well", says("migrate") + " and all is well", says("migrate") + "). All is well (", "saw error: container \"migrate\" in pod \"web-1\" is healthy"} {
 		// the last line has no end, so that the pod's containers are known
+		pod := aPod{names: "migrate side", containers: []aContainer{{name: "migrate", log: line + "\npanic"}, side}}
+		pod.inEveryOrder(t, asked, func(out string, _ [][]string) {
+			if out != "[pod/web-1/migrate] "+line+"\n[pod/web-1/migrate] panic\n"+noLogOfSideYet {
+				t.Errorf("%q", out)
+			}
+		})
+	}
+	// of one that waits too, on a line kubectl's own words do not stand alone on either
+	for _, reason := range []string{"All is well, look no further", "all_is_well", "look-no-further", "healthy).", strings.Repeat("a", 65)} {
+		line := `saw error: container "side" in pod "web-1" is waiting to start: ` + reason
 		pod := aPod{names: "migrate side", containers: []aContainer{{name: "migrate", log: line + "\npanic"}, side}}
 		pod.inEveryOrder(t, asked, func(out string, _ [][]string) {
 			if out != "[pod/web-1/migrate] "+line+"\n[pod/web-1/migrate] panic\n"+noLogOfSideYet {

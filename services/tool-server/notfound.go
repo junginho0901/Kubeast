@@ -39,25 +39,30 @@ var (
 	reLogPrefix = regexp.MustCompile(`\[pod/[^/\]\s]+/([^\]\s]+)\] `)
 	// What ends kubectl logs at a container without a previous run, what --ignore-errors prints of it instead (after the
 	// text of a line too), and the time --timestamps puts before a line.
-	reEndsNoPrevious  = regexp.MustCompile(`previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found$`)
-	reNoPreviousLine  = regexp.MustCompile(`error: previous terminated container "([^"\n]+)" in pod "([^"\n]+)" not found\n$`)
-	reNoPreviousAfter = regexp.MustCompile(`[^\n]error: previous terminated container "[^"\n]+" in pod "[^"\n]+" not found\n`)
+	reEndsNoPrevious  = regexp.MustCompile(noPrevious + `$`)
+	reNoPreviousLine  = regexp.MustCompile(`error: ` + noPrevious + `\n$`)
+	reNoPreviousAfter = regexp.MustCompile(`[^\n]error: ` + noPrevious + `\n`)
 	// The same of a container the kubelet has no log of yet.
 	reEndsNoLogYet  = regexp.MustCompile(noLogYet + `$`)
 	reNoLogYetLine  = regexp.MustCompile(`error: ` + noLogYet + `\n$`)
 	reNoLogYetAfter = regexp.MustCompile(`[^\n]error: ` + noLogYet + `\n`)
 	reLineTime      = regexp.MustCompile(`(^|\n|\[pod/[^/\]\s]+/[^\]\s]+\] )\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+(?:Z|[+-]\d\d:\d\d) `)
-	// A line of podContainers' output.
+	// The lines of podContainers' output: a container, and one that has the log asked for.
 	rePodContainer = regexp.MustCompile(`(?m)^container/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)$`)
+	rePodLogged    = regexp.MustCompile(`(?m)^logged/([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)/.`)
 	// A ReplicaSet pod template hash or a pod's random suffix: 5–10 characters
 	// from Kubernetes' safe-encoding alphabet (no vowels, so "cache" or "redis"
 	// are not stripped).
 	reHashSuffix = regexp.MustCompile(`-[bcdfghjklmnpqrstvwxz2456789]{5,10}$`)
 )
 
-// noLogYet is what the kubelet says of a container it has no log of yet (kubelet_pods.go validateContainerLogStatus): the
-// container, the pod, and why, whose reason is one word but for the two it spells out.
-const noLogYet = `container "([^"\n]+)" in pod "([^"\n]+)" is (waiting to start(?:: ?(?:image can't be pulled|trying and failing to pull image|\S*)| - no logs yet)|not available|terminated)`
+// What the kubelet says of a container it has no previous log of, and of one it has no log of yet (kubelet_pods.go
+// validateContainerLogStatus): the container, the pod, and why, whose reason is one word of its own but for the two it spells out.
+const (
+	containerInPod = `container "([a-z0-9-]{1,63})" in pod "([a-z0-9.-]{1,253})"`
+	noPrevious     = `previous terminated ` + containerInPod + ` not found`
+	noLogYet       = containerInPod + ` is (waiting to start(?:: ?(?:image can't be pulled|trying and failing to pull image|[A-Za-z0-9]{0,64})| - no logs yet)|not available|terminated)`
+)
 
 // candidateListCap bounds the names scanned for suggestions.
 const candidateListCap = 5000
