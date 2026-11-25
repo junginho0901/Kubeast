@@ -879,7 +879,10 @@ func (s *Service) argoChanges(ctx context.Context, namespace string, sink *chang
 	err := eachCallerNamespace(srcCtx, "", read)
 	switch {
 	case err == nil:
-		sink.missed("argocd", left)
+		// read in every namespace of a grant whichever was asked: a named one's answer is of what that one holds
+		if namespace == "" {
+			sink.missed("argocd", left)
+		}
 	case apierrors.IsNotFound(err):
 		sink.note("argocd", "Argo CD Applications are not served in this cluster (no applications.argoproj.io)")
 	default:

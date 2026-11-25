@@ -56,6 +56,46 @@ func TestTimelineChanges_ANamespaceOfAGrantThatRefusedASourceIsNamed(t *testing.
 	}
 }
 
+// Argo CD's Applications are read in every namespace of a grant whichever namespace was asked: one that refuses them is
+// named where every namespace was asked, and a named namespace's answer is the one it had.
+func TestTimelineChanges_ANamespaceThatRefusedArgoIsNotNamedInAnothersAnswer(t *testing.T) {
+	now, since, until := chgWindow()
+	app := func(name, namespace, to string) map[string]interface{} {
+		return map[string]interface{}{
+			"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
+			"metadata": map[string]interface{}{"name": name, "namespace": namespace},
+			"spec":     map[string]interface{}{"destination": map[string]interface{}{"namespace": to}},
+			"status":   map[string]interface{}{"history": []interface{}{map[string]interface{}{"deployedAt": now.Add(-time.Hour).Format(time.RFC3339), "revision": "abc"}}},
+		}
+	}
+	read := func(namespace string, refuse ...string) *TimelineChangesResult {
+		t.Helper()
+		api := &changesAPI{apps: []map[string]interface{}{app("web", "beta", "beta")}, refuse: map[string]bool{}}
+		for _, r := range refuse {
+			api.refuse[r] = true
+		}
+		grant := auth.WithPayload(context.Background(), auth.TokenPayload{UserID: "u1", Namespaces: map[string][]string{"default": {"alpha", "beta"}}})
+		return chgRead(t, api.service(t), grant, namespace, since, until)
+	}
+
+	got, want := read("beta", "alpha/applications"), read("beta")
+	if !reflect.DeepEqual(got, want) || got.Summary["not_read_in"] != nil || got.Summary["not_read"] != nil {
+		t.Errorf("beta asked: %v, want %v", got.Summary, want.Summary)
+	}
+	if n := len(chgOfKind(want, "Application")); n != 1 {
+		t.Errorf("%d Applications of beta, want 1", n)
+	}
+	got = read("", "alpha/applications")
+	if !reflect.DeepEqual(got.Summary["not_read_in"], map[string]string{"argocd": "not read in alpha: applications is forbidden"}) {
+		t.Errorf("every namespace asked: %v", got.Summary)
+	}
+	// refused in all of them: the source is not read, as before
+	got = read("beta", "alpha/applications", "beta/applications")
+	if notRead, _ := got.Summary["not_read"].(map[string]string); got.Summary["not_read_in"] != nil || notRead["argocd"] == "" {
+		t.Errorf("refused in all: %v", got.Summary)
+	}
+}
+
 // The Timeline of every namespace of a limited grant names the ones whose events or rollouts were refused.
 func TestNamespaceTimeline_ANamespaceOfAGrantThatWasNotReadIsNamed(t *testing.T) {
 	read := func(ctx context.Context, namespace string, refused ...string) map[string]interface{} {
