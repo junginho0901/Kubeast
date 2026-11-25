@@ -18,7 +18,8 @@ import (
 //
 //	result, since (RFC3339), until (RFC3339), limit (default 100, max 1000),
 //	offset (default 0), as_of (the as_of of the first page's answer).
-//	A since or until that is not RFC 3339 is a 400, read and recorded as nothing.
+//	A since or until that is not RFC 3339, or a text with 0x00 or a byte that is
+//	not UTF-8, is a 400, read and recorded as nothing.
 //
 // Without as_of the read pins itself to the rows written so far and answers
 // that bound as as_of; the next pages (and the CSV) pass it back so rows
