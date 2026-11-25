@@ -144,12 +144,17 @@ test.describe('AI trace tools', () => {
     expect(opened.shown).toBe(2) // telemetrygen: a server span and its child
     expect(opened.errors).toBe(2)
     if (opened.table) { // ai.traceSpanTable on: a line per span, "start_ms | ms | self_ms | outside_ms | service | kind | span"
-      for (const line of opened.table as string[]) {
-        expect(line).toContain(svc)
+      const lines = opened.table as string[]
+      expect(lines).toHaveLength(2)
+      expect(opened.namespace).toBe(NS) // a span of another would put "<namespace>/" in front of the services
+      for (const line of lines) {
+        const cells = line.split(' | ')
+        expect(cells[4].startsWith(svc), line).toBe(true)
         expect(line).toContain('[ERROR')
-        expect(Number(line.split(' | ')[1])).toBeCloseTo(1500, 0)
+        expect(Number(cells[1])).toBeCloseTo(1500, 0)
       }
     } else {
+      expect(opened.spans).toHaveLength(2)
       for (const s of opened.spans as { service: string; namespace: string; durationMs: number; status: string }[]) {
         expect(s).toMatchObject({ service: svc, namespace: NS, status: 'ERROR' })
         expect(s.durationMs).toBeCloseTo(1500, 0)
