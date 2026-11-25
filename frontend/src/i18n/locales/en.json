@@ -4940,6 +4940,13 @@
       },
       "failed": "Not started.",
       "auditUnavailable": "Not started: the audit log cannot take the record right now."
+    },
+    "past": {
+      "title": "Past investigations of this alert",
+      "note": "Up to five of the last 30 days, newest first: what the AI concluded then, confirmed by no person. This time the cause may be another.",
+      "checked": "Checked by the server",
+      "more": "+{{n}} more",
+      "failed": "The past investigations could not be read."
     }
   },
   "investigations": {

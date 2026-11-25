@@ -19,6 +19,7 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
 import { ExternalHttpLink } from '@/components/ExternalHttpLink'
+import { PastInvestigations } from './PastInvestigations'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
 import { inboxPage } from './inboxPage'
@@ -423,6 +424,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
   const { open: openDetail } = useResourceDetail()
   const [note, setNote] = useState<string | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
+  const [pastOpen, setPastOpen] = useState<string | null>(null)
   const [silenceOpen, setSilenceOpen] = useState(false)
   const { data, isLoading, error } = useQuery<AlertInboxDetail>({
     queryKey: ['alert-inbox', 'one', id],
@@ -648,6 +650,8 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
               </div>
             </section>
 
+            {data.past_investigations !== undefined && <PastInvestigations items={data.past_investigations} onOpen={setPastOpen} />}
+
             <section>
               <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.section.labels', 'Labels and annotations')}</h3>
               <div className="grid gap-3 md:grid-cols-2">
@@ -672,6 +676,9 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
       )}
       {reportOpen && data?.investigation && (
         <InvestigationReportModal id={data.investigation.id} load={() => api.getAlertInboxInvestigation(id)} onClose={() => setReportOpen(false)} />
+      )}
+      {pastOpen && (
+        <InvestigationReportModal key={pastOpen} id={pastOpen} load={() => api.getAlertInboxInvestigation(id, pastOpen)} onClose={() => setPastOpen(null)} />
       )}
     </>
   )
