@@ -556,15 +556,15 @@ func TestGuardedAnyOtherFailureRefusesTheNextAction(t *testing.T) {
 				t.Fatal(err)
 			}
 			s.err, s.probeErr = failure, failure
-			if _, err := g.Write(ctx, Record{Action: "k8s.pod.delete"}); err == nil {
-				t.Fatal("stored")
+			if _, err := g.Write(ctx, Record{Action: "k8s.pod.delete"}); err == nil || !g.broken {
+				t.Fatalf("err = %v, broken %v: not a broken store", err, g.broken)
 			}
 			if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
 				t.Fatalf("ready = %v", err)
 			}
 			s.err = pgRefusal("22021")
-			if _, err := g.Write(ctx, Record{Action: "k8s.pod.delete"}); err == nil {
-				t.Fatal("stored")
+			if _, err := g.Write(ctx, Record{Action: "k8s.pod.delete"}); err == nil || !g.broken {
+				t.Fatalf("err = %v, broken %v: a row refused for its text ended it", err, g.broken)
 			}
 			if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
 				t.Fatalf("a row refused for its text let the next action run: %v", err)

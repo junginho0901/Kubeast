@@ -307,6 +307,7 @@ async def test_a_row_missing_for_any_other_reason_refuses_the_next_action(table,
         await audit_writer.require_audit_ready()
     table.answer = refusal("22021")
     assert await audit_writer.write_audit(action="ai.tool.call") is False
+    assert audit_writer._write_broken is True, "a row refused for its text ended it"
     assert (await audit_writer.audit_ready())[0] is False, "a row refused for its text let the next action run"
     table.answer = None
     audit_writer._ready_cache["at"] = 0.0
