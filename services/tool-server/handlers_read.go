@@ -198,7 +198,10 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 
 	logs := podLogRead{pod: podName, namespace: namespace, container: container, since: since, previous: previous, allContainers: allContainers}
 	if err := logs.read(ctx, headers, cmdArgs); err != nil {
-		return explainFailure(ctx, headers, err, "pods", podName, namespace)
+		if answer, ok := failureResult(ctx, headers, logFailure(err), "pods", podName, namespace); ok {
+			return answer, nil
+		}
+		return "", err
 	}
 	if answer, ok, err := logs.withoutALine(ctx, headers); ok {
 		return answer, err

@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"regexp"
 	"sort"
@@ -86,6 +87,34 @@ func classifyKubectlFailure(err error) (kubectlFailure, bool) {
 		return kubectlFailure{Status: "forbidden", Name: strings.TrimSpace(m[1])}, true
 	}
 	return kubectlFailure{}, false
+}
+
+// reKubectlSays is how what kubectl fails with begins (kubectl util.StandardErrorMessage and its default).
+var reKubectlSays = regexp.MustCompile(`Error from server(?: \([A-Za-z]+\))?: |error: |Unable to connect to the server|The connection to the server `)
+
+// logFailure is a failed kubectl logs without the lines of the containers it read before it failed, which are no failure:
+// what it failed with comes last, on the line of a log's last line where that has no end.
+func logFailure(err error) error {
+	text, ran := strings.CutPrefix(err.Error(), "kubectl failed: ")
+	if !ran {
+		return err
+	}
+	if i := strings.LastIndex(text, truncatedMarkerLead); i >= 0 {
+		text = text[:i]
+	}
+	text = text[len(reDefaulted.FindString(text)):]
+	last := text[strings.LastIndex(text, "\n")+1:]
+	lead, says := reKubectlSays.FindStringIndex(text), reKubectlSays.FindAllStringIndex(last, -1)
+	switch begins := lead != nil && lead[0] == 0; {
+	case begins && len(says) > 0 && says[0][0] == 0:
+		text = last
+	case begins: // it says it in several lines, with no log before them
+	case len(says) > 0:
+		text = last[says[len(says)-1][0]:]
+	default:
+		text = "" // it was stopped
+	}
+	return errors.New("kubectl failed: " + text)
 }
 
 // failureResult turns a classified kubectl failure into the tool's JSON
