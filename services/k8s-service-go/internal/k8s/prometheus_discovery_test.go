@@ -6,11 +6,17 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+	ktesting "k8s.io/client-go/testing"
+
+	"github.com/junginho0901/kubeast/services/pkg/auth"
 )
 
 // promServer stands in for a cluster API server: with found, monitoring holds a
@@ -28,8 +34,11 @@ type promServer struct {
 	queries  int
 	// failing: every Service list answers 500, as an API server that cannot list does.
 	failing bool
-	// held: a Service list is answered once its caller has gone (no answer), as an API server slow to list.
-	held bool
+	// gate, while set, keeps every Service list waiting, as an API server slow to list.
+	gate chan struct{}
+	// people is the person each Service list came as ("" for a request of no one's).
+	people []string
+	url    string
 }
 
 func (p *promServer) counts() (lists, queries int) {
@@ -38,10 +47,30 @@ func (p *promServer) counts() (lists, queries int) {
 	return p.lists, p.queries
 }
 
+// hold keeps the Service lists waiting, and those that wait go on once it is off.
 func (p *promServer) hold(on bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.held = on
+	switch {
+	case on && p.gate == nil:
+		p.gate = make(chan struct{})
+	case !on && p.gate != nil:
+		close(p.gate)
+		p.gate = nil
+	}
+}
+
+// waitLists waits for n Service lists to have come.
+func (p *promServer) waitLists(t *testing.T, n int) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(2 * time.Millisecond) {
+		if lists, _ := p.counts(); lists >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d Service lists never came", n)
+		}
+	}
 }
 
 // become changes what the cluster holds between two calls.
@@ -58,19 +87,21 @@ func newPromServer(t *testing.T, found, healthy403 bool) (*kubernetes.Clientset,
 		w.Header().Set("Content-Type", "application/json")
 		p := r.URL.Path
 		ps.mu.Lock()
-		found, failing, held := ps.found, ps.failing, ps.held
+		found, failing := ps.found, ps.failing
 		ps.mu.Unlock()
 		switch {
 		case strings.HasSuffix(p, "/services"):
 			ps.mu.Lock()
 			ps.lists++
+			ps.people = append(ps.people, r.Header.Get(auth.HeaderImpersonateUser))
+			gate := ps.gate
 			ps.mu.Unlock()
-			if held {
+			if gate != nil {
 				select {
+				case <-gate:
 				case <-r.Context().Done():
-				case <-time.After(10 * time.Second):
+					return
 				}
-				return
 			}
 			if failing {
 				w.WriteHeader(http.StatusInternalServerError)
@@ -112,7 +143,9 @@ func newPromServer(t *testing.T, found, healthy403 bool) (*kubernetes.Clientset,
 			_, _ = w.Write([]byte(`{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"NotFound","code":404}`))
 		}
 	}))
+	ps.url = srv.URL
 	t.Cleanup(srv.Close)
+	t.Cleanup(func() { ps.hold(false) })
 	// no client rate limit: a second discovery round would otherwise wait for its 5 a second
 	cs, err := kubernetes.NewForConfig(&rest.Config{Host: srv.URL, QPS: -1})
 	if err != nil {
@@ -274,8 +307,27 @@ func TestPrometheusDiscovery_AFailedDiscoveryIsAskedAgainAfterAMinute(t *testing
 	}
 }
 
-// A discovery its caller cut short is not remembered as a miss: the next caller looks again and finds it.
-func TestPrometheusDiscovery_OneItsCallerCutShortIsNotRemembered(t *testing.T) {
+// askPrometheus is PrometheusAvailable on ctx, whose answer comes on the channel.
+func askPrometheus(ctx context.Context, s *Service) <-chan bool {
+	answer := make(chan bool, 1)
+	go func() { answer <- s.PrometheusAvailable(ctx) }()
+	return answer
+}
+
+// answerOf is the answer of a caller who must have one by now.
+func answerOf(t *testing.T, who string, answer <-chan bool) bool {
+	t.Helper()
+	select {
+	case ok := <-answer:
+		return ok
+	case <-time.After(3 * time.Second):
+		t.Fatalf("%s has no answer", who)
+		return false
+	}
+}
+
+// A caller leaving cuts no search: it goes on, and what it finds is remembered, with no second one.
+func TestPrometheusDiscovery_ASearchOutlivesTheCallerWhoStartedIt(t *testing.T) {
 	for name, cut := range map[string]func() (context.Context, context.CancelFunc){
 		"its caller left": func() (context.Context, context.CancelFunc) {
 			ctx, cancel := context.WithCancel(context.Background())
@@ -285,16 +337,6 @@ func TestPrometheusDiscovery_OneItsCallerCutShortIsNotRemembered(t *testing.T) {
 		"its caller's own time ended": func() (context.Context, context.CancelFunc) {
 			return context.WithTimeout(context.Background(), 150*time.Millisecond)
 		},
-		"its caller had left": func() (context.Context, context.CancelFunc) {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			return ctx, cancel
-		},
-		"its request's reads are held": func() (context.Context, context.CancelFunc) {
-			ctx, calls := WithClusterCalls(context.Background(), "", func() {})
-			calls.waitedOut.Store(true)
-			return ctx, func() {}
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			promDiscoveryEnv(t)
@@ -303,37 +345,214 @@ func TestPrometheusDiscovery_OneItsCallerCutShortIsNotRemembered(t *testing.T) {
 			s := newPromService(cs, nil)
 			ctx, cancel := cut()
 			defer cancel()
-			if s.PrometheusAvailable(ctx) {
-				t.Fatal("found by a discovery that was cut short")
+			if answerOf(t, "the caller who left", askPrometheus(ctx, s)) {
+				t.Fatal("found while every list waits")
 			}
 			srv.hold(false)
 			if !promAvailable(s) {
-				t.Error("the cut discovery is remembered: the next caller did not look again")
+				t.Error("not found by the search that went on")
 			}
-			if lists, _ := srv.counts(); lists > 1+oneRound {
-				t.Errorf("service lists = %d, want the cut one's first at most and one discovery (%d)", lists, oneRound)
+			if lists, _ := srv.counts(); lists != oneRound {
+				t.Errorf("service lists = %d, want one discovery (%d)", lists, oneRound)
 			}
 		})
 	}
 }
 
-// A cut discovery after the last one's ten minutes leaves the Service last found, and what the next whole one says.
-func TestPrometheusDiscovery_TheLastFoundStandsOverACutOne(t *testing.T) {
+// A request that has ended, and one whose reads of the cluster are held, start no search and take the last one found.
+func TestPrometheusDiscovery_ARequestThatSendsNoReadStartsNoSearch(t *testing.T) {
+	gone, leave := context.WithCancel(context.Background())
+	leave()
+	held, calls := WithClusterCalls(context.Background(), "", func() {})
+	calls.waitedOut.Store(true)
+	for name, ctx := range map[string]context.Context{"it had ended": gone, "its reads are held": held} {
+		t.Run(name, func(t *testing.T) {
+			promDiscoveryEnv(t)
+			cs, srv := newPromServer(t, true, false)
+			s := newPromService(cs, nil)
+			if s.PrometheusAvailable(ctx) {
+				t.Error("found with no search")
+			}
+			if lists, _ := srv.counts(); lists != 0 {
+				t.Errorf("service lists = %d, want none", lists)
+			}
+			if !promAvailable(s) {
+				t.Fatal("the next caller did not look")
+			}
+			passPromTime(s, 10*time.Minute+time.Second)
+			srv.become(false, false)
+			if !s.PrometheusAvailable(ctx) {
+				t.Error("the last one found did not stand")
+			}
+			if promAvailable(s) {
+				t.Error("the next caller did not look again")
+			}
+		})
+	}
+}
+
+// A caller in line for another's search leaves when its own time ends, not when that search does.
+func TestPrometheusDiscovery_ACallerInLineLeavesOnItsOwnTime(t *testing.T) {
 	promDiscoveryEnv(t)
 	cs, srv := newPromServer(t, true, false)
+	srv.hold(true)
 	s := newPromService(cs, nil)
-	if !promAvailable(s) {
-		t.Fatal("not found")
+	first := askPrometheus(context.Background(), s)
+	srv.waitLists(t, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if answerOf(t, "the caller in line", askPrometheus(ctx, s)) {
+		t.Error("found while every list waits")
 	}
-	passPromTime(s, 10*time.Minute+time.Second)
-	srv.become(false, false)
-	gone, cancel := context.WithCancel(context.Background())
-	cancel()
-	if !s.PrometheusAvailable(gone) {
-		t.Error("a cut discovery took the last one found away")
+	srv.hold(false)
+	if !answerOf(t, "the first caller", first) {
+		t.Error("the first caller's search was cut")
 	}
+	if lists, _ := srv.counts(); lists != oneRound {
+		t.Errorf("service lists = %d, want one discovery (%d)", lists, oneRound)
+	}
+}
+
+// A cluster slower to list than any caller waits costs callers who come faster than a search takes one search between
+// them, and what it ended in is remembered: without that each started over and none ever waited a whole one.
+func TestPrometheusDiscovery_CallersNoneOfWhomWaitsAWholeSearchShareOne(t *testing.T) {
+	was := discoveryTime
+	discoveryTime = 400 * time.Millisecond
+	t.Cleanup(func() { discoveryTime = was })
+	promDiscoveryEnv(t)
+	cs, srv := newPromServer(t, true, false)
+	srv.hold(true)
+	s := newPromService(cs, nil)
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+			defer cancel()
+			s.PrometheusAvailable(ctx)
+		}()
+		time.Sleep(40 * time.Millisecond)
+	}
+	wg.Wait()
 	if promAvailable(s) {
-		t.Error("the next caller did not look again")
+		t.Fatal("found though every list waits")
+	}
+	srv.hold(false)
+	if promAvailable(s) {
+		t.Error("asked again within the minute")
+	}
+	if lists, _ := srv.counts(); lists != 1 {
+		t.Errorf("service lists = %d, want the one that waited a whole search", lists)
+	}
+}
+
+// A search goes out as the person who started it, also once they have left, and as no one else who asks meanwhile.
+func TestPrometheusDiscovery_ASearchKeepsThePersonWhoStartedIt(t *testing.T) {
+	promDiscoveryEnv(t)
+	_, srv := newPromServer(t, true, false)
+	cfg := &rest.Config{Host: srv.url, QPS: -1}
+	wrapPerson(cfg, "c1")
+	cs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	s := newPromService(cs, nil)
+	srv.hold(true)
+	ctx, leave := context.WithCancel(asUser(context.Background(), "ann", nil))
+	ann := askPrometheus(ctx, s)
+	srv.waitLists(t, 1)
+	leave()
+	answerOf(t, "ann", ann)
+	bob := askPrometheus(asUser(context.Background(), "bob", nil), s)
+	srv.hold(false)
+	if !answerOf(t, "bob", bob) {
+		t.Error("not found by the search ann started")
+	}
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	if len(srv.people) != oneRound {
+		t.Errorf("service lists = %d, want one discovery (%d)", len(srv.people), oneRound)
+	}
+	for i, who := range srv.people {
+		if who != "ann@example.com" {
+			t.Errorf("list %d went out as %q, want ann@example.com", i+1, who)
+		}
+	}
+}
+
+// A search is not held with the other reads of the request that started it, and that request's record, not those of the
+// requests in line, says what its calls got.
+func TestPrometheusDiscovery_ASearchIsNotHeldAndIsItsStartersOnTheRecord(t *testing.T) {
+	promDiscoveryEnv(t)
+	_, srv := newPromServer(t, true, false)
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: srv.url, QPS: -1, WrapTransport: func(rt http.RoundTripper) http.RoundTripper {
+		return newReadWait(answerNotice{base: rt}, "", "")
+	}})
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	s := newPromService(cs, nil)
+	var answered atomic.Int64
+	ctx, calls := WithClusterCalls(context.Background(), "", func() { answered.Add(1) })
+	inLine, lineCalls := WithClusterCalls(context.Background(), "", func() { answered.Add(100) })
+	srv.hold(true)
+	first := askPrometheus(ctx, s)
+	srv.waitLists(t, 1)
+	second := askPrometheus(inLine, s)
+	calls.waitedOut.Store(true) // another of its reads ran out its wait meanwhile
+	srv.hold(false)
+	if !answerOf(t, "the request that started it", first) || !answerOf(t, "the request in line", second) {
+		t.Error("not found: the search was held with its request's reads")
+	}
+	if lists, _ := srv.counts(); lists != oneRound {
+		t.Errorf("service lists = %d, want one discovery (%d)", lists, oneRound)
+	}
+	if !calls.gotAnswer.Load() || answered.Load() != 1 {
+		t.Errorf("the starter's record: answer %v, its breaker told %d times, want true and once", calls.gotAnswer.Load(), answered.Load())
+	}
+	if lineCalls.gotAnswer.Load() || lineCalls.responded.Load() {
+		t.Error("the request in line has calls it did not make on its record")
+	}
+}
+
+// A cluster that could not be reached by a search counts for the request that started it, as its own reads do.
+func TestPrometheusDiscovery_ASearchThatCouldNotReachTheClusterSaysSo(t *testing.T) {
+	promDiscoveryEnv(t)
+	gone := httptest.NewServer(http.NotFoundHandler())
+	gone.Close()
+	cs, err := kubernetes.NewForConfig(&rest.Config{Host: gone.URL, QPS: -1, WrapTransport: func(rt http.RoundTripper) http.RoundTripper {
+		return newReadWait(answerNotice{base: rt}, "", "")
+	}})
+	if err != nil {
+		t.Fatalf("clientset: %v", err)
+	}
+	ctx, calls := WithClusterCalls(context.Background(), "", func() {})
+	if newPromService(cs, nil).PrometheusAvailable(ctx) {
+		t.Fatal("found in a cluster that cannot be reached")
+	}
+	if !calls.Unreached() {
+		t.Error("the request's record does not say its cluster could not be reached")
+	}
+}
+
+// A search that panics takes nothing down and is not remembered.
+func TestPrometheusDiscovery_ASearchThatPanicsIsNotRemembered(t *testing.T) {
+	promDiscoveryEnv(t)
+	view := fake.NewSimpleClientset()
+	var lists atomic.Int64
+	view.PrependReactor("list", "services", func(ktesting.Action) (bool, runtime.Object, error) {
+		lists.Add(1)
+		panic("a list that panics")
+	})
+	s := newPromService(nil, view)
+	for range 2 {
+		if promAvailable(s) {
+			t.Fatal("found by a search that panicked")
+		}
+	}
+	if lists.Load() != 2 {
+		t.Errorf("searches = %d, want one for each caller", lists.Load())
 	}
 }
 

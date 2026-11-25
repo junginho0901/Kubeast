@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/proxypath"
+	"golang.org/x/sync/singleflight"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,6 +75,7 @@ type promCache struct {
 	svc      *promServiceInfo
 	probed   bool
 	probedAt time.Time
+	search   singleflight.Group // searchOnce
 }
 
 // A cluster's promCache lives on its clientBundle, so a kubeconfig rotation that
@@ -99,6 +101,20 @@ func (c *promCache) fresh(now time.Time) bool {
 		ttl = promCacheTTL
 	}
 	return now.Sub(c.probedAt) < ttl
+}
+
+// last is the Service last found, nil when the last discovery found none, and whether it still answers at now.
+func (c *promCache) last(now time.Time) (*promServiceInfo, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.svc, c.fresh(now)
+}
+
+// keep remembers what a discovery that ended at now found.
+func (c *promCache) keep(svc *promServiceInfo, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.svc, c.probed, c.probedAt = svc, true, now
 }
 
 // PrometheusFeatureEnabled reports whether the operator has explicitly
@@ -358,32 +374,18 @@ func (s *Service) getPromService(ctx context.Context) *promServiceInfo {
 		return nil
 	}
 	c := b.prom
-	c.mu.RLock()
-	if c.fresh(time.Now()) {
-		cached := c.svc
-		c.mu.RUnlock()
-		return cached
+	svc, fresh := c.last(time.Now())
+	// A request that has ended or sends the cluster no other read starts no search; the last one found stands.
+	if fresh || ctx.Err() != nil || readsHeld(ctx, b.id) {
+		return svc
 	}
-	c.mu.RUnlock()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.fresh(time.Now()) {
-		return c.svc
-	}
-
-	// A discovery its caller cut short (its reads held, its context ended) says nothing of the cluster: what it did not
-	// find is not remembered, the next caller looks again, and until then the last one found stands.
-	if readsHeld(ctx, b.id) {
-		return c.svc
-	}
-	svc := s.discoverPrometheus(ctx)
-	if svc == nil && ctx.Err() != nil {
-		return c.svc
-	}
-	c.svc, c.probed, c.probedAt = svc, true, time.Now()
-	return c.svc
+	searchOnce(ctx, &c.search, func(ctx context.Context) {
+		if _, fresh := c.last(time.Now()); !fresh {
+			c.keep(s.discoverPrometheus(ctx), time.Now())
+		}
+	})
+	svc, _ = c.last(time.Now())
+	return svc
 }
 
 // discoverPrometheus scans the TARGET cluster for a Prometheus service. The
@@ -396,24 +398,23 @@ func (s *Service) getPromService(ctx context.Context) *promServiceInfo {
 // caller: the result is remembered for the whole cluster, so a caller who may
 // not list a namespace or proxy to the Service must not turn it into "not
 // found" for everyone. The queries themselves still go out as the caller.
+// ctx is a search's (searchOnce), which ends at discoveryTime.
 func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 	cs := s.discoveryClient(ctx)
 	if cs == nil {
 		return nil
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, discoveryTime)
-	defer cancel()
 
 	// Labels first, in every namespace (Headlamp's order): a Service marked for
 	// Kubeast, the prometheus chart's server, the Operator's prometheus-operated.
-	if info := probeServiceLabels(probeCtx, cs, PrometheusServiceLabels); info != nil {
+	if info := probeServiceLabels(ctx, cs, PrometheusServiceLabels); info != nil {
 		slog.Info("Prometheus discovered by label via K8s API proxy",
 			"namespace", info.Namespace, "service", info.Name, "port", info.Port)
 		return info
 	}
 	// One listing of the common namespaces gives the candidates by name for both.
-	byName := namespaceCandidates(probeCtx, cs, isPrometheusPort, isVictoriaMetricsPort)
-	if info := firstVerified(probeCtx, cs, byName[0]); info != nil {
+	byName := namespaceCandidates(ctx, cs, isPrometheusPort, isVictoriaMetricsPort)
+	if info := firstVerified(ctx, cs, byName[0]); info != nil {
 		slog.Info("Prometheus discovered via K8s API proxy",
 			"namespace", info.Namespace, "service", info.Name, "port", info.Port)
 		return info
@@ -421,20 +422,18 @@ func (s *Service) discoverPrometheus(ctx context.Context) *promServiceInfo {
 	// No Prometheus: a single-node VictoriaMetrics (the operator's vmsingle, the
 	// victoria-metrics-single chart). A VictoriaMetrics cluster's vmselect needs
 	// its tenant path, so it is named in the settings instead.
-	if info := probeServiceLabels(probeCtx, cs, VictoriaMetricsServiceLabels); info != nil {
+	if info := probeServiceLabels(ctx, cs, VictoriaMetricsServiceLabels); info != nil {
 		slog.Info("VictoriaMetrics discovered by label via K8s API proxy",
 			"namespace", info.Namespace, "service", info.Name, "port", info.Port)
 		return info
 	}
-	if info := firstVerified(probeCtx, cs, byName[1]); info != nil {
+	if info := firstVerified(ctx, cs, byName[1]); info != nil {
 		slog.Info("VictoriaMetrics discovered via K8s API proxy",
 			"namespace", info.Namespace, "service", info.Name, "port", info.Port)
 		return info
 	}
 
-	if ctx.Err() == nil {
-		slog.Warn("Prometheus not found in target cluster")
-	}
+	slog.Warn("Prometheus not found in target cluster")
 	return nil
 }
 
