@@ -126,9 +126,9 @@ def onset_rules(rules: bool) -> str:
         "and last time and count, a pod's restarts with its last termination, the time of a change, the window before. A beginning "
         "no result shows is not known, which is not new.\n"
         "- Look first at what began near the alert's start. What began well before it, or was the same in the window before "
-        "(already_there), was already there: do not name it as the cause unless the alert is about it, a result shows the alert's "
-        "symptom coming from it, or it got worse near the alert's start (more restarts or errors, fewer ready pods; it then began when "
-        f"it got worse). List it under \"{heading}\" as \"Already there before\" with its time.\n"
+        "(already_there), was already there: do not list it among the causes. It is one, though it began earlier, when the alert is about "
+        "it, a result shows the alert's symptom coming from it, or it got worse near the alert's start (more restarts or errors, fewer "
+        f"ready pods; it then began when it got worse). Otherwise list it under \"{heading}\" as \"Already there before\" with its time.\n"
     )
 
 

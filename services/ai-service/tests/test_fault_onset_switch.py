@@ -20,7 +20,7 @@ CAUSE = "AI_CAUSE_QUESTIONS"
 OTHERS = ("AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED")
 COMBINATIONS = [on for n in range(len(OTHERS) + 1) for on in itertools.combinations(OTHERS, n)]
 # What the section adds to any of them, so a longer text is seen here: every model call of an answer sends it.
-ADDED_CHARS, ADDED_BYTES = 765, 1751
+ADDED_CHARS, ADDED_BYTES = 783, 1793
 # An investigation's system prompt before this switch (981d53f65), without the rules and with them: sha256.
 INVESTIGATION_BEFORE = {
     False: "0a39f3d9ffc2990bd020f0f25ef3e5e54cc50055e5eaf7c7947abfe74c08ae55",
@@ -99,7 +99,7 @@ def test_on_the_section_says_when_each_failure_began_and_when_an_older_one_is_th
         assert words in section, words
     # an old failure is the cause when the question is about it, a call shows the symptom coming from it, or it got worse
     (older,) = [line for line in section.split("\n") if line.startswith("- **전부터 있던 것은 따로**")]
-    for words in ("질문이 그것을 물었을 때", "물은 증상이 그것에서 온다는 호출이 있을 때", "그 무렵 더 나빠졌을 때", "나빠진 때가 시작한 때"):
+    for words in ("원인 목록에 넣지 말고(원인을 여럿 적을 때도)", "먼저 시작했어도 원인인 때는 질문이 그것을 물었을 때", "물은 증상이 그것에서 온다는 호출이 있을 때", "그 무렵 더 나빠졌을 때", "나빠진 때가 시작한 때"):
         assert words in older, words
     # it names no outcome and no first call: those stay with the rules for why questions and the order rules
     assert "원인 확인" not in section and "먼저 부를" not in section and "## " not in section
@@ -190,7 +190,7 @@ def test_on_an_investigations_prompt_gets_two_rules_and_nothing_else_changes(rul
     before, after = on.split(added)
     assert before + after == off and before.endswith("\n") and added.count("\n- ") == 1
     heading = "Ruled out" if rules else "What I checked"
-    assert f'List it under "{heading}" as "Already there before" with its time.' in added
+    assert f'Otherwise list it under "{heading}" as "Already there before" with its time.' in added
     assert heading in inv_prompt.report_headings(rules)
 
 
@@ -198,7 +198,7 @@ def test_an_investigations_rules_say_when_an_older_failure_is_the_cause():
     added = inv_prompt.onset_rules(True)
     for words in ("Say when each thing you found began", "often 15 minutes and up to an hour, so what began that long before the start counts as near it",
                   "not known, which is not new",
-                  "Look first at what began near the alert's start", "do not name it as the cause unless the alert is about it",
+                  "Look first at what began near the alert's start", "do not list it among the causes", "It is one, though it began earlier, when the alert is about it",
                   "a result shows the alert's symptom coming from it", "or it got worse near the alert's start", "it then began when it got worse"):
         assert words in added, words
 

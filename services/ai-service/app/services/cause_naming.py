@@ -52,9 +52,10 @@ INVESTIGATION = (
     'apart under "blocked") or, in a block without it, as hypotheses in the report. With no other cause "causes" is [], '
     '"no_fault" false and "outcome", where the block has it, cannot_tell. When they show that one end, or an object between the '
     "two, is at fault, name that one only.\n"
-    "- List every independent cause the results show, an entry each, the one that explains most of the symptom first; "
-    '"path" is that one\'s. What a cause brought about is not another cause: it goes in "path". Never add one to be on the '
-    "safe side.\n"
+    "- List every independent cause of the alert's symptom the results show, an entry each, the one that explains most of it "
+    'first; "path" is that one\'s. What was failing before and no result shows to bring the symptom about is not one; what '
+    'began before and a result shows to bring it about is. What a cause brought about is not another cause: it goes in "path". '
+    "Never add one to be on the safe side.\n"
 )
 
 # The chat's section, before the language rules.
@@ -64,7 +65,7 @@ CHAT_SECTION = f"""### 원인을 적는 법
 - **kind**: 증상의 모양이 아니라 그 객체의 무엇이 잘못됐나입니다. 둘 이상이 맞으면 바뀐 것으로 정하세요: 바뀐 것을 말하는 줄의 종류이고, 그것이 낳은 것의 종류가 아닙니다. 바뀐 것이 보이지 않으면 먼저 잘못된 것의 종류입니다. 질문이 낱말을 고르라고 하면 아래 뜻으로 고르고, 글로 답할 때는 낱말 대신 뜻을 쓰세요.
 {_KINDS}
 - **느리거나 끊긴 호출의 양 끝**: 결과가 양 끝을 다 보여 주는데 어느 쪽 탓인지는 보여 주지 않으면, 둘 다 원인이 아니라 후보입니다. 불리는 쪽부터 둘 다 후보로 적고(쪽마다 그것을 보여 준 호출과, 둘을 가를 다음 확인을 함께; 질문이 준 양식에 후보 칸이 없으면 답의 글에), 다른 원인이 없으면 원인은 비우고 알 수 없다고 답하세요. 한쪽 탓이나 둘 사이의 객체 탓인 것이 보이면 그것만 원인으로 적으세요.
-- **서로 다른 원인이 여럿이면 모두**: 결과가 보여 준 것을 하나도 빼지 말고 하나씩, 증상을 가장 많이 설명하는 것부터 적으세요. 경로는 그 첫 원인의 것입니다. 한 원인이 낳은 것은 다른 원인이 아니라 경로에 들어갑니다. 혹시 몰라서 더 적지는 마세요."""
+- **서로 다른 원인이 여럿이면 모두**: 결과가 물은 증상의 원인으로 보여 준 것을 하나도 빼지 말고 하나씩, 증상을 가장 많이 설명하는 것부터 적으세요. 전부터 고장 나 있어도 물은 증상이 그것에서 온다고 보여 준 결과가 없으면 원인이 아니고, 먼저 시작했어도 그런 결과가 있으면 원인입니다. 경로는 그 첫 원인의 것입니다. 한 원인이 낳은 것은 다른 원인이 아니라 경로에 들어갑니다. 혹시 몰라서 더 적지는 마세요."""
 
 
 def on() -> bool:

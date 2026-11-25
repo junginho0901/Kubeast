@@ -34,8 +34,8 @@ PARTS = [p for p in itertools.product((False, True), repeat=3) if p[0] or p[1]] 
 CHAT_BEFORE = "bcea6b1a6aa84a1706adfd68927a9f396fd7a08125c5094f0d028116373a64d8"
 RCA_BEFORE = "84809f765b2e6512dbb830aac3143e75ad3d4071efe80086f555ff32fa6ce714"
 # What it adds, so a longer text is seen here: every model call of a chat answer or of an investigation sends it.
-CHAT_ADDED = (2311, 3553)  # characters, bytes
-RCA_ADDED = 2987
+CHAT_ADDED = (2401, 3773)  # characters, bytes
+RCA_ADDED = 3143
 
 API, WEB, SETTINGS = "Service/apps/api", "Deployment/apps/web", "ConfigMap/apps/web-settings"
 
@@ -197,8 +197,12 @@ def test_both_say_the_same_rules(monkeypatch):
         ("다른 원인이 없으면 원인은 비우고 알 수 없다고", 'With no other cause "causes" is []'),
         ("한쪽 탓이나 둘 사이의 객체 탓인 것이 보이면 그것만 원인으로", "one end, or an object between the two, is at fault, name that one only"),
         # every independent cause, the main one first, and none added
-        ("하나도 빼지 말고", "List every independent cause the results show"),
-        ("증상을 가장 많이 설명하는 것부터", "the one that explains most of the symptom first"),
+        ("하나도 빼지 말고", "List every independent cause of the alert's symptom the results show"),
+        # what was failing before is one only when a result shows the symptom coming from it
+        ("전부터 고장 나 있어도 물은 증상이 그것에서 온다고 보여 준 결과가 없으면 원인이 아니고",
+         "What was failing before and no result shows to bring the symptom about is not one;"),
+        ("먼저 시작했어도 그런 결과가 있으면 원인입니다", "what began before and a result shows to bring it about is."),
+        ("증상을 가장 많이 설명하는 것부터", "the one that explains most of it first"),
         ("경로는 그 첫 원인의 것", '"path" is that one\'s'),
         ("다른 원인이 아니라 경로에", "is not another cause: it goes in \"path\""),
         ("혹시 몰라서 더 적지는 마세요", "Never add one to be on the safe side"),
