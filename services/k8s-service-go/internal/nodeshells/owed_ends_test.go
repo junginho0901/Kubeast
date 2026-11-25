@@ -231,3 +231,101 @@ func TestWriteEndWithoutAWriterSaysSo(t *testing.T) {
 		t.Fatal("a tracker without a writer kept a row")
 	}
 }
+
+// outAudit is the audit table behind the service's own gate (audit.Guard): down answers nothing, shut answers a ping and
+// takes no row.
+type outAudit struct {
+	auditRows
+	audit.Reader
+	mu         sync.Mutex
+	down, shut bool
+	tries      int
+}
+
+func (a *outAudit) set(down, shut bool) {
+	a.mu.Lock()
+	a.down, a.shut = down, shut
+	a.mu.Unlock()
+}
+
+func (a *outAudit) Write(ctx context.Context, rec audit.Record) (int64, error) {
+	a.mu.Lock()
+	a.tries++
+	a.mu.Unlock()
+	if err := a.ProbeWrite(ctx); err != nil {
+		return 0, err
+	}
+	return a.auditRows.Write(ctx, rec)
+}
+
+func (a *outAudit) Ping(context.Context) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.down {
+		return errors.New("dial tcp: i/o timeout")
+	}
+	return nil
+}
+
+func (a *outAudit) ProbeWrite(ctx context.Context) error {
+	if err := a.Ping(ctx); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.shut {
+		return errors.New("could not extend file")
+	}
+	return nil
+}
+
+func (a *outAudit) tried() int { a.mu.Lock(); defer a.mu.Unlock(); return a.tries }
+
+// A refusal the gate keeps from the outage, for a request that came just before the database was back, does not put an
+// owed row off to the next beat, nor lose it when the server stops.
+func TestARefusalKeptFromTheOutageDoesNotHoldAnOwedRowBack(t *testing.T) {
+	for name, pay := range map[string]func(*Tracker){
+		"at a beat":            func(tr *Tracker) { tr.payOwed(context.Background()) },
+		"as the server stops":  func(tr *Tracker) { tr.payOwedAtStop() },
+		"as the server's done": func(tr *Tracker) { done, stop := context.WithCancel(context.Background()); stop(); tr.Run(done) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			rows := &outAudit{}
+			gate := audit.Guard(rows, rows, true)
+			tr := NewTracker(NewMemory(nil), nil, gate, time.Hour)
+			rows.set(true, false)
+			tr.WriteEnd(ctx, endRow("n1"))
+			if err := gate.Ready(ctx); !errors.Is(err, audit.ErrUnavailable) {
+				t.Fatalf("a request while the database is out: %v", err)
+			}
+			rows.set(false, false)
+			pay(tr)
+			if got := rows.all(); len(got) != 1 || tr.Owed() != 0 || got[0].TargetID != "n1" {
+				t.Fatalf("%d rows, %d owed: want the row written once the database answers", len(got), tr.Owed())
+			}
+		})
+	}
+}
+
+// A table that answers a ping and takes no row is asked with a probe, as before: no row is tried (no stdout copy) at a
+// beat while it takes none, and the row is written at the first beat once it does.
+func TestAnOwedRowIsNotTriedWhileTheTableTakesNone(t *testing.T) {
+	ctx := context.Background()
+	rows := &outAudit{}
+	gate := audit.Guard(rows, rows, true)
+	tr := NewTracker(NewMemory(nil), nil, gate, time.Hour)
+	rows.set(false, true)
+	tr.WriteEnd(ctx, endRow("n1"))
+	for range 3 {
+		tr.payOwed(ctx)
+	}
+	if rows.tried() != 1 || tr.Owed() != 1 {
+		t.Fatalf("%d tries, %d owed while the table took no row, want 1 and 1", rows.tried(), tr.Owed())
+	}
+	rows.set(false, false)
+	tr.payOwed(ctx)
+	if rows.tried() != 2 || tr.Owed() != 0 || len(rows.all()) != 1 {
+		t.Fatalf("%d tries, %d owed, %d rows at the first beat after, want 2, 0 and 1", rows.tried(), tr.Owed(), len(rows.all()))
+	}
+}

@@ -58,7 +58,8 @@ func (t *Tracker) Owed() int {
 }
 
 // payOwed writes the owed end rows, oldest first, once the database answers (the store's Ping) and the audit store is
-// ready (audit.Readier); it stops at the first row not taken, left to the next try. It runs on the heartbeat's
+// ready by a check of its own (audit.Checker: a refusal kept from the outage for a request is not its answer), or else
+// by audit.Readier; it stops at the first row not taken, left to the next try. It runs on the heartbeat's
 // goroutine after a beat, so it starts no row once a third of beatEvery has passed since it began and leaves the rest,
 // in their order, to the next tick: with the beat's opTimeout and the last row's, a tick ends within beatEvery, and an
 // audit store that takes rows slowly does not hold the next beat back.
@@ -74,10 +75,13 @@ func (t *Tracker) payOwed(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	if rd, ok := t.audit.(audit.Readier); ok {
-		if rd.Ready(ctx) != nil {
-			return
-		}
+	if c, ok := t.audit.(audit.Checker); ok {
+		err = c.CheckReady(ctx)
+	} else if rd, ok := t.audit.(audit.Readier); ok {
+		err = rd.Ready(ctx)
+	}
+	if err != nil {
+		return
 	}
 	for {
 		t.mu.Lock()

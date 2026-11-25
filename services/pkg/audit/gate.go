@@ -40,6 +40,14 @@ type Readier interface {
 	Ready(ctx context.Context) error
 }
 
+// Checker is asked in place of Readier by a writer that waits for the store to
+// come back with a row it owes: an answer kept for requests would put the row
+// off, and lose it if the process stops meanwhile.
+type Checker interface {
+	// CheckReady is Ready from a check made after it was called.
+	CheckReady(ctx context.Context) error
+}
+
 // FailClosedEnabled reports AUDIT_FAIL_CLOSED (default true): with the audit
 // store unreachable, audited actions are refused with 503 instead of running
 // unrecorded. Off restores the log-and-continue behaviour.
@@ -240,6 +248,15 @@ func (g *Guarded) Ready(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// CheckReady implements Checker: whatever answer is kept, the store is asked,
+// and Ready keeps what it answers.
+func (g *Guarded) CheckReady(ctx context.Context) error {
+	g.mu.Lock()
+	g.checkedAt, g.probedAt = time.Time{}, time.Time{}
+	g.mu.Unlock()
+	return g.Ready(ctx)
 }
 
 // FailClosed reports the switch the wrapper was built with.
