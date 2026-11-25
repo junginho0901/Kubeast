@@ -23,6 +23,7 @@ from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import limits
 from app.services.ai import repeats as repeats_mod
+from app.services.ai import thought_signatures
 from app.services.ai import tool_replay
 from app.services.ai import tool_results
 from app.services.ai import tool_turn
@@ -1068,6 +1069,7 @@ async def session_chat_stream(
                                 collected_tool_calls[idx]["name"] = tc_delta.function.name
                             if getattr(tc_delta.function, "arguments", None):
                                 collected_tool_calls[idx]["arguments"] += tc_delta.function.arguments
+                            thought_signatures.add_delta(service.provider, collected_tool_calls[idx], tc_delta)
 
                 # usage 로그 + 턴 합계
                 usage_acct.add_usage(turn_usage, stream_usage, prompt_chars=call_prompt_chars)
@@ -1116,6 +1118,7 @@ async def session_chat_stream(
                         "type": "function",
                         # a call with no input streams no argument text (Anthropic adapter): "{}" as the providers expect
                         "function": {"name": tc["name"], "arguments": tc["arguments"] or "{}"},
+                        **thought_signatures.kept(service.provider, tc),
                     })
                 assistant_msg = {
                     "role": "assistant",
