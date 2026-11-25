@@ -1,14 +1,19 @@
 package audit
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type fakePinger struct {
@@ -413,5 +418,196 @@ func TestAGuardedMadeWithoutGuardTakesWriteGrace(t *testing.T) {
 	}
 	if len(store.rows) != 2 || g.failures.Load() != 0 {
 		t.Fatalf("rows %d failures %d", len(store.rows), g.failures.Load())
+	}
+}
+
+// refusing is a store whose writes answer err, and whose probe answers probeErr.
+type refusing struct {
+	fakeStore
+	err, probeErr error
+	pings, probes int
+}
+
+func (s *refusing) Write(ctx context.Context, rec Record) (int64, error) { return 1, s.err }
+func (s *refusing) Ping(ctx context.Context) error                       { s.pings++; return nil }
+func (s *refusing) ProbeWrite(ctx context.Context) error                 { s.probes++; return s.probeErr }
+
+func pgRefusal(code string) error {
+	return fmt.Errorf("audit insert: %w", &pgconn.PgError{Severity: "ERROR", Code: code, Message: "refused"})
+}
+
+// A row refused for its text says nothing about the next one: nobody is refused for it, and it is counted and logged
+// with its action. The next check probes a write, so a table that refuses every row that way is still seen.
+func TestGuardedARowRefusedForItsTextRefusesNobody(t *testing.T) {
+	for _, code := range []string{"22021", "22P02", "22P05", "22001", "22000", "54000", "54001"} {
+		t.Run(code, func(t *testing.T) {
+			var logged bytes.Buffer
+			was := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+			defer slog.SetDefault(was)
+			s := &refusing{}
+			g := Guard(s, s, true)
+			ctx := context.Background()
+			if err := g.Ready(ctx); err != nil {
+				t.Fatal(err)
+			}
+			s.err = pgRefusal(code)
+			for i := 0; i < 3; i++ {
+				if _, err := g.Write(ctx, Record{Action: "user.login.failed"}); !errors.Is(err, s.err) {
+					t.Fatalf("err = %v", err)
+				}
+				if err := g.Ready(ctx); err != nil {
+					t.Fatalf("refused: %v", err)
+				}
+			}
+			if s.pings != 1 || s.probes != 0 || g.broken {
+				t.Fatalf("pings %d, probes %d, broken %v: the store counts as broken", s.pings, s.probes, g.broken)
+			}
+			if st := g.Status(ctx); st.WriteFailures != 3 || !strings.Contains(st.LastError, code) {
+				t.Errorf("status = %+v", st)
+			}
+			if line := logged.String(); strings.Count(line, `"msg":"audit: row refused for its text","action":"user.login.failed"`) != 3 || !strings.Contains(line, code) {
+				t.Errorf("logged %s", line)
+			}
+
+			s.pings = 0
+			g.checkedAt = time.Now().Add(-time.Minute) // the next check is due
+			for i := 0; i < 2; i++ {
+				if err := g.Ready(ctx); err != nil {
+					t.Fatalf("after a probe that landed: %v", err)
+				}
+			}
+			if s.pings != 1 || s.probes != 1 {
+				t.Fatalf("pings %d, probes %d, want one of each", s.pings, s.probes)
+			}
+
+			s.probeErr = s.err
+			if _, err := g.Write(ctx, Record{Action: "user.login.failed"}); err == nil {
+				t.Fatal("stored")
+			}
+			g.checkedAt = time.Now().Add(-time.Minute)
+			if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+				t.Fatalf("every row is refused, and an action may run: %v", err)
+			}
+		})
+	}
+}
+
+// A row that lands after one refused for its text leaves nothing to probe.
+func TestGuardedALandedRowEndsTheDoubtOfARefusedOne(t *testing.T) {
+	s := &refusing{err: pgRefusal("22021")}
+	g := Guard(s, s, true)
+	ctx := context.Background()
+	if _, err := g.Write(ctx, Record{Action: "a"}); err == nil {
+		t.Fatal("stored")
+	}
+	s.err = nil
+	if _, err := g.Write(ctx, Record{Action: "b"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Ready(ctx); err != nil || s.probes != 0 {
+		t.Fatalf("ready %v, probes %d", err, s.probes)
+	}
+}
+
+// A row that is missing for any other reason refuses the next action until a write lands, also one that a row refused
+// for its text follows.
+func TestGuardedAnyOtherFailureRefusesTheNextAction(t *testing.T) {
+	failures := map[string]error{
+		"no connection":           errors.New("dial tcp: connection refused"),
+		"the ids ran out":         pgRefusal("2200H"),
+		"the id column ran out":   pgRefusal("22003"),
+		"a full disk":             pgRefusal("53100"),
+		"a lock":                  pgRefusal("55P03"),
+		"a constraint":            pgRefusal("23514"),
+		"a trigger":               pgRefusal("P0001"),
+		"read only":               pgRefusal("25006"),
+		"the server stopping":     pgRefusal("57P01"),
+		"a statement cut":         pgRefusal("57014"),
+		"a table that is not it":  pgRefusal("42P01"),
+		"a broken database":       pgRefusal("XX001"),
+		"the caller's deadline":   context.DeadlineExceeded,
+		"a code that starts like": errors.New("22021"),
+	}
+	for name, failure := range failures {
+		t.Run(name, func(t *testing.T) {
+			s := &refusing{}
+			g := Guard(s, s, true)
+			ctx := context.Background()
+			if err := g.Ready(ctx); err != nil {
+				t.Fatal(err)
+			}
+			s.err, s.probeErr = failure, failure
+			if _, err := g.Write(ctx, Record{Action: "k8s.pod.delete"}); err == nil {
+				t.Fatal("stored")
+			}
+			if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+				t.Fatalf("ready = %v", err)
+			}
+			s.err = pgRefusal("22021")
+			if _, err := g.Write(ctx, Record{Action: "k8s.pod.delete"}); err == nil {
+				t.Fatal("stored")
+			}
+			if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+				t.Fatalf("a row refused for its text let the next action run: %v", err)
+			}
+			s.err, s.probeErr = nil, nil
+			g.probedAt = time.Time{}
+			if err := g.Ready(ctx); err != nil {
+				t.Fatalf("rows land again: %v", err)
+			}
+		})
+	}
+}
+
+// One row with any text, written while others ask: the store holds every row and refuses nobody.
+func TestGuardedOneCallersTextRefusesNobodyElse(t *testing.T) {
+	pg, pool := startFakePG(t)
+	store := NewPostgresStore(pool, ServiceAuth)
+	g := Guard(store, store, true)
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for n := 0; n < 25; n++ {
+				if _, err := g.Write(ctx, Record{Action: "user.login.failed", UserAgent: "curl\xff", Path: "/\x00", TargetID: strings.Repeat("x", 5000)}); err != nil {
+					t.Errorf("not stored: %v", err)
+				}
+				if err := g.Ready(ctx); err != nil {
+					t.Errorf("refused: %v", err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	if rows, probes := pg.count(); rows != 100 || probes != 0 {
+		t.Fatalf("rows %d, probes %d", rows, probes)
+	}
+}
+
+// A table that takes no row refuses the next action, whatever its answer's code says of the row.
+func TestGuardedATableThatRefusesEveryRowRefusesTheNextAction(t *testing.T) {
+	pg, pool := startFakePG(t)
+	store := NewPostgresStore(pool, ServiceK8s)
+	g := Guard(store, store, true)
+	g.ttl = 0 // every Ready checks
+	ctx := context.Background()
+	if err := g.Ready(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, code := range []string{"22P02", "53100", "2200H"} {
+		pg.refuseEveryRow(code)
+		if _, err := g.Write(ctx, Record{Action: "k8s.pod.delete"}); err == nil {
+			t.Fatal("stored")
+		}
+		if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("%s: ready = %v", code, err)
+		}
+		pg.refuseEveryRow("")
+		if err := g.Ready(ctx); err != nil {
+			t.Fatalf("%s: rows land again: %v", code, err)
+		}
 	}
 }

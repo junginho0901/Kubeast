@@ -49,7 +49,8 @@ func (s *PostgresStore) ProbeWrite(ctx context.Context) error {
 	return err
 }
 
-// Write inserts a Record and returns the assigned id.
+// Write inserts a Record, its text as the columns take it (storable), and
+// returns the assigned id.
 func (s *PostgresStore) Write(ctx context.Context, rec Record) (int64, error) {
 	if rec.Service == "" {
 		rec.Service = s.defaultService
@@ -57,6 +58,7 @@ func (s *PostgresStore) Write(ctx context.Context, rec Record) (int64, error) {
 	if rec.Result == "" {
 		rec.Result = ResultSuccess
 	}
+	rec = storable(rec)
 
 	const q = `
         INSERT INTO auth_audit_logs

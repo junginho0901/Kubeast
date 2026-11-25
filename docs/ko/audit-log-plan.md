@@ -39,6 +39,8 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서입니다.
 ## 4. 저장
 
 - **DB**: `auth_audit_logs`(모든 서비스 공용, auth-service가 스키마 관리). Go는 `audit.PostgresStore`로, Python은 `audit_writer.py`로 같은 컬럼에 INSERT합니다.
+  - 행은 어떤 글이 들어 있어도 저장됩니다. PostgreSQL이 받지 않는 글은 받는 글로 바꿔 적습니다: UTF-8이 아닌 바이트와 짝이 없는 서로게이트는 U+FFFD, 0x00은 뺌(JSON에서는 U+FFFD), 색인이 있는 열(`service`, `action`, `actor_user_id`, `target_id`)은 앞 2,692바이트. 그 밖의 글은 온 그대로 저장합니다(`audit.storable`, `audit_text.py`, 함께 쓰는 사례는 `audit_text_cases.json`).
+  - 그래도 글 때문에 거절된 행은 세고 로그에 남기며(`audit: row refused for its text`, ai-service는 `audit row refused for its text`) 다른 동작을 거부하지 않습니다. 다음 준비 확인이 시험 쓰기를 합니다.
 - **stdout**: 서비스 로거(JSON)로 한 줄을 씁니다.
   - 형식: `{"time":…,"level":"INFO","msg":"audit","event":"audit","audit":{id,service,action,result,error,actor_user_id,actor_email,target_type,target_id,target_email,cluster,namespace,path,request_ip,user_agent,request_id,before,after}}`
   - 최상위 `event: "audit"`이 로그 파이프라인의 라우팅 키입니다.

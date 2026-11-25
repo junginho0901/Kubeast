@@ -23,7 +23,6 @@ Schema columns come from services/pkg/dbmigrate/migrations (auth_audit_logs).
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import time
@@ -31,6 +30,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlalchemy import text
+
+from app.services.audit_text import cut_text, refused_for_its_text, storable_json, storable_text
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,8 @@ write_failures = 0
 # A write failed and none has landed since: readiness then probes a write (inserted and rolled back), since the
 # database can answer SELECT 1 while the audit table takes no row (a full disk, a lock, a trigger).
 _write_broken = False
+# A row was refused for its text since the last check: the next one probes a write, and until then nothing is refused.
+_write_doubt = False
 _PROBE_SQL = text("INSERT INTO auth_audit_logs (service, action) VALUES ('ai', 'audit.probe')")
 
 
@@ -65,7 +68,7 @@ async def audit_ready() -> tuple[bool, Optional[str]]:
     the engine — after a failed write, an insert rolled back — cached
     READY_TTL_SEC. Always True with fail-closed off or on the sqlite dev
     database (no audit table there)."""
-    global _write_broken
+    global _write_broken, _write_doubt
     if not fail_closed_enabled():
         return True, None
     now = time.monotonic()
@@ -79,13 +82,13 @@ async def audit_ready() -> tuple[bool, Optional[str]]:
         if "postgresql" in str(db.database_url):
             async with db.engine.connect() as conn:
                 await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=2.0)
-                if _write_broken:
+                if _write_broken or _write_doubt:
                     # SELECT 1 began the connection's transaction (SQLAlchemy autobegin): the insert joins it
                     try:
                         await asyncio.wait_for(conn.execute(_PROBE_SQL), timeout=2.0)
                     finally:
                         await conn.rollback()
-        _write_broken = False
+        _write_broken = _write_doubt = False
     except Exception as exc:  # unreachable, timeout, pool exhausted, the table refusing rows, ...
         ok, error = False, str(exc) or exc.__class__.__name__
     _ready_cache.update(at=time.monotonic(), ok=ok, error=error)
@@ -115,7 +118,7 @@ def _emit_stdout(record: dict[str, Any]) -> None:
             "audit": {k: v for k, v in record.items() if v is not None},
         }
         # Compact separators match the Go services' slog JSON output.
-        print(json.dumps(line, ensure_ascii=False, default=str, separators=(",", ":")), flush=True)
+        print(storable_json(line, separators=(",", ":")), flush=True)
     except Exception as exc:  # never block the caller
         logger.warning("audit stdout emit failed (action=%s): %s", record.get("action"), exc)
 
@@ -140,22 +143,28 @@ def _record(
     result: str = "success",
     error: Optional[str] = None,
 ) -> dict[str, Any]:
-    """The stdout mirror's record of a write_audit call."""
+    """A write_audit call's record, its text as the columns take it: what the stdout mirror prints and the row holds."""
+    def column(value: Any, indexed: bool = False) -> Optional[str]:
+        if not value:
+            return None
+        stored = storable_text(value)
+        return (cut_text(stored) if indexed else stored) or None
+
     return {
         "service": SERVICE_AI,
-        "action": action,
-        "result": result,
-        "error": error or None,
-        "actor_user_id": actor_user_id or None,
-        "actor_email": actor_email or None,
-        "target_type": target_type or None,
-        "target_id": target_id or None,
-        "cluster": cluster or None,
-        "namespace": namespace or None,
-        "path": path or None,
-        "request_ip": request_ip or None,
-        "user_agent": user_agent or None,
-        "request_id": request_id or None,
+        "action": column(action, indexed=True) or "",
+        "result": column(result) or "",
+        "error": column(error),
+        "actor_user_id": column(actor_user_id, indexed=True),
+        "actor_email": column(actor_email),
+        "target_type": column(target_type),
+        "target_id": column(target_id, indexed=True),
+        "cluster": column(cluster),
+        "namespace": column(namespace),
+        "path": column(path),
+        "request_ip": column(request_ip),
+        "user_agent": column(user_agent),
+        "request_id": column(request_id),
         "after": after or None,
     }
 
@@ -163,14 +172,18 @@ def _record(
 def _landed() -> None:
     """A row landed, so the audit table takes rows: writes count as working and a refusal readiness cached a moment
     ago ends now instead of READY_TTL_SEC later."""
-    global _write_broken
-    _write_broken = False
+    global _write_broken, _write_doubt
+    _write_broken = _write_doubt = False
     _ready_cache.update(at=time.monotonic(), ok=True, error=None)
 
 
 def _write_failed(action: str, exc: BaseException) -> None:
-    global write_failures, _write_broken
+    global write_failures, _write_broken, _write_doubt
     write_failures += 1
+    if refused_for_its_text(exc):
+        _write_doubt = True
+        logger.error("audit row refused for its text (action=%s, failures=%d): %s", action, write_failures, exc)
+        return
     _write_broken = True
     _ready_cache["at"] = 0.0  # re-probe (a write this time) on the next readiness check
     logger.error("audit write failed (action=%s, failures=%d): %s", action, write_failures, exc)
@@ -240,38 +253,21 @@ async def write_audit(
     doesn't exist and we skip silently. `cluster` is the cluster the request
     acted on; callers that do not know it leave it unset (stored empty).
     """
-    if conn is None:
-        _emit_stdout(_record(
+    try:
+        record = _record(
             action=action, actor_user_id=actor_user_id, actor_email=actor_email, target_type=target_type, target_id=target_id,
             namespace=namespace, after=after, request_ip=request_ip, user_agent=user_agent, request_id=request_id, path=path,
             cluster=cluster, result=result, error=error,
-        ))
-    try:
+        )
+        if conn is None:
+            _emit_stdout(record)
         from app.database import get_db_service
 
         db = await get_db_service()
         if "postgresql" not in str(db.database_url):
             return True
 
-        after_json = json.dumps(after, ensure_ascii=False, default=str) if after else "{}"
-
-        params = {
-            "service": SERVICE_AI,
-            "action": action,
-            "actor_user_id": actor_user_id or None,
-            "actor_email": actor_email or None,
-            "target_type": target_type or None,
-            "target_id": target_id or None,
-            "after": after_json,
-            "request_ip": request_ip or None,
-            "user_agent": user_agent or None,
-            "request_id": request_id or None,
-            "path": path or None,
-            "cluster": cluster or None,
-            "namespace": namespace or None,
-            "result": result,
-            "error": error or None,
-        }
+        params = {**record, "after": storable_json(after) if after else "{}"}
         if conn is not None:
             await conn.execute(_INSERT_SQL, params)  # lands, or not, with the caller's commit_row
             return True
