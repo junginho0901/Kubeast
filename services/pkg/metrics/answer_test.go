@@ -454,6 +454,47 @@ func TestAnAnswerOverAPlainWriter(t *testing.T) {
 	}
 }
 
+// screenWait is an axios call's own time in ms, as the screens' sources write one: 30000, 30_000 or 30 * 1000.
+const screenWait = `\btimeout: ([\d_]+(?: \* [\d_]+)*)`
+
+// wholeNumber is a number as a source writes it: "_" between its digits, or a product.
+func wholeNumber(literal string) (int, error) {
+	product := 1
+	for _, factor := range strings.Split(literal, "*") {
+		n, err := strconv.Atoi(strings.ReplaceAll(strings.TrimSpace(factor), "_", ""))
+		if err != nil {
+			return 0, fmt.Errorf("%q: %w", literal, err)
+		}
+		product *= n
+	}
+	return product, nil
+}
+
+func TestAScreensWaitIsReadAsItIsWritten(t *testing.T) {
+	for source, want := range map[string]int{
+		"  timeout: 10000, // ten seconds": 10000,
+		"{ timeout: 90_000 })":             90000,
+		"{ timeout: 1_200_000 }":           1200000,
+		"timeout: 20 * 1000,":              20000,
+		"timeout: 2 * 60 * 1_000,":         120000,
+		"timeout: 300 }":                   300,
+	} {
+		hit := regexp.MustCompile(screenWait).FindStringSubmatch(source)
+		if hit == nil {
+			t.Errorf("%s: not found", source)
+			continue
+		}
+		if got, err := wholeNumber(hit[1]); got != want || err != nil {
+			t.Errorf("%s: %d, %v; want %d", source, got, err, want)
+		}
+	}
+	for _, not := range []string{"timeout: LIMIT,", "requestTimeout: 500", "timeout = 500"} {
+		if hit := regexp.MustCompile(screenWait).FindStringSubmatch(not); hit != nil {
+			t.Errorf("%s: read as %v", not, hit)
+		}
+	}
+}
+
 // The limit is under half of every wait that ends a request the way its client leaving does, so a wait cut short of its
 // time by what came before the handler (a full accept queue, a browser's own queue) is still past it.
 func TestTheLimitIsUnderHalfOfEveryWait(t *testing.T) {
@@ -472,7 +513,7 @@ func TestTheLimitIsUnderHalfOfEveryWait(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, hit := range regexp.MustCompile(pattern).FindAllStringSubmatch(string(raw), -1) {
-				n, err := strconv.Atoi(hit[1])
+				n, err := wholeNumber(hit[1])
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -484,7 +525,7 @@ func TestTheLimitIsUnderHalfOfEveryWait(t *testing.T) {
 			t.Fatalf("%s in %s: none found", pattern, path)
 		}
 	}
-	read(`\btimeout: (\d+)`, "frontend/src/services/api/*.ts", time.Millisecond)
+	read(screenWait, "frontend/src/services/api/*.ts", time.Millisecond)
 	read(`proxy_read_timeout (\d+)s`, "helm/kubeast/files/nginx.conf", time.Second)
 	for _, main := range []string{
 		"auth-service-go/cmd/server/main.go", "k8s-service-go/cmd/server/conn_buffers.go",
