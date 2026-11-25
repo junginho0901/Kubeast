@@ -12,25 +12,31 @@ of them and never a report's text. A cluster removed and registered again under 
   markers (prompt.past_block), made of the server's words and of fields held to a form: the time, that a cause was found,
   and each cause's object (Kind/namespace/name) and kind (rca.KINDS). No text of a report, a hypothesis, a label or a
   note goes in. A line is given only for an investigation whose outcome is a cause found, and a cause only when the
-  evidence check verified it on a call that reads more than alerts, rules and names, and only in the alert's own
-  namespace when it has one (the investigator's token is limited to it). The lines have no call number, so no cause of
-  the run can rest on them. A read that fails leaves the run without them. The run's audit row names the investigations
-  it was given; while the switch is on alerts_inbox gives the run no report either (asks_for_report).
+  evidence check verified it, a call given for it named its object as one (names_in: the answer of a read of objects,
+  events or metrics gives the name where an object's name goes — a name that is only in a log line, a message or what
+  was asked is none), its name is a Kubernetes name of at most NAME_CHARS characters, its kind one of Kubernetes' own,
+  and only in the alert's own namespace when it has one (the investigator's token is limited to it). Which call named it
+  is kept with the cause while the switch is on (`named_by`), so an investigation made with it off gives no line. The
+  lines have no call number, so no cause of the run can rest on them. A read that fails leaves the run without them. The
+  run's audit row names the investigations it was given; while the switch is on alerts_inbox gives the run no report
+  either (asks_for_report).
 """
 
 from __future__ import annotations
 
 import asyncio
+import itertools
+import json
 import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Awaitable, Callable, Iterable, Optional
+from typing import Any, Awaitable, Callable, Iterable, Iterator, Optional
 
 from sqlalchemy import DateTime, String, column, select, table
 
 from app.database import AlertInvestigation
-from app.services.investigation import rca, verdict
+from app.services.investigation import answers, evidence, rca, verdict
 from app.services.redact import Numbers, redact_text
 
 log = logging.getLogger(__name__)
@@ -46,9 +52,22 @@ MAX_CAUSES = 3  # of one investigation, in the window and in a line
 # auth-service's table, read for when the cluster was registered.
 _CLUSTERS = table("clusters", column("id", String), column("created_at", DateTime))
 
-# Kind/namespace/name or Kind/name, as Kubernetes writes them: words, spaces and markers do not fit it.
-_RESOURCE = re.compile(r"[A-Z][A-Za-z0-9]{1,39}(?:/(?P<namespace>[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))?/"
-                       r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?")
+# Kind/namespace/name or Kind/name with names as Kubernetes writes them (RFC 1123), and the longest name of a line: words,
+# spaces and markers do not fit, nor a name long enough to hold a sentence.
+_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+_NAME = re.compile(rf"{_LABEL}(?:\.{_LABEL})*")
+_RESOURCE = re.compile(rf"(?P<kind>[A-Z][A-Za-z0-9]{{1,39}})(?:/(?P<namespace>{_LABEL}))?/(?P<name>{_LABEL}(?:\.{_LABEL})*)")
+NAME_CHARS = 63
+
+# The kinds a line may name: Kubernetes' own, which no one can make up.
+OBJECT_KINDS = frozenset({
+    "Pod", "Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "ReplicationController", "Job", "CronJob",
+    "HorizontalPodAutoscaler", "PodDisruptionBudget", "Service", "Endpoints", "EndpointSlice", "Ingress", "IngressClass", "NetworkPolicy",
+    "ConfigMap", "Secret", "ServiceAccount", "ResourceQuota", "LimitRange", "PersistentVolumeClaim", "PersistentVolume", "StorageClass",
+    "VolumeAttachment", "Node", "Namespace", "Lease", "Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding", "PriorityClass",
+    "RuntimeClass", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration", "ValidatingAdmissionPolicy", "APIService",
+    "CustomResourceDefinition",
+})
 
 
 @dataclass(frozen=True)
@@ -56,7 +75,7 @@ class Cause:
     resource: str
     kind: str
     verified: Optional[bool]       # None: the evidence check did not read it
-    tools: tuple[str, ...]         # of the calls given for it that did not fail
+    named: bool                    # a call given for it named its object (named_by, kept while the switch is on)
 
 
 @dataclass(frozen=True)
@@ -72,11 +91,11 @@ def _causes(result: dict) -> list[Cause]:
     for c in result.get("causes") if isinstance(result.get("causes"), list) else []:
         if not isinstance(c, dict) or not rca.is_cause(c):
             continue
-        refs = c.get("evidence") if isinstance(c.get("evidence"), list) else []
+        by = c.get(NAMED_BY) if isinstance(c.get(NAMED_BY), list) else []
         out.append(Cause(
             resource=str(c.get("resource") or ""), kind=str(c.get("kind") or ""),
             verified=c["verified"] if isinstance(c.get("verified"), bool) else None,
-            tools=tuple(str(r.get("tool") or "") for r in refs if isinstance(r, dict) and not r.get("failed"))))
+            named=any(isinstance(r, dict) and r.get("tool") in NAMING for r in by)))
     return out
 
 
@@ -157,6 +176,118 @@ async def listed(db, item, investigation, now: datetime) -> Optional[list[dict[s
              "causes_total": len(p.causes)} for p in past]
 
 
+# --- what a run's calls named --------------------------------------------------------------------------------------------
+
+# The reads of objects, events and metrics: their answers give an object's name where an object's name goes. Not among
+# them: the logs, which whatever runs in a container writes, the traces, whose names the applications set, the queries
+# whose answer the model shapes (k8s_jq_query, k8s_tabular_query), and the alerts, rules and lists of names
+# (verdict.NO_SYMPTOM).
+NAMING = frozenset({
+    "issues", "k8s_get_resources", "k8s_get_resource_yaml", "k8s_describe_resource", "k8s_get_events", "timeline", "anomaly_rank",
+    "resource_graph", "storage_summary", "network_policy_check", "network_policy_effective", "get_pod_metrics", "get_node_metrics",
+    "prometheus_query",
+})
+# kubectl's reads of one object by its name: an answer is that object's, so it is there.
+_BY_NAME = frozenset({"k8s_get_resources", "k8s_get_resource_yaml", "k8s_describe_resource"})
+# The fields of a listed item that hold an object's name; any other text of it (a message, a summary, a value) names none.
+_NAME_FIELDS = frozenset({
+    "name", "namespace", "exported_namespace", "node", "nodename", "node_name", "owner", "ownername", "owner_name", "pod_name",
+    "workload_name", "target",
+    *(label for labels in verdict.OBJECT_LABELS for label in labels)}) - {"app", "container", "exported_container", "service_name"}
+# What an object's writer fills freely: no field in them is the name of an object that was read.
+_FREE_FIELDS = frozenset({"annotations", "labels", "data", "stringData", "binaryData", "env"})
+# PromQL that writes a label itself: its answer can hold a name nothing has.
+_OWN_LABELS = re.compile(r"\b(?:label_replace|label_join|absent|absent_over_time|info)\s*\(")
+NAMED_BY = "named_by"
+MAX_NAMES = 2000  # of one answer, kept while the run lasts
+
+
+def _listed(value: Any, item: bool = False) -> Iterator[str]:
+    """The name fields of what a JSON answer lists. What was asked is repeated beside its lists, not in them, and the
+    lists about the call itself (answers._ABOUT: not found, similar, searched) name nothing that was read."""
+    if isinstance(value, list):
+        for part in value:
+            yield from _listed(part, True)
+        return
+    if not isinstance(value, dict):
+        return
+    # an anomaly's target is an object's name in the checks of objects and metrics; in those of logs and traces it is theirs
+    other_target = "check" in value and verdict.CHECK_SOURCES.get(str(value["check"])) not in ("objects", "metrics")
+    for key, part in value.items():
+        if key in answers._ABOUT or (key == "target" and other_target) or (item and key in _FREE_FIELDS):
+            continue
+        if isinstance(part, (dict, list)):
+            if key == "pods" and isinstance(part, list):  # "<namespace>/<pod> <status> …" of k8s_get_resources' long list
+                yield from (p.split(" ", 1)[0] for p in part if isinstance(p, str))
+            yield from _listed(part, item)
+        elif item and isinstance(part, str) and key.lower() in _NAME_FIELDS:
+            yield part
+
+
+def _rows(text: str) -> Iterator[str]:
+    """The names in the NAMESPACE and NAME columns of kubectl's own tables (it prints a cell's first line only)."""
+    columns = 0
+    for line in text.splitlines():
+        cells = line.split()
+        if cells[:2] == ["NAMESPACE", "NAME"]:
+            columns = 2
+        elif cells[:1] == ["NAME"]:
+            columns = 1
+        elif not cells:
+            columns = 0
+        else:
+            yield from cells[:columns]
+
+
+def names_in(tool: str, args: Any, raw: Any, status: Optional[str]) -> frozenset[str]:
+    """The names a call's whole answer gives as objects', at most MAX_NAMES; none of a tool that is not one of NAMING, of
+    an answer that read or holds nothing, or of one that could not be gone through. `status`: the answer's own
+    (tool_outcome)."""
+    if tool not in NAMING:
+        return frozenset()
+    try:
+        return frozenset(_names_of(tool, args if isinstance(args, dict) else {}, raw, status))
+    except Exception as e:  # RecursionError of a deep answer too: the run goes on, its causes are named by other calls
+        log.warning("the names in an answer of %s could not be read: %s", tool, type(e).__name__)
+        return frozenset()
+
+
+def _names_of(tool: str, args: dict, raw: Any, status: Optional[str]) -> set[str]:
+    if answers.unread(tool, raw, status) is not None or answers.empty(tool, raw):
+        return set()
+    if tool == "prometheus_query" and any(_OWN_LABELS.search(v) for v in args.values() if isinstance(v, str)):
+        return set()
+    found = [args["resource_name"]] if tool in _BY_NAME and isinstance(args.get("resource_name"), str) else []
+    if tool not in answers.RAW_TEXT_TOOLS:
+        listed: Iterable[str] = ()
+        try:
+            listed = _listed(json.loads(raw) if isinstance(raw, str) else raw)
+        except ValueError:
+            if tool == "k8s_get_resources" and args.get("output") in (None, "", "wide"):
+                listed = _rows(raw)
+        found += itertools.islice(listed, MAX_NAMES)
+    names = {part for name in found for part in name.strip().split("/") if len(part) <= 253 and _NAME.fullmatch(part)}
+    if names and isinstance(args.get("namespace"), str) and _NAME.fullmatch(args["namespace"]):
+        names.add(args["namespace"])  # something was read in it
+    return names
+
+
+def _names_object(read: evidence.Read, resource: str) -> bool:
+    """Whether a call named a cause's object, or a pod of it, and the namespace the cause gives it."""
+    form = _form(resource)
+    if form is None or (form["namespace"] and form["namespace"] not in read.names):
+        return False
+    return any(n == form["name"] or (n.startswith(form["name"]) and form["name"] in verdict._pod_is_of(n)) for n in read.names)
+
+
+def note_names(result: dict[str, Any], reads: list[evidence.Read]) -> None:
+    """Keeps with each cause of a run's `result` which of the calls given for it named its object (NAMED_BY)."""
+    for cause in result.get("causes") or []:
+        if rca.is_cause(cause):
+            good, _bad = evidence.answered([ref["call"] for ref in cause["evidence"]], reads)
+            cause[NAMED_BY] = [{"call": n, "tool": read.tool} for n, read in good if _names_object(read, cause["resource"])]
+
+
 # --- an investigation's first message ---------------------------------------------------------------------------------
 
 
@@ -172,11 +303,15 @@ class Given:
         return {"lines": len(self.ids), "ids": list(self.ids), **({"failed": True} if self.failed else {})}
 
 
+def _form(resource: str) -> Optional[re.Match]:
+    """The parts of a resource a line may hold, None of any other text."""
+    form = _RESOURCE.fullmatch(resource)
+    return form if form and form["kind"] in OBJECT_KINDS and len(form["name"]) <= NAME_CHARS else None
+
+
 def _fits(cause: Cause, namespace: str) -> bool:
-    form = _RESOURCE.fullmatch(cause.resource)
-    if form is None or cause.kind not in rca.KINDS:
-        return False
-    if cause.verified is not True or not any(tool not in verdict.NO_SYMPTOM for tool in cause.tools):
+    form = _form(cause.resource)
+    if form is None or cause.kind not in rca.KINDS or cause.verified is not True or not cause.named:
         return False
     return not (namespace and form["namespace"] and form["namespace"] != namespace)
 

@@ -259,6 +259,8 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
     result = inv_result.shape(kept.block, kept.status, tool_log, kept.hypotheses, asked_again=asked, ask_failed=ask_failed,
                               failures=kept.failures, cause_problems=kept.cause_problems if cfg.evidence_check else None,
                               checks={"evidence": cfg.evidence_check, "ledger": cfg.ledger}, verdict=outcome)
+    if cfg.past_model and reads is not None:  # what a later investigation of the alert may be told of it (investigation/past.py)
+        inv_past.note_names(result, reads)
     if facts is not None:  # the model's text in them can hold a lone surrogate, which the row could not take
         report, result = inv_verdict.writable(report), inv_verdict.writable(result)
     return report, result, int(asked)
@@ -410,6 +412,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         if read is not None:
             read.failed = bool(entry.get("error")) or (not ran and seen is None)
             read.text = answers.log_text(name, result) if ran and not read.failed and not entry.get("no_log") else ""
+            if cfg.past_model and read.text:
+                read.names = inv_past.names_in(name, args, raw, status)
         if facts is not None and ran and not entry.get("error"):
             facts.note(number, name, args, raw, status)
             if read is not None:
