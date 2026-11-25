@@ -3,6 +3,8 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
+import { sessionToken } from './session-token'
+
 // The alert window's list of the same alert's earlier investigations (features.alertInvestigation.pastReports.window,
 // off by default):
 // - the window draws what the server lists, in its order, and the button of one opens that one's report (asked by its ID);
@@ -86,11 +88,12 @@ test.describe("the alert window's past investigations", () => {
     const signIn = async (r: APIRequestContext) => {
       const res = await r.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
       expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-      return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+      return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
     }
     const headers = await signIn(request)
     const list = await request.get('/api/v1/alerts/inbox', { headers, params: { cluster: 'self', status: 'resolved', limit: 1 }, failOnStatusCode: false })
-    test.skip(list.status() !== 200, 'alert investigation (the inbox) is off')
+    test.skip([404, 503].includes(list.status()), 'alert investigation (the inbox) or the AI is off')
+    expect(list.status(), await list.text()).toBe(200)
     const [item] = (await list.json()).items
     test.skip(!item, 'the inbox holds no resolved alert to read')
     const read = async (params: Record<string, string>) => {

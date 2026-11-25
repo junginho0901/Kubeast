@@ -172,6 +172,8 @@ export const alertInboxApi = {
   // this firing's report, or with `past` (an ID the window lists) that earlier investigation's; each open is audited
   getAlertInboxInvestigation: async (id: string, past?: string): Promise<Investigation> => {
     const { data } = await client.get(`${base}/${encodeURIComponent(id)}/investigation`, past ? { params: { past } } : undefined)
+    // an ai-service that does not know `past` (one a rolling update has yet to replace) answers this firing's report
+    if (past && data?.id !== past) throw new Error('not the investigation asked for')
     return data
   },
 

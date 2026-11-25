@@ -95,7 +95,18 @@ describe('what the window asks', () => {
     expect(post).toHaveBeenLastCalledWith('/alerts/inbox/a1/investigate', undefined, { params: { past: 'true' } })
     await alertInboxApi.getAlertInboxInvestigation('a1')
     expect(get).toHaveBeenLastCalledWith('/alerts/inbox/a1/investigation', undefined)
-    await alertInboxApi.getAlertInboxInvestigation('a1', 'inv-2')
+    get.mockResolvedValue({ data: { id: 'inv-2', report: 'r' } })
+    expect(await alertInboxApi.getAlertInboxInvestigation('a1', 'inv-2')).toEqual({ id: 'inv-2', report: 'r' })
     expect(get).toHaveBeenLastCalledWith('/alerts/inbox/a1/investigation', { params: { past: 'inv-2' } })
+  })
+
+  it('opens no other report in its place: a server that does not know the earlier ones answers this firing\'s', async () => {
+    const get = vi.spyOn(client, 'get').mockResolvedValue({ data: { id: 'inv-9', report: 'this firing' } })
+    await expect(alertInboxApi.getAlertInboxInvestigation('a1', 'inv-2')).rejects.toThrow('not the investigation asked for')
+    get.mockResolvedValue({ data: null })
+    await expect(alertInboxApi.getAlertInboxInvestigation('a1', 'inv-2')).rejects.toThrow()
+    // this firing's own report is whatever the server has for it
+    get.mockResolvedValue({ data: { id: 'inv-9' } })
+    expect(await alertInboxApi.getAlertInboxInvestigation('a1')).toEqual({ id: 'inv-9' })
   })
 })
