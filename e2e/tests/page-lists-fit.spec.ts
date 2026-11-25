@@ -109,6 +109,11 @@ test.describe('Lists sized to the screen', () => {
       const limit = Number(u.searchParams.get('limit') ?? 50)
       await route.fulfill({ json: { items: all.slice(offset, offset + limit), total: all.length, counts: { firing: all.length, stale: 0, resolved: 0 }, stale_hours: 24, severities: ['info'] } })
     })
+    // Alertmanager's answer stood in too, after the rows: the line it puts under a status makes a one-line row taller
+    await page.route((u) => u.pathname === '/api/v1/alertstore/alerts', async (route) => {
+      await new Promise((answer) => setTimeout(answer, 500))
+      await route.fulfill({ json: { alerts: [], total: 0, truncated: false } })
+    })
     // the rows drawn in each painted frame
     await page.addInitScript(() => {
       const w = window as unknown as { __rows: number[] }

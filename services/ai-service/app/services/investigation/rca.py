@@ -142,13 +142,16 @@ def _without_blocks(text: str) -> str:
 
 
 def _block(raw: str) -> Optional[dict]:
-    """The block's object, or None when it is not an object whose causes are a list of objects."""
+    """The block's object, or None when it is not an object whose causes are a list of objects, or when it says
+    "no_fault": true beside a cause (the instruction's rule; kind "none" is no cause, is_cause)."""
     try:
         block = json.loads(raw)
     except (ValueError, RecursionError):
         return None
     causes = block.get("causes") if isinstance(block, dict) else None
-    return block if isinstance(causes, list) and all(isinstance(c, dict) for c in causes) else None
+    if not (isinstance(causes, list) and all(isinstance(c, dict) for c in causes)):
+        return None
+    return None if block.get("no_fault") is True and any(is_cause(c) for c in causes) else block
 
 
 def split(answer: str, finish_reason: str = "") -> tuple[str, Optional[dict], str]:
@@ -163,7 +166,7 @@ def split(answer: str, finish_reason: str = "") -> tuple[str, Optional[dict], st
     (`finish_reason` "length"); with a whole JSON object after it, it is the block; with other JSON it is cut, or
     missing when the provider said it stopped by itself ("stop"). An answer stopped at the length with no block is
     cut. Outside ok no closed rca block holding JSON stays in the report. A block that is not an object, whose causes
-    are not a list or hold an item that is not an object, is invalid."""
+    are not a list or hold an item that is not an object, or that says "no_fault": true beside a cause, is invalid."""
     text = answer or ""
     stopped = finish_reason == "length"
     opens = list(_OPEN.finditer(text))

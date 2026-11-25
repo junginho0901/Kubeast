@@ -91,8 +91,10 @@ def _number(n: Any) -> Optional[int]:
 
 
 def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tuple[int, list[Problem]]:
-    """(the causes checked, what is wrong with them). An entry of kind "none" is not a cause (rca.is_cause); one
-    whose kind is missing or null is. The rows keep UTC without a zone, as `alert_start` does."""
+    """(the causes checked, what is wrong with them), one problem per cause, the first found. A cause whose other
+    checks pass but that also gives a number naming no call that answered is bad_calls too. An entry of kind "none"
+    is not a cause (rca.is_cause); one whose kind is missing or null is. The rows keep UTC without a zone, as
+    `alert_start` does."""
     given = block.get("causes")
     causes = [(i, c) for i, c in enumerate(given if isinstance(given, list) else [])
               if isinstance(c, dict) and rca.is_cause(c)]
@@ -120,6 +122,9 @@ def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tu
         started = _time(c.get("started_at"))
         if alert_start is not None and started is not None and started > alert_start + START_TOLERANCE:
             problems.append(Problem(resource, "after_alert", {"at": _stamp(started), "start": _stamp(alert_start)}, index))
+            continue
+        if bad:  # a call that shows the cause does not make the other numbers right: each must name a call that answered
+            problems.append(Problem(resource, "bad_calls", {"calls": [n for n, _ in bad]}, index))
     return len(causes), problems
 
 

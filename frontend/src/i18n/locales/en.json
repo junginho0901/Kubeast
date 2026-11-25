@@ -5025,6 +5025,7 @@
       "started": "from {{at}}",
       "path": "Path (cause → symptom)",
       "ruledOut": "Ruled out",
+      "partial": "Showing the first {{shown}} of {{total}}: the server did not keep the rest.",
       "hypotheses": "Hypotheses ({{count}})",
       "col": {
         "hypothesis": "Hypothesis",
@@ -5053,7 +5054,7 @@
       "notVerifiedBare": "Not verified",
       "unverified": {
         "no_evidence": "no call is given for it",
-        "bad_calls": "the calls given are not calls of this investigation that answered",
+        "bad_calls": "a call given is not a call of this investigation that answered",
         "name_missing": "its name does not appear in what the calls returned",
         "after_alert": "it starts after the alert did"
       }

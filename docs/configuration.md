@@ -284,10 +284,10 @@ features:
   alertInvestigation:
     rules: false             # (alpha) true: the time windows below, the scope groups, facts kept apart from hypotheses and the report's
                              # six headings, in the prompt (ai-alerts.md)
-    changesFirst: false      # (alpha) true: step 0 puts the timeline's changes over the change window into the first message (an audited
-                             # tool call, no model step); writes the windows too
-    narrowFirst: false       # (alpha) true: step 0, after the changes, puts anomaly_rank (features.anomalyRank) over the metrics window
-                             # into the first message; writes the windows too
+    changesFirst: false      # (alpha) true: step 0 reads the timeline's changes over the change window before the first model call (an
+                             # audited tool call, no model step), given as that call's tool result; writes the windows too
+    narrowFirst: false       # (alpha) true: step 0, after the changes, reads anomaly_rank (features.anomalyRank) over the metrics window,
+                             # given the same way; writes the windows too
     ledger: false            # (alpha) true: the report ends with a block of causes, path, ruled out and hypotheses, each closed with the
                              # calls for and against it, kept apart and shown under the report (asked once more while one is open)
     evidenceCheck: false     # (alpha) true: the server checks that the calls each cause names answered and hold its name, asks once more

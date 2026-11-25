@@ -82,7 +82,7 @@ class FakeKubeast:
         self.then = "ok"
         self.on_chat = lambda n: None
         self.totals = {"investigations": 2, "inbox": 3}
-        self.alert_investigation = True    # off: the investigation list and the inbox answer 404
+        self.alert_investigation = True    # off: the inbox answers 404, the investigation list still answers
         self.passwords: list[str] = []     # each account's password as the admin set it
         self.only_admin_signs_in = False
         self.lock = threading.Lock()
@@ -139,8 +139,8 @@ class FakeKubeast:
                           {"usage": {"total_tokens": 100}}]
                 return (200, "".join(f"data: {json.dumps(e)}\n\n" for e in events) + "data: [DONE]\n\n", action == "slow")
             if path in ("/api/v1/ai/investigations", "/api/v1/alerts/inbox"):
-                if not self.alert_investigation:
-                    return 404, {"detail": "Not Found"}
+                if not self.alert_investigation and path.endswith("inbox"):
+                    return 404, {"detail": "the alert inbox is off (features.alertInvestigation.enabled)"}
                 if not admin and path.endswith("investigations"):
                     return 403, {"detail": "permission required: admin.investigations.read"}
                 key = "investigations" if path.endswith("investigations") else "inbox"
@@ -490,10 +490,20 @@ def test_a_chat_round_is_refused_while_alert_investigation_is_on_unless_asked():
     assert json.loads(next(out.glob("*-round.json")).read_text())["alert_investigation_on"] is True
     fake = FakeKubeast()
     fake.alert_investigation = False
+    fake.totals = {"investigations": 351, "inbox": 0}  # off: earlier reports stay listed
     code, out, _, screen, _ = _main(fake, root)
     info = json.loads(next(out.glob("*-round.json")).read_text())
     assert code == 0 and "WARNING" not in screen and info["alert_investigation_on"] is False
-    assert info["before"] == {"default": {"investigations": "HTTP 404", "inbox": "HTTP 404"}}
+    assert info["before"] == {"default": {"investigations": 351, "inbox": "HTTP 404"}}
+
+
+def test_only_the_inbox_says_whether_alert_investigation_is_on():
+    """ai-service answers the investigation list whatever features.alertInvestigation.enabled says and the inbox 404
+    while it is off, so a total of the investigation list alone is not on."""
+    on = AI_EVAL.investigation_on
+    assert on({"default": {"investigations": 351, "inbox": "HTTP 404"}, "self": {"investigations": 352, "inbox": "HTTP 404"}}) == []
+    assert on({"default": {"investigations": 0, "inbox": "URLError"}}) == []
+    assert on({"default": {"investigations": 351, "inbox": 0}, "self": {"investigations": "HTTP 404", "inbox": 7}}) == ["default", "self"]
 
 
 def test_the_hidden_total_is_written_only_once_the_run_ends():

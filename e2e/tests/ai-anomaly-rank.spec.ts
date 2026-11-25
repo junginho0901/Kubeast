@@ -40,6 +40,9 @@ const LIMITED = "the cluster's Prometheus covers the whole cluster; your grant o
 const NO_SERIES = 'Prometheus holds no series for this check in the namespace (its metric is not scraped there, or no pod ran)'
 const NO_LOG_STORE = 'no log store for this cluster (features.logSearch, or the cluster\'s own store)'
 const NO_TRACE_STORE = 'no trace store for this cluster (features.traceStore)'
+const NO_TRACE_STEP = "the window's bounds are not on whole minutes, which the trace checks need to cut both windows into the same steps"
+const NO_SPANS = 'the trace store holds no server spans for this namespace in the window or the one before (no traces sent, or spans without k8s.namespace.name or span kind)'
+const TOO_MANY_TRACE_READS = /^too many trace reads: \d+ per minute$/
 const OFF = 'anomaly ranking is off (features.anomalyRank.enabled)'
 // What kubectl prints of a container that keeps exiting
 const CRASHED = /^(CrashLoopBackOff|Error)$/
@@ -127,6 +130,18 @@ function terminations(pods: Pod[], start: number, end: number): Record<string, n
 // the termination times and restart counts, to see that the cluster held still around a read
 const podState = (pods: Pod[]) => JSON.stringify(pods.map((p) => [p.metadata.name, (p.status.containerStatuses ?? []).map((c) =>
   [c.restartCount, c.state?.terminated?.finishedAt, c.lastState?.terminated?.finishedAt])]))
+
+// whether the trace checks read the window (TraceStep): a step of whole seconds, 15 or more, that the window's start is a
+// multiple of and that cuts the window in 4 to 120. A window on whole minutes has one; so has about one in seven of the
+// others ten minutes long.
+function hasTraceStep(w: { start: string; end: string }): boolean {
+  const start = Date.parse(w.start) / 1000
+  const length = Date.parse(w.end) / 1000 - start
+  for (let n = 4; n <= 120; n++) {
+    if (length % n === 0 && length / n >= 15 && start % (length / n) === 0) return true
+  }
+  return false
+}
 
 // each check is in one place: a finding, normal, or not run with a reason
 function eachCheckOnce(a: Answer) {
@@ -313,14 +328,16 @@ test.describe('AI tool anomaly_rank', () => {
       expect(reasonOf(tool, check), check).toBe(NO_PROMETHEUS)
       expect(tool.normal).not.toContain(check)
     }
-    // the log and trace checks say which store is missing; a window that does not end on a whole minute leaves the
-    // trace checks out even with a store
+    // the log and trace checks say which store is missing; with a trace store, a window the trace checks can cut finds no
+    // span of a namespace that sends none, and any other is left out with why
     for (const check of ['error_log_patterns', 'error_log_counts']) {
       if (!features.logSearch?.clusters?.includes(SELF)) expect(reasonOf(tool, check), check).toBe(NO_LOG_STORE)
     }
+    const traces = hasTraceStep(tool.window) ? NO_SPANS : NO_TRACE_STEP
     for (const check of ['trace_errors', 'trace_latency', 'trace_requests']) {
-      if (!features.traceStore?.clusters?.includes(SELF)) expect(reasonOf(tool, check), check).toBe(NO_TRACE_STORE)
-      else expect(reasonOf(tool, check), check).toMatch(/not on whole minutes|too many trace reads/)
+      const reason = reasonOf(tool, check)
+      if (!features.traceStore?.clusters?.includes(SELF)) expect(reason, check).toBe(NO_TRACE_STORE)
+      else if (!TOO_MANY_TRACE_READS.test(reason ?? '')) expect(reason, `${check} of the window ${tool.window.start} to ${tool.window.end}`).toBe(traces)
     }
     if (!features.logSearch?.clusters?.includes(SELF) && !features.traceStore?.clusters?.includes(SELF)) {
       expect(tool.store_queries, 'no store was asked').toBe(0)

@@ -1,0 +1,29 @@
+{
+ "comment": "Written by hand and read by both services: ai-service's test_alert_rule_expression.py (runner.rule_expressions) and tool-server's alert_rule_expr_test.go (ruleExpressions). What the model may read of an alert's generatorURL: the g<n>.expr values of the text after its first ? and before its #, in panel order; never the address. Every address is made up.",
+ "cases": [
+  {"name": "Prometheus", "link": "http://prometheus-k8s.monitoring.svc:9090/graph?g0.expr=sum+by+%28pod%29+%28rate%28container_cpu_usage_seconds_total%7Bnamespace%3D%22apps%22%7D%5B5m%5D%29%29+%3E+0.9&g0.tab=1", "expr": ["sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"apps\"}[5m])) > 0.9"]},
+  {"name": "Thanos Ruler", "link": "https://thanos-query.example.com:10902/query/graph?g0.expr=sum+by+%28pod%29+%28rate%28container_cpu_usage_seconds_total%7Bnamespace%3D%22apps%22%7D%5B5m%5D%29%29+%3E+0.9&g0.tab=1", "expr": ["sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"apps\"}[5m])) > 0.9"]},
+  {"name": "a Grafana-managed rule's page", "link": "https://grafana.example.com/alerting/grafana/f2d7c8a1-6b1e-4c3e-9a8f-0d5b7e9c1a22/view?orgId=1", "expr": []},
+  {"name": "a user and password in the address", "link": "https://promreader:not-a-real-password-9@prom.example.com:9443/prometheus/graph?g0.expr=sum+by+%28pod%29+%28rate%28container_cpu_usage_seconds_total%7Bnamespace%3D%22apps%22%7D%5B5m%5D%29%29+%3E+0.9&g0.tab=table", "expr": ["sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"apps\"}[5m])) > 0.9"]},
+  {"name": "empty", "link": "", "expr": []},
+  {"name": "spaces", "link": "   ", "expr": []},
+  {"name": "a relative path with no expression", "link": "/graph", "expr": []},
+  {"name": "text that is not a link", "link": "not a link", "expr": []},
+  {"name": "no question mark", "link": "g0.expr=up", "expr": []},
+  {"name": "no expression in the query", "link": "http://prometheus:9090/graph?g0.tab=1", "expr": []},
+  {"name": "an empty expression", "link": "http://prometheus:9090/graph?g0.expr=&g0.tab=1", "expr": []},
+  {"name": "an expression of spaces", "link": "http://prometheus:9090/graph?g0.expr=%20%20+", "expr": []},
+  {"name": "another tool's keys", "link": "http://prometheus:9090/graph?expr=up&query=up", "expr": []},
+  {"name": "a panel number past three digits", "link": "http://prometheus:9090/graph?g1111.expr=up", "expr": []},
+  {"name": "a key with no value", "link": "http://prometheus:9090/graph?g0.expr", "expr": []},
+  {"name": "the query in the fragment (vmui)", "link": "http://vm.example.com:8428/vmui/#/?g0.expr=up", "expr": []},
+  {"name": "a relative path with an expression", "link": "/graph?g0.expr=up&g0.tab=1", "expr": ["up"]},
+  {"name": "a port that is not a number", "link": "http://prometheus:notaport/graph?g0.expr=up", "expr": ["up"]},
+  {"name": "an unclosed IPv6 bracket", "link": "http://[::1/graph?g0.expr=up", "expr": ["up"]},
+  {"name": "a fragment after the query", "link": "http://prometheus:9090/graph?g0.expr=up#g1.expr=down", "expr": ["up"]},
+  {"name": "an escaped key", "link": "http://prometheus:9090/graph?g0%2Eexpr=up", "expr": ["up"]},
+  {"name": "several panels in their order", "link": "http://prometheus:9090/graph?g1.expr=b&g0.tab=1&g0.expr=a&g2.expr=&g10.expr=c", "expr": ["a", "b", "c"]},
+  {"name": "one panel twice: the first", "link": "http://prometheus:9090/graph?g0.expr=a&g00.expr=b&g0.expr=c", "expr": ["a"]},
+  {"name": "a semicolon in an expression", "link": "http://prometheus:9090/graph?g0.expr=a;b", "expr": ["a;b"]}
+ ]
+}

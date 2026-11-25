@@ -1,5 +1,5 @@
 import type { AIContextInput } from '@/hooks/useAIContext'
-import type { HypothesisState, Investigation, InvestigationCallRef, InvestigationCause, InvestigationHypothesis, InvestigationResult } from '@/services/api/investigations'
+import type { HypothesisState, Investigation, InvestigationCallRef, InvestigationCause, InvestigationCut, InvestigationHypothesis, InvestigationResult } from '@/services/api/investigations'
 import { MAX_LAYER_BYTES } from '@/utils/aiContext/tokenBudget'
 
 // The report's result (evidenceCheck or ledger): what its window draws and what it tells the floating chat.
@@ -67,7 +67,7 @@ export function ledgerOn(result: InvestigationResult): boolean {
 
 const UNVERIFIED_TEXT: Record<string, string> = {
   no_evidence: 'no call is given for it',
-  bad_calls: 'the calls given are not calls of this investigation that answered',
+  bad_calls: 'a call given is not a call of this investigation that answered',
   name_missing: 'its name does not appear in what the calls returned',
   after_alert: 'it starts after the alert did',
 }
@@ -78,6 +78,13 @@ export function notVerifiedText(c: InvestigationCause, tr: Tr): string {
   return reason
     ? tr('investigations.result.notVerified', 'Not verified: {{reason}}', { reason })
     : tr('investigations.result.notVerifiedBare', 'Not verified')
+}
+
+// A list the server cut at what it keeps of it (`cut`), as the window says it under the list; '' for one that fits.
+export function cutText(cut: InvestigationCut | undefined, tr: Tr): string {
+  return cut
+    ? tr('investigations.result.partial', 'Showing the first {{shown}} of {{total}}: the server did not keep the rest.', { shown: cut.kept, total: cut.given })
+    : ''
 }
 
 // The lines above the result: a block the server could not read, the second ask.
@@ -124,9 +131,11 @@ const hypothesesForChat = (result: InvestigationResult) => orderedHypotheses(res
   against: h.against.map(callLabel),
   ...(h.blocked ? { blocked: short(h.blocked) } : {}),
   ...(h.problems?.length ? { not_closed: h.problems.map((p) => p.reason) } : {}),
+  ...(h.cut ? { cut: h.cut } : {}),
 }))
 
-// What the floating chat is told of the result: a cause the calls do not show says so, hypotheses only with the ledger.
+// What the floating chat is told of the result: a cause the calls do not show says so, hypotheses only with the ledger,
+// a list the server cut with how many were given (`cut`).
 export function resultForChat(result: InvestigationResult): Record<string, unknown> {
   return {
     status: result.status,
@@ -136,10 +145,12 @@ export function resultForChat(result: InvestigationResult): Record<string, unkno
       resource: short(c.resource), kind: c.kind, started_at: c.started_at, evidence: c.evidence.map(callLabel),
       ...(c.verified !== undefined ? { verified: c.verified } : {}),
       ...(c.verified === false && c.reason ? { not_verified: c.reason } : {}),
+      ...(c.cut ? { cut: c.cut } : {}),
     })),
     path: result.path.map(short),
     ruled_out: result.ruled_out.map(short),
     ...(ledgerOn(result) ? { hypotheses: hypothesesForChat(result) } : {}),
+    ...(result.cut ? { cut: result.cut } : {}),
   }
 }
 

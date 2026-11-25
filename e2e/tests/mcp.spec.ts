@@ -163,14 +163,16 @@ test.describe('MCP server', () => {
       expect(podsRow?.Cluster ?? podsRow?.cluster).toBe('self')
       expect(after?.credential).toEqual({ type: 'api_key', akid: key.id })
 
-      // A Read user on self has ai.mcp.use and the fifty-two read tools (not the Admin-only hygiene, audit_search, nodes_stats_summary, nodes_log, access_review, ai_usage, access_requests, audit_integrity, hygiene_history, investigations, ai_models, session_recordings, the write preview k8s_diff nor alert_investigate, which starts an investigation), never a write tool (with write tools on, also the way to ask for a role).
+      // A Read user on self has ai.mcp.use and fifty-two read tools (not the Admin-only hygiene, audit_search, nodes_stats_summary, nodes_log, access_review, ai_usage, access_requests, audit_integrity, hygiene_history, investigations, ai_models, session_recordings, the write preview k8s_diff nor alert_investigate, which starts an investigation) and, where features.anomalyRank is on, anomaly_rank, never a write tool (with write tools on, also the way to ask for a role).
+      const features = await (await request.get('/api/v1/cluster/features', { headers: bearer(admin) })).json()
       const readList = await rpc(request, readerToken, 'tools/list')
       expect(readList.status()).toBe(200)
       const readNames = ((await readList.json()).result.tools as { name: string }[]).map((t) => t.name).sort()
       expect(readNames.filter((n) => WRITE_TOOLS.includes(n))).toEqual([])
       expect(readNames).toContain('k8s_get_resources')
       expect(readNames.includes('request_access')).toBe(!!cfg.write_tools)
-      expect(readNames.filter((n) => n !== 'request_access' && n !== 'list_clusters').length).toBe(52)
+      expect(readNames.includes('anomaly_rank')).toBe(features.anomalyRank?.enabled === true)
+      expect(readNames.filter((n) => !['request_access', 'list_clusters', 'anomaly_rank'].includes(n)).length).toBe(52)
       expect(readNames).toContain('clusters_list')
       expect(readNames).not.toContain('alert_investigate')
       expect(readNames).not.toContain('hygiene')
