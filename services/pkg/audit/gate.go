@@ -118,7 +118,7 @@ type Guarded struct {
 	checkedAt time.Time
 	lastPing  error
 	broken    bool // a write failed and none has landed since
-	doubt     bool // a row was refused for its text since the last check: the next one probes a write
+	doubt     bool // a row was refused for its text since the last probe: the next Ready probes a write
 	probedAt  time.Time
 	lastProbe error
 
@@ -140,9 +140,9 @@ func Guard(store Store, pinger Pinger, failClosed bool) *Guarded {
 }
 
 // Write persists through the inner Store, counting and logging failures. A
-// failure also drops the Ready cache so the next check pings again; a row
-// refused for its text leaves it, the table being able to take the next one,
-// and the next check probes a write to see that it does. The write
+// failure also drops the Ready cache so the next check pings again. A row
+// refused for its text does not count as a broken store, which may take the
+// next one: the next Ready asks it with a probe write. The write
 // keeps ctx's values and deadline but not its cancellation: a request whose
 // client went away after its change ran (net/http cancels the request's
 // context when the connection closes) still gets its row, the write going on
@@ -220,12 +220,12 @@ func (g *Guarded) Ready(ctx context.Context) error {
 		g.lastPing = g.pinger.Ping(pctx)
 		cancel()
 		g.checkedAt = time.Now()
-		if g.doubt {
-			g.doubt, g.broken, g.probedAt = false, true, time.Time{}
-		}
 	}
 	if g.lastPing != nil {
 		return fmt.Errorf("%w: %v", ErrUnavailable, g.lastPing)
+	}
+	if g.doubt {
+		g.doubt, g.broken, g.probedAt = false, true, time.Time{}
 	}
 	if g.broken && g.prober != nil {
 		if time.Since(g.probedAt) >= g.ttl {

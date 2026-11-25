@@ -437,7 +437,7 @@ func pgRefusal(code string) error {
 }
 
 // A row refused for its text says nothing about the next one: nobody is refused for it, and it is counted and logged
-// with its action. The next check probes a write, so a table that refuses every row that way is still seen.
+// with its action. The next Ready probes a write, so a table that refuses every row that way is still seen.
 func TestGuardedARowRefusedForItsTextRefusesNobody(t *testing.T) {
 	for _, code := range []string{"22021", "22P02", "22P05", "22001", "22000", "54000", "54001"} {
 		t.Run(code, func(t *testing.T) {
@@ -456,12 +456,17 @@ func TestGuardedARowRefusedForItsTextRefusesNobody(t *testing.T) {
 				if _, err := g.Write(ctx, Record{Action: "user.login.failed"}); !errors.Is(err, s.err) {
 					t.Fatalf("err = %v", err)
 				}
-				if err := g.Ready(ctx); err != nil {
-					t.Fatalf("refused: %v", err)
+				if g.broken {
+					t.Fatal("the store counts as broken")
+				}
+				for n := 0; n < 2; n++ {
+					if err := g.Ready(ctx); err != nil {
+						t.Fatalf("refused: %v", err)
+					}
 				}
 			}
-			if s.pings != 1 || s.probes != 0 || g.broken {
-				t.Fatalf("pings %d, probes %d, broken %v: the store counts as broken", s.pings, s.probes, g.broken)
+			if s.pings != 1 || s.probes != 3 || g.broken {
+				t.Fatalf("pings %d, probes %d, broken %v: want one ping, and one probe a row", s.pings, s.probes, g.broken)
 			}
 			if st := g.Status(ctx); st.WriteFailures != 3 || !strings.Contains(st.LastError, code) {
 				t.Errorf("status = %+v", st)
@@ -470,26 +475,39 @@ func TestGuardedARowRefusedForItsTextRefusesNobody(t *testing.T) {
 				t.Errorf("logged %s", line)
 			}
 
-			s.pings = 0
-			g.checkedAt = time.Now().Add(-time.Minute) // the next check is due
-			for i := 0; i < 2; i++ {
-				if err := g.Ready(ctx); err != nil {
-					t.Fatalf("after a probe that landed: %v", err)
-				}
-			}
-			if s.pings != 1 || s.probes != 1 {
-				t.Fatalf("pings %d, probes %d, want one of each", s.pings, s.probes)
-			}
-
 			s.probeErr = s.err
 			if _, err := g.Write(ctx, Record{Action: "user.login.failed"}); err == nil {
 				t.Fatal("stored")
 			}
-			g.checkedAt = time.Now().Add(-time.Minute)
-			if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
-				t.Fatalf("every row is refused, and an action may run: %v", err)
+			for n := 0; n < 2; n++ {
+				if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+					t.Fatalf("every row is refused, and an action may run: %v", err)
+				}
+			}
+			s.probeErr = nil
+			g.probedAt = time.Time{}
+			if err := g.Ready(ctx); err != nil {
+				t.Fatalf("rows land again: %v", err)
 			}
 		})
+	}
+}
+
+// Without a probe to ask, the next Ready is answered as it was.
+func TestGuardedARowRefusedForItsTextWithoutAProbe(t *testing.T) {
+	p := &fakePinger{}
+	g := Guard(&fakeStore{err: pgRefusal("22021")}, p, true)
+	ctx := context.Background()
+	for i := 0; i < 2; i++ {
+		if _, err := g.Write(ctx, Record{Action: "a"}); err == nil {
+			t.Fatal("stored")
+		}
+		if err := g.Ready(ctx); err != nil {
+			t.Fatalf("refused: %v", err)
+		}
+	}
+	if p.calls != 1 {
+		t.Errorf("pings %d", p.calls)
 	}
 }
 
@@ -592,7 +610,6 @@ func TestGuardedATableThatRefusesEveryRowRefusesTheNextAction(t *testing.T) {
 	pg, pool := startFakePG(t)
 	store := NewPostgresStore(pool, ServiceK8s)
 	g := Guard(store, store, true)
-	g.ttl = 0 // every Ready checks
 	ctx := context.Background()
 	if err := g.Ready(ctx); err != nil {
 		t.Fatal(err)
@@ -606,6 +623,7 @@ func TestGuardedATableThatRefusesEveryRowRefusesTheNextAction(t *testing.T) {
 			t.Fatalf("%s: ready = %v", code, err)
 		}
 		pg.refuseEveryRow("")
+		g.probedAt = time.Time{}
 		if err := g.Ready(ctx); err != nil {
 			t.Fatalf("%s: rows land again: %v", code, err)
 		}

@@ -1,6 +1,7 @@
 """A row is stored whatever text it holds. The cases are shared with services/pkg/audit (TestSharedAuditTextCases), so
 the two make the same text of the same row. PostgreSQL is stood in by a connection that refuses what it refuses;
 test_audit_text_postgres.py asks a real one."""
+import asyncio
 import json
 import random
 import re
@@ -193,6 +194,9 @@ async def test_a_row_is_stored_whatever_a_caller_sends(table, capsys, field, nam
     assert await audit_writer.write_audit(**{"action": "ai.tool.call", field: "a" + TEXTS[name] + "b"}) is True
     row = table.rows[0]
     assert row["action"] == "ai.tool.call" and row[field].startswith("a")
+    if name == "a long text":
+        sent = "a" + TEXTS[name] + "b"
+        assert row[field] == (sent[:INDEXED_MAX] if field in ("actor_user_id", "target_id") else sent)
     line = json.loads(capsys.readouterr().out)
     assert line["audit"][field] == row[field], "the mirror prints what the row holds"
 
@@ -245,30 +249,39 @@ async def test_a_row_in_the_callers_transaction_is_stored_too(table, capsys):
 @pytest.mark.parametrize("sqlstate", ["22021", "22P02", "22P05", "22001", "22000", "54000", "54001"])
 async def test_a_row_refused_for_its_text_refuses_nobody(table, capsys, caplog, sqlstate):
     assert await audit_writer.audit_ready() == (True, None)
-    table.answer = refusal(sqlstate)
-    for _ in range(3):
+    for n in range(3):
+        table.answer = refusal(sqlstate)
         assert await audit_writer.write_audit(action="ai.tool.call") is False
-        assert await audit_writer.audit_ready() == (True, None)
-    assert table.selects == 1 and table.probes == 0 and audit_writer._write_broken is False
+        assert audit_writer._write_broken is False
+        table.answer = None
+        for _ in range(2):
+            assert await audit_writer.audit_ready() == (True, None)
+        assert table.probes == n + 1, "one probe a refused row"
     assert audit_writer.write_failures == 3
     assert caplog.text.count("audit row refused for its text (action=ai.tool.call") == 3
 
-    table.answer = None
-    audit_writer._ready_cache["at"] = 0.0  # the next check is due
-    assert await audit_writer.audit_ready() == (True, None)
-    audit_writer._ready_cache["at"] = 0.0
-    assert await audit_writer.audit_ready() == (True, None)
-    assert table.probes == 1, "the check after a refused row probes a write, the next one does not"
-
     table.answer = refusal(sqlstate)
     assert await audit_writer.write_audit(action="ai.tool.call") is False
+    selects = table.selects
     for _ in range(2):
-        audit_writer._ready_cache["at"] = 0.0
         ok, error = await audit_writer.audit_ready()
         assert ok is False and sqlstate in error, "every row is refused, and an action may run"
+        with pytest.raises(audit_writer.AuditUnavailable):
+            await audit_writer.require_audit_ready()
+    assert table.selects == selects + 1, "the refusal is kept as any other"
     table.answer = None
     audit_writer._ready_cache["at"] = 0.0
     assert await audit_writer.audit_ready() == (True, None)
+    capsys.readouterr()
+
+
+async def test_a_check_under_way_is_not_the_answer_for_a_row_refused_meanwhile(table, capsys):
+    """Two callers after a refused row: neither is answered from the pass before it."""
+    assert await audit_writer.audit_ready() == (True, None)
+    table.answer = refusal("22021")
+    assert await audit_writer.write_audit(action="ai.tool.call") is False
+    answers = await asyncio.gather(audit_writer.audit_ready(), audit_writer.audit_ready())
+    assert [ok for ok, _ in answers] == [False, False]
     capsys.readouterr()
 
 

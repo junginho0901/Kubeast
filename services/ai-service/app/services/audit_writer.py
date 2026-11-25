@@ -58,7 +58,8 @@ write_failures = 0
 # A write failed and none has landed since: readiness then probes a write (inserted and rolled back), since the
 # database can answer SELECT 1 while the audit table takes no row (a full disk, a lock, a trigger).
 _write_broken = False
-# A row was refused for its text since the last check: the next one probes a write, and until then nothing is refused.
+# A row was refused for its text since the last check: it does not count as a broken table, the next check asks with a
+# probe write.
 _write_doubt = False
 _PROBE_SQL = text("INSERT INTO auth_audit_logs (service, action) VALUES ('ai', 'audit.probe')")
 
@@ -71,6 +72,8 @@ async def audit_ready() -> tuple[bool, Optional[str]]:
     global _write_broken, _write_doubt
     if not fail_closed_enabled():
         return True, None
+    if _write_doubt:
+        _write_doubt, _write_broken, _ready_cache["at"] = False, True, 0.0
     now = time.monotonic()
     if now - _ready_cache["at"] < READY_TTL_SEC:
         return _ready_cache["ok"], _ready_cache["error"]
@@ -82,13 +85,13 @@ async def audit_ready() -> tuple[bool, Optional[str]]:
         if "postgresql" in str(db.database_url):
             async with db.engine.connect() as conn:
                 await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=2.0)
-                if _write_broken or _write_doubt:
+                if _write_broken:
                     # SELECT 1 began the connection's transaction (SQLAlchemy autobegin): the insert joins it
                     try:
                         await asyncio.wait_for(conn.execute(_PROBE_SQL), timeout=2.0)
                     finally:
                         await conn.rollback()
-        _write_broken = _write_doubt = False
+        _write_broken = False
     except Exception as exc:  # unreachable, timeout, pool exhausted, the table refusing rows, ...
         ok, error = False, str(exc) or exc.__class__.__name__
     _ready_cache.update(at=time.monotonic(), ok=ok, error=error)
