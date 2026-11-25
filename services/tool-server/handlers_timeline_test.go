@@ -650,6 +650,39 @@ func TestTimeline_ChangesViewDefaultsAndSaysWhatItDidNotList(t *testing.T) {
 	}
 }
 
+// A source a namespace of a limited grant refused (summary.not_read_in) is said beside the counts, and what it did not hold
+// is not said to be nothing.
+func TestTimeline_WhatANamespaceOfAGrantRefusedIsSaid(t *testing.T) {
+	reply := `{"changes":[],"summary":{"changes_total":0,"changes_shown":0,"by_source":{"pods":0},"not_read_in":{"pods":"not read in beta: pods is forbidden"}}}`
+	answer := func(view, body string) map[string]interface{} {
+		t.Helper()
+		fakeK8sService(t, func(*http.Request) (int, string) { return 200, body })
+		out, err := handleTimeline(ctxFor("c1", "alpha", "beta"), args{"view": view}, bearer())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return decode(t, out)
+	}
+	m := answer("changes", reply)
+	if note, _ := m["not_read_in_note"].(string); !strings.Contains(note, "summary.not_read_in") || !strings.Contains(note, "not counted, not zero") || m["hint"] != nil || m["not_read_note"] != nil {
+		t.Errorf("changes: %v", m)
+	}
+	m = answer("changes", strings.Replace(reply, `,"not_read_in":{"pods":"not read in beta: pods is forbidden"}`, "", 1))
+	if hint, _ := m["hint"].(string); !strings.HasPrefix(hint, "Nothing changed in this window") || m["not_read_in_note"] != nil {
+		t.Errorf("changes, every source read: %v", m)
+	}
+
+	events := `{"events":[],"rollout_history":[],"summary":{"total_events":0,"events_shown":0,"events_matching":0,"not_read_in":{"rollouts":"not read in beta: replicasets is forbidden"}}}`
+	m = answer("", events)
+	if note, _ := m["not_read_in_note"].(string); !strings.Contains(note, "summary.not_read_in") || m["hint"] != nil {
+		t.Errorf("events: %v", m)
+	}
+	m = answer("", strings.Replace(events, `,"not_read_in":{"rollouts":"not read in beta: replicasets is forbidden"}`, "", 1))
+	if hint, _ := m["hint"].(string); !strings.HasPrefix(hint, "Nothing in this window") || m["not_read_in_note"] != nil {
+		t.Errorf("events, everything read: %v", m)
+	}
+}
+
 // The events view's narrowing arguments are refused with view changes, and a view neither tool knows is refused by
 // both, before anything is asked.
 func TestTimeline_ViewIsEventsOrChanges(t *testing.T) {

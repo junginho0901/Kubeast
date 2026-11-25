@@ -40,7 +40,7 @@ type changesAPI struct {
 	nodes   []corev1.Node
 	pods    []corev1.Pod
 	apps    []map[string]interface{}
-	refuse  map[string]bool
+	refuse  map[string]bool // resources, or "<namespace>/<resource>"
 	// pageSize > 0 answers that many objects a page whatever the limit asked, as an API server may
 	pageSize int
 	// podsEverywhere answers the access review of listing pods across the cluster (set reviews to ask one)
@@ -130,7 +130,7 @@ func (a *changesAPI) serve(w http.ResponseWriter, r *http.Request) {
 			ns = parts[i+1]
 		}
 	}
-	if a.refuse[resource] {
+	if a.refuse[resource] || a.refuse[ns+"/"+resource] {
 		chgStatus(w, http.StatusForbidden, "Forbidden", resource+" is forbidden")
 		return
 	}
