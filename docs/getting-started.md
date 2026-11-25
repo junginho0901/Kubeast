@@ -347,6 +347,7 @@ So these are the same as on the API key path: the tool list, approval cards for 
   - Each run gets a temporary HOME and config directory and no Claude Code built-in tools (Bash, files, web). It reads no settings files or CLAUDE.md.
   - All environment variables ai-service received are overwritten with empty values, except path, proxy and CA variables. So model keys and DB addresses are not passed on.
   - The token goes only as `CLAUDE_CODE_OAUTH_TOKEN`.
+  - Claude Code receives every prompt as written.
 - **Rules**:
   - Only claude-code can use `CLAUDE_CODE_OAUTH_TOKEN`, and claude-code does not accept base_url or other providers' key variables.
   - On an install where it is off, saving a new claude-code setting is rejected with 400, and the connection test shows the reason.

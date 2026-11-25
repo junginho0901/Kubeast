@@ -347,6 +347,7 @@ Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 �
   - Claude Code 기본 도구(Bash, 파일, 웹)는 없고, 설정 파일과 CLAUDE.md를 읽지 않습니다.
   - ai-service가 받은 환경변수는 경로, 프록시, CA 변수를 빼고 모두 빈 값으로 덮어쓰므로 모델 키나 DB 주소가 넘어가지 않습니다.
   - 토큰은 `CLAUDE_CODE_OAUTH_TOKEN`으로만 전달합니다.
+  - Claude Code는 모든 프롬프트를 쓴 그대로 받습니다.
 - **규칙**: `CLAUDE_CODE_OAUTH_TOKEN`은 claude-code만 쓸 수 있고, claude-code는 base_url과 다른 공급자의 키 변수를 받지 않습니다. 꺼진 설치에서 새 claude-code 설정을 저장하면 400으로 거절되고, 연결 테스트가 그 이유를 보여 줍니다.
 - **한도**: 채팅 턴은 두 한도 아래의 칸을 이 순서로 잡아야 실행됩니다.
   - `maxConcurrent`(기본 2)는 ai-service 서버 한 대의 한도입니다. 서버 한 대가 동시에 띄우는 Claude Code 프로세스 수이므로 메모리를 정합니다.
