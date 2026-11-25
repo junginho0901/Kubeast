@@ -28,6 +28,9 @@ _RAW_SHAPES: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "forbidden": (frozenset({"reason", "hint"}), frozenset({"resource_type"})),
 }
 
+# permissions.namespace_scope_error: a grant limited to namespaces, refused before tool-server.
+_GRANT = re.compile(r"forbidden: .* your grant on ")
+
 # The read tools whose answer lists what was found, so that an empty list is nothing found. Others answer about the one
 # thing asked (what a network policy allows, a release), where an empty list says something.
 _LISTS = frozenset({
@@ -72,6 +75,9 @@ def raw_outcome(tool: str, raw: Any) -> tuple[Optional[str], Optional[str]]:
     if isinstance(error, str) and raw == json.dumps({"error": error}, ensure_ascii=False) and error.startswith(
             (f"Error in {tool}: ", f"권한 없음: '{tool}'")):
         return error[:300], None
+    message = data.get("message")
+    if isinstance(message, str) and raw == json.dumps({"status": "forbidden", "message": message}, ensure_ascii=False) and _GRANT.match(message):
+        return "forbidden", "forbidden"
     status = data.get("status")
     shape = _RAW_SHAPES.get(status) if isinstance(status, str) else None
     if shape is None:
