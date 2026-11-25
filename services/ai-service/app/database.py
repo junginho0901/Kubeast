@@ -453,17 +453,21 @@ class DatabaseService:
             )
             return result.scalar_one_or_none()
 
-    async def get_active_model_config(self) -> Optional[ModelConfig]:
+    @staticmethod
+    def active_model_config_query():
         """The chat's model: the default one, else a default-tier one, else the newest enabled."""
+        from sqlalchemy import select
+        return (
+            select(ModelConfig)
+            .where(ModelConfig.enabled.is_(True))
+            .order_by(ModelConfig.is_default.desc(), (ModelConfig.tier == "economy").asc(),
+                      ModelConfig.updated_at.desc())
+            .limit(1)
+        )
+
+    async def get_active_model_config(self) -> Optional[ModelConfig]:
         async with self.async_session() as db:
-            from sqlalchemy import select
-            result = await db.execute(
-                select(ModelConfig)
-                .where(ModelConfig.enabled.is_(True))
-                .order_by(ModelConfig.is_default.desc(), (ModelConfig.tier == "economy").asc(),
-                          ModelConfig.updated_at.desc())
-                .limit(1)
-            )
+            result = await db.execute(self.active_model_config_query())
             return result.scalar_one_or_none()
 
     async def get_economy_model_config(self) -> Optional[ModelConfig]:
@@ -481,11 +485,15 @@ class DatabaseService:
     async def get_model_uses(self) -> Dict[str, ModelConfig]:
         """The config an administrator chose for each use that has a choice, a disabled config too (app/services/model_uses.py)."""
         async with self.async_session() as db:
-            from sqlalchemy import select
-            rows = await db.execute(
-                select(ModelUse.use_name, ModelConfig).join(ModelConfig, ModelConfig.id == ModelUse.config_id)
-            )
-            return {use: config for use, config in rows.all()}
+            return await self.read_model_uses(db)
+
+    @staticmethod
+    async def read_model_uses(session) -> Dict[str, ModelConfig]:
+        from sqlalchemy import select
+        rows = await session.execute(
+            select(ModelUse.use_name, ModelConfig).join(ModelConfig, ModelConfig.id == ModelUse.config_id)
+        )
+        return {use: config for use, config in rows.all()}
 
     async def set_model_use(self, use: str, config_id: Optional[int]) -> bool:
         """Chooses the config of a use, or takes the choice away (None). False when that config is not there (any more)."""

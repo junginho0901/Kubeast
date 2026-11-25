@@ -1,7 +1,10 @@
 """The model config chosen for a use (app/services/model_uses.py): nothing chosen selects exactly what was selected
 before, and a choice is followed, refused or given up as the module says."""
 import asyncio
+import dataclasses
+import itertools
 import time
+from datetime import timedelta
 from types import SimpleNamespace
 
 import httpx
@@ -10,13 +13,14 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
-from app import api, security
+from app import api, api_alert_inbox, security
 from app.database import DatabaseService
 from app.services import audit_writer, model_config_service as mcs, model_uses
-from app.services.investigation import runner
+from app.services.investigation import runner, store, webhook
 from app.services.investigation import settings as inv_settings
 from app.services.investigation.settings import InvestigationSettings
 from main import app
+from tests.test_alert_investigation import NOW, alert, am_message, row as alert_row
 
 ROUTE = "/api/v1/ai/model-configs/uses"
 
@@ -261,6 +265,112 @@ async def test_a_chosen_model_that_cannot_run_is_not_replaced_by_another(db):
         await api._build_ai_service("Bearer t", cluster_name="self", use="optimization")
     assert refused.value.status_code == 503 and refused.value.detail.startswith(reason)
     assert (await api._build_ai_service("Bearer t", cluster_name="self")).model == "chat-model"  # the chat goes on
+
+
+# ---- a provider that refuses one kind's model ----
+
+REFUSED = "provider refused (credit): RateLimitError"
+CFG = InvestigationSettings(enabled=True, webhook_token="hook-token", internal_token="internal", max_per_hour=0)
+FINGERPRINTS = (f"fp-{n}" for n in itertools.count())
+
+
+async def failed(db, *, manual, error=REFUSED, ago=1):
+    """A run of one kind that failed `ago` minutes ago."""
+    at = NOW - timedelta(minutes=ago)
+    inv = await store.insert(db, cluster="self", fingerprint=next(FINGERPRINTS), status="running", received_at=at, requested_by="ops@x" if manual else "")
+    await store.finish(db, inv, status="failed", error=error, finished_at=at)
+
+
+async def held(db, cfg=CFG) -> tuple[bool, bool]:
+    """Whether the webhook's investigations and the ones people ask for wait, as the three places that ask say."""
+    out = []
+    for manual, requested_by in ((False, ""), (True, "ops@x")):
+        taken = (await runner.claim_refusal(cfg, db, alert_row(requested_by=requested_by), NOW)).startswith("paused:")
+        if manual:
+            payload = SimpleNamespace(has_permission_for_cluster=lambda *a: True)
+            shown = await api_alert_inbox.investigate_now_of(db, cfg, payload, alert_row(), None, NOW)
+            assert (shown["reason"] == "provider_paused", shown["allowed"]) == (taken, not taken)
+        else:
+            counts = await webhook.gate_and_queue(db, cfg, "self", am_message(alert(fp=next(FINGERPRINTS))), NOW)
+            assert (counts["skipped"], counts["accepted"]) == ((1, 0) if taken else (0, 1))
+        out.append(taken)
+    return tuple(out)
+
+
+@pytest.mark.parametrize("chart", ["", "chat", "strong"])
+@pytest.mark.parametrize("manual", [False, True])
+@pytest.mark.parametrize("chosen", [{}, {"optimization": "strong"}, {"investigation": "strong"}])
+@pytest.mark.asyncio
+async def test_without_a_choice_of_its_own_investigate_now_waits_with_the_webhooks(db, chosen, manual, chart):
+    configs = {name: await add(db, name, is_default=name == "chat") for name in ("chat", "strong")}
+    for use, name in chosen.items():
+        await db.set_model_use(use, configs[name].id)
+    cfg = dataclasses.replace(CFG, model=chart)
+    assert await held(db, cfg) == (False, False)
+    await failed(db, manual=manual)
+    assert await held(db, cfg) == (True, True)
+
+
+@pytest.mark.parametrize("manual", [False, True])
+@pytest.mark.parametrize("chart, investigation, asked, apart", [
+    ("", None, "strong", True), ("", None, "chat", False),            # the webhook's run on the active config
+    ("", "small", "strong", True), ("", "strong", "strong", False),   # on the one chosen for them
+    ("small", None, "strong", True), ("small", None, "small", False), # on the chart's
+    ("small", "strong", "strong", True),                              # the chart decides over a choice for them
+    ("gone", None, "strong", True),                                   # the chart's is not there: theirs fails, it runs
+])
+@pytest.mark.asyncio
+async def test_a_refusal_of_one_kinds_own_model_holds_that_kind_alone(db, chart, investigation, asked, apart, manual):
+    configs = {name: await add(db, name, is_default=name == "chat") for name in ("chat", "strong", "small")}
+    await db.set_model_use("investigate_now", configs[asked].id)
+    if investigation:
+        await db.set_model_use("investigation", configs[investigation].id)
+    cfg = dataclasses.replace(CFG, model=chart)
+    await failed(db, manual=manual)
+    assert await held(db, cfg) == ((not manual, manual) if apart else (True, True))
+
+
+@pytest.mark.asyncio
+async def test_each_kind_is_held_by_its_own_last_failure(db):
+    await add(db, "chat", is_default=True)
+    strong = await add(db, "strong")
+    await db.set_model_use("investigate_now", strong.id)
+    await failed(db, manual=False, ago=9)
+    assert await held(db) == (True, False)
+    await failed(db, manual=True, ago=8, error="timed out after 300s")  # says nothing of the webhook's model
+    assert await held(db) == (True, False)
+    await failed(db, manual=True, ago=7)
+    assert await held(db) == (True, True)
+    await failed(db, manual=False, ago=6, error="timed out after 300s")  # it answered again
+    assert await held(db) == (False, True)
+    # the choice taken away: both kinds run on one model again, and the last failure is the webhook's
+    await db.set_model_use("investigate_now", None)
+    assert await held(db) == (False, False)
+
+
+@pytest.mark.asyncio
+async def test_a_choice_that_is_disabled_holds_both_kinds(db):
+    await add(db, "chat", is_default=True)
+    strong = await add(db, "strong")
+    await db.set_model_use("investigate_now", strong.id)
+    await failed(db, manual=True)
+    assert await held(db) == (False, True)
+    await db.update_model_config(strong.id, {"enabled": False})
+    assert await held(db) == (True, True)
+
+
+@pytest.mark.asyncio
+async def test_the_choices_are_read_only_when_the_other_kinds_run_failed_last(db, monkeypatch):
+    async def asked(*a, **kw):
+        raise AssertionError("the choices were read")
+
+    await add(db, "chat", is_default=True)
+    monkeypatch.setattr(model_uses, "kinds_apart", asked)
+    assert await held(db) == (False, False)                       # nothing failed
+    assert await store.pause_reason(db, 30, NOW) == ""            # not asked for a kind: as before
+    await failed(db, manual=False)
+    assert await store.pause_reason(db, 30, NOW, manual=False) != "" and await store.pause_reason(db, 30, NOW) != ""
+    assert await store.pause_reason(db, 0, NOW, manual=True) == ""  # 0 = never pause
 
 
 @pytest.mark.asyncio

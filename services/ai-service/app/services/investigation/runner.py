@@ -622,7 +622,7 @@ async def claim_refusal(cfg: inv_settings.InvestigationSettings, db, row, now) -
     manual = bool(getattr(row, "requested_by", ""))
     if not (cfg.manual if manual else cfg.automatic):
         return skip_reasons.switched_off(manual)
-    reason = await store.pause_reason(db, cfg.provider_pause_minutes, now)
+    reason = await store.pause_reason(db, cfg.provider_pause_minutes, now, manual=manual, chart_model=cfg.model)
     if reason:
         return reason
     budget = cfg.manual_daily_token_budget if manual else cfg.daily_token_budget

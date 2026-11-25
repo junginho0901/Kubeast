@@ -108,7 +108,7 @@ class FakeStore:
                 self.locked.append((cluster, fingerprint, starts_at))
                 yield self.lock_session
 
-        async def pause_reason(db, minutes, now, held=None):
+        async def pause_reason(db, minutes, now, held=None, **kind):
             self.held.append(("pause_reason", held))
             return self.pause if minutes else ""
 
@@ -1052,7 +1052,7 @@ async def test_worker_skips_a_queued_alert_while_paused(monkeypatch):
     async def nothing(*a, **k):
         return 0
 
-    async def paused(db, minutes, now):
+    async def paused(db, minutes, now, **kind):
         return "paused: the AI model provider refused (credit) at …"
 
     async def skip(db, inv_id, reason):
@@ -1140,7 +1140,7 @@ async def test_the_worker_logs_a_run_whose_end_could_not_be_stored_and_takes_the
     async def nothing(*a, **k):
         return 0
 
-    async def not_paused(db, minutes, now):
+    async def not_paused(db, minutes, now, **kind):
         return ""
 
     async def run_one(c, db, r):
@@ -1268,7 +1268,7 @@ async def test_worker_skips_an_asked_for_run_once_its_budget_is_spent(monkeypatc
     async def nothing(*a, **k):
         return 0
 
-    async def no_pause(db, minutes, now):
+    async def no_pause(db, minutes, now, **kind):
         return ""
 
     async def tokens(db, since, manual=False):

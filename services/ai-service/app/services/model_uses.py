@@ -19,7 +19,7 @@ import asyncio
 import dataclasses
 from typing import Any, Dict, Optional
 
-from app.database import ModelConfig
+from app.database import DatabaseService, ModelConfig
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import store as inv_store
 from app.services.investigation.settings import InvestigationSettings
@@ -49,6 +49,19 @@ async def run_settings(db, cfg: InvestigationSettings, row) -> InvestigationSett
     """The settings one investigation runs with: `cfg` itself, or a copy naming the config chosen for its kind."""
     config = for_investigation(await chosen(db), cfg, manual=bool(getattr(row, "requested_by", "")))
     return cfg if config is None else dataclasses.replace(cfg, model=config.name, model_from=CHOSEN_IN)
+
+
+async def kinds_apart(session, chart_model: str) -> bool:
+    """Whether "Investigate now" runs on another config than the webhook's investigations, so that a refusal of one's
+    model says nothing of the other's. Without a choice of its own it runs on theirs."""
+    choices = {use: config for use, config in (await DatabaseService.read_model_uses(session)).items() if config.enabled}
+    asked = choices.get(INVESTIGATE_NOW)
+    if asked is None:
+        return False
+    if chart_model:
+        return asked.name != chart_model
+    webhook = choices.get(INVESTIGATION) or (await session.execute(DatabaseService.active_model_config_query())).scalar_one_or_none()
+    return webhook is None or asked.id != webhook.id
 
 
 def _problem(config: Optional[ModelConfig]) -> str:
