@@ -130,6 +130,8 @@ data:
   AI_WRITE_APPROVAL: {{ .Values.ai.writeApproval | quote }}
   AI_REFUSE_REPEATED_READS: {{ .Values.ai.refuseRepeatedReads | quote }}
   AI_TOOL_RESULT_DETAILS: {{ .Values.ai.toolResultDetails | quote }}
+  {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's default */}}
+  AI_PAST_HINTS: {{ dig "pastHints" false .Values.ai | quote }}
   AI_BASE_URL_ALLOWED_HOSTS: {{ join "," .Values.ai.baseUrlAllowedHosts | quote }}
   COOKIE_SECURE: {{ .Values.auth.cookieSecure | quote }}
   REDACTION_ENABLED: {{ .Values.ai.redaction.enabled | quote }}
@@ -209,6 +211,7 @@ data:
   {{- /* dig: values an earlier chart's --reuse-values lacks render as this chart's defaults */}}
   {{- $nodeNeighbors := dig "nodeNeighbors" (dict) .Values.features }}
   NODE_NEIGHBORS_ENABLED: {{ dig "enabled" false $nodeNeighbors | quote }}
+  NODE_NEIGHBORS_BUSIEST_CPU: {{ dig "busiestCPU" false $nodeNeighbors | quote }}
   {{- with .Values.features.alertInvestigation }}
   ALERT_INVESTIGATION_SEVERITIES: {{ join "," .severities | quote }}
   ALERT_INVESTIGATION_DEDUPE_HOURS: {{ .dedupeHours | int64 | quote }}

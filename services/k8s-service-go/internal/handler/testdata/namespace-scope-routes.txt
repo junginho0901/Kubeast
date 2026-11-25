@@ -116,6 +116,7 @@ GET /api/v1/logsearch/patterns self-checked
 GET /api/v1/logsearch/query self-checked
 GET /api/v1/logsearch/status no-objects
 GET /api/v1/metrics/nodes cluster-object
+GET /api/v1/metrics/nodes/busiest-cpu cluster-object
 GET /api/v1/metrics/pods query
 GET /api/v1/metrics/top-resources narrowed
 GET /api/v1/mutatingadmissionpolicies cluster-object

@@ -1027,6 +1027,33 @@ tests:
           path: data.AI_TOOL_RESULT_DETAILS
           value: "true"
 
+  - it: keeps the past hints off by default, with the tool result details on too
+    set:
+      ai.toolResultDetails: true
+    asserts:
+      - equal:
+          path: data.AI_PAST_HINTS
+          value: "false"
+
+  - it: passes the past hints switch as it is set and leaves the tool result details' as it is
+    set:
+      ai.pastHints: true
+    asserts:
+      - equal:
+          path: data.AI_PAST_HINTS
+          value: "true"
+      - equal:
+          path: data.AI_TOOL_RESULT_DETAILS
+          value: "false"
+
+  - it: values without ai.pastHints, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.pastHints: null
+    asserts:
+      - equal:
+          path: data.AI_PAST_HINTS
+          value: "false"
+
   - it: renders every 0.7.9 AI switch off when the values set it off
     set:
       ai.timelineChanges: false

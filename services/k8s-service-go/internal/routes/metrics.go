@@ -13,5 +13,7 @@ import (
 func RegisterMetrics(r chi.Router, h *handler.Handler) {
 	r.Get("/api/v1/metrics/pods", h.GetPodMetrics)
 	r.Get("/api/v1/metrics/nodes", h.GetNodeMetrics)
+	// The nodes' busiest CPU and the pods that used it (features.nodeNeighbors.busiestCPU; the AI tool get_node_metrics)
+	r.Get("/api/v1/metrics/nodes/busiest-cpu", h.NodeNeighbors().Busiest)
 	r.Get("/api/v1/metrics/top-resources", h.GetTopResources)
 }

@@ -10,6 +10,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.services import switch
 from app.services.ai import console_links
 
 
@@ -209,8 +210,9 @@ def _format_table(headers: List[str], rows: List[List[str]]) -> str:
     return "\n".join(lines)
 
 def _empty_reason(data: Any) -> str:
-    """Why an answer that holds nothing may be empty, as tool-server says it with AI_TOOL_RESULT_DETAILS (off: "")."""
-    if not console_links.enabled() or not isinstance(data, dict):
+    """Why an answer that holds nothing may be empty, as tool-server says it with AI_TOOL_RESULT_DETAILS, or of an event
+    read with AI_PAST_HINTS (both off: "")."""
+    if not (console_links.enabled() or switch.env_on("AI_PAST_HINTS")) or not isinstance(data, dict):
         return ""
     reason = data.get("empty_reason")
     return reason.strip() if isinstance(reason, str) else ""
@@ -560,8 +562,9 @@ def _format_k8s_get_events_display(raw_text: str) -> Optional[str]:
         return None
     note = ""
     if isinstance(data, dict) and isinstance(data.get("events"), list):
-        # more events matched than were listed: the newest, with the total; or none did, with why
-        note = str(data.get("note") or "") or _empty_reason(data)
+        # more events matched than were listed: the newest, with the total; or none did, with why; or only an admission
+        # policy's did, with where to read further back (AI_PAST_HINTS)
+        note = str(data.get("note") or data.get("past_hint") or "") or _empty_reason(data)
         data = data["events"]
     if not isinstance(data, list):
         return None
@@ -703,6 +706,10 @@ def _format_node_metrics_display(raw_text: str) -> Optional[str]:
         data = json.loads(raw_text)
     except Exception:
         return None
+    line = ""
+    if isinstance(data, dict) and isinstance(data.get("busiest_cpu"), str):
+        # NODE_NEIGHBORS_BUSIEST_CPU: the busiest CPU's line beside the nodes' usage
+        line, data = data["busiest_cpu"], data.get("nodes")
     if not isinstance(data, list):
         return None
     headers = ["NAME", "CPU(cores)", "MEMORY(bytes)"]
@@ -713,7 +720,7 @@ def _format_node_metrics_display(raw_text: str) -> Optional[str]:
             str(m.get("cpu", "")),
             str(m.get("memory", "")),
         ])
-    return _format_table(headers, rows)
+    return _with_reason(_format_table(headers, rows), line)
 
 def _build_tool_display(
         function_name: str,

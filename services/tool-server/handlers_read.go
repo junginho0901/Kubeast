@@ -93,7 +93,7 @@ func handleGetResources(ctx context.Context, args map[string]interface{}, header
 		return explainFailure(ctx, headers, err, resourceType, resourceName, namespace)
 	}
 	// an expression prints nothing for an unset field as well
-	if resultDetails() && resourceName == "" && !outputExpression(output) {
+	if (resultDetails() || (pastHints() && isEventsKind(resourceType))) && resourceName == "" && !outputExpression(output) {
 		out = withListReason(out, listEmpty(resourceType, namespace, allNamespaces))
 	}
 	return stripCutSecret(ctx, out, resourceType), nil
@@ -147,8 +147,8 @@ func handleDescribeResource(ctx context.Context, args map[string]interface{}, he
 	if err != nil {
 		return explainFailure(ctx, headers, err, resourceType, resourceName, namespace)
 	}
-	if resultDetails() {
-		out = withEventsReason(out)
+	if resultDetails() || pastHints() {
+		out = withEventsReason(out, namespace)
 	}
 	return out, nil
 }
@@ -210,14 +210,24 @@ func handleGetPodLogs(ctx context.Context, args map[string]interface{}, headers 
 		return answer, err
 	}
 	out := logs.out
-	if out == "" && resultDetails() {
-		return logEmpty(scan, since, previous, allContainers), nil
+	source := logSource(podName, namespace, container, allContainers, previous)
+	if out == "" && (resultDetails() || pastHints()) {
+		out = logEmpty(scan, since, previous, allContainers)
+		if pastHints() {
+			out += logHeldLine(ctx, headers, source, since)
+		}
+		return out, nil
 	}
 	if grep != "" {
 		out = grepLines(out, grep, tailLines)
 		// the header alone
-		if resultDetails() && !strings.Contains(out, "\n") {
-			out += logNoMatch(since, previous, allContainers)
+		if !strings.Contains(out, "\n") {
+			if resultDetails() {
+				out += logNoMatch(since, previous, allContainers)
+			}
+			if pastHints() && !logs.cut {
+				out += logSearchedLine(ctx, headers, source, since)
+			}
 		}
 	} else {
 		out = logs.said + out
@@ -335,8 +345,13 @@ func handleGetEvents(ctx context.Context, args map[string]interface{}, headers h
 			"note": fmt.Sprintf("the newest %d of %d events, newest first; narrow with kind and name, or field_selector type=Warning", len(events), reply.Total),
 		})
 	}
-	if len(events) == 0 && resultDetails() {
+	if len(events) == 0 && (resultDetails() || pastHints()) {
 		return marshalJSON(map[string]interface{}{"events": events, "empty_reason": eventsEmpty(q.Get("namespace"), len(selectors) > 0)})
+	}
+	if pastHints() && onlyPolicyViolations(events) {
+		// in front of the events, which the model may read cut
+		return marshalOrdered(map[string]interface{}{"events": events, "past_hint": policyEventsHint(q.Get("namespace"), len(selectors) > 0)},
+			[]string{"past_hint"}, []string{"events"})
 	}
 	return marshalJSON(events)
 }
@@ -409,8 +424,7 @@ func handleGetNodeMetrics(ctx context.Context, _ map[string]interface{}, headers
 	if err != nil {
 		return explainFailure(ctx, headers, err, "", "", "")
 	}
-	metrics := parseTopNodes(output)
-	return marshalJSON(metrics)
+	return nodeMetricsAnswer(ctx, headers, parseTopNodes(output))
 }
 
 func handleGetPodMetrics(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {

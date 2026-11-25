@@ -65,7 +65,23 @@
  {
   "name": "a log",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "ready\n",
+  "holds": "something"
+ },
+ {
+  "name": "a log",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "ready\n",
+  "holds": "something"
+ },
+ {
+  "name": "a log",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "ready\n",
   "holds": "something"
  },
@@ -79,8 +95,24 @@
  {
   "name": "an empty log",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "# No line was read: the newest 50 lines were asked for. An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n# This log holds no line.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log",
+  "tool": "k8s_get_pod_logs",
   "details": true,
   "answer": "# No line was read: the newest 50 lines were asked for. An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
+  "answer": "# No line was read: the newest 50 lines were asked for. An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n# This log holds no line.\n",
   "holds": "nothing"
  },
  {
@@ -93,7 +125,23 @@
  {
   "name": "a search of a log without a match",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "# grep \"web-1\": 0 of 1 lines matched",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of a log without a match",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "# grep \"web-1\": 0 of 1 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of a log without a match",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "# grep \"web-1\": 0 of 1 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.",
   "holds": "nothing"
  },
@@ -107,7 +155,23 @@
  {
   "name": "a search of a cut log without a match",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 0 of 71 lines matched",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of a cut log without a match",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 0 of 71 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search of a cut log without a match",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 0 of 71 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.",
   "holds": "nothing"
  },
@@ -121,7 +185,23 @@
  {
   "name": "a search of a cut log with a match",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 1 of 71 lines matched\nweb-1 stopped",
+  "holds": "something"
+ },
+ {
+  "name": "a search of a cut log with a match",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 1 of 71 lines matched\nweb-1 stopped",
+  "holds": "something"
+ },
+ {
+  "name": "a search of a cut log with a match",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\n# grep \"web-1\": 1 of 71 lines matched\nweb-1 stopped",
   "holds": "something"
  },
@@ -135,7 +215,23 @@
  {
   "name": "a cut log",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\n",
+  "holds": "something"
+ },
+ {
+  "name": "a cut log",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\n",
+  "holds": "something"
+ },
+ {
+  "name": "a cut log",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "… [older lines cut by tool-server: this read is larger than 1000 bytes and the newest lines follow; narrow it with since, tail_lines, grep or container]\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\nline of a log\n",
   "holds": "something"
  },
@@ -149,7 +245,23 @@
  {
   "name": "a log whose container is gone",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "{\"container\":\"app\",\"hint\":\"The previous container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the current log (previous=false), the pod's events and its last state (k8s_describe_resource: reason, exit code) instead; a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a log whose container is gone",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "{\"container\":\"app\",\"hint\":\"The previous container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the current log (previous=false), the pod's events and its last state (k8s_describe_resource: reason, exit code) instead; a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a log whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "{\"container\":\"app\",\"hint\":\"The previous container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the current log (previous=false), the pod's events and its last state (k8s_describe_resource: reason, exit code) instead; a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
   "holds": "unread"
  },
@@ -163,7 +275,23 @@
  {
   "name": "a log whose file is gone",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "{\"container\":\"app\",\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"failed to try resolving symlinks in path \\\"/var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log\\\": lstat /var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log: no such file or directory\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a log whose file is gone",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "{\"container\":\"app\",\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"failed to try resolving symlinks in path \\\"/var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log\\\": lstat /var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log: no such file or directory\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a log whose file is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "{\"container\":\"app\",\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"failed to try resolving symlinks in path \\\"/var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log\\\": lstat /var/log/pods/shop_web-1_5b1f8e0a-0d0f-4a1c-9c55-8f1d6f0f3f10/app/1.log: no such file or directory\",\"status\":\"no_log\"}",
   "holds": "unread"
  },
@@ -177,7 +305,23 @@
  {
   "name": "a search of a log whose container is gone",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "{\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a search of a log whose container is gone",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "{\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "a search of a log whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "{\"hint\":\"This container's log is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
   "holds": "unread"
  },
@@ -191,7 +335,23 @@
  {
   "name": "logs whose containers are gone",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "{\"containers\":[\"app\",\"side\"],\"hint\":\"The log of each container listed is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "logs whose containers are gone",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "{\"containers\":[\"app\",\"side\"],\"hint\":\"The log of each container listed is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
+  "holds": "unread"
+ },
+ {
+  "name": "logs whose containers are gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "{\"containers\":[\"app\",\"side\"],\"hint\":\"The log of each container listed is gone or cannot be read: the kubelet answered with reason in its place, so no line was read. Read the pod's events and its state (k8s_describe_resource: reason, exit code) instead, or the run before a restart (previous=true); a log store's tools (where offered) may still hold its lines.\",\"namespace\":\"shop\",\"pod\":\"web-1\",\"reason\":\"unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"status\":\"no_log\"}",
   "holds": "unread"
  },
@@ -205,7 +365,23 @@
  {
   "name": "a log beside one whose container is gone",
   "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "[pod/web-1/app] unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef[pod/web-1/side] ready\n",
+  "holds": "something"
+ },
+ {
+  "name": "a log beside one whose container is gone",
+  "tool": "k8s_get_pod_logs",
   "details": true,
+  "answer": "[pod/web-1/app] unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef[pod/web-1/side] ready\n",
+  "holds": "something"
+ },
+ {
+  "name": "a log beside one whose container is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
   "answer": "[pod/web-1/app] unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef[pod/web-1/side] ready\n",
   "holds": "something"
  },
@@ -213,6 +389,14 @@
   "name": "a line of a log with the words of one that is gone",
   "tool": "k8s_get_pod_logs",
   "details": false,
+  "answer": "unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n",
+  "holds": "something"
+ },
+ {
+  "name": "a line of a log with the words of one that is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
   "answer": "unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n",
   "holds": "something"
  },
@@ -420,6 +604,134 @@
   "holds": "unread"
  },
  {
+  "name": "a line of a log with the words of one that is gone",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
+  "answer": "unable to retrieve container logs for containerd://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n",
+  "holds": "something"
+ },
+ {
+  "name": "an empty log of a window",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log of a window",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "# No line was read: the newest 50 lines within since=10m were asked for. An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n# The lines this log holds run from 2026-11-25T04:28:58Z to 2026-11-25T04:28:58Z: none is within since=10m.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log of a window",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# No line was read: the newest 50 lines within since=10m were asked for. An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "an empty log of a window",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
+  "answer": "# No line was read: the newest 50 lines within since=10m were asked for. An empty log does not say that nothing failed: previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n# The lines this log holds run from 2026-11-25T04:28:58Z to 2026-11-25T04:28:58Z: none is within since=10m.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search without a match, of lines with times",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "answer": "# grep \"web-1\": 0 of 1 lines matched",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search without a match, of lines with times",
+  "tool": "k8s_get_pod_logs",
+  "details": false,
+  "past": true,
+  "answer": "# grep \"web-1\": 0 of 1 lines matched\n# The lines searched run from 2026-11-25T04:28:58Z to 2026-11-25T04:28:58Z, from the first line this log holds; a log store's tools (loki_query, logsearch, where offered) may have older ones.",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search without a match, of lines with times",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "answer": "# grep \"web-1\": 0 of 1 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.",
+  "holds": "nothing"
+ },
+ {
+  "name": "a search without a match, of lines with times",
+  "tool": "k8s_get_pod_logs",
+  "details": true,
+  "past": true,
+  "answer": "# grep \"web-1\": 0 of 1 lines matched\n# grep is a plain substring of the newest 2000 lines: the same thing in other words, or an older line, is not matched; previous=true reads the run before a restart, all_containers=true the pod's other containers, a log store's tools (where offered) older lines and pods that are gone.\n# The lines searched run from 2026-11-25T04:28:58Z to 2026-11-25T04:28:58Z, from the first line this log holds; a log store's tools (loki_query, logsearch, where offered) may have older ones.",
+  "holds": "nothing"
+ },
+ {
+  "name": "no event",
+  "tool": "k8s_get_events",
+  "details": false,
+  "answer": "[]",
+  "holds": "nothing"
+ },
+ {
+  "name": "no event",
+  "tool": "k8s_get_events",
+  "details": false,
+  "past": true,
+  "answer": "{\"empty_reason\":\"No event matched. The API server keeps an event for about an hour by default, so this does not say that nothing happened before: read the logs (k8s_get_pod_logs, or a log store's tools where offered) and the replica and restart metrics over a longer window (prometheus_query with range=true and since, where offered). A namespace that does not exist answers the same. What reaches further back, over a window that holds that time: loki_query (where offered) {k8s_namespace_name=\\\"shop\\\"} |~ \\\"(?i)error|refused|timeout\\\" (loki_labels has the label names); prometheus_query (where offered) with range=true, kube_deployment_spec_replicas{namespace=\\\"shop\\\"} and kube_statefulset_replicas{namespace=\\\"shop\\\"}, whose fall to 0 is a scale down that leaves no failing object, and kube_pod_container_status_restarts_total{namespace=\\\"shop\\\"}.\",\"events\":[]}",
+  "holds": "nothing"
+ },
+ {
+  "name": "no event",
+  "tool": "k8s_get_events",
+  "details": true,
+  "answer": "{\"empty_reason\":\"No event matched. The API server keeps an event for about an hour by default, so this does not say that nothing happened before: read the logs (k8s_get_pod_logs, or a log store's tools where offered) and the replica and restart metrics over a longer window (prometheus_query with range=true and since, where offered). A namespace that does not exist answers the same.\",\"events\":[]}",
+  "holds": "nothing"
+ },
+ {
+  "name": "no event",
+  "tool": "k8s_get_events",
+  "details": true,
+  "past": true,
+  "answer": "{\"empty_reason\":\"No event matched. The API server keeps an event for about an hour by default, so this does not say that nothing happened before: read the logs (k8s_get_pod_logs, or a log store's tools where offered) and the replica and restart metrics over a longer window (prometheus_query with range=true and since, where offered). A namespace that does not exist answers the same. What reaches further back, over a window that holds that time: loki_query (where offered) {k8s_namespace_name=\\\"shop\\\"} |~ \\\"(?i)error|refused|timeout\\\" (loki_labels has the label names); prometheus_query (where offered) with range=true, kube_deployment_spec_replicas{namespace=\\\"shop\\\"} and kube_statefulset_replicas{namespace=\\\"shop\\\"}, whose fall to 0 is a scale down that leaves no failing object, and kube_pod_container_status_restarts_total{namespace=\\\"shop\\\"}.\",\"events\":[]}",
+  "holds": "nothing"
+ },
+ {
+  "name": "an admission policy's events alone",
+  "tool": "k8s_get_events",
+  "details": false,
+  "answer": "[{\"count\":1,\"first_timestamp\":\"2026-11-25T04:28:58Z\",\"last_timestamp\":\"2026-11-25T04:28:58Z\",\"message\":\"policy require-labels/ fail\",\"namespace\":\"shop\",\"object\":{\"kind\":\"Deployment\",\"name\":\"payments\"},\"reason\":\"PolicyViolation\",\"type\":\"Warning\"}]",
+  "holds": "something"
+ },
+ {
+  "name": "an admission policy's events alone",
+  "tool": "k8s_get_events",
+  "details": false,
+  "past": true,
+  "answer": "{\"past_hint\":\"Only PolicyViolation events matched, an admission policy's warnings about objects as they are: they do not say that anything failed, or that nothing did. The API server keeps an event for about an hour by default, so what happened before that is not here. What reaches further back, over a window that holds that time: loki_query (where offered) {k8s_namespace_name=\\\"shop\\\"} |~ \\\"(?i)error|refused|timeout\\\" (loki_labels has the label names); prometheus_query (where offered) with range=true, kube_deployment_spec_replicas{namespace=\\\"shop\\\"} and kube_statefulset_replicas{namespace=\\\"shop\\\"}, whose fall to 0 is a scale down that leaves no failing object, and kube_pod_container_status_restarts_total{namespace=\\\"shop\\\"}.\",\"events\":[{\"count\":1,\"first_timestamp\":\"2026-11-25T04:28:58Z\",\"last_timestamp\":\"2026-11-25T04:28:58Z\",\"message\":\"policy require-labels/ fail\",\"namespace\":\"shop\",\"object\":{\"kind\":\"Deployment\",\"name\":\"payments\"},\"reason\":\"PolicyViolation\",\"type\":\"Warning\"}]}",
+  "holds": "something"
+ },
+ {
+  "name": "an admission policy's events alone",
+  "tool": "k8s_get_events",
+  "details": true,
+  "answer": "[{\"count\":1,\"first_timestamp\":\"2026-11-25T04:28:58Z\",\"last_timestamp\":\"2026-11-25T04:28:58Z\",\"message\":\"policy require-labels/ fail\",\"namespace\":\"shop\",\"object\":{\"kind\":\"Deployment\",\"name\":\"payments\"},\"reason\":\"PolicyViolation\",\"type\":\"Warning\"}]",
+  "holds": "something"
+ },
+ {
+  "name": "an admission policy's events alone",
+  "tool": "k8s_get_events",
+  "details": true,
+  "past": true,
+  "answer": "{\"past_hint\":\"Only PolicyViolation events matched, an admission policy's warnings about objects as they are: they do not say that anything failed, or that nothing did. The API server keeps an event for about an hour by default, so what happened before that is not here. What reaches further back, over a window that holds that time: loki_query (where offered) {k8s_namespace_name=\\\"shop\\\"} |~ \\\"(?i)error|refused|timeout\\\" (loki_labels has the label names); prometheus_query (where offered) with range=true, kube_deployment_spec_replicas{namespace=\\\"shop\\\"} and kube_statefulset_replicas{namespace=\\\"shop\\\"}, whose fall to 0 is a scale down that leaves no failing object, and kube_pod_container_status_restarts_total{namespace=\\\"shop\\\"}.\",\"events\":[{\"count\":1,\"first_timestamp\":\"2026-11-25T04:28:58Z\",\"last_timestamp\":\"2026-11-25T04:28:58Z\",\"message\":\"policy require-labels/ fail\",\"namespace\":\"shop\",\"object\":{\"kind\":\"Deployment\",\"name\":\"payments\"},\"reason\":\"PolicyViolation\",\"type\":\"Warning\"}]}",
+  "holds": "something"
+ },
+ {
   "name": "a list of no name",
   "tool": "k8s_get_resources",
   "details": false,
@@ -429,7 +741,23 @@
  {
   "name": "a list of no name",
   "tool": "k8s_get_resources",
+  "details": false,
+  "past": true,
+  "answer": "",
+  "holds": "nothing"
+ },
+ {
+  "name": "a list of no name",
+  "tool": "k8s_get_resources",
   "details": true,
+  "answer": "Nothing of this kind exists now in what was read. An object deleted earlier is not listed: events, logs and metrics of that time may still name it. A namespace that does not exist answers the same. k8s_find_resource looks for a name in every namespace the user may read.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a list of no name",
+  "tool": "k8s_get_resources",
+  "details": true,
+  "past": true,
   "answer": "Nothing of this kind exists now in what was read. An object deleted earlier is not listed: events, logs and metrics of that time may still name it. A namespace that does not exist answers the same. k8s_find_resource looks for a name in every namespace the user may read.\n",
   "holds": "nothing"
  },
@@ -443,8 +771,24 @@
  {
   "name": "a list of no event's name",
   "tool": "k8s_get_resources",
+  "details": false,
+  "past": true,
+  "answer": "No event matched. The API server keeps an event for about an hour by default, so this does not say that nothing happened before: read the logs (k8s_get_pod_logs, or a log store's tools where offered) and the replica and restart metrics over a longer window (prometheus_query with range=true and since, where offered). What reaches further back, over a window that holds that time: loki_query (where offered) {k8s_namespace_name=~\".+\"} |~ \"(?i)error|refused|timeout\" (loki_labels has the label names); prometheus_query (where offered) with range=true, kube_deployment_spec_replicas and kube_statefulset_replicas, whose fall to 0 is a scale down that leaves no failing object, and kube_pod_container_status_restarts_total.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a list of no event's name",
+  "tool": "k8s_get_resources",
   "details": true,
   "answer": "No event matched. The API server keeps an event for about an hour by default, so this does not say that nothing happened before: read the logs (k8s_get_pod_logs, or a log store's tools where offered) and the replica and restart metrics over a longer window (prometheus_query with range=true and since, where offered).\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a list of no event's name",
+  "tool": "k8s_get_resources",
+  "details": true,
+  "past": true,
+  "answer": "No event matched. The API server keeps an event for about an hour by default, so this does not say that nothing happened before: read the logs (k8s_get_pod_logs, or a log store's tools where offered) and the replica and restart metrics over a longer window (prometheus_query with range=true and since, where offered). What reaches further back, over a window that holds that time: loki_query (where offered) {k8s_namespace_name=~\".+\"} |~ \"(?i)error|refused|timeout\" (loki_labels has the label names); prometheus_query (where offered) with range=true, kube_deployment_spec_replicas and kube_statefulset_replicas, whose fall to 0 is a scale down that leaves no failing object, and kube_pod_container_status_restarts_total.\n",
   "holds": "nothing"
  },
  {
@@ -457,7 +801,23 @@
  {
   "name": "a list of a name",
   "tool": "k8s_get_resources",
+  "details": false,
+  "past": true,
+  "answer": "configmap/web\n",
+  "holds": "something"
+ },
+ {
+  "name": "a list of a name",
+  "tool": "k8s_get_resources",
   "details": true,
+  "answer": "configmap/web\n",
+  "holds": "something"
+ },
+ {
+  "name": "a list of a name",
+  "tool": "k8s_get_resources",
+  "details": true,
+  "past": true,
   "answer": "configmap/web\n",
   "holds": "something"
  },
@@ -471,7 +831,23 @@
  {
   "name": "a table of no object",
   "tool": "k8s_get_resources",
+  "details": false,
+  "past": true,
+  "answer": "No resources found in shop namespace.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a table of no object",
+  "tool": "k8s_get_resources",
   "details": true,
+  "answer": "No resources found in shop namespace.\nNothing of this kind exists now in what was read. An object deleted earlier is not listed: events, logs and metrics of that time may still name it. A namespace that does not exist answers the same. k8s_find_resource looks for a name in every namespace the user may read.\n",
+  "holds": "nothing"
+ },
+ {
+  "name": "a table of no object",
+  "tool": "k8s_get_resources",
+  "details": true,
+  "past": true,
   "answer": "No resources found in shop namespace.\nNothing of this kind exists now in what was read. An object deleted earlier is not listed: events, logs and metrics of that time may still name it. A namespace that does not exist answers the same. k8s_find_resource looks for a name in every namespace the user may read.\n",
   "holds": "nothing"
  },

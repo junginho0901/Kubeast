@@ -393,6 +393,15 @@ ai:
   # the search for that name, not the investigation.
   # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   toolResultDetails: false
+  # For a question about something that is over: an event read that holds
+  # nothing, or nothing but an admission policy's PolicyViolation events, names
+  # the log query and the replica and restart metrics that reach further back
+  # than the events; a pod log read without a line says from when to when the
+  # lines that exist run (two or three more reads of that log, 36 bytes each);
+  # issues lists the PolicyViolation findings last. By itself, or beside
+  # toolResultDetails, whose own words stay. Off: the answers are as before.
+  # Stage: alpha, not run yet: the AI evaluation's 16_past_outage asked 70 minutes after, with it off and on (docs/configuration.md "Stages of new values").
+  pastHints: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
   # JWTs, credentials in URLs, Authorization values, API keys with a known
@@ -1219,9 +1228,18 @@ features:
   # caller), else the metrics API's current values; a namespace whose pods the
   # caller may not list is counted, not named. Off: the route answers 404,
   # reads nothing, and the AI's tool takes no node.
+  # busiestCPU (nothing without enabled): get_node_metrics without a node adds
+  # one line, the busiest CPU of the cluster's nodes in the last hour (30 steps
+  # of two minutes, since one full CPU does not show in a node's percentage) and
+  # the pods of every namespace that used the most CPU on its node then (at most
+  # four Prometheus queries, GET /metrics/nodes/busiest-cpu, kept a minute per
+  # caller; nodes with more than 2 000 CPUs together are not read), and the
+  # window of one node is cut in steps of at most a thirtieth of it, where they
+  # are a twelfth. Off: the tool, the route (404) and the steps are as before.
   # Stage: alpha, not run yet: the AI evaluation's 03_node_cpu_saturated with it off and on (docs/configuration.md "Stages of new values").
   nodeNeighbors:
     enabled: false
+    busiestCPU: false
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,

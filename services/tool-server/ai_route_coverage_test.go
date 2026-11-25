@@ -233,6 +233,8 @@ func callForCoverage(t *testing.T, row aiRouteCoverage, handler ToolHandler) (*c
 }
 
 func TestRouteCoverage_EachToolReachesWhatItsRowSays(t *testing.T) {
+	t.Setenv("NODE_NEIGHBORS_ENABLED", "true") // the rows are the tools' reads with every feature on (the nodes' busiest CPU)
+	t.Setenv("NODE_NEIGHBORS_BUSIEST_CPU", "true")
 	registry := buildToolRegistry()
 	rows := coveredRoutes(t)
 	keys := make([]string, 0, len(rows))

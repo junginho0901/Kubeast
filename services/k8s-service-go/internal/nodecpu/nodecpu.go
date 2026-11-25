@@ -66,6 +66,11 @@ func (w Window) stepStart(i int) time.Time { return w.BeforeStart().Add(time.Dur
 // question in the same minute is the same window; an end after now is now. The start defaults to DefaultLength before
 // the end, and moves back less than MaxSteps seconds so that the steps are whole seconds.
 func ParseWindow(start, end string, now time.Time) (Window, error) {
+	return parseWindow(start, end, now, MaxSteps)
+}
+
+// parseWindow is ParseWindow with at most maxSteps steps in place of MaxSteps.
+func parseWindow(start, end string, now time.Time, maxSteps int) (Window, error) {
 	w := Window{End: now.Truncate(time.Minute)}
 	if end != "" {
 		t, err := time.Parse(time.RFC3339, end)
@@ -92,7 +97,7 @@ func ParseWindow(start, end string, now time.Time) (Window, error) {
 	case length > MaxLength:
 		return w, invalid("the window is at most %s", MaxLength)
 	}
-	w.Steps = min(MaxSteps, int(w.Length()/MinStep))
+	w.Steps = min(maxSteps, int(w.Length()/MinStep))
 	seconds := int64(w.Length() / time.Second)
 	w.Step = time.Duration((seconds+int64(w.Steps)-1)/int64(w.Steps)) * time.Second
 	w.Start = w.End.Add(-time.Duration(w.Steps) * w.Step)

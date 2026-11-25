@@ -74,6 +74,7 @@
   "/api/v1/logsearch/query": {"tool": "loki_query", "args": {"logql": "{app=\"web\"}"}, "note": "The screen's LogQL written by hand: the same store and query language as logsearch/logql, which the tool reads.", "reads": "/api/v1/logsearch/logql"},
   "/api/v1/logsearch/status": {"tool": "logsearch", "args": {}, "note": "logsearch answers unavailable when no log store is set for the cluster.", "reads": "/api/v1/logsearch"},
   "/api/v1/metrics/nodes": {"tool": "get_node_metrics", "args": {}, "note": "kubectl top nodes, printed as this route prints it.", "reads": "kubectl top nodes"},
+  "/api/v1/metrics/nodes/busiest-cpu": {"tool": "get_node_metrics", "args": {}},
   "/api/v1/metrics/pods": {"tool": "get_pod_metrics", "args": {}, "note": "kubectl top pods, printed as this route prints it.", "reads": "kubectl top pods"},
   "/api/v1/metrics/top-resources": {"tool": "get_pod_metrics", "args": {}, "note": "The dashboard's top consumers: get_pod_metrics and get_node_metrics hold the same usage to sort.", "reads": "kubectl top pods"},
   "/api/v1/mutatingadmissionpolicies": {"tool": "k8s_get_resources", "args": {"resource_type": "mutatingadmissionpolicies"}},
