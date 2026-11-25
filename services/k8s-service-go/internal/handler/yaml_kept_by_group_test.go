@@ -167,7 +167,8 @@ func (g twoGroupsRig) yamlOf(resourceType string) string {
 	return g.yaml("/api/v1/resources/yaml?" + url.Values{"resource_type": {resourceType}, "resource_name": {"web"}, "namespace": {"shop"}}.Encode())
 }
 
-// The YAML kept for an object is not another group's object of the same plural name, namespace and name.
+// The YAML kept for an object is not another group's object of the same plural name, namespace and name, nor another
+// kind's of its own group.
 func TestTheYAMLKeptForOneGroupIsNotAnothers(t *testing.T) {
 	for _, order := range [][]string{
 		{"services", "services.serving.knative.dev"},
@@ -175,13 +176,15 @@ func TestTheYAMLKeptForOneGroupIsNotAnothers(t *testing.T) {
 		{"gateways.gateway.networking.k8s.io", "gateways.networking.istio.io"},
 		{"gateways.networking.istio.io", "gateways.gateway.networking.k8s.io"},
 		{"gateways", "gateways.networking.istio.io", "services", "ksvc", "svc"},
+		{"services", "configmaps"},
 	} {
 		t.Run(strings.Join(order, ","), func(t *testing.T) {
 			g := newTwoGroupsRig(t)
 			want := map[string]string{
-				"services": "v1", "svc": "v1", "services.serving.knative.dev": "serving.knative.dev/v1", "ksvc": "serving.knative.dev/v1",
-				"gateways": "gateway.networking.k8s.io/v1", "gateways.gateway.networking.k8s.io": "gateway.networking.k8s.io/v1",
-				"gateways.networking.istio.io": "networking.istio.io/v1",
+				"services": "v1\nkind: Service", "svc": "v1\nkind: Service", "configmaps": "v1\nkind: ConfigMap",
+				"services.serving.knative.dev": "serving.knative.dev/v1\nkind: Service", "ksvc": "serving.knative.dev/v1\nkind: Service",
+				"gateways": "gateway.networking.k8s.io/v1\nkind: Gateway", "gateways.gateway.networking.k8s.io": "gateway.networking.k8s.io/v1\nkind: Gateway",
+				"gateways.networking.istio.io": "networking.istio.io/v1\nkind: Gateway",
 			}
 			for _, resourceType := range order {
 				if text := g.yamlOf(resourceType); !strings.Contains(text, "apiVersion: "+want[resourceType]+"\n") {
