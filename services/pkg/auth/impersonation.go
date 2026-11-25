@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -97,12 +98,18 @@ func (p TokenPayload) Impersonation(clusterID string) (user string, groups []str
 }
 
 // CacheIdentity is a short hash of the identity Impersonation returns for
-// clusterID, for keying a cached cluster answer: the cluster decides what each
-// identity may see, so one user's answer is never served to another. The hash
-// keeps user data out of the key.
+// clusterID and of the namespaces the grant there is limited to, for keying a
+// cached cluster answer: the cluster decides what each identity may see and an
+// answer may hold those namespaces alone, so one user's answer is never served
+// to another, nor to a token of the same identity limited to other namespaces.
+// The hash keeps user data out of the key.
 func (p TokenPayload) CacheIdentity(clusterID string) string {
 	user, groups := p.Impersonation(clusterID)
-	sum := sha256.Sum256([]byte(user + "|" + strings.Join(groups, ",")))
+	who := user + "|" + strings.Join(groups, ",")
+	if namespaces := p.Namespaces[clusterID]; len(namespaces) > 0 {
+		who += "|ns:" + strings.Join(slices.Sorted(slices.Values(namespaces)), ",")
+	}
+	sum := sha256.Sum256([]byte(who))
 	return hex.EncodeToString(sum[:8])
 }
 
