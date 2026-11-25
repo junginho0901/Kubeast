@@ -298,10 +298,11 @@ func TestPodLogs_ALineOfALogThatEndsAsTheErrorOfAContainerThatWaitsIsTheLogs(t *
 		}
 	}
 	// what a line says of why is the kubelet's word and no more
-	for _, line := range []string{says("side") + " and all is well", says("side") + "). All is well (", "saw error: container \"side\" in pod \"web-1\" is healthy"} {
-		pod := aPod{names: "migrate side", containers: []aContainer{{name: "migrate", log: line + "\n"}, side}}
+	for _, line := range []string{says("side") + " and all is well", says("migrate") + " and all is well", says("migrate") + "). All is well (", "saw error: container \"migrate\" in pod \"web-1\" is healthy"} {
+		// the last line has no end, so that the pod's containers are known
+		pod := aPod{names: "migrate side", containers: []aContainer{{name: "migrate", log: line + "\npanic"}, side}}
 		pod.inEveryOrder(t, asked, func(out string, _ [][]string) {
-			if out != "[pod/web-1/migrate] "+line+"\n"+noLogOfSideYet {
+			if out != "[pod/web-1/migrate] "+line+"\n[pod/web-1/migrate] panic\n"+noLogOfSideYet {
 				t.Errorf("%q", out)
 			}
 		})
