@@ -122,7 +122,7 @@ func handleLokiQuery(ctx context.Context, args map[string]interface{}, headers h
 		case len(reply.Series) == 0:
 			result["hint"] = "No series: no line matched. Check the label names and values with loki_labels, or widen the window."
 		case !truncated:
-			result["note"] = "A step with no matching line has no point; read it as 0 for counts and rates."
+			result["note"] = "A step has no point when no line matched there (a count or rate of 0) or when its value is not a number (a division by zero); a ratio's missing point is not 0."
 		}
 	} else {
 		lines := reply.Lines
