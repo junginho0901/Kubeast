@@ -22,7 +22,7 @@ const drawerWidth = () => {
 
 const sectionPadding = () => {
   const src = read(join(dir, 'DetailCommon.tsx'))
-  const section = src.match(/export function InfoSection[\s\S]*?<div className="rounded-lg border border-slate-700 bg-slate-900\/40 p-(\d+)">/)
+  const section = src.match(/export function InfoSection[\s\S]*?<div(?: data-[\w-]+="[^"]*")* className="rounded-lg border border-slate-700 bg-slate-900\/40 p-(\d+)"(?: data-[\w-]+="[^"]*")*>/)
   expect(section, 'InfoSection: a 1 px border and p-N').not.toBeNull()
   return Number(section![1]) * 4
 }

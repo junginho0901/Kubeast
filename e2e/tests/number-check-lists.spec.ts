@@ -810,8 +810,8 @@ async function readScreen(page: Page): Promise<ScreenRead> {
     const heads = [...document.querySelectorAll('main thead th')].map((th) => (th as HTMLElement).innerText.trim())
     const rows = [...document.querySelectorAll('main tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => (td as HTMLElement).innerText.trim()))
     const cards: Record<string, number> = {}
-    // a summary card: a bordered box of two lines, the label and a number
-    for (const box of document.querySelectorAll('main div.rounded-lg.border')) {
+    // Summary grid cells have a small label followed by a large number.
+    for (const box of document.querySelectorAll('main div.rounded-lg.border, main .grid.shrink-0 > div:has(> .text-xs:first-child):has(> .text-lg:last-child)')) {
       const lines = [...box.children] as HTMLElement[]
       if (lines.length === 2 && /^\d+$/.test(lines[1].innerText.trim())) cards[lines[0].innerText.trim()] = Number(lines[1].innerText.trim())
     }
@@ -2581,7 +2581,7 @@ test.describe('number check — list screens', () => {
       await page.goto(JOBS)
       await expect.poll(async () => (await jobRow(page, name))?.Status, { timeout: 20_000 }).toBe('Running')
       await expect(jobBadge(page, name)).toHaveClass(/badge-success/)
-      await expect(page.locator('main div.rounded-lg.border').filter({ hasText: /^(Running|실행 중)/ }).first()).toHaveClass(/emerald/)
+      await expect(page.locator('main').getByText(/^(Running|실행 중)$/, { exact: true }).first()).toHaveClass(/emerald/)
       await page.goto(`${JOBS}&detail=${encodeURIComponent(`CronJob/${NS}/num-cron`)}`)
       const row = page.locator(DRAWER).last().locator('tbody tr').filter({ hasText: name })
       await expect(row.locator('.badge').first()).toHaveText('Running', { timeout: 20_000 })
@@ -2629,7 +2629,7 @@ test.describe('number check — list screens', () => {
     await expect.poll(async () => (await readScreen(page)).cards, { timeout: 20_000 }).toMatchObject({ Total: want.total, Completed: want.completed, Running: want.running, Suspended: want.suspended, Failed: want.failed })
     // the Suspended card in the colour of a suspended row's badge
     await expect(jobBadge(page, 'num-held')).toHaveClass(/badge-warning/)
-    await expect(page.locator('main div.rounded-lg.border').filter({ hasText: /^(Suspended|중지됨)/ }).first()).toHaveClass(/yellow/)
+    await expect(page.locator('main').getByText(/^(Suspended|중지됨)$/, { exact: true }).first()).toHaveClass(/yellow/)
     await expect.poll(async () => (await ask())?.stats, { timeout: 20_000 }).toEqual(want)
   })
 
@@ -2640,7 +2640,7 @@ test.describe('number check — list screens', () => {
     const badge = page.locator('main tbody tr').filter({ has: page.getByRole('cell', { name: 'num-cron', exact: true }) }).locator('.badge').first()
     await expect(badge).toHaveText(/^(Yes|예)$/, { timeout: 20_000 })
     await expect(badge).toHaveClass(/badge-warning/)
-    const card = page.locator('main div.rounded-lg.border').filter({ hasText: /^(Suspended|중지됨)/ }).first()
+    const card = page.locator('main').getByText(/^(Suspended|중지됨)$/, { exact: true }).first()
     await expect(card).toHaveClass(/yellow/)
     await expect(card).not.toHaveClass(/amber/)
   })

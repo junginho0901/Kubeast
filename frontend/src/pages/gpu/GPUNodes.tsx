@@ -106,7 +106,7 @@ export default function GPUNodes() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelColor]) => (
-          <div key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
+          <div data-list-summary-card="" key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
             <div className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelColor}`}>{label}</div>
             <div className="mt-1 text-lg font-semibold text-ink">{value}</div>
           </div>

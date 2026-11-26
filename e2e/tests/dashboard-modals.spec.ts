@@ -21,7 +21,7 @@ test.describe('Dashboard modals — Context refactor regression', () => {
 
     // ResourceModal 가 뜨면 PVC list 가 render
     await expect(page.locator('text=/PVC|Persistent Volume/i').first()).toBeVisible({ timeout: 10000 })
-    const title = page.locator('h2.text-xl').filter({ hasText: /PVC|PersistentVolumeClaim/ })
+    const title = page.getByRole('heading', { level: 2, name: /PVC|PersistentVolumeClaim/ })
     await expect(title).toHaveCount(1)
 
     // 모달 닫기 (Esc)

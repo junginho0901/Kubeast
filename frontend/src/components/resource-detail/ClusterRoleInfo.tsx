@@ -83,13 +83,13 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
               const matchLabels = sel.matchLabels as Record<string, string> | undefined
               const matchExpressions: any[] = Array.isArray(sel.matchExpressions) ? sel.matchExpressions : []
               return (
-                <div key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
+                <div data-detail-card="" key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
                   <div className="text-xs text-slate-300">
                     <span className="text-[11px] text-slate-500 mr-2"><Tx>Match Labels:</Tx></span>
                     {matchLabels && Object.keys(matchLabels).length > 0 ? (
                       <div className="inline-flex flex-wrap gap-1 mt-0.5">
                         {Object.entries(matchLabels).map(([k, v]) => (
-                          <span key={k} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                          <span data-detail-chip="" key={k} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                             {k}={v}
                           </span>
                         ))}
@@ -103,7 +103,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                       <span className="text-[11px] text-slate-500 mr-2"><Tx>Match Expressions:</Tx></span>
                       <div className="inline-flex flex-wrap gap-1 mt-0.5">
                         {matchExpressions.map((e: any, i: number) => (
-                          <span key={i} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                          <span data-detail-chip="" key={i} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                             {`${e?.key} ${e?.operator} [${Array.isArray(e?.values) ? e.values.join(', ') : ''}]`}
                           </span>
                         ))}
@@ -127,7 +127,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
               const nonResourceURLs = Array.isArray(rule.nonResourceURLs) ? rule.nonResourceURLs : []
 
               return (
-                <div key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+                <div data-detail-card="" key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
                   <div className="text-xs text-slate-300 space-y-1.5">
                     <div>
                       <span className="text-[11px] text-slate-500 mr-2"><Tx>API Groups:</Tx></span>
@@ -141,7 +141,7 @@ export default function ClusterRoleInfo({ name, rawJson }: Props) {
                       <span className="text-[11px] text-slate-500 mr-2"><Tx>Verbs:</Tx></span>
                       <div className="inline-flex flex-wrap gap-1 mt-0.5">
                         {verbs.map((verb: string) => (
-                          <span key={verb} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                          <span data-detail-chip="" key={verb} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                             {verb}
                           </span>
                         ))}

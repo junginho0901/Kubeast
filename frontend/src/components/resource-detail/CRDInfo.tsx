@@ -129,7 +129,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
             <InfoRow label={tr('crdInfo.shortNames', 'Short Names')} value={
               <div className="inline-flex flex-wrap gap-1">
                 {shortNames.map((n: string) => (
-                  <span key={n} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{n}</span>
+                  <span data-detail-chip="" key={n} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{n}</span>
                 ))}
               </div>
             } />
@@ -138,7 +138,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
             <InfoRow label={tr('crdInfo.categories', 'Categories')} value={
               <div className="inline-flex flex-wrap gap-1">
                 {categories.map((c: string) => (
-                  <span key={c} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{c}</span>
+                  <span data-detail-chip="" key={c} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{c}</span>
                 ))}
               </div>
             } />
@@ -147,7 +147,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
             <InfoRow label={tr('crdInfo.subresources', 'Subresources')} value={
               <div className="inline-flex flex-wrap gap-1">
                 {subresources.map((s) => (
-                  <span key={s} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{s}</span>
+                  <span data-detail-chip="" key={s} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{s}</span>
                 ))}
               </div>
             } />
@@ -180,7 +180,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
         <InfoSection title={tr('crdInfo.versions', 'Versions')}>
           <div className="space-y-2">
             {versions.map((ver: any) => (
-              <div key={ver.name} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
+              <div data-detail-card="" key={ver.name} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-ink">{ver.name}</span>
                   {ver.storage && (
@@ -230,7 +230,7 @@ export default function CRDInfo({ name, rawJson }: Props) {
         <InfoSection title={tr('crdInfo.storedVersions', 'Stored Versions')}>
           <div className="inline-flex flex-wrap gap-1">
             {storedVersions.map((v: string) => (
-              <span key={v} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{v}</span>
+              <span data-detail-chip="" key={v} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">{v}</span>
             ))}
           </div>
         </InfoSection>

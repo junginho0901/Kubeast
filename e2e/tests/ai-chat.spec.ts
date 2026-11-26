@@ -79,7 +79,7 @@ test.describe('AI Chat', () => {
       await expect(input).toBeEnabled({ timeout: 60_000 })
 
       // assistant 응답에 한글 포함 (LLM 이 한국어로 응답해야)
-      const assistantMessages = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+      const assistantMessages = page.getByTestId('assistant-avatar').locator('..')
       const lastAssistant = assistantMessages.last()
       const text = (await lastAssistant.innerText()).trim()
       expect(text.length).toBeGreaterThan(0)
@@ -107,7 +107,7 @@ test.describe('AI Chat', () => {
       await expect(input).toBeDisabled({ timeout: 15_000 })
       await expect(input).toBeEnabled({ timeout: 90_000 })
 
-      const lastAssistant = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+      const lastAssistant = page.getByTestId('assistant-avatar').locator('..').last()
       // a tool was called (its block is on screen) and the answer itself names real pods
       expect(await lastAssistant.locator('.md-details').count()).toBeGreaterThan(0)
       const answer = await answerText(lastAssistant)
@@ -144,7 +144,7 @@ test.describe('AI Chat', () => {
       // the stream really stopped: the answer does not grow any more (stopped before the first word, there is no
       // answer bubble at all — nothing was written or saved). The answer is measured without the action row under it,
       // which opens after the stop and adds "Stopped · usage not available"
-      const assistants = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+      const assistants = page.getByTestId('assistant-avatar').locator('..')
       const answerLength = () => assistants.last().evaluate((el) => {
         const copy = el.cloneNode(true) as HTMLElement
         copy.querySelectorAll('[data-testid="message-actions-row"]').forEach((row) => row.remove())
@@ -216,7 +216,7 @@ test.describe('AI Chat', () => {
       // session item selector — 사이드바 안의 클릭 가능한 세션 행
       const firstSession = page.locator('[class*="cursor-pointer"]').filter({ hasText: /hi|새 채팅|new chat/i }).first()
       await firstSession.click()
-      const messages = page.locator('div.flex.gap-3.p-6')
+      const messages = page.getByTestId('chat-message')
       await expect(messages.first()).toBeVisible({ timeout: 5_000 })
       const before = await messages.count()
 

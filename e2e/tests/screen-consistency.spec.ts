@@ -287,7 +287,7 @@ test.describe('every screen in every colour mode', () => {
         await setMode(page, mode)
         await page.goto('/ai-chat?cluster=self')
         await page.getByText(title, { exact: true }).first().click()
-        const bubble = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+        const bubble = page.getByTestId('assistant-avatar').locator('..').last()
         await expect(bubble.getByRole('button', { name: /k8s_get_resources/ })).toBeVisible()
         // open every tool box, the nested ones too: the first closed one each time (opening one changes the list)
         const closed = bubble.locator('.md-details:not([data-open]) > .md-summary')

@@ -263,7 +263,7 @@ test.describe('terminals and followed logs past an account\'s cap', () => {
       // The Cluster View Logs tab says why in place of the lines.
       await page.goto(`/cluster-view?cluster=${CLUSTER}`)
       await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill(POD)
-      await page.locator('div.card button', { hasText: POD }).first().click()
+      await page.getByTestId('cluster-view-node').locator('button').filter({ hasText: POD }).first().click()
       const area = page.locator('pre.whitespace-pre-wrap').first()
       await expect(area).toContainText(`» ${tr('serverShutdown.followLimit')}`, { timeout: 20_000 })
       expect(await area.innerText()).not.toContain('caps-line-')
@@ -277,7 +277,7 @@ test.describe('terminals and followed logs past an account\'s cap', () => {
       await expect.poll(async () => {
         await page.reload()
         await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill(POD)
-        await page.locator('div.card button', { hasText: POD }).first().click()
+        await page.getByTestId('cluster-view-node').locator('button').filter({ hasText: POD }).first().click()
         await page.waitForTimeout(1_000)
         return (await page.locator('pre.whitespace-pre-wrap').first().innerText()).includes('caps-line-5')
       }, { timeout: 45_000, intervals: [3_000] }).toBe(true)

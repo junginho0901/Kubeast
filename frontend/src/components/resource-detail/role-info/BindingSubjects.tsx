@@ -22,7 +22,7 @@ export function BindingSubjects({ subjects, namespace }: { subjects: any[]; name
     <InfoSection title="Subjects ({{n}})" titleValues={{ n: subjects.length }}>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {Object.entries(counts).map(([k, c]) => (
-          <span key={k} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-200">
+          <span data-detail-chip="" key={k} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-200">
             {k}: <span className="font-mono">{String(c)}</span>
           </span>
         ))}
@@ -32,7 +32,7 @@ export function BindingSubjects({ subjects, namespace }: { subjects: any[]; name
           {paged.map((subj: any, idx: number) => {
             const saNamespace = subj.namespace ?? namespace
             return (
-              <div key={(page - 1) * 10 + idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5" data-testid="binding-subject">
+              <div data-detail-card="" key={(page - 1) * 10 + idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5" data-testid="binding-subject">
                 <div className="text-xs text-slate-300 space-y-1">
                   <div>
                     <span className="text-[11px] text-slate-500 mr-2"><Tx>Kind:</Tx></span>

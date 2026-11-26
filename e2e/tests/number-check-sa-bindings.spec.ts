@@ -93,7 +93,7 @@ async function login(request: APIRequestContext): Promise<string> {
 function readSection(page: Page, clickNext = false) {
   return page.locator(DRAWER).last().evaluate((root, clickNext) => {
     const txt = (el: Element) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()
-    const sec = [...root.querySelectorAll('div.rounded-lg.border')].find((s) => {
+    const sec = [...root.querySelectorAll('[data-detail-section]')].find((s) => {
       const t = s.firstElementChild?.firstElementChild
       return !!t && t.tagName === 'P' && txt(t).startsWith('Effective Permissions')
     })
@@ -103,12 +103,12 @@ function readSection(page: Page, clickNext = false) {
     if (next && !next.disabled && clickNext) next.click()
     return {
       title: txt(sec.firstElementChild!.firstElementChild!),
-      cards: [...sec.querySelectorAll('div.rounded-sm.border.p-2')].map((c) => {
+      cards: [...sec.querySelectorAll('[data-detail-card]')].map((c) => {
         const matched = c.querySelector('[data-testid="sa-binding-matched-by"]')
         const rows = [...c.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map(txt))
         return { head: txt(c.firstElementChild!), matchedBy: matched ? txt(matched) : null, rows }
       }),
-      rulesLoading: [...sec.querySelectorAll('div.rounded-sm.border.p-2')].some((c) => txt(c).includes('Loading rules')),
+      rulesLoading: [...sec.querySelectorAll('[data-detail-card]')].some((c) => txt(c).includes('Loading rules')),
       pager: pager ? txt(pager) : null,
       more: !!next && !next.disabled,
     }

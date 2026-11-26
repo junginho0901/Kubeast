@@ -416,7 +416,7 @@ test.describe('rolling the install\'s services while it is in use', () => {
       await logs.goto(`/cluster-view?cluster=${CLUSTER}`)
       await expect(logs.getByRole('heading', { name: /클러스터 뷰|Cluster view/i })).toBeVisible({ timeout: 15_000 })
       await logs.getByPlaceholder(/Search pod name|Pod 이름/i).fill(POD)
-      await logs.locator('div.card button', { hasText: POD }).first().click()
+      await logs.getByTestId('cluster-view-node').locator('button').filter({ hasText: POD }).first().click()
       const area = logs.locator('pre.whitespace-pre-wrap').first()
       await expect(area).toContainText('rollout-line-1', { timeout: 20_000 })
 

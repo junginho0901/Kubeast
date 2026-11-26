@@ -73,7 +73,7 @@ async function readDrawer(page: Page): Promise<View> {
       head: [...tb.querySelectorAll('thead th')].map(txt),
       rows: [...tb.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map(txt)),
     })
-    const isRow = (g: Element) => g.children.length === 2 && g.children[0].tagName === 'SPAN' && g.children[1].tagName === 'SPAN' && has(g.children[0], 'text-slate-400')
+    const isRow = (g: Element) => g.children.length === 2 && g.children[0].tagName === 'SPAN' && g.children[1].tagName === 'SPAN' && g.hasAttribute('data-detail-row')
     // "Label: value": a grid of a label and a value that is not an info row (a container's rows), or a div whose
     // first element is the grey label ending in ":"
     const linesOf = (els: Element[]) => {
@@ -93,12 +93,12 @@ async function readDrawer(page: Page): Promise<View> {
       .filter((e) => !inside(e, 'table') && !inside(e, 'div.grid'))
       .map(txt)
     const view = { badges: {} as Record<string, string>, counts: {} as Record<string, number>, sections: {} as Record<string, unknown> }
-    for (const b of root.querySelectorAll('span.rounded-full')) {
+    for (const b of root.querySelectorAll('[data-summary-badge]')) {
       const bm = b.className.includes('py-0.5') ? /^([^:]+): (.*)$/.exec(txt(b)) : null
       if (bm) view.badges[bm[1]] = bm[2]
     }
     const skipped: Element[] = []
-    for (const sec of root.querySelectorAll('div.rounded-lg.border')) {
+    for (const sec of root.querySelectorAll('[data-detail-section]')) {
       const title = sec.firstElementChild?.firstElementChild
       if (!title || title.tagName !== 'P') continue
       const m = /^(.*) \((\d+)\)$/.exec(txt(title))
@@ -109,9 +109,9 @@ async function readDrawer(page: Page): Promise<View> {
       }
       if (m) view.counts[name] = Number(m[2])
       const all = [...sec.querySelectorAll('*')].filter((e) => e !== title)
-      const cards: Element[] = [...sec.querySelectorAll('div')].filter((d) => has(d, 'rounded-sm', 'border'))
+      const cards: Element[] = [...sec.querySelectorAll('div')].filter((d) => d.hasAttribute('data-detail-card'))
       const inCard = (el: Element) => cards.some((c) => c !== el && c.contains(el))
-      const tags = [...sec.querySelectorAll('span.rounded-full')].filter((s) => s.className.includes('py-1')).map((s) => {
+      const tags = [...sec.querySelectorAll('[data-detail-tag]')].filter((s) => s.className.includes('py-1')).map((s) => {
         const parts = [...s.children].filter((c) => c.tagName === 'SPAN')
         return parts.length >= 3 ? `${parts[0].textContent?.trim()}=${parts[2].textContent?.trim()}` : txt(s)
       }).sort()
@@ -125,13 +125,13 @@ async function readDrawer(page: Page): Promise<View> {
             lines: linesOf(els.filter((e) => e.tagName === 'DIV')),
             notes: notesOf(els),
             tables: [...c.querySelectorAll('table')].map(tableOf),
-            chips: [...c.querySelectorAll('span')].filter((s) => has(s, 'rounded-sm', 'border')).map(txt),
+            chips: [...c.querySelectorAll('span')].filter((s) => s.hasAttribute('data-detail-chip')).map(txt),
           }
         }),
         tables: [...sec.querySelectorAll('table')].filter((t) => !inCard(t)).map(tableOf),
-        chips: [...sec.querySelectorAll('span')].filter((s) => has(s, 'rounded-sm', 'border') && !inCard(s)).map(txt),
+        chips: [...sec.querySelectorAll('span')].filter((s) => s.hasAttribute('data-detail-chip') && !inCard(s)).map(txt),
         tags,
-        notes: notesOf(all.filter((e) => !inCard(e) && !cards.includes(e) && !e.closest('span.rounded-full'))),
+        notes: notesOf(all.filter((e) => !inCard(e) && !cards.includes(e) && !e.closest('[data-detail-tag]'))),
         lines: linesOf(all.filter((e) => e.tagName === 'DIV' && !inCard(e) && !cards.includes(e))),
         pagers: [...sec.querySelectorAll('span')].map(txt).filter((s) => /^\d+-\d+ \/ \d+$/.test(s)),
         json: [...sec.querySelectorAll('pre')].map((p) => {

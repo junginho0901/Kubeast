@@ -82,7 +82,7 @@ function drawer(describe: Record<string, unknown>) {
 const section = (html: string, title: string) => {
   const at = html.indexOf(`>${title}</p>`)
   if (at < 0) return `no ${title} section`
-  const next = html.indexOf('<div class="rounded-lg border', at)
+  const next = html.indexOf('<div data-detail-section=""', at)
   return html.slice(at + 1, next < 0 ? undefined : next).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 

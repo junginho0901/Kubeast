@@ -119,7 +119,7 @@ type Events = { rows: string[][]; pager: string | null; text: string } | null
 async function readEvents(page: Page): Promise<Events> {
   return page.locator(DRAWER).last().evaluate((root) => {
     const txt = (el: Element) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()
-    const sec = [...root.querySelectorAll('div.rounded-lg.border')].find((s) => {
+    const sec = [...root.querySelectorAll('[data-detail-section]')].find((s) => {
       const t = s.firstElementChild?.firstElementChild
       return !!t && t.tagName === 'P' && txt(t) === 'Events'
     })

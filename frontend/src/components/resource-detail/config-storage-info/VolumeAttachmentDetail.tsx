@@ -149,14 +149,14 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
         <InfoSection title="Attach/Detach Errors">
           <div className="space-y-2">
             {attachErrorMessage && (
-              <div className="rounded-sm border border-red-800/60 bg-red-950/20 p-3 text-xs">
+              <div data-detail-card="" className="rounded-sm border border-red-800/60 bg-red-950/20 p-3 text-xs">
                 <p className="text-red-300 font-medium"><Tx>Attach Error</Tx></p>
                 <p className="mt-1 text-slate-200 whitespace-pre-wrap wrap-break-word">{attachErrorMessage}</p>
                 {attachErrorTime && <p className="mt-1 text-slate-400">{fmtTs(attachErrorTime)} ({fmtRel(attachErrorTime)})</p>}
               </div>
             )}
             {detachErrorMessage && (
-              <div className="rounded-sm border border-red-800/60 bg-red-950/20 p-3 text-xs">
+              <div data-detail-card="" className="rounded-sm border border-red-800/60 bg-red-950/20 p-3 text-xs">
                 <p className="text-red-300 font-medium"><Tx>Detach Error</Tx></p>
                 <p className="mt-1 text-slate-200 whitespace-pre-wrap wrap-break-word">{detachErrorMessage}</p>
                 {detachErrorTime && <p className="mt-1 text-slate-400">{fmtTs(detachErrorTime)} ({fmtRel(detachErrorTime)})</p>}

@@ -95,7 +95,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
               const resourceNames = Array.isArray(rule.resourceNames) ? rule.resourceNames : []
 
               return (
-                <div key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+                <div data-detail-card="" key={idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
                   <div className="text-xs text-slate-300 space-y-1.5">
                     <div>
                       <span className="text-[11px] text-slate-500 mr-2"><Tx>API Groups:</Tx></span>
@@ -109,7 +109,7 @@ export default function RoleInfo({ name, namespace, rawJson }: Props) {
                       <span className="text-[11px] text-slate-500 mr-2"><Tx>Verbs:</Tx></span>
                       <div className="inline-flex flex-wrap gap-1 mt-0.5">
                         {verbs.map((verb: string) => (
-                          <span key={verb} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                          <span data-detail-chip="" key={verb} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                             {verb}
                           </span>
                         ))}

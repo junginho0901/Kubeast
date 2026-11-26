@@ -354,7 +354,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
       {/* Top Summary */}
       <InfoSection title="Top">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Status</Tx></div>
             <div className="mt-1 text-xs text-ink font-medium truncate" title={statusNotReady ? undefined : podStatus} data-testid="pod-drawer-status">
               {statusNotReady ? (
@@ -364,19 +364,19 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               ) : (podStatus || '-')}
             </div>
           </div>
-          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Ready</Tx></div>
             <div className="mt-1 text-xs text-ink font-medium">{`${readyContainers}/${Math.max(totalContainers, 0)}`}</div>
           </div>
-          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Waiting</Tx></div>
             <div className="mt-1 text-xs text-ink font-medium">{waitingCount}</div>
           </div>
-          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>CrashLoop</Tx></div>
             <div className={`mt-1 text-xs font-medium ${crashLoopCount > 0 ? 'text-red-300' : 'text-ink'}`}>{crashLoopCount}</div>
           </div>
-          <div className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
+          <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/70 px-3 py-2">
             <div className="text-[11px] text-slate-400"><Tx>Terminated</Tx></div>
             <div className="mt-1 text-xs text-ink font-medium">{terminatedCount}</div>
           </div>
@@ -567,12 +567,12 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           return terms.map((term: any, ti: number) => (
             <div key={ti} className="space-y-1">
               {Array.isArray(term.matchExpressions) && term.matchExpressions.map((expr: any, ei: number) => (
-                <span key={ei} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
+                <span data-detail-chip="" key={ei} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
                   {expr.key} {expr.operator} {Array.isArray(expr.values) ? expr.values.join(', ') : ''}
                 </span>
               ))}
               {Array.isArray(term.matchFields) && term.matchFields.map((field: any, fi: number) => (
-                <span key={`f-${fi}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
+                <span data-detail-chip="" key={`f-${fi}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono mr-1 mb-1">
                   {field.key} {field.operator} {Array.isArray(field.values) ? field.values.join(', ') : ''}
                 </span>
               ))}
@@ -586,7 +586,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             const selectors = t.labelSelector?.matchExpressions || []
             const labels = t.labelSelector?.matchLabels ? Object.entries(t.labelSelector.matchLabels) : []
             return (
-              <div key={`${prefix}-${ti}`} className="rounded-sm border border-slate-800 bg-slate-900/40 p-2 space-y-1 text-xs">
+              <div data-detail-card="" key={`${prefix}-${ti}`} className="rounded-sm border border-slate-800 bg-slate-900/40 p-2 space-y-1 text-xs">
                 {t.topologyKey && <div className="text-slate-400">topologyKey: <span className="text-slate-200 font-mono">{t.topologyKey}</span></div>}
                 {Array.isArray(t.namespaces) && t.namespaces.length > 0 && (
                   <div className="text-slate-400">namespaces: <span className="text-slate-200 font-mono">{t.namespaces.join(', ')}</span></div>
@@ -594,7 +594,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 {labels.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {labels.map(([k, v]) => (
-                      <span key={`${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span data-detail-chip="" key={`${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                         {k}={String(v)}
                       </span>
                     ))}
@@ -603,7 +603,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 {selectors.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {selectors.map((expr: any, ei: number) => (
-                      <span key={ei} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span data-detail-chip="" key={ei} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                         {expr.key} {expr.operator} {Array.isArray(expr.values) ? expr.values.join(', ') : ''}
                       </span>
                     ))}

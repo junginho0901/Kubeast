@@ -164,7 +164,7 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
               const filters = Array.isArray(rule?.filters) ? rule.filters : []
 
               return (
-                <div key={`rule-${idx}`} className="rounded-sm border border-slate-800 p-3">
+                <div data-detail-card="" key={`rule-${idx}`} className="rounded-sm border border-slate-800 p-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                     <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Matches:</Tx></span> {matches.length}</div>
                     <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Backend Refs:</Tx></span> {backendRefs.length}</div>
@@ -237,7 +237,7 @@ export default function GRPCRouteInfo({ name, namespace, rawJson }: Props) {
         ) : (
           <div className="space-y-3">
             {parentStatuses.map((parent, idx) => (
-              <div key={`parent-status-${idx}`} className="rounded-sm border border-slate-800 p-3">
+              <div data-detail-card="" key={`parent-status-${idx}`} className="rounded-sm border border-slate-800 p-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
                   <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Controller:</Tx></span> {text(parent?.controllerName)}</div>
                   <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Parent Ref:</Tx></span> {formatParentRef(parent?.parentRef || {})}</div>
