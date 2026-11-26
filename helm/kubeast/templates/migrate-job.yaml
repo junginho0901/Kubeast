@@ -36,9 +36,11 @@ spec:
             - name: MIGRATE_ONLY
               value: "true"
             # kubeast-config's values: a pre-install hook runs before the release creates that ConfigMap.
+            {{- /* OIDC_ENABLED false: with it on the binary asks for OIDC_CLIENT_SECRET first, which the migration does not use
+                   and the Job does not get (auth.oidc.existingSecret, an upgrade that turns OIDC on before its Secret is written) */}}
             {{- range $key, $value := (include (print $.Template.BasePath "/configmap.yaml") . | fromYaml).data }}
             - name: {{ $key }}
-              value: {{ $value | quote }}
+              value: {{ ternary "false" $value (eq $key "OIDC_ENABLED") | quote }}
             {{- end }}
           envFrom:
             - secretRef:
