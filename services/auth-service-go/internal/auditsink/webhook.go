@@ -105,7 +105,7 @@ func (w *webhookSink) Send(ctx context.Context, events []Event) error {
 		return w.post(ctx, w.url, body, headers)
 	case "pagerduty":
 		for _, e := range events {
-			if err := w.post(ctx, w.url, mustJSON(pagerDutyEvent(w.key, w.cfg.Severity, e)), nil); err != nil {
+			if err := w.post(ctx, w.url, pagerDutyBody(w.key, w.cfg.Severity, e), nil); err != nil {
 				return err
 			}
 		}
@@ -256,6 +256,36 @@ func pagerDutyEvent(routingKey, severity string, e Event) map[string]any {
 			"custom_details": e,
 		},
 	}
+}
+
+// pagerDutyMaxEventBytes is the largest event the Events API v2 takes.
+const pagerDutyMaxEventBytes = 512000
+
+// pagerDutyCutDetails is custom_details without the row's before and after.
+type pagerDutyCutDetails struct {
+	Event
+	Note string `json:"note"`
+}
+
+// pagerDutyBody is the event as JSON. Over pagerDutyMaxEventBytes, which
+// PagerDuty refuses with a 400 on every retry, custom_details drops the row's
+// before and after, and then every field but a note, as Alertmanager and
+// Grafana drop custom details past that size.
+func pagerDutyBody(routingKey, severity string, e Event) []byte {
+	ev := pagerDutyEvent(routingKey, severity, e)
+	body := mustJSON(ev)
+	if len(body) <= pagerDutyMaxEventBytes {
+		return body
+	}
+	payload := ev["payload"].(map[string]any)
+	cut := e
+	cut.Before, cut.After = nil, nil
+	payload["custom_details"] = pagerDutyCutDetails{Event: cut, Note: "before and after removed: the event was over the 512000 bytes PagerDuty takes"}
+	if body = mustJSON(ev); len(body) <= pagerDutyMaxEventBytes {
+		return body
+	}
+	payload["custom_details"] = map[string]string{"note": "custom details removed: the event was over the 512000 bytes PagerDuty takes"}
+	return mustJSON(ev)
 }
 
 func mustJSON(v any) []byte {

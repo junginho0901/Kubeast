@@ -187,3 +187,103 @@ func TestTeamsOneLineOverTheLimitIsCut(t *testing.T) {
 		t.Fatalf("line %.80q… (%d characters)", lines[0], len([]rune(lines[0])))
 	}
 }
+
+func bigJSON(n int) json.RawMessage {
+	return json.RawMessage(`{"data":"` + strings.Repeat("x", n) + `"}`)
+}
+
+type pagerDutyBodyFields struct {
+	DedupKey string `json:"dedup_key"`
+	Payload  struct {
+		Summary       string         `json:"summary"`
+		Severity      string         `json:"severity"`
+		CustomDetails map[string]any `json:"custom_details"`
+	} `json:"payload"`
+}
+
+// An event under 512 000 bytes is the bytes pagerDutyEvent makes, as before.
+func TestPagerDutyEventUnderTheLimitIsUnchanged(t *testing.T) {
+	events := append(sampleEvents(), longTargetEvents(1, 2600)...)
+	events[2].ID, events[2].Before, events[2].After = 43, bigJSON(250000), bigJSON(250000)
+	recv := &limitedReceiver{max: pagerDutyMaxEventBytes, status: http.StatusAccepted}
+	srv := httptest.NewServer(recv)
+	defer srv.Close()
+	if err := webhook(t, "pagerduty", srv.URL, map[string]string{"routingKey": "R1"}, nil).Send(context.Background(), events); err != nil {
+		t.Fatal(err)
+	}
+	got := recv.taken()
+	if len(got) != len(events) {
+		t.Fatalf("%d events sent, want %d", len(got), len(events))
+	}
+	for i, e := range events {
+		want := mustJSON(pagerDutyEvent("R1", "", e))
+		if len(want) > pagerDutyMaxEventBytes {
+			t.Fatalf("case is over the limit: event %d is %d bytes", e.ID, len(want))
+		}
+		if !bytes.Equal(got[i], want) {
+			t.Errorf("event %d differs", e.ID)
+		}
+	}
+}
+
+// An event over 512 000 bytes goes out with the row's before and after left
+// out of custom_details, and the rows after it go too.
+func TestPagerDutyEventOverTheLimitDropsBeforeAndAfter(t *testing.T) {
+	events := sampleEvents()
+	big := events[0]
+	big.ID, big.Before, big.After = 43, bigJSON(300000), bigJSON(300000)
+	events = []Event{events[0], big, events[1]}
+	events[2].ID = 44
+	recv := &limitedReceiver{max: pagerDutyMaxEventBytes, status: http.StatusAccepted}
+	srv := httptest.NewServer(recv)
+	defer srv.Close()
+	sc := SinkConfig{Name: "pd", Type: "webhook", Webhook: WebhookConfig{Format: "pagerduty", URL: srv.URL}, secrets: map[string]string{"routingKey": "R1"}}
+	sink, err := sc.build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &memStore{rows: events, cursors: map[string]int64{}, fails: map[string]int{}}
+	s := run(sc, sink)
+	next, _, err := (&Dispatcher{store: store}).step(context.Background(), s, 0)
+	if err != nil || next != 44 || store.cursors["pd"] != 44 || s.sent.Load() != 3 || s.failures.Load() != 0 {
+		t.Fatalf("next %d cursor %d sent %d failures %d err %v (sizes %v)", next, store.cursors["pd"], s.sent.Load(), s.failures.Load(), err, recv.sizes)
+	}
+	got := recv.taken()
+	if len(got) != 3 || len(got[1]) > pagerDutyMaxEventBytes {
+		t.Fatalf("sizes %v", recv.sizes)
+	}
+	var pd pagerDutyBodyFields
+	if err := json.Unmarshal(got[1], &pd); err != nil {
+		t.Fatal(err)
+	}
+	d := pd.Payload.CustomDetails
+	if pd.DedupKey != "kubeast-audit-43" || pd.Payload.Summary != truncate(big.Line(), 1000) || pd.Payload.Severity != "warning" {
+		t.Errorf("event fields changed: %s", got[1][:300])
+	}
+	if _, ok := d["before"]; ok {
+		t.Errorf("before is still there")
+	}
+	if _, ok := d["after"]; ok {
+		t.Errorf("after is still there")
+	}
+	if d["id"] != float64(43) || d["action"] != big.Action || d["target_id"] != big.TargetID || d["cluster"] != big.Cluster ||
+		!strings.Contains(fmt.Sprint(d["note"]), "before and after removed") {
+		t.Errorf("custom_details %v", d)
+	}
+}
+
+func TestPagerDutyEventStillOverTheLimitKeepsANoteOnly(t *testing.T) {
+	e := sampleEvents()[0]
+	e.UserAgent = strings.Repeat("u", 600000)
+	body := pagerDutyBody("R1", "", e)
+	if len(body) > pagerDutyMaxEventBytes {
+		t.Fatalf("%d bytes", len(body))
+	}
+	var pd pagerDutyBodyFields
+	if err := json.Unmarshal(body, &pd); err != nil {
+		t.Fatal(err)
+	}
+	if len(pd.Payload.CustomDetails) != 1 || !strings.Contains(fmt.Sprint(pd.Payload.CustomDetails["note"]), "custom details removed") || pd.DedupKey != "kubeast-audit-41" {
+		t.Fatalf("custom_details %v", pd.Payload.CustomDetails)
+	}
+}
