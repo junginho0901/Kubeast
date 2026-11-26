@@ -74,6 +74,9 @@ func newS3Sink(s SinkConfig) (Sink, error) {
 			o.BaseEndpoint = aws.String(c.Endpoint)
 		}
 		o.UsePathStyle = c.ForcePathStyle
+		if isGCSEndpoint(c.Endpoint) {
+			o.APIOptions = append(o.APIOptions, gcsRequestSteps)
+		}
 	})
 	return &s3Sink{cfg: c, client: client}, nil
 }
