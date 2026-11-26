@@ -48,7 +48,7 @@ export function ChatMain({
   )
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col">
+    <div className="min-w-0 min-h-0 flex-1 flex flex-col">
       <ChatHeader />
 
       {messages.length === 0 && (!selectedSessionId || isTempSessionId(selectedSessionId)) ? (

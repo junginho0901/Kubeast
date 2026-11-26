@@ -214,7 +214,7 @@ export function SessionSidebar({
                     onClick={() => handleSelectSession(session.id)}
                     onContextMenu={(e) => handleContextMenu(session, e)}
                     className={`group relative rounded-lg cursor-pointer transition-colors overflow-hidden ${
-                      isSelected ? 'bg-primary-600 text-white' : 'hover:bg-slate-700/50 text-slate-300'
+                      isSelected ? 'bg-slate-700 text-ink border-l-2 border-primary-400' : 'hover:bg-slate-700/50 text-slate-300'
                     }`}
                   >
                     {/* 다중 선택 모드일 때 체크박스 표시 */}
@@ -245,7 +245,7 @@ export function SessionSidebar({
                           value={editingTitle}
                           maxLength={NAME_MAX}
                           onChange={(e) => setEditingTitle(e.target.value)}
-                          className="flex-1 px-2 py-1 text-sm bg-slate-600 border border-slate-500 rounded-sm text-ink min-w-0"
+                          className="flex-1 px-2 py-1 text-sm bg-slate-900 border border-control rounded-lg text-ink min-w-0 focus:outline-none focus:border-primary-500"
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSaveEdit(session.id)
@@ -254,14 +254,14 @@ export function SessionSidebar({
                         />
                         <button
                           onClick={() => handleSaveEdit(session.id)}
-                          className="shrink-0 p-1 hover:bg-slate-600 rounded-sm"
+                          className="shrink-0 p-1 hover:bg-slate-600 rounded-lg"
                           aria-label={t('common.save')}
                         >
                           <Check className="w-4 h-4 text-green-400" />
                         </button>
                         <button
                           onClick={handleCancelEdit}
-                          className="shrink-0 p-1 hover:bg-slate-600 rounded-sm"
+                          className="shrink-0 p-1 hover:bg-slate-600 rounded-lg"
                           aria-label={t('common.cancel')}
                         >
                           <X className="w-4 h-4 text-red-400" />
@@ -274,7 +274,7 @@ export function SessionSidebar({
                           <div className="text-sm font-medium truncate" title={session.title}>
                             {session.title}
                           </div>
-                          <div className={`text-xs mt-1 ${isSelected ? 'text-white' : 'text-slate-400'}`}>
+                          <div className="text-xs mt-1 text-slate-400">
                             {t('aiChat.messageCount', { count: session.message_count })}
                           </div>
                         </div>

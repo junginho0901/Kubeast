@@ -11,6 +11,8 @@ interface ToggleButtonProps {
   docked: boolean
   /** the chat gives the focus back here when it closes */
   buttonRef?: Ref<HTMLButtonElement>
+  /** Temporary reading state; keyboard access and the panel's focus return remain available. */
+  scrollHidden?: boolean
 }
 
 /**
@@ -19,7 +21,7 @@ interface ToggleButtonProps {
  * `visible=false` 시 페이드아웃 + 살짝 축소 → 부모가 unmount 처리.
  * 클릭 가능 영역도 같이 비활성화하여 hidden 중 클릭 사고를 방지.
  */
-export function ToggleButton({ onClick, visible, docked, buttonRef }: ToggleButtonProps) {
+export function ToggleButton({ onClick, visible, docked, buttonRef, scrollHidden = false }: ToggleButtonProps) {
   const { t } = useTranslation()
   const shortcut = chatShortcutNames(isMacPlatform())
   return (
@@ -34,7 +36,9 @@ export function ToggleButton({ onClick, visible, docked, buttonRef }: ToggleButt
         docked ? 'min-[1348px]:right-[756px]' : ''
       } ${
         visible
-          ? 'opacity-100 scale-100 hover:scale-105 pointer-events-auto'
+          ? scrollHidden
+            ? 'opacity-0 scale-100 pointer-events-none focus:opacity-100 focus:pointer-events-auto'
+            : 'opacity-100 scale-100 hover:scale-105 motion-reduce:hover:scale-100 pointer-events-auto'
           : 'opacity-0 scale-90 pointer-events-none'
       }`}
       aria-label={t('floatingChat.openAriaLabel', { defaultValue: 'Open AI Chat' })}

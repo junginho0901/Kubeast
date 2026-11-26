@@ -1737,6 +1737,8 @@
     }
   },
   "aiChat": {
+    "showConversations": "대화 목록 열기",
+    "hideConversations": "대화 목록 접기",
     "answerImage": "그림",
     "earlier": {
       "hidden": "표시되지 않은 이전 메시지: {{count}}개",

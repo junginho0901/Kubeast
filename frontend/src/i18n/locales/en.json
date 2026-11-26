@@ -1736,6 +1736,8 @@
     "createTitle": "Create Node from YAML"
   },
   "aiChat": {
+    "showConversations": "Show conversations",
+    "hideConversations": "Hide conversations",
     "answerImage": "image",
     "earlier": {
       "hidden": "Earlier messages not shown: {{count}}",

@@ -8,6 +8,7 @@ import { ToggleButton } from './ToggleButton'
 import { focusOrigin, returnFocus } from './focusReturn'
 import { FLOATING_SESSION_KEY } from '@/services/floatingChatSession'
 import { useChatShortcut } from '@/hooks/useChatShortcut'
+import { useChatScrollVisibility } from '@/hooks/useChatScrollVisibility'
 
 const ANIM_MS = 200
 
@@ -55,6 +56,7 @@ export default function FloatingAIChat() {
   }, [])
 
   const toggleRef = useRef<HTMLButtonElement>(null)
+  const scrollHidden = useChatScrollVisibility(toggleRef, isOpen || !toggleVisible || pageType === 'ai-chat')
   const panelRef = useRef<HTMLDivElement>(null)
   const openedFrom = useRef<HTMLElement | null>(null)
   const focusToggle = useRef(false)
@@ -105,7 +107,7 @@ export default function FloatingAIChat() {
 
   return (
     <>
-      <ToggleButton onClick={open} visible={toggleVisible} docked={docked} buttonRef={toggleRef} />
+      <ToggleButton onClick={open} visible={toggleVisible} docked={docked} buttonRef={toggleRef} scrollHidden={scrollHidden} />
       {panelMounted && (
         <Suspense fallback={null}>
           <ChatPanel

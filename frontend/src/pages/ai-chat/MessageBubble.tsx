@@ -36,19 +36,19 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copyRes
   // the ZIP being made, then what came of it until the next press: why none was made, or that some results are cut
   const [zip, setZip] = useState<{ busy: boolean; outcome: ExportOutcome | null }>({ busy: false, outcome: null })
   return (
-    <div data-message-role={message.role} data-testid="chat-message" className={`flex gap-3 p-6 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+    <div data-testid="chat-message" data-message-role={message.role} className={`flex gap-3 p-4 sm:p-5 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
       {message.role === 'user' ? (
-        <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-primary-500">
-          <User className="w-5 h-5 text-ink" />
+        <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-slate-700">
+          <User className="w-5 h-5 text-slate-300" />
         </div>
       ) : (
         <img src="/icon.svg" alt="" className="shrink-0 w-8 h-8" data-testid="assistant-avatar" />
       )}
       <div
-        className={`flex-1 p-4 rounded-lg prose prose-invert max-w-3xl overflow-x-auto ${
+        className={`min-w-0 flex-1 p-4 rounded-lg prose prose-invert prose-sm max-w-3xl overflow-x-auto ${
           message.role === 'user'
-            ? 'bg-primary-600 text-white'
-            : 'bg-slate-700 text-slate-100'
+            ? 'bg-slate-700 text-ink'
+            : 'bg-slate-800 text-slate-100'
         }`}
       >
         {(() => {
@@ -152,7 +152,7 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copyRes
                       e.stopPropagation()
                       onCopy(message, messageKey)
                     }}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100"
+                    className="btn-row flex items-center gap-1 px-2.5 py-1 text-xs"
                     title={isCopied ? t('aiChat.copied') : notCopied ? t('common.copyFailed') : t('aiChat.copyMessage')}
                     data-testid="chat-copy"
                   >
@@ -171,7 +171,7 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copyRes
                     }}
                     disabled={zip.busy}
                     aria-busy={zip.busy}
-                    className="px-2.5 py-1 text-xs rounded-sm bg-slate-600 hover:bg-slate-500 text-slate-100 disabled:opacity-60 disabled:cursor-wait"
+                    className="btn-row px-2.5 py-1 text-xs disabled:opacity-60 disabled:cursor-wait"
                     data-testid="result-zip-download"
                   >
                     {t('aiChat.resultZipDownload')}

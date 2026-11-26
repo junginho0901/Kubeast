@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { SessionSidebar } from './SessionSidebar'
+import { ChatColumns } from './ChatColumns'
 import { ChatMain } from './ChatMain'
 import { useChatSessions } from './useChatSessions'
 import { useChatStreamSync } from './useChatStreamSync'
@@ -163,7 +164,7 @@ export function AIChatBody() {
   })
 
   return (
-    <div className="flex h-screen">
+    <ChatColumns sidebar={
       <SessionSidebar
         sessionsList={sessionsList}
         sessionsLoading={sessionsLoading}
@@ -197,7 +198,7 @@ export function AIChatBody() {
         listFailure={sessionListFailure(deleteSessionMutation.error, deleteSessionMutation.submittedAt, renameError, renameSentAt)}
         t={t}
       />
-
+      }>
       <ChatMain
         sessionDetail={sessionDetail}
         isStreaming={isStreaming}
@@ -209,6 +210,6 @@ export function AIChatBody() {
         stopSaveFailure={stopSaveFailure}
         t={t}
       />
-    </div>
+    </ChatColumns>
   )
 }
