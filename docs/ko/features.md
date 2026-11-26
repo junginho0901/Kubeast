@@ -61,7 +61,7 @@
     - `alerts_list` — 알림 저장소에 있는 이 클러스터의 알림(울림·무음·억제 상태)과 그 알림을 덮은 무음. `silences=true`면 Silences 탭의 무음 전체, 지금 걸린 알림이 없는 무음까지
     - `alert_investigate` — Alerts 받은편지함의 알림 하나를 "지금 조사" 버튼처럼 정식 조사로 시작([AI 알림](ai-alerts.md) 참고)
     - `clusters_list` — 그 사람이 볼 수 있는 클러스터와 연결 상태. 클러스터 선택기 목록과 같고 값은 마지막 확인 결과와 그 시각입니다. k8s-service가 기본 60초마다(`multicluster.healthcheckIntervalSec`) 확인하고, Admin → Clusters의 Test도 이 값을 씁니다. `admin.clusters.list`가 있으면 Admin → Clusters 목록도 받습니다. kubeconfig·자격 증명은 나가지 않습니다
-    - `alerts_inbox` — Alerts 받은편지함. 알림을 누가 확인했고 누가 맡았고 끝났는지, `alert_id`로 읽으면 메모까지, `with_report`를 주면 Report 버튼이 여는 보고서까지 보여 줍니다(`ai.investigation.view`로 남습니다). 읽기만 하며 표시 변경은 화면에서 합니다
+    - `alerts_inbox` — Alerts 받은편지함. 알림을 누가 확인했고 누가 맡았고 끝났는지, `alert_id`로 읽으면 메모까지, `with_report`를 주면 Report 버튼이 여는 보고서까지 보여 줍니다(`ai.investigation.view`로 남습니다. 알림 조사에는 `with_report`가 거절됩니다). 읽기만 하며 표시 변경은 화면에서 합니다
     - `pod_rbac` — 파드의 서비스 계정, 그 계정에 걸리는 바인딩, 각 역할이 허용하는 일. 파드 RBAC API와 파드 창 RBAC 탭의 답과 같습니다. 클러스터가 호출자에게 거절한 것은 비우지 않고 이름을 말합니다
     - `logfiles` — 컨테이너 안 로그 파일. 로그 파일 탭처럼 목록을 보거나 읽습니다(고정 `tail`, 마지막 N줄, 따라가기 없음. [컨테이너 안 로그 파일](operations.md#컨테이너-안-로그-파일-log-files) 참고)
     - `storage_summary` — Storage 창의 PVC(사용량 포함)·PV 상태별 개수와 PVC→PV 연결

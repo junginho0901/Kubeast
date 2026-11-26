@@ -333,9 +333,8 @@ features:
     verdict: true            # (alpha) true, with evidenceCheck or ledger: the block also says a cause was found, no fault was found or it
                              # cannot tell, held to the calls; the server lists what was checked and normal and what was not looked at
     pastReports:             # the same alert's earlier investigations, the last 30 days' (ai-alerts.md); no new table or column
-      window: false          # (alpha) true: the alert's window in Alerts lists at most five, with their outcome, causes and report
-      model: false           # (alpha) true: an investigation's first message holds at most five lines of them between markers; the causes
-                             # evidenceCheck verified and a read of objects or events named only (kept from then on)
+      window: false          # (alpha) true: the alert's window in Alerts lists at most five, with their outcome, causes and report;
+                             # nothing of them reaches a model
     window:                  # counted from the alert's start; ends are never past now
       metricsMinutes: 15     # metrics this long either side of the start (1–360)
       logsMinutes: 5         # logs from this long before the start (0–1440)
@@ -430,7 +429,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | The alert investigations of the AI evaluation (`scripts/ai-eval.py --alerts`) with each switch off and on, and a run on the kind dev install with them on |
 | `features.alertInvestigation.ledger`, `evidenceCheck` (on, either adds one model call to `maxSteps` when it asks again) | true, true | alpha | The alert investigations of the AI evaluation with each off and on, and a run on the kind dev install with them on |
 | `features.alertInvestigation.verdict` (with `evidenceCheck` or `ledger`; nothing with both off) | true | alpha | The alert investigations of the AI evaluation with it off and on beside `evidenceCheck`, and a run on the kind dev install with it on |
-| `features.alertInvestigation.pastReports.window`, `pastReports.model` (no line for a run made with `evidenceCheck` or the switch itself off) | false, false | alpha | Both on the kind dev install, and the alert investigations of the AI evaluation on alerts that fire again with the same cause and with another one |
+| `features.alertInvestigation.pastReports.window` | false | alpha | On the kind dev install with the e2e `alert-past-investigations.spec.ts` |
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | The AI evaluation with it alone off and on. Tested: the e2e `ai-anomaly-rank.spec.ts` in a whole e2e run on a kind install with the AI switches on (2026-11-25), its four tests passing |
 | `features.nodeNeighbors.enabled` | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on, and a run on the kind dev install with it on |
 | `features.nodeNeighbors.busiestCPU` (nothing without `enabled`) | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on beside `enabled`, and a run on the kind dev install with both on |

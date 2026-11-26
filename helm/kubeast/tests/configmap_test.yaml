@@ -1013,14 +1013,14 @@ tests:
           path: data.ALERT_INVESTIGATION_VERDICT
           value: "true"
 
-  - it: writes neither switch of an alert's earlier investigations by default
+  - it: writes no switch of an alert's earlier investigations by default
     asserts:
       - notExists:
           path: data.ALERT_INVESTIGATION_PAST_WINDOW
       - notExists:
           path: data.ALERT_INVESTIGATION_PAST_MODEL
 
-  - it: writes the switch of the alert window's list of earlier investigations when it is on, and not the other
+  - it: writes the switch of the alert window's list of earlier investigations when it is on, and none for a model
     set:
       features.alertInvestigation.pastReports.window: true
     asserts:
@@ -1030,17 +1030,16 @@ tests:
       - notExists:
           path: data.ALERT_INVESTIGATION_PAST_MODEL
 
-  - it: writes the switch of an investigation's lines of earlier ones when it is on, and not the other
+  - it: a pastReports.model value, which this chart does not read, writes nothing that gives a model the earlier investigations
     set:
       features.alertInvestigation.pastReports.model: true
     asserts:
       - notExists:
           path: data.ALERT_INVESTIGATION_PAST_WINDOW
-      - equal:
+      - notExists:
           path: data.ALERT_INVESTIGATION_PAST_MODEL
-          value: "true"
 
-  - it: values without the earlier investigations' switches, as an earlier chart's --reuse-values keeps them, write neither
+  - it: values without the earlier investigations' switch, as an earlier chart's --reuse-values keeps them, write none
     set:
       features.alertInvestigation.pastReports: null
     asserts:
