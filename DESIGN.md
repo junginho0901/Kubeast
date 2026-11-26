@@ -184,3 +184,7 @@ Cards 12px (`.card` is `rounded-xl`). Buttons, inputs, list rows, dropdowns and 
 - Don't use all-caps or tracked labels.
 - Don't use sparkle icons or colour to say "AI"; the floating chat button and the AI pages are enough.
 - Don't change the sign-in page's ground or the site's look along with the console or its colour mode.
+
+## Design workflow source
+
+The redesign workflow is adapted from [unslop](https://github.com/heydamir/unslop) by Damir Sokolovsky, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The palette, action priorities and layout rules above are adapted for Kubeast.
