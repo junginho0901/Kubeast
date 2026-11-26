@@ -87,7 +87,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
     [undefined, t('resourceGraph.group.all', 'All'), stats?.total, 'text-ink'],
     ['ok', t('resourceGraph.group.ok', 'Healthy'), stats?.health?.ok, 'text-emerald-300'],
     ['warn', t('resourceGraph.group.warn', 'Warning'), stats?.health?.warn, 'text-amber-300'],
-    ['error', t('resourceGraph.group.error', 'Error'), stats?.health?.error, 'text-rose-300'],
+    ['error', t('resourceGraph.group.error', 'Error'), stats?.health?.error, 'text-summary-text-error'],
   ]
 
   return (
