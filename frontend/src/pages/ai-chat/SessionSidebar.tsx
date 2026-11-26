@@ -255,6 +255,7 @@ export function SessionSidebar({
                         <button
                           onClick={() => handleSaveEdit(session.id)}
                           className="shrink-0 p-1 hover:bg-slate-600 rounded-sm"
+                          aria-label={t('common.save')}
                         >
                           <Check className="w-4 h-4 text-green-400" />
                         </button>
