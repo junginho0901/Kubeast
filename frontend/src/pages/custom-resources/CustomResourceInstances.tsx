@@ -244,9 +244,9 @@ export default function CustomResourceInstances() {
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('crInstancesPage.title', 'Custom Resource Instances')}</h1>
-          <p className="mt-2 text-slate-400">{tr('crInstancesPage.subtitle', 'Browse all custom resource instances across CRDs.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('crInstancesPage.subtitle', 'Browse all custom resource instances across CRDs.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={handleRefresh} disabled={isRefreshing} title={tr('crInstancesPage.refreshTitle', 'Force refresh')} className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             {tr('crInstancesPage.refresh', 'Refresh')}
@@ -256,14 +256,14 @@ export default function CustomResourceInstances() {
 
       <RefreshFailure failure={refreshFailure} />
 
-      <div className="flex gap-3 shrink-0">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3 shrink-0">
+        <div className="relative flex-1 min-w-[min(100%,18rem)]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input type="text" placeholder={tr('crInstancesPage.searchPlaceholder', 'Search by name, namespace, kind, or group...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
         </div>
         <CustomDropdown
           size="lg"
-          className="min-w-[180px]"
+          className="min-w-[180px] flex-1 xl:flex-none"
           testId="cr-instances-kind"
           value={kindFilter}
           onChange={(v) => { setKindFilter(v); setSortKey(null) }}
@@ -277,7 +277,7 @@ export default function CustomResourceInstances() {
       <div className="grid grid-cols-3 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
-            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
+            <p className={`text-xs leading-4 break-words ${labelClass}`}>{label}</p>
             <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}
@@ -290,7 +290,7 @@ export default function CustomResourceInstances() {
               {line.testId === 'cr-instances-forbidden'
                 ? <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
                 : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />}
-              <span>{line.text}</span>
+              <span className="min-w-0 break-words">{line.text}</span>
             </p>
           ))}
         </div>

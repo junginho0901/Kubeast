@@ -209,7 +209,7 @@ description: "Sample priority class"
             {tr('priorityClasses.subtitle', 'Manage pod scheduling priority across the cluster.')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -243,23 +243,23 @@ description: "Sample priority class"
             placeholder={tr('priorityClasses.searchPlaceholder', 'Search priority classes by name, description or preemption policy...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="h-10 w-full pl-10 pr-4 bg-slate-700 border border-control rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('priorityClasses.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-0 gap-y-1 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('priorityClasses.stats.total', 'Total')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.total}</p>
         </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('priorityClasses.stats.globalDefault', 'Global Default')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.globalDefault}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('priorityClasses.stats.globalDefault', 'Global Default')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.globalDefault}</p>
         </div>
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('priorityClasses.stats.preempting', 'Preempting')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.preempting}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('priorityClasses.stats.preempting', 'Preempting')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.preempting}</p>
         </div>
       </div>
 
