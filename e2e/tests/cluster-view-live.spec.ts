@@ -212,7 +212,7 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     await expect(big.getByTestId('cluster-view-pod')).toHaveCount(PREVIEW_CARDS)
     await expect(big.getByTestId('cluster-view-node-shown')).toHaveText(/Showing 12 of 250 Pods|Pod 250개 중 12개를 보여 줍니다\./)
     // the ten Failed pods first, then the rest by name
-    const preview = await big.locator('[data-testid="cluster-view-pod"] div.truncate').allInnerTexts()
+    const preview = await big.locator('[data-testid="cluster-view-pod"] [data-testid="cluster-view-pod-name"]').allInnerTexts()
     expect(preview).toEqual([...Array.from({ length: 10 }, (_, i) => `e2e-big-p${String(5 + 25 * i).padStart(3, '0')}`), 'e2e-big-p000', 'e2e-big-p001'])
 
     await big.getByTestId('cluster-view-node-more').click()
@@ -222,7 +222,7 @@ test.describe('Cluster View — node map, boxes on screen, live', () => {
     for (let p = 1; p <= 5; p++) {
       const first = p * 60 - 59
       await expect(pager).toContainText(new RegExp(`Showing ${first}-${Math.min(p * 60, 250)} of 250|250개 중 ${first}-${Math.min(p * 60, 250)} 표시`))
-      seen.push(...await big.locator('[data-testid="cluster-view-pod"] div.truncate').allInnerTexts())
+      seen.push(...await big.locator('[data-testid="cluster-view-pod"] [data-testid="cluster-view-pod-name"]').allInnerTexts())
       if (p < 5) await pager.getByRole('button', { name: /Next|다음/ }).click()
     }
     expect(seen, 'every pod once, by name, over the five pages').toEqual(Array.from({ length: 250 }, (_, i) => `e2e-big-p${String(i).padStart(3, '0')}`))

@@ -112,7 +112,7 @@ export function PrometheusSection({
   }
   if (!available) return null
   return (
-    <div className="mt-4 border-t border-hairline pt-4">
+    <div className="mt-4 border-t border-hairline pt-4" data-testid="prometheus-section">
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none" />
         <h3 className="text-lg font-semibold text-ink"><Tx>{title}</Tx></h3>

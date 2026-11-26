@@ -416,7 +416,7 @@ test.describe.serial('Drawn text runs no script: a pod\'s logs and events', () =
     await page.goto(`/cluster-view?cluster=${CLUSTER}`)
     await expect(page.getByRole('heading', { name: /클러스터 뷰|Cluster view/i })).toBeVisible({ timeout: 15_000 })
     await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill(pod)
-    await page.locator('div.card button', { hasText: pod }).first().click()
+    await page.getByTestId('cluster-view-pod').filter({ hasText: pod }).first().click()
 
     if (files) await expect(page.getByTestId('log-source-stdout')).toHaveAttribute('aria-pressed', 'true')
     const stdout = page.locator('pre.whitespace-pre-wrap').first()

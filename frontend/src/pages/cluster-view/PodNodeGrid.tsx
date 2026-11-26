@@ -390,7 +390,7 @@ export function NodeBox({ entry, canDeletePod, mode, onNavigate }: { entry: Node
             getHealthIcon(health.level, health.reason)
           )}
         </div>
-        <div className="min-w-0 h-10 text-sm font-medium text-ink break-all line-clamp-2" title={pod.name}>
+        <div className="min-w-0 h-10 text-sm font-medium text-ink break-all line-clamp-2" title={pod.name} data-testid="cluster-view-pod-name">
           {pod.name}
         </div>
         <div title={pod.namespace} className="text-xs text-slate-400 mt-1 break-all">{pod.namespace}</div>

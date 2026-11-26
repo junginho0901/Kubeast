@@ -63,10 +63,15 @@ test.describe("the alert window's past investigations", () => {
     const rows = page.getByTestId('alert-past-list').locator('> li')
     await expect(rows).toHaveCount(2)
     expect(await rows.evaluateAll((lis) => lis.map((li) => li.getAttribute('data-testid')))).toEqual(PAST.map((p) => `alert-past-${p.id}`))
-    expect(norm(await rows.nth(0).innerText())).toContain(
-      `${EN.investigations.result.outcome.cause_found} CronJob/default/job-${run} dependency_slow ${EN.alertInbox.past.checked}`)
-    expect(norm(await rows.nth(1).innerText())).toContain(
-      `${EN.investigations.result.outcome.cannot_tell} Pod/default/<EMAIL_1> crash ${EN.investigations.result.notVerifiedBare}`)
+    // part by part: margins, not spaces, keep them apart
+    const parts = async (i: number) => [
+      norm(await rows.nth(i).locator('[data-outcome]').textContent()),
+      ...(await rows.nth(i).getByTestId('alert-past-cause').locator('> span').allTextContents()).map(norm),
+    ]
+    expect(await parts(0)).toEqual(
+      [EN.investigations.result.outcome.cause_found, `CronJob/default/job-${run}`, 'dependency_slow', EN.alertInbox.past.checked])
+    expect(await parts(1)).toEqual(
+      [EN.investigations.result.outcome.cannot_tell, 'Pod/default/<EMAIL_1>', 'crash', EN.investigations.result.notVerifiedBare])
     expect(asked.some((u) => u.pathname.endsWith('/investigation')), 'no report is read before one is opened').toBe(false)
     await rows.nth(1).getByTestId('alert-past-report').click()
     await expect(page.getByTestId('investigation-modal')).toContainText(`Report of ${PAST[1].id}`)
