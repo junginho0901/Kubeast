@@ -39,6 +39,8 @@ postgresql:
     key: ca.crt
 ```
 
+Kubeast는 `DATABASE_URL`에 든 사용자와 비밀번호로 접속합니다. RDS IAM 데이터베이스 인증(비밀번호 대신 짧게 쓰는 토큰)은 쓰지 않으므로, 데이터베이스 사용자에게 비밀번호를 주세요.
+
 PgBouncer를 거친다면 session 풀링을 쓰거나 직접 연결하세요. k8s-service와 auth-service는 연결 하나에 잡은 세션 advisory lock으로 일을 맡을 서버 한 대를 고르는데, transaction 풀링에서는 그 잠금이 한 서버 세션에 남지 않습니다.
 
 ## 클러스터 안 데이터베이스 백업 (Backing up the in-cluster database)

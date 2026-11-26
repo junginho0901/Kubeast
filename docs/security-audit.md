@@ -118,9 +118,17 @@ retention:
 
 - **Filter**: the same wildcards as permission patterns (`k8s.*.delete`, `admin.*`) and `results: [failure]`. No filter means everything.
 - **Starting point**: `s3` and `file` start from the beginning (the whole existing history), the rest from when they are turned on (change with `startFrom`).
+- **Message size**: a `teams` card is kept under 24 KiB (Teams takes up to 28 KB in one message). A batch whose card would be larger goes out as several cards, and one line that is still too long is cut to 1000 characters. A `pagerduty` event over 512000 bytes (the Events API v2 limit) goes out without the row's `before` and `after` in `custom_details`, with a `note` saying so.
 - **S3 Object Lock (WORM, ISMS-P evidence)**: create the bucket with Object Lock and versioning, and set a **default retention** (compliance or governance mode, and a period).
-  - Kubeast does not set retention per object, and the only IAM permission it needs is `s3:PutObject`.
+  - Kubeast does not set retention per object.
+  - IAM permissions on the sink's prefix: `s3:PutObject` and `s3:GetObject`. The anchor's **Verify** reads the digests back with `GetObject` (`<prefix>digests/*`), and a batch that a locked bucket refuses to write again is read back (below). Without `s3:GetObject`, Verify marks each anchor's object check as failed with the access error, and such a batch keeps failing.
   - In compliance mode, not even root can delete during the period.
+- **Google Cloud Storage and Cloudflare R2** do not take S3 Object Lock. Use their own retention: a GCS bucket retention policy (Bucket Lock makes it permanent), or an R2 bucket lock rule on the prefix.
+  - Such a bucket refuses to replace an object: GCS answers 403 (`retentionPolicyNotMet`), R2 answers 409. A batch is sent again when the cursor did not move after a write that went through, and it goes to the same key. When that second write is refused, Kubeast reads the key back and counts the batch as sent if the object holds the same bytes. If it holds other bytes or cannot be read, the send stays failed and the sink stalls.
+  - Leave `sse` empty. R2 refuses the `x-amz-server-side-encryption` header, and GCS encrypts stored objects without it.
+  - GCS: `endpoint: https://storage.googleapis.com` and a service account's HMAC key as `accessKeyId` and `secretAccessKey`. For this endpoint only, Kubeast leaves `Accept-Encoding` out of the request signature and drops the `x-id` query parameter, which GCS needs; requests to other endpoints are unchanged. `region` can stay empty or be `auto`.
+  - R2: `endpoint: https://<account id>.r2.cloudflarestorage.com`, `region: auto` (empty works too), and the S3 keys of an R2 API token.
+- **MinIO**: the community edition is published as source only since 2025-10 (no new binaries or container images), and its repository is archived; the last release tag is `RELEASE.2025-10-15T17-29-55Z`. Build the server yourself from a release tag (`go install github.com/minio/minio@<tag>`, or the `Dockerfile` in the repository), or use another S3-compatible store. Set `endpoint` and `forcePathStyle: true`.
 - **Retention**: even past `retention.auditDays`, **rows not yet sent to a sink are not deleted**. A stalled sink shows up as the alert `KubeastAuditSinkStalled`. Related metrics: `kubeast_audit_sink_pending`, `_failures_total` and `_last_success_timestamp_seconds`.
 - **Network**: 443 is open. For SMTP (587/465) or in-cluster endpoints, add NetworkPolicy rules to `audit.sinkEgress`.
 
