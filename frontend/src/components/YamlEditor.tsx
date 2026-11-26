@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Editor, { type OnMount } from '@/components/monaco/CodeEditor'
+import { followTabMovesFocus } from '@/components/monaco/tabMovesFocus'
 import { isMacPlatform } from '@/hooks/useChatShortcut'
 import { copyText } from '@/utils/clipboard'
 import { refocusIfDropped } from '@/utils/focusDrop'
@@ -72,7 +73,7 @@ export default function YamlEditor({
   const [copyFailed, setCopyFailed] = useState(false)
   const [opened, setOpened] = useState('')
   const [focusNext, setFocusNext] = useState<YamlFocusNext | null>(null)
-  // Monaco's own Tab switch (Ctrl+M, Ctrl+Shift+M on a Mac), read back from the editor so the hint follows it.
+  // Monaco's own Tab switch (Ctrl+M, Ctrl+Shift+M on a Mac), read back from Monaco so the hint follows it.
   const [tabMovesFocus, setTabMovesFocus] = useState(false)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
   const editButtonRef = useRef<HTMLButtonElement>(null)
@@ -127,11 +128,7 @@ export default function YamlEditor({
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor
-    const option = monaco.editor.EditorOption.tabFocusMode
-    setTabMovesFocus(editor.getOption(option))
-    editor.onDidChangeConfiguration((e) => {
-      if (e.hasChanged(option)) setTabMovesFocus(editor.getOption(option))
-    })
+    followTabMovesFocus(editor, monaco.editor.EditorOption.tabFocusMode, setTabMovesFocus)
   }
 
   const handleCopy = async () => {
