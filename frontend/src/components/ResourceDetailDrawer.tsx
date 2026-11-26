@@ -388,7 +388,7 @@ export default function ResourceDetailDrawer() {
         }}
       />
       <div
-        className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-slate-700 flex flex-col shadow-2xl"
+        className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-hairline flex flex-col shadow-2xl"
         style={{ zIndex: zIndex + 1 }}
       >
         <ResourceDetailHeader
@@ -418,7 +418,7 @@ export default function ResourceDetailDrawer() {
         />
 
         {/* Content */}
-        <div ref={contentScrollRef} className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div ref={contentScrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {tab === 'info' && (
             <DrawerObjectReadContext.Provider value={objectRead}>
             {/* keyed by the object: what a view holds (a value shown, a log or shell window, a page of a list) starts over for the next one */}
@@ -506,19 +506,19 @@ export default function ResourceDetailDrawer() {
           )}
         >
           {system.blocked ? (
-            <p className="text-sm text-slate-300 break-keep" data-testid="delete-refused">
+            <p className="text-sm text-slate-300 [overflow-wrap:anywhere]" data-testid="delete-refused">
               {t('common.deleteRefused', { kind: displayKind, name, defaultValue: 'Kubernetes does not allow deleting {{kind}} "{{name}}".' })}
             </p>
           ) : (
             <>
-              <p className="text-sm text-slate-300 break-keep">
+              <p className="text-sm text-slate-300 [overflow-wrap:anywhere]">
                 {ns
                   // `ns` is i18next's namespace option, so the value goes in as `namespace`
                   ? t('common.deleteKindConfirmNs', { kind: displayKind, name, namespace: ns, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}" in "{{namespace}}"?' })
                   : t('common.deleteKindConfirm', { kind: displayKind, name, defaultValue: 'Are you sure you want to delete {{kind}} "{{name}}"?' })}
               </p>
               {argoManaged && !argoBlocked && (
-                <p className="mt-3 text-xs text-amber-300 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg break-keep">{argoWarnText}</p>
+                <p className="mt-3 text-sm text-amber-300 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg [overflow-wrap:anywhere]">{argoWarnText}</p>
               )}
               {kind === 'Node' && (
                 <WarningBox>{t('nodes.delete.warning', { defaultValue: 'Deleting a node can disrupt workloads scheduled on it.' })}</WarningBox>
@@ -537,7 +537,7 @@ export default function ResourceDetailDrawer() {
               )}
             </>
           )}
-          {deleteError && <p className="mt-3 text-sm text-red-400 break-keep">{deleteError}</p>}
+          {deleteError && <p className="mt-3 text-sm text-red-400 [overflow-wrap:anywhere]">{deleteError}</p>}
         </ModalFrame>
       )}
     </>

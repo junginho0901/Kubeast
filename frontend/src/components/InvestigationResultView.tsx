@@ -17,7 +17,7 @@ function Calls({ refs, toolCalls }: { refs: InvestigationCallRef[]; toolCalls: I
       {refs.map((r) => (
         <span
           key={r.call}
-          className={`rounded-sm border px-1.5 py-0.5 font-mono ${r.failed ? 'border-red-800/60 text-red-300' : 'border-slate-700 text-slate-300'}`}
+          className={`rounded-sm border px-1.5 py-0.5 font-mono ${r.failed ? 'border-red-800/60 text-red-300' : 'border-hairline text-slate-300'}`}
           title={JSON.stringify(toolCalls[r.call - 1]?.args ?? {}) + (r.failed ? ` (${t('investigations.tool.error', { defaultValue: 'refused' })})` : '')}
           data-testid="investigation-result-call"
         >
@@ -110,7 +110,7 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
       <h3 className="mb-2 text-xs font-semibold text-slate-400">
         {withLedger ? tr('investigations.result.title', 'Result and hypotheses') : tr('investigations.result.titleCauses', 'Result')}
       </h3>
-      <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3 text-xs">
+      <div className="min-w-0 space-y-3 border-t border-hairline pt-3 text-xs">
         {notes.map((n) => (
           <div key={n} className={result.status === 'ok' ? 'text-slate-400' : 'text-amber-300'} data-testid="investigation-result-note">{n}</div>
         ))}
@@ -163,7 +163,8 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
               {hypotheses.length === 0 ? (
                 <div className="text-slate-500">{tr('common.none', 'None')}</div>
               ) : (
-                <table className="w-full" data-testid="investigation-hypotheses" data-list-bounded="the hypotheses of one report, at most 12">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[36rem]" data-testid="investigation-hypotheses" data-list-bounded="the hypotheses of one report, at most 12">
                   <thead className="text-slate-500">
                     <tr>
                       <th className="px-2 py-1 text-left">{tr('investigations.result.col.hypothesis', 'Hypothesis')}</th>
@@ -174,7 +175,7 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
                   </thead>
                   <tbody>
                     {hypotheses.map((h, i) => (
-                      <tr key={`${h.id}-${i}`} className="border-t border-slate-800 align-top" data-state={h.state}>
+                      <tr key={`${h.id}-${i}`} className="border-t border-hairline align-top" data-state={h.state}>
                         <td className="px-2 py-1">
                           <div className="text-ink break-words">{h.statement || '-'}</div>
                           {h.resource && <div className="font-mono text-slate-400 break-all">{h.resource}</div>}
@@ -198,6 +199,7 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
               <CutNote text={cutText(result.cut?.hypotheses, tr)} />
             </div>}

@@ -116,7 +116,7 @@ export default function ResourceYamlCreateDialog({
     >
       {/* on a screen too low for the text the editor gives up height first, then this part scrolls: the buttons stay inside */}
       <div className="min-h-0 flex flex-col overflow-y-auto">
-        <div className="relative min-h-24 border border-slate-700 rounded-lg overflow-hidden" style={{ height: yamlEditorHeight(yaml) }}>
+        <div className="relative min-h-24 border border-control rounded-lg overflow-hidden" style={{ height: yamlEditorHeight(yaml) }}>
           {/* filled by position: a percent height is not resolved in a frame whose own height follows its content */}
           <div className="absolute inset-0">
             <Editor

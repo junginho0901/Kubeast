@@ -58,7 +58,7 @@ function ConfirmDialog({ options, onDone }: { options: ConfirmOptions; onDone: (
         </>
       }
     >
-      {options.message && <p className="text-sm text-slate-300 whitespace-pre-line break-keep">{options.message}</p>}
+      {options.message && <p className="text-sm text-slate-300 whitespace-pre-line [overflow-wrap:anywhere]">{options.message}</p>}
       {options.warning && <WarningBox>{options.warning}</WarningBox>}
       {options.typeToConfirm && <TypeToConfirm expected={options.typeToConfirm} value={typed} onChange={setTyped} />}
     </ModalFrame>
