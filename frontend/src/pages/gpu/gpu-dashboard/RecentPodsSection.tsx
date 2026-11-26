@@ -19,10 +19,10 @@ export function RecentPodsSection({ recentPods, openDetail, tr }: Props) {
 
   return (
     <div className="rounded-xl border border-slate-700/50 bg-slate-800/30" data-testid="gpu-recent-pods" data-list-bounded="the newest 5 GPU pods; View all opens the paged GPU Pods list">
-      <div className="flex items-center justify-between border-b border-slate-700/50 px-5 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-5 py-3">
         <div className="flex items-center gap-2">
           <Box className="h-4 w-4 text-slate-400" />
-          <h2 className="text-sm font-semibold text-ink">
+          <h2 className="text-lg font-semibold text-ink">
             {tr('gpuDashboardPage.recentPods.title', 'Recent GPU Pods')}
           </h2>
         </div>

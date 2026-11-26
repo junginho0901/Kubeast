@@ -89,8 +89,8 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
       const n = (v: number) => (forbidden || !data ? NOT_COUNTED : v)
       return [
         [tr('gpuNodes.stats.total', 'Total Nodes'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-        [tr('gpuNodes.stats.ready', 'Ready'), n(stats.ready), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-        [tr('gpuNodes.stats.notReady', 'Not Ready'), n(stats.notReady), 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
+        [tr('gpuNodes.stats.ready', 'Ready'), n(stats.ready), 'border-slate-700 bg-slate-900/50', 'text-emerald-300'],
+        [tr('gpuNodes.stats.notReady', 'Not Ready'), n(stats.notReady), 'border-slate-700 bg-slate-900/50', 'text-rose-300'],
         [tr('gpuNodes.stats.capacity', 'GPU Capacity'), n(stats.totalCapacity), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
         [tr('gpuNodes.stats.allocatable', 'Allocatable'), n(stats.totalAllocatable), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
         [tr('gpuNodes.stats.used', 'Used'), n(stats.totalUsed), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],

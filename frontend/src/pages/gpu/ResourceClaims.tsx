@@ -204,9 +204,9 @@ spec:
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('resourceClaimsPage.title', 'Resource Claims')}</h1>
-          <p className="mt-2 text-slate-400">{tr('resourceClaimsPage.subtitle', 'Manage DRA ResourceClaim resources.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('resourceClaimsPage.subtitle', 'Manage DRA ResourceClaim resources.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -244,19 +244,19 @@ spec:
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div data-list-summary-card="" className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('resourceClaimsPage.stats.total', 'Total')}</p>
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('resourceClaimsPage.stats.total', 'Total')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
         </div>
-        <div data-list-summary-card="" className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('resourceClaimsPage.stats.allocated', 'Allocated')}</p>
+        <div data-list-summary-card="" className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-xs leading-4 break-words text-emerald-300">{tr('resourceClaimsPage.stats.allocated', 'Allocated')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.allocated}</p>
         </div>
         <div data-list-summary-card="" className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('resourceClaimsPage.stats.reserved', 'Reserved')}</p>
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('resourceClaimsPage.stats.reserved', 'Reserved')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.reserved}</p>
         </div>
-        <div data-list-summary-card="" className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('resourceClaimsPage.stats.pending', 'Pending')}</p>
+        <div data-list-summary-card="" className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-xs leading-4 break-words text-amber-300">{tr('resourceClaimsPage.stats.pending', 'Pending')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.pending}</p>
         </div>
       </div>

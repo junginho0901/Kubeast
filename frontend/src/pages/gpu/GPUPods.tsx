@@ -87,9 +87,9 @@ export default function GPUPods() {
       const n = (v: number) => (forbidden || !data ? NOT_COUNTED : v)
       return [
         [tr('gpuPods.stats.total', 'Total Pods'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-        [tr('gpuPods.stats.running', 'Running'), n(stats.running), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-        [tr('gpuPods.stats.pending', 'Pending'), n(stats.pending), 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
-        [tr('gpuPods.stats.failed', 'Failed'), n(stats.failed), 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
+        [tr('gpuPods.stats.running', 'Running'), n(stats.running), 'border-slate-700 bg-slate-900/50', 'text-emerald-300'],
+        [tr('gpuPods.stats.pending', 'Pending'), n(stats.pending), 'border-slate-700 bg-slate-900/50', 'text-yellow-300'],
+        [tr('gpuPods.stats.failed', 'Failed'), n(stats.failed), 'border-slate-700 bg-slate-900/50', 'text-rose-300'],
         [tr('gpuPods.stats.gpuRequested', 'GPUs Requested'), n(stats.totalGpuRequested), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
         [tr('gpuPods.stats.namespaces', 'Namespaces'), n(stats.namespaces), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       ]
@@ -191,9 +191,9 @@ export default function GPUPods() {
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('gpuPods.title', 'GPU Pods')}</h1>
-          <p className="mt-2 text-slate-400">{tr('gpuPods.subtitle', 'Pods consuming GPU resources across the cluster.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('gpuPods.subtitle', 'Pods consuming GPU resources across the cluster.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowCharts((prev) => !prev)}
             aria-pressed={showCharts}
@@ -225,8 +225,8 @@ export default function GPUPods() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelColor]) => (
-          <div data-list-summary-card="" key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
-            <div className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelColor}`}>{label}</div>
+          <div key={label} data-list-summary-card="" className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
+            <div className={`text-xs leading-4 break-words ${labelColor}`}>{label}</div>
             <div className="mt-1 text-lg font-semibold text-ink">{value}</div>
           </div>
         ))}
