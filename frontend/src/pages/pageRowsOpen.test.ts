@@ -183,19 +183,47 @@ describe('the audit log', () => {
     entry, expanded, onToggle, resultBadge: (r) => r, fmtTime: (iso) => iso, onPlay: () => {}, playLabel: 'Play recording',
   }))
 
+  // aria-expanded is allowed on a row only inside a treegrid (axe aria-conditional-attr): the row keeps the Tab stop
+  // and the keys, and a button in it says whether the details are shown
+  const toggleOf = (tree: unknown) => elementsOf(tree, (props, type) => type === 'button' && 'aria-expanded' in props) as El[]
+
   it('a row shows and hides its details from the keyboard and says whether they are shown', () => {
     const onToggle = vi.fn()
-    const closed = openRows(row(false, onToggle))
+    const tree = row(false, onToggle)
+    const closed = openRows(tree)
     expect(closed).toHaveLength(1)
     expectTabStops(closed)
-    expect(closed[0].props['aria-expanded']).toBe(false)
+    expect(closed[0].props).not.toHaveProperty('aria-expanded')
+    expect(toggleOf(tree).map((b) => b.props['aria-expanded'])).toEqual([false])
     press(closed[0], 'Enter')
     expect(onToggle).toHaveBeenCalledTimes(1)
 
     const open = row(true, onToggle)
-    expect(openRows(open)[0].props['aria-expanded']).toBe(true)
+    expect(openRows(open)[0].props).not.toHaveProperty('aria-expanded')
+    expect(toggleOf(open).map((b) => b.props['aria-expanded'])).toEqual([true])
     expect(textsOf(open)).toContain('/api/v1/namespaces/shop/pods/web-0')
     expect(press(openRows(open)[0], ' ')).toHaveBeenCalled()
     expect(onToggle).toHaveBeenCalledTimes(2)
+  })
+
+  it("the row's button has a name, no Tab stop and no click of its own: a key on it is its own, and its click goes up to the row", () => {
+    const onToggle = vi.fn()
+    const tree = row(false, onToggle)
+    const [toggle] = toggleOf(tree)
+    expect(toggle.props).toMatchObject({ type: 'button', tabIndex: -1, 'aria-label': 'Details' })
+    expect(toggle.props).not.toHaveProperty('onClick')
+    const [r] = openRows(tree)
+    expect(press(r, 'Enter', toggle)).not.toHaveBeenCalled()
+    expect(onToggle).not.toHaveBeenCalled()
+    ;(r.props.onClick as () => void)()
+    expect(onToggle).toHaveBeenCalledTimes(1)
+  })
+
+  it('no table row of the console carries aria-expanded', () => {
+    const sources = import.meta.glob(['/src/**/*.tsx', '!/src/**/*.test.*'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+    const rows = Object.entries(sources).flatMap(([path, source]) => [...source.matchAll(/<tr\b[^<]*?\baria-expanded=/g)].map(() => path))
+    expect(rows).toEqual([])
+    // the audit page is among the files read, its button holding the state
+    expect(sources['/src/pages/AdminAudit.tsx']).toMatch(/<button\b[^<]*?\baria-expanded=\{expanded\}/)
   })
 })

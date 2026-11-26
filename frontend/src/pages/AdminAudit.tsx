@@ -597,7 +597,6 @@ export function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTi
           entry.Result === 'failure' ? 'bg-red-950/20' : ''
         }`}
         {...openOnPress(onToggle)}
-        aria-expanded={expanded}
       >
         <td className="px-3 py-2 text-slate-300 whitespace-nowrap" title={utcTitle(entry.CreatedAt)}>{fmtTime(entry.CreatedAt)}</td>
         <td className="px-3 py-2 text-slate-200"><span className="block max-w-[170px] truncate" title={entry.ActorEmail || undefined}>{entry.ActorEmail || '-'}</span></td>
@@ -621,7 +620,11 @@ export function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTi
           )}
         </td>
         <td className="px-3 py-2 text-slate-400 text-right">
-          {expanded ? <ChevronUp className="w-4 h-4 inline" /> : <ChevronDown className="w-4 h-4 inline" />}
+          {/* aria-expanded belongs on a control, not a row outside a treegrid. The row keeps the Tab stop and the keys,
+              and the click goes up to it. */}
+          <button type="button" tabIndex={-1} aria-expanded={expanded} aria-label={tr('adminAudit.rowDetails', 'Details')}>
+            {expanded ? <ChevronUp className="w-4 h-4 inline" /> : <ChevronDown className="w-4 h-4 inline" />}
+          </button>
         </td>
       </tr>
       {expanded && (

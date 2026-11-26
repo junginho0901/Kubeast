@@ -4517,6 +4517,7 @@
     },
     "loading": "Loading...",
     "playRecording": "Play recording",
+    "rowDetails": "Details",
     "resultValue": {
       "success": "Success",
       "failure": "Failure"
