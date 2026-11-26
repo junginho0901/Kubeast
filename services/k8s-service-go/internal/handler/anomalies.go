@@ -28,7 +28,7 @@ import (
 // anomalySource is what a narrowing read needs, all as the signed-in user (*k8s.Service; tests replace it).
 type anomalySource interface {
 	CollectIssues(ctx context.Context, opts k8s.IssuesOptions) ([]k8s.Issue, error)
-	GetPods(ctx context.Context, namespace string, labelSelector string) ([]map[string]interface{}, error)
+	EachPodRow(ctx context.Context, namespace, labelSelector string, fn func(map[string]interface{})) error
 	PrometheusAvailable(ctx context.Context) bool
 	PrometheusQueryAt(ctx context.Context, query string, at time.Time) ([]k8s.PrometheusQueryResult, error)
 	ProtectedNamespaces(ctx context.Context) protectedns.Namespaces
@@ -115,7 +115,8 @@ func (h *Handler) GetNamespaceAnomalies(w http.ResponseWriter, r *http.Request) 
 }
 
 // rankAnomalies runs the checks: the pods and the issue check once, then the metric, log and trace checks, at most
-// features.anomalyRank.concurrency at once, each within checkTimeoutSeconds and all within timeoutSeconds. The store
+// features.anomalyRank.concurrency at once, each within checkTimeoutSeconds and all within timeoutSeconds. The pods are
+// folded into what their checks read as they come (anomaly.Pods), so their rows are not held until the end. The store
 // queries are taken from the answer's budget in check order before any runs, so the same budget gives the same checks:
 // one for each of the three metric checks, three for the log checks and three for the trace checks, beside those the
 // call order keeps (callOrderShare); the log checks' reads of one line (logSpare) come last, from what is left.
@@ -146,7 +147,7 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 		results   []anomaly.CheckResult
 		issues    []k8s.Issue
 		issuesErr error
-		pods      []map[string]interface{}
+		pods      = anomaly.NewPods(wl, win)
 		podsErr   error
 	)
 	add := func(rs ...anomaly.CheckResult) {
@@ -168,7 +169,7 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 	}()
 	go func() {
 		defer wg.Done()
-		run(func(c context.Context) { pods, podsErr = src.GetPods(c, namespace, "") })
+		run(func(c context.Context) { podsErr = src.EachPodRow(c, namespace, "", pods.Add) })
 	}()
 
 	queries := anomaly.Queries(namespace, wl, win.Length())
@@ -250,13 +251,13 @@ func (h *Handler) rankAnomalies(r *http.Request, namespace string, wl *anomaly.W
 		add(anomaly.CheckResult{Check: anomaly.CheckNodeConditions, NotRun: readFailure("the pods (they say which nodes to look at)", podsErr)})
 	default:
 		rows, nodesErr := issueRows(issues, win)
-		add(anomaly.FromIssues(rows, pods, wl))
-		add(anomaly.FromNodeConditions(rows, pods, wl, nodesErr))
+		add(anomaly.FromIssues(rows, pods))
+		add(anomaly.FromNodeConditions(rows, pods, nodesErr))
 	}
 	if podsErr != nil {
 		add(anomaly.CheckResult{Check: anomaly.CheckCrashReasons, NotRun: readFailure("the pods", podsErr)})
 	} else {
-		add(anomaly.FromCrashReasons(pods, wl, win))
+		add(anomaly.FromCrashReasons(pods))
 	}
 
 	var rows []storeRow

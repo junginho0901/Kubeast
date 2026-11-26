@@ -224,6 +224,15 @@ func ended(reason string, at time.Time) map[string]interface{} {
 	return map[string]interface{}{"reason": reason, "finished_at": at.Format(time.RFC3339), "exit_code": int32(137)}
 }
 
+// folded is the pods as the narrowing reads them, a row at a time.
+func folded(rows []map[string]interface{}, wl *Workload, w Window) *Pods {
+	ps := NewPods(wl, w)
+	for _, row := range rows {
+		ps.Add(row)
+	}
+	return ps
+}
+
 func TestFromCrashReasons_CountsByReasonInBothWindows(t *testing.T) {
 	w := Window{Start: now.Add(-time.Hour), End: now}
 	pods := []map[string]interface{}{
@@ -232,7 +241,7 @@ func TestFromCrashReasons_CountsByReasonInBothWindows(t *testing.T) {
 		pod("web-1-c", ended("Error", now.Add(-70*time.Minute))),
 		pod("web-1-d", ended("Error", now.Add(-30*time.Minute))),
 	}
-	r := FromCrashReasons(pods, nil, w)
+	r := FromCrashReasons(folded(pods, nil, w))
 	got := map[string]Finding{}
 	for _, f := range r.Findings {
 		got[f.Target] = f
@@ -255,18 +264,18 @@ func TestFromIssues_LeavesNodesAndInfoOut(t *testing.T) {
 		{Kind: "Pod", Name: "web-1-b", Severity: "info", Reason: "Restarted"},
 		{Kind: "Node", Name: "n1", Severity: "warning", Reason: "MemoryPressure"},
 	}
-	r := FromIssues(rows, nil, nil)
+	r := FromIssues(rows, folded(nil, nil, Window{}))
 	if len(r.Findings) != 2 || r.Findings[0].Target != "Pod/web-1-a" || r.Findings[0].New || r.Findings[1].New {
 		t.Fatalf("%+v", r.Findings)
 	}
 	if r.Findings[0].Summary != "critical now (no earlier data): CrashLoopBackOff" || r.Findings[1].Summary != "warning now: Unavailable" {
 		t.Fatalf("%+v", r.Findings)
 	}
-	nodes := FromNodeConditions(rows, []map[string]interface{}{pod("web-1-a")}, nil, "")
+	nodes := FromNodeConditions(rows, folded([]map[string]interface{}{pod("web-1-a")}, nil, Window{}), "")
 	if len(nodes.Findings) != 1 || nodes.Findings[0].Target != "Node/n1" {
 		t.Fatalf("%+v", nodes)
 	}
-	if refused := FromNodeConditions(rows, nil, nil, "forbidden"); refused.NotRun == "" {
+	if refused := FromNodeConditions(rows, folded(nil, nil, Window{}), "forbidden"); refused.NotRun == "" {
 		t.Fatalf("a nodes list that failed is not run: %+v", refused)
 	}
 }
@@ -279,7 +288,7 @@ func TestFromIssues_AWorkloadKeepsItsOwnRows(t *testing.T) {
 		{Kind: "StatefulSet", Name: "db", Severity: "warning"},
 	}
 	pods := []map[string]interface{}{pod("web-1-a"), {"name": "db-0", "owner_references": owners("StatefulSet", "db")}}
-	r := FromIssues(rows, pods, &Workload{Kind: "Deployment", Name: "web"})
+	r := FromIssues(rows, folded(pods, &Workload{Kind: "Deployment", Name: "web"}, Window{}))
 	if len(r.Findings) != 2 || r.Findings[0].Target != "Pod/web-1-a" || r.Findings[1].Target != "Deployment/web" {
 		t.Fatalf("%+v", r.Findings)
 	}
@@ -293,7 +302,7 @@ func TestFromIssues_KeepsAFailedListBesideItsFindings(t *testing.T) {
 		{Kind: "Deployment", Name: "cart", Severity: "warning", Reason: "NotReady"},
 		{Kind: "Collector", Name: "jobs", Severity: "info", Reason: "ListFailed"},
 	}
-	out, err := json.Marshal(Assemble("shop", nil, w, []CheckResult{FromIssues(rows, nil, nil)}, 0))
+	out, err := json.Marshal(Assemble("shop", nil, w, []CheckResult{FromIssues(rows, folded(nil, nil, w))}, 0))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +321,7 @@ func TestFromIssues_KeepsAFailedListBesideItsFindings(t *testing.T) {
 		t.Fatalf("the Jobs list that failed is not said: %s", out)
 	}
 	// with nothing else found, the check did not run
-	only := Assemble("shop", nil, w, []CheckResult{FromIssues(rows[1:], nil, nil)}, 0)
+	only := Assemble("shop", nil, w, []CheckResult{FromIssues(rows[1:], folded(nil, nil, w))}, 0)
 	if len(only.NotRun) != 1 || only.NotRun[0].Reason != "these lists could not be read: jobs" || len(only.Normal) != 0 {
 		t.Fatalf("%+v", only)
 	}

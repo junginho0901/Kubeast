@@ -92,7 +92,7 @@ func TestAStateNowIsNotNewAndStillFirst(t *testing.T) {
 	}
 	pods := []map[string]interface{}{pod("web-1-a")}
 	grown := CheckResult{Check: CheckRestarts, Findings: []Finding{{Check: CheckRestarts, Target: "Pod/web-1-a", Verdict: VerdictAnomalous, Now: f(90), Ratio: f(30)}}}
-	res := Assemble("shop", nil, w, []CheckResult{FromIssues(rows, pods, nil), FromNodeConditions(rows, pods, nil, ""), grown}, 0)
+	res := Assemble("shop", nil, w, []CheckResult{FromIssues(rows, folded(pods, nil, w)), FromNodeConditions(rows, folded(pods, nil, w), ""), grown}, 0)
 	var order []string
 	for _, f := range res.Findings {
 		order = append(order, f.Check+":"+f.Target)
@@ -158,7 +158,7 @@ func TestACrashReasonIsNewOnlyWhenTheWindowBeforeIsKnown(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := FromCrashReasons(c.pods, nil, w)
+			r := FromCrashReasons(folded(c.pods, nil, w))
 			if len(r.Findings) != 1 || r.NotRun != "" {
 				t.Fatalf("%+v", r)
 			}
@@ -171,7 +171,7 @@ func TestACrashReasonIsNewOnlyWhenTheWindowBeforeIsKnown(t *testing.T) {
 	}
 	// one that ended for it before gives the count before, whatever others hide
 	counted := append(row(old, 9, waiting, ago(5*time.Minute)), row(old, 1, running, ago(70*time.Minute))...)
-	if f := FromCrashReasons(counted, nil, w).Findings[0]; f.New || f.Before == nil || *f.Before != 1 || strings.Contains(f.Summary, NoEarlier) {
+	if f := FromCrashReasons(folded(counted, nil, w)).Findings[0]; f.New || f.Before == nil || *f.Before != 1 || strings.Contains(f.Summary, NoEarlier) {
 		t.Errorf("%+v", f)
 	}
 
@@ -205,7 +205,7 @@ func TestACrashReasonIsNewOnlyWhenTheWindowBeforeIsKnown(t *testing.T) {
 		{"an init container that keeps failing and shows no end", initRow(0, waiting), false},
 	} {
 		t.Run("beside one: "+c.name, func(t *testing.T) {
-			f, ok := byTarget(FromCrashReasons(append(first(), c.pods...), nil, w))["Error"]
+			f, ok := byTarget(FromCrashReasons(folded(append(first(), c.pods...), nil, w)))["Error"]
 			if !ok {
 				t.Fatal("no Error")
 			}
@@ -219,7 +219,7 @@ func TestACrashReasonIsNewOnlyWhenTheWindowBeforeIsKnown(t *testing.T) {
 	// the other container belongs to another workload: it was not read
 	elsewhere := row(old, 9, waiting, other("OOMKilled", time.Minute))
 	elsewhere[0]["owner_references"] = owners("ReplicaSet", "api-5d4f8c7b9")
-	saysNew(t, byTarget(FromCrashReasons(append(first(), elsewhere...), &Workload{Kind: "ReplicaSet", Name: "web-1"}, w))["Error"])
+	saysNew(t, byTarget(FromCrashReasons(folded(append(first(), elsewhere...), &Workload{Kind: "ReplicaSet", Name: "web-1"}, w)))["Error"])
 }
 
 func TestErrorLinesAreNewOnlyWithLinesInTheWindowBefore(t *testing.T) {
@@ -323,7 +323,7 @@ func TestTraceChecksSayWhatTheyCouldNotCompare(t *testing.T) {
 func TestTheNodeCheckSaysWhatItCovers(t *testing.T) {
 	w := Window{Start: now.Add(-time.Hour), End: now}
 	pods := []map[string]interface{}{pod("web-1-a")}
-	res := Assemble("shop", nil, w, []CheckResult{FromNodeConditions(nil, pods, nil, "")}, 0)
+	res := Assemble("shop", nil, w, []CheckResult{FromNodeConditions(nil, folded(pods, nil, w), "")}, 0)
 	if strings.Join(res.Normal, ",") != "node_conditions_not_cpu" || len(res.NotRun) != 0 {
 		t.Fatalf("%+v", res)
 	}
@@ -334,23 +334,23 @@ func TestTheNodeCheckSaysWhatItCovers(t *testing.T) {
 	}
 	unplaced := []map[string]interface{}{{"name": "web-1-a"}}
 	for name, r := range map[string]CheckResult{
-		"no pods":        FromNodeConditions(nil, nil, nil, ""),
-		"no pod placed":  FromNodeConditions(nil, unplaced, nil, ""),
-		"no pod of it":   FromNodeConditions(nil, pods, &Workload{Kind: "Deployment", Name: "api"}, ""),
-		"node list fail": FromNodeConditions(nil, pods, nil, "forbidden"),
+		"no pods":        FromNodeConditions(nil, folded(nil, nil, w), ""),
+		"no pod placed":  FromNodeConditions(nil, folded(unplaced, nil, w), ""),
+		"no pod of it":   FromNodeConditions(nil, folded(pods, &Workload{Kind: "Deployment", Name: "api"}, w), ""),
+		"node list fail": FromNodeConditions(nil, folded(pods, nil, w), "forbidden"),
 	} {
 		res := Assemble("shop", nil, w, []CheckResult{r}, 0)
 		if len(res.Normal) != 0 || len(res.NotRun) != 1 || res.NotRun[0].Check != CheckNodeConditions || res.NotRun[0].Reason == "" {
 			t.Errorf("%s: %+v", name, res)
 		}
 	}
-	if r := FromCrashReasons(nil, nil, w); r.NotRun != NoPods {
+	if r := FromCrashReasons(folded(nil, nil, w)); r.NotRun != NoPods {
 		t.Errorf("%+v", r)
 	}
-	if r := FromCrashReasons(pods, &Workload{Kind: "Deployment", Name: "api"}, w); r.NotRun != NoPods {
+	if r := FromCrashReasons(folded(pods, &Workload{Kind: "Deployment", Name: "api"}, w)); r.NotRun != NoPods {
 		t.Errorf("%+v", r)
 	}
-	if r := FromCrashReasons(pods, nil, w); r.NotRun != "" {
+	if r := FromCrashReasons(folded(pods, nil, w)); r.NotRun != "" {
 		t.Errorf("%+v", r)
 	}
 }

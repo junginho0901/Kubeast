@@ -29,11 +29,10 @@ func (f *twoRestarting) CollectIssues(context.Context, k8s.IssuesOptions) ([]k8s
 	return nil, nil
 }
 
-func (f *twoRestarting) GetPods(_ context.Context, namespace, _ string) ([]map[string]interface{}, error) {
-	return []map[string]interface{}{
-		{"name": "web-1", "namespace": namespace, "owner_references": []map[string]interface{}{{"kind": "Deployment", "name": "web"}}},
-		{"name": "api-1", "namespace": namespace, "owner_references": []map[string]interface{}{{"kind": "Deployment", "name": "api"}}},
-	}, nil
+func (f *twoRestarting) EachPodRow(_ context.Context, namespace, _ string, fn func(map[string]interface{})) error {
+	fn(map[string]interface{}{"name": "web-1", "namespace": namespace, "owner_references": []map[string]interface{}{{"kind": "Deployment", "name": "web"}}})
+	fn(map[string]interface{}{"name": "api-1", "namespace": namespace, "owner_references": []map[string]interface{}{{"kind": "Deployment", "name": "api"}}})
+	return nil
 }
 
 func (f *twoRestarting) PrometheusAvailable(context.Context) bool { return true }

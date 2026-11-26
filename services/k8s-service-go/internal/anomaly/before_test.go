@@ -63,7 +63,7 @@ func TestAStateThereBeforeTheWindowComesAfterWhatIsNew(t *testing.T) {
 		{Check: CheckMemoryNearLimit, Findings: []Finding{{Check: CheckMemoryNearLimit, Target: "Pod/cart-1 container main", Verdict: VerdictAnomalous, Ratio: f(2), Now: f(0.95)}}},
 	}
 	run := func(rows ...IssueRow) Result {
-		return Assemble("shop", nil, w, append([]CheckResult{FromIssues(rows, nil, nil)}, others...), 0)
+		return Assemble("shop", nil, w, append([]CheckResult{FromIssues(rows, folded(nil, nil, w))}, others...), 0)
 	}
 	// not asked for, or asked for and not before the window: it stays with what is critical now
 	for _, row := range []IssueRow{{Kind: "Pod", Name: "notifier-1", Severity: "critical", Reason: "CrashLoopBackOff"}, old} {
@@ -92,7 +92,7 @@ func TestAStateThereBeforeThatGotWorseKeepsItsPlace(t *testing.T) {
 		"memory newly near its limit": {Check: CheckMemoryNearLimit, Target: "Pod/notifier-1 container main", Verdict: VerdictAnomalous, New: true, Now: f(0.99)},
 		"a new reason to end":         {Check: CheckCrashReasons, Target: "OOMKilled", Verdict: VerdictAnomalous, New: true, Now: f(1), pods: []string{"notifier-1"}},
 	} {
-		res := Assemble("shop", nil, w, []CheckResult{FromIssues([]IssueRow{old}, nil, nil), {Check: other.Check, Findings: []Finding{other}}}, 0)
+		res := Assemble("shop", nil, w, []CheckResult{FromIssues([]IssueRow{old}, folded(nil, nil, w)), {Check: other.Check, Findings: []Finding{other}}}, 0)
 		var got Finding
 		for _, fd := range res.Findings {
 			if fd.Check == CheckIssues {
@@ -108,7 +108,7 @@ func TestAStateThereBeforeThatGotWorseKeepsItsPlace(t *testing.T) {
 		"another pod": {Check: CheckRestarts, Target: "Pod/notifier-10", Verdict: VerdictAnomalous, Ratio: f(3), Now: f(9)},
 		"no earlier":  {Check: CheckRestarts, Target: "Pod/notifier-1", Verdict: VerdictAnomalous, noEarlier: true, Now: f(9)},
 	} {
-		res := Assemble("shop", nil, w, []CheckResult{FromIssues([]IssueRow{old}, nil, nil), {Check: other.Check, Findings: []Finding{other}}}, 0)
+		res := Assemble("shop", nil, w, []CheckResult{FromIssues([]IssueRow{old}, folded(nil, nil, w)), {Check: other.Check, Findings: []Finding{other}}}, 0)
 		if last := res.Findings[len(res.Findings)-1]; last.Check != CheckIssues || last.Worse {
 			t.Errorf("%s: %+v", name, res.Findings)
 		}
@@ -125,7 +125,7 @@ func TestTheTerminationsOfAPodThereBeforeAreNotNewNews(t *testing.T) {
 	}
 	old := IssueRow{Kind: "Pod", Name: "notifier-1", Severity: "critical", Reason: "CrashLoopBackOff", Since: "2026-11-14T20:00:00Z", Before: true}
 	run := func(pods ...map[string]interface{}) Finding {
-		res := Assemble("shop", nil, w, []CheckResult{FromIssues([]IssueRow{old}, pods, nil), FromCrashReasons(pods, nil, w)}, 0)
+		res := Assemble("shop", nil, w, []CheckResult{FromIssues([]IssueRow{old}, folded(pods, nil, w)), FromCrashReasons(folded(pods, nil, w))}, 0)
 		for _, fd := range res.Findings {
 			if fd.Check == CheckCrashReasons {
 				return fd
@@ -146,7 +146,7 @@ func TestTheTerminationsOfAPodThereBeforeAreNotNewNews(t *testing.T) {
 func TestWithoutSinceTheAnswerHasNoneOfItsFields(t *testing.T) {
 	w := Window{Start: now.Add(-time.Hour), End: now}
 	rows := []IssueRow{{Kind: "Pod", Name: "web-1", Severity: "critical", Reason: "CrashLoopBackOff"}, {Kind: "Deployment", Name: "web", Severity: "warning", Reason: "Unavailable"}}
-	res := Assemble("shop", nil, w, []CheckResult{FromIssues(rows, nil, nil),
+	res := Assemble("shop", nil, w, []CheckResult{FromIssues(rows, folded(nil, nil, w)),
 		{Check: CheckRestarts, Findings: []Finding{{Check: CheckRestarts, Target: "Pod/web-1", Verdict: VerdictAnomalous, New: true, Now: f(3)}}}}, 1)
 	out, err := json.Marshal(res)
 	if err != nil {
