@@ -102,11 +102,11 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
           {validations.length === 0 ? <div className="text-xs text-slate-400">-</div> : (
             <div className="space-y-2">
               {validations.map((v, i) => (
-                <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5 space-y-1" data-testid="admission-policy-validation">
-                  <p className="font-mono text-[11px] text-slate-200 break-all">{v?.expression || '-'}</p>
-                  {v?.message && <p className="text-[11px] text-slate-300"><Tx>Message</Tx>: {v.message}</p>}
-                  {v?.messageExpression && <p className="text-[11px] text-slate-300"><Tx>Message Expression</Tx>: <span className="font-mono break-all">{v.messageExpression}</span></p>}
-                  {v?.reason && <p className="text-[11px] text-slate-400"><Tx>Reason</Tx>: {v.reason}</p>}
+                <div key={i} data-detail-card="" className="border-b border-hairline py-2 space-y-1" data-testid="admission-policy-validation">
+                  <p className="font-mono text-xs text-slate-200 break-all">{v?.expression || '-'}</p>
+                  {v?.message && <p className="text-xs text-slate-300"><Tx>Message</Tx>: {v.message}</p>}
+                  {v?.messageExpression && <p className="text-xs text-slate-300"><Tx>Message Expression</Tx>: <span className="font-mono break-all">{v.messageExpression}</span></p>}
+                  {v?.reason && <p className="text-xs text-slate-400"><Tx>Reason</Tx>: {v.reason}</p>}
                 </div>
               ))}
             </div>
@@ -117,9 +117,9 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
           {mutations.length === 0 ? <div className="text-xs text-slate-400">-</div> : (
             <div className="space-y-2">
               {mutations.map((m, i) => (
-                <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5 space-y-1" data-testid="admission-policy-mutation">
-                  <p className="text-[11px] text-slate-400"><Tx>Patch Type</Tx>: {m?.patchType || '-'}</p>
-                  <p className="font-mono text-[11px] text-slate-200 break-all">{m?.applyConfiguration?.expression || m?.jsonPatch?.expression || '-'}</p>
+                <div key={i} data-detail-card="" className="border-b border-hairline py-2 space-y-1" data-testid="admission-policy-mutation">
+                  <p className="text-xs text-slate-400"><Tx>Patch Type</Tx>: {m?.patchType || '-'}</p>
+                  <p className="font-mono text-xs text-slate-200 break-all">{m?.applyConfiguration?.expression || m?.jsonPatch?.expression || '-'}</p>
                 </div>
               ))}
             </div>
@@ -137,9 +137,9 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
         <InfoSection title="Type Checking">
           <div className="space-y-2">
             {warnings.map((w, i) => (
-              <div data-detail-card="" key={i} className="rounded-sm border border-amber-700/60 bg-amber-900/20 px-2 py-1.5">
-                <p className="text-[11px] text-amber-300 font-mono">{w?.fieldRef || '-'}</p>
-                <p className="text-[11px] text-slate-200 break-all">{w?.warning || '-'}</p>
+              <div key={i} data-detail-card="" className="rounded-sm border border-amber-700/60 bg-amber-900/20 px-2 py-1.5">
+                <p className="text-xs text-amber-300 font-mono">{w?.fieldRef || '-'}</p>
+                <p className="text-xs text-slate-200 break-all">{w?.warning || '-'}</p>
               </div>
             ))}
             {conditions.map((c, i) => (
@@ -207,9 +207,9 @@ function ExpressionList({ items }: { items: { name?: string; expression?: string
   return (
     <div className="space-y-1">
       {items.map((it, i) => (
-        <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5">
-          <p className="text-[11px] text-slate-300">{it.name || '-'}</p>
-          <p className="font-mono text-[11px] text-slate-200 break-all">{it.expression || '-'}</p>
+        <div key={i} data-detail-card="" className="border-b border-hairline py-2">
+          <p className="text-xs text-slate-300">{it.name || '-'}</p>
+          <p className="font-mono text-xs text-slate-200 break-all">{it.expression || '-'}</p>
         </div>
       ))}
     </div>
@@ -251,7 +251,7 @@ function RulesTable({ label, rules }: { label: string; rules: any[] }) {
   if (rules.length === 0) return <InfoRow label={label} value="-" />
   return (
     <div className="mt-2">
-      <p className="text-[11px] font-medium text-slate-400 mb-1"><Tx>{label}</Tx></p>
+      <p className="text-xs font-medium text-slate-400 mb-1"><Tx>{label}</Tx></p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs border border-slate-700 rounded-sm">
           <thead>

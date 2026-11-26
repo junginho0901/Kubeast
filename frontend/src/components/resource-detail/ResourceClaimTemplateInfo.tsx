@@ -167,7 +167,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
                 )
               }
               return (
-                <pre key={idx} className="text-xs text-gray-300 bg-gray-800 rounded-sm p-2 overflow-auto max-h-40">
+                <pre key={idx} className="text-xs text-slate-300 bg-slate-800 rounded-lg p-2 overflow-auto max-h-40">
                   {JSON.stringify(cfg, null, 2)}
                 </pre>
               )
@@ -179,7 +179,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
       {requests.length === 0 && constraints.length === 0 && configArr.length === 0 && (
         <InfoSection title="Claim Spec">
           {claimSpec ? (
-            <pre className="text-xs text-gray-300 bg-gray-800 rounded-sm p-2 overflow-auto max-h-64">
+            <pre className="text-xs text-slate-300 bg-slate-800 rounded-lg p-2 overflow-auto max-h-64">
               {JSON.stringify(claimSpec, null, 2)}
             </pre>
           ) : (

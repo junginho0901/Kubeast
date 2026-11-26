@@ -31,7 +31,7 @@ export function MetricBar({
         <span className="text-slate-400">{label}</span>
         <span className="font-mono text-slate-300">{displayVal}{unit}</span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-700">
         <div
           className={`h-full rounded-full transition-all ${color}`}
           style={{ width: `${pct}%` }}
@@ -61,17 +61,17 @@ export function MetricCard({
 }) {
   const t = thresholds ?? { warn: 60, danger: 80 }
   const color =
-    value >= t.danger ? 'text-red-400 border-red-700/40 bg-red-900/10'
-    : value >= t.warn ? 'text-amber-400 border-amber-700/40 bg-amber-900/10'
-    : 'text-emerald-400 border-emerald-700/40 bg-emerald-900/10'
+    value >= t.danger ? 'text-red-400'
+    : value >= t.warn ? 'text-amber-400'
+    : 'text-ink'
 
   return (
-    <div className={`rounded-lg border px-3 py-2.5 ${color}`}>
-      <div className="text-[11px] text-slate-400"><Tx>{label}</Tx></div>
+    <div className={`min-w-0 border-l border-hairline px-3 py-2.5 ${color}`}>
+      <div className="text-xs text-slate-400"><Tx>{label}</Tx></div>
       <div className="mt-1 text-lg font-semibold">
         {whole || unit === '%' ? Math.round(value) : value.toFixed(1)}{unit}
       </div>
-      {subtext && <div className="text-[10px] text-slate-500">{subtext}</div>}
+      {subtext && <div className="text-xs text-slate-500">{subtext}</div>}
     </div>
   )
 }
@@ -95,8 +95,8 @@ export function PrometheusSection({
   const features = useClusterFeatures()
   if (features.data?.prometheus?.namespaceLimited) {
     return (
-      <div className="mt-4 rounded-lg border border-slate-700/50 bg-slate-800/30 p-4" data-testid="prometheus-namespace-limited">
-        <h3 className="text-xs font-semibold text-slate-300 mb-2"><Tx>{title}</Tx></h3>
+      <div className="mt-4 border-t border-hairline pt-4" data-testid="prometheus-namespace-limited">
+        <h3 className="text-lg font-semibold text-ink mb-2"><Tx>{title}</Tx></h3>
         <p className="text-xs text-slate-400"><Tx>Metrics from the cluster's Prometheus need a grant on the whole cluster.</Tx></p>
       </div>
     )
@@ -111,10 +111,10 @@ export function PrometheusSection({
   }
   if (!available) return null
   return (
-    <div className="mt-4 rounded-lg border border-slate-700/50 bg-slate-800/30 p-4">
-      <div className="flex items-center gap-2 mb-3">
+    <div className="mt-4 border-t border-hairline pt-4">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
         <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-        <h3 className="text-xs font-semibold text-slate-300"><Tx>{title}</Tx></h3>
+        <h3 className="text-lg font-semibold text-ink"><Tx>{title}</Tx></h3>
       </div>
       {children}
     </div>
@@ -134,9 +134,9 @@ export function Sparkline({
   points,
   width = 240,
   height = 48,
-  stroke = '#10b981',
-  fillFrom = 'rgba(16, 185, 129, 0.25)',
-  fillTo = 'rgba(16, 185, 129, 0)',
+  stroke = 'var(--color-primary-bright)',
+  fillFrom = 'transparent',
+  fillTo = 'transparent',
   min,
   max,
 }: {
@@ -150,7 +150,7 @@ export function Sparkline({
   max?: number
 }) {
   if (!points || points.length === 0) {
-    return <div className="text-[10px] text-slate-500"><Tx>(no data)</Tx></div>
+    return <div className="text-xs text-slate-500"><Tx>(no data)</Tx></div>
   }
 
   const vs = points.map((p) => p.v)

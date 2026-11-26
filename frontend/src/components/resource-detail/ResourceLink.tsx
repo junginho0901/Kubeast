@@ -16,7 +16,7 @@ export function ResourceLink({ kind, name, namespace, apiVersion }: ResourceLink
   return (
     <button
       type="button"
-      className="text-primary-400 hover:text-primary-300 hover:underline cursor-pointer"
+      className="max-w-full break-all text-left text-primary-400 hover:text-primary-300 hover:underline cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-primary-500"
       onClick={(e) => {
         e.stopPropagation()
         open(detailTarget(kind, name, namespace, apiVersion))

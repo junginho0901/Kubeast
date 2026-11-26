@@ -54,7 +54,7 @@ export default function NetworkDrops({ kind, namespace, name }: { kind: string; 
     <InfoSection
       title="Network Drops"
       actions={res.available ? (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CustomDropdown
             size="sm"
             value={range}
@@ -68,7 +68,7 @@ export default function NetworkDrops({ kind, namespace, name }: { kind: string; 
         </div>
       ) : undefined}
     >
-      <div className="space-y-2 text-xs" data-testid="netdrop-section">
+      <div className="space-y-2 text-xs overflow-x-auto" data-testid="netdrop-section">
         <RefreshFailure failure={failureOf(drops.error, drops.errorUpdatedAt)} className="text-xs" />
         {!res.available ? (
           <p className="text-slate-400" data-testid="netdrop-no-labels">{tr('netdrops.noLabels', "The cluster's Hubble drop metric has no pod or workload labels, so drops cannot be shown per workload. See the cluster requirements (Hubble metrics).")}</p>
@@ -80,7 +80,7 @@ export default function NetworkDrops({ kind, namespace, name }: { kind: string; 
             {list.length === 0 ? (
               <p className="text-slate-400" data-testid="netdrop-none">{tr('netdrops.none', 'No drops in the last {{w}}.', { w: range })}</p>
             ) : (
-              <table className="w-full" data-testid="netdrop-table">
+              <table className="w-full min-w-[480px]" data-testid="netdrop-table">
                 <thead className="text-slate-400">
                   <tr>
                     <th className="text-left py-1 pr-2 font-medium" />

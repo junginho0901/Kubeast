@@ -77,7 +77,7 @@ export default function NetworkFlows({ kind, namespace, name }: { kind: string; 
     <InfoSection
       title="Recent Flows"
       actions={asked ? (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CustomDropdown
             size="sm"
             value={since}
@@ -101,15 +101,15 @@ export default function NetworkFlows({ kind, namespace, name }: { kind: string; 
         </div>
       ) : undefined}
     >
-      <div className="space-y-2 text-xs" data-testid="netflow-section">
+      <div className="space-y-2 text-xs overflow-x-auto" data-testid="netflow-section">
         {!asked ? (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <p className="text-slate-400">
               {calico
                 ? tr('netflows.introCalico', "Connections Calico's Whisker saw to and from this {{kind}}, counted in packets. Calico names the pods of one ReplicaSet or Job together. Reading them is recorded in the audit log.", { kind })
                 : tr('netflows.intro', "Connections the cluster's Hubble Relay saw to and from this {{kind}}. Reading them is recorded in the audit log.", { kind })}
             </p>
-            <button type="button" className="shrink-0 h-7 px-2.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-200 text-[11px] hover:bg-slate-700" onClick={() => setAsked(true)} data-testid="netflow-load">
+            <button type="button" className="shrink-0 h-7 px-2.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-200 text-xs hover:bg-slate-700" onClick={() => setAsked(true)} data-testid="netflow-load">
               {tr('netflows.load', 'Show flows')}
             </button>
           </div>
