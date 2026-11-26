@@ -136,8 +136,8 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
               </button>
             ) : '-'}
           />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{String(describe.uid)}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px] break-all">{String(describe.resource_version)}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{String(describe.uid)}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs break-all">{String(describe.resource_version)}</span>} />}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
       </InfoSection>
@@ -149,14 +149,14 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
         <InfoSection title="Attach/Detach Errors">
           <div className="space-y-2">
             {attachErrorMessage && (
-              <div data-detail-card="" className="rounded-sm border border-red-800/60 bg-red-950/20 p-3 text-xs">
+              <div data-detail-card="" className="rounded-lg border border-red-800/60 bg-red-950/20 p-3 text-xs">
                 <p className="text-red-300 font-medium"><Tx>Attach Error</Tx></p>
                 <p className="mt-1 text-slate-200 whitespace-pre-wrap wrap-break-word">{attachErrorMessage}</p>
                 {attachErrorTime && <p className="mt-1 text-slate-400">{fmtTs(attachErrorTime)} ({fmtRel(attachErrorTime)})</p>}
               </div>
             )}
             {detachErrorMessage && (
-              <div data-detail-card="" className="rounded-sm border border-red-800/60 bg-red-950/20 p-3 text-xs">
+              <div data-detail-card="" className="rounded-lg border border-red-800/60 bg-red-950/20 p-3 text-xs">
                 <p className="text-red-300 font-medium"><Tx>Detach Error</Tx></p>
                 <p className="mt-1 text-slate-200 whitespace-pre-wrap wrap-break-word">{detachErrorMessage}</p>
                 {detachErrorTime && <p className="mt-1 text-slate-400">{fmtTs(detachErrorTime)} ({fmtRel(detachErrorTime)})</p>}
@@ -195,7 +195,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
             <InfoRow label="Volume Mode" value={String(pvSummary.volume_mode ?? '-')} />
             <InfoRow label="Source" value={String(pvSummary.source ?? '-')} />
             <InfoRow label="Driver" value={String(pvSummary.driver ?? '-')} />
-            <InfoRow label="Volume Handle" value={pvSummary.volume_handle ? <span className="font-mono break-all text-[11px]">{String(pvSummary.volume_handle)}</span> : '-'} />
+            <InfoRow label="Volume Handle" value={pvSummary.volume_handle ? <span className="font-mono break-all text-xs">{String(pvSummary.volume_handle)}</span> : '-'} />
           </div>
         </InfoSection>
       )}
@@ -246,7 +246,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
 
       {inlineVolumeSpec && (
         <InfoSection title="Inline Volume Spec">
-          <pre className="text-[11px] text-slate-300 bg-slate-950 rounded-sm p-3 max-h-[220px] overflow-auto whitespace-pre-wrap wrap-break-word">
+          <pre className="text-xs text-slate-300 bg-slate-800 rounded-lg p-3 max-h-[220px] overflow-auto whitespace-pre-wrap wrap-break-word">
             {typeof inlineVolumeSpec === 'string' ? inlineVolumeSpec : JSON.stringify(inlineVolumeSpec, null, 2)}
           </pre>
         </InfoSection>

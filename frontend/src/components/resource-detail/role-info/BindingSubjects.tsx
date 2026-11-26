@@ -22,7 +22,7 @@ export function BindingSubjects({ subjects, namespace }: { subjects: any[]; name
     <InfoSection title="Subjects ({{n}})" titleValues={{ n: subjects.length }}>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {Object.entries(counts).map(([k, c]) => (
-          <span data-detail-chip="" key={k} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[11px] text-slate-200">
+          <span key={k} data-detail-chip="" className="max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-200">
             {k}: <span className="font-mono">{String(c)}</span>
           </span>
         ))}
@@ -32,14 +32,14 @@ export function BindingSubjects({ subjects, namespace }: { subjects: any[]; name
           {paged.map((subj: any, idx: number) => {
             const saNamespace = subj.namespace ?? namespace
             return (
-              <div data-detail-card="" key={(page - 1) * 10 + idx} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-1.5" data-testid="binding-subject">
+              <div key={(page - 1) * 10 + idx} data-detail-card="" className="border-b border-hairline py-3 break-words space-y-1.5" data-testid="binding-subject">
                 <div className="text-xs text-slate-300 space-y-1">
                   <div>
-                    <span className="text-[11px] text-slate-500 mr-2"><Tx>Kind:</Tx></span>
+                    <span className="text-xs text-slate-500 mr-2"><Tx>Kind:</Tx></span>
                     <span className="font-mono">{subj.kind || '-'}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-500 mr-2"><Tx>Name:</Tx></span>
+                    <span className="text-xs text-slate-500 mr-2"><Tx>Name:</Tx></span>
                     {subj.kind === 'ServiceAccount' && subj.name && saNamespace ? (
                       <ResourceLink kind="ServiceAccount" name={subj.name} namespace={saNamespace} />
                     ) : (
@@ -48,13 +48,13 @@ export function BindingSubjects({ subjects, namespace }: { subjects: any[]; name
                   </div>
                   {subj.namespace && (
                     <div>
-                      <span className="text-[11px] text-slate-500 mr-2"><Tx>Namespace:</Tx></span>
+                      <span className="text-xs text-slate-500 mr-2"><Tx>Namespace:</Tx></span>
                       <span className="font-mono">{subj.namespace}</span>
                     </div>
                   )}
                   {subj.apiGroup && (
                     <div>
-                      <span className="text-[11px] text-slate-500 mr-2"><Tx>API Group:</Tx></span>
+                      <span className="text-xs text-slate-500 mr-2"><Tx>API Group:</Tx></span>
                       <span className="font-mono">{subj.apiGroup}</span>
                     </div>
                   )}

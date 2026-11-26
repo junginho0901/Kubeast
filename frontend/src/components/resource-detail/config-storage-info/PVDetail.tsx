@@ -154,13 +154,13 @@ export default function PVDetail({ name, rawJson }: { name: string; rawJson?: Re
             ) : claimText}
           />
           <InfoRow label="Source" value={sourceText} />
-          <InfoRow label="Volume Handle" value={volumeHandle && volumeHandle !== '-' ? <span className="font-mono break-all text-[11px]">{volumeHandle}</span> : '-'} />
+          <InfoRow label="Volume Handle" value={volumeHandle && volumeHandle !== '-' ? <span className="font-mono break-all text-xs">{volumeHandle}</span> : '-'} />
           <InfoRow
             label="Node Affinity"
-            value={nodeAffinityLines(nodeAffinity)?.map((line) => <div key={line} className="font-mono text-[11px]">{line}</div>) ?? nodeAffinity}
+            value={nodeAffinityLines(nodeAffinity)?.map((line) => <div key={line} className="font-mono text-xs">{line}</div>) ?? nodeAffinity}
           />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{String(describe.uid)}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px] break-all">{String(describe.resource_version)}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{String(describe.uid)}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs break-all">{String(describe.resource_version)}</span>} />}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
           {lastPhaseTransitionTime && (
             <InfoRow

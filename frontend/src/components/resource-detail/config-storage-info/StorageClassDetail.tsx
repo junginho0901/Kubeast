@@ -124,8 +124,8 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
               value={<span className={`badge ${successCls}`}>{successRate}%</span>}
             />
           )}
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{String(describe.uid)}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px] break-all">{String(describe.resource_version)}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{String(describe.uid)}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs break-all">{String(describe.resource_version)}</span>} />}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
       </InfoSection>
@@ -142,7 +142,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
         <InfoSection title="Mount Options">
           <div className="flex flex-wrap gap-2">
             {mountOptions.map((opt, idx) => (
-              <span data-detail-tag="" key={`${opt}-${idx}`} className="text-[11px] rounded-full border border-slate-700 bg-slate-800/80 px-2 py-1">{String(opt)}</span>
+              <span key={`${opt}-${idx}`} data-detail-tag="" className="text-xs max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-1">{String(opt)}</span>
             ))}
           </div>
         </InfoSection>
@@ -151,7 +151,7 @@ export default function StorageClassDetail({ name, rawJson }: { name: string; ra
         <InfoSection title="Allowed Topologies">
           <div className="space-y-1 text-xs text-slate-200">
             {allowedTopologies.map((line) => (
-              <div key={line} className="font-mono text-[11px] wrap-break-word">{line}</div>
+              <div key={line} className="font-mono text-xs wrap-break-word">{line}</div>
             ))}
           </div>
         </InfoSection>

@@ -152,8 +152,8 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
           {effectiveDataSource && <InfoRow label="Data Source" value={formatDataSourceRef(effectiveDataSource)} />}
           {effectiveDataSourceRef && <InfoRow label="Data Source Ref" value={formatDataSourceRef(effectiveDataSourceRef)} />}
           <InfoRow label="Resize State" value={resizeState} />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{String(describe.uid)}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{String(describe.resource_version)}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{String(describe.uid)}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs">{String(describe.resource_version)}</span>} />}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
       </InfoSection>

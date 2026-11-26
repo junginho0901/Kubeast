@@ -40,10 +40,10 @@ function Targets({ targets, fallbackIps, tone }: { targets: any[]; fallbackIps: 
           const refText = ref?.name ? `${ref.kind || 'Target'}:${ref.name}` : 'targetRef: -'
           const nodeText = t?.node_name ? `node=${t.node_name}` : null
           return (
-            <div data-detail-card="" key={`${tone}-${(page - 1) * 10 + i}`} className={`rounded-sm border px-2 py-1.5 text-xs ${borderTone}`} data-testid="endpoints-target">
+            <div key={`${tone}-${(page - 1) * 10 + i}`} data-detail-card="" className={`rounded-lg border px-2 py-1.5 text-xs ${borderTone}`} data-testid="endpoints-target">
               <p className="text-slate-200 font-mono break-all">{t?.ip || '-'}</p>
               <p className="text-slate-300 break-all">{refText}</p>
-              {nodeText && <p className="text-slate-400">{nodeText}</p>}
+              {nodeText && <p className="text-slate-400 break-all">{nodeText}</p>}
             </div>
           )
         })}
@@ -104,7 +104,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
             />
           )}
           {view?.generation != null && <InfoRow label="Generation" value={String(view.generation)} />}
-          {view?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px] break-all">{view.resource_version}</span>} />}
+          {view?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs break-all">{view.resource_version}</span>} />}
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
         </div>
         {isLoading && <p className="text-xs text-slate-400 mt-2"><Tx>Loading details...</Tx></p>}
@@ -154,7 +154,7 @@ export default function EndpointDetail({ name, namespace, kind, rawJson }: Props
         <InfoSection title="Subsets">
           <div className="space-y-2 text-xs">
             {subsets.map((s, i) => (
-              <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 p-2 space-y-0.5 text-slate-200" data-testid="endpoints-subset">
+              <div key={i} data-detail-card="" className="border-b border-hairline py-2 break-words space-y-0.5 text-slate-200" data-testid="endpoints-subset">
                 <SubsetAddresses label="Addresses" addresses={s.addresses} testId="endpoints-subset-addresses" />
                 <SubsetAddresses label="Not Ready Addresses" addresses={s.not_ready_addresses} testId="endpoints-subset-not-ready-addresses" />
                 <div><span className="text-slate-400"><Tx>Ports</Tx>:</span> {s.ports.length ? formatPorts(s.ports) : <Tx>None</Tx>}</div>

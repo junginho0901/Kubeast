@@ -56,8 +56,8 @@ export default function ContainerCard({
   const kp = keyPrefix ?? namePrefix
 
   return (
-    <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
-      <div className="flex items-center justify-between">
+    <div data-detail-card="" className="border-t border-hairline pt-3 space-y-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <span className="text-sm font-semibold text-ink wrap-break-word">{c.name || `${namePrefix}-${i + 1}`}</span>
         <div className="flex items-center gap-2">
           {isContainer && canResize && stateKey === 'running' && onResize && (
@@ -82,7 +82,7 @@ export default function ContainerCard({
           {isContainer && ready !== undefined && (
             <span className={`w-2 h-2 rounded-full ${ready ? 'bg-emerald-400' : 'bg-red-400'}`} />
           )}
-          <span className="text-[11px] text-slate-400">{stateKey}</span>
+          <span className="text-xs text-slate-400">{stateKey}</span>
         </div>
       </div>
       <div className="divide-y divide-slate-800/70">
@@ -114,7 +114,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Ports">
             <div className="flex flex-wrap gap-1">
               {toPorts(c.ports).map((port, idx) => (
-                <span data-detail-chip="" key={`${port}-${idx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span key={`${port}-${idx}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                   {port}
                 </span>
               ))}
@@ -125,7 +125,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Requests">
             <div className="flex flex-wrap gap-1">
               {toEntryPairs(requests).map(([k, v]) => (
-                <span data-detail-chip="" key={`req-${kp}-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span key={`req-${kp}-${k}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                   {k}={v}
                 </span>
               ))}
@@ -136,7 +136,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Limits">
             <div className="flex flex-wrap gap-1">
               {toEntryPairs(limits).map(([k, v]) => (
-                <span data-detail-chip="" key={`lim-${kp}-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span key={`lim-${kp}-${k}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                   {k}={v}
                 </span>
               ))}
@@ -156,14 +156,14 @@ export default function ContainerCard({
               <div className="flex flex-col gap-1">
                 {envFrom.map((ef, idx) => (
                   <div key={`envfrom-${kp}-${idx}`} className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] text-slate-400">{ef.kind}:</span>
+                    <span className="text-xs text-slate-400">{ef.kind}:</span>
                     {namespace ? (
                       <ResourceLink kind={ef.kind} name={ef.name} namespace={namespace} />
                     ) : (
-                      <span className="font-mono text-[11px]">{ef.name}</span>
+                      <span className="font-mono text-xs">{ef.name}</span>
                     )}
-                    {ef.prefix && <span className="text-[11px] text-slate-500">prefix={ef.prefix}</span>}
-                    {ef.optional && <span className="text-[11px] text-slate-500"><Tx>(optional)</Tx></span>}
+                    {ef.prefix && <span className="text-xs text-slate-500">prefix={ef.prefix}</span>}
+                    {ef.optional && <span className="text-xs text-slate-500"><Tx>(optional)</Tx></span>}
                   </div>
                 ))}
               </div>
@@ -174,7 +174,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Mounts">
             <div className="flex flex-wrap gap-1">
               {toMounts(mounts).map((mount, idx) => (
-                <span data-detail-chip="" key={`${mount}-${idx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span key={`${mount}-${idx}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                   {mount}
                 </span>
               ))}

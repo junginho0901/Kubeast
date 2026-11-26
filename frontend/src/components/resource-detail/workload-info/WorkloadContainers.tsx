@@ -21,9 +21,9 @@ export default function WorkloadContainers({ containers }: Props) {
     <InfoSection title="Containers">
       <div className="space-y-2">
         {containers.map((container: any, idx: number) => (
-          <div data-detail-card="" key={`${container.name || 'container'}-${idx}`} className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+          <div key={`${container.name || 'container'}-${idx}`} data-detail-card="" className="border-t border-hairline pt-3 space-y-2">
             <div className="pb-2 border-b border-slate-800">
-              <div className="text-sm font-semibold text-ink wrap-break-word">{container.name || `container-${idx + 1}`}</div>
+              <div className="text-lg font-semibold text-ink wrap-break-word">{container.name || `container-${idx + 1}`}</div>
             </div>
             <div className="divide-y divide-slate-800/70">
               <ContainerKvRow label="Image">
@@ -36,7 +36,7 @@ export default function WorkloadContainers({ containers }: Props) {
                 <ContainerKvRow label="Ports">
                   <div className="flex flex-wrap gap-1.5">
                     {toPorts(container.ports).map((port, portIdx) => (
-                      <span data-detail-chip="" key={`${port}-${portIdx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span key={`${port}-${portIdx}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                         {port}
                       </span>
                     ))}
@@ -47,7 +47,7 @@ export default function WorkloadContainers({ containers }: Props) {
                 <ContainerKvRow label="Requests">
                   <div className="flex flex-wrap gap-1.5">
                     {toEntryPairs(container.requests).map(([k, v]) => (
-                      <span data-detail-chip="" key={`req-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span key={`req-${k}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                         {k}={v}
                       </span>
                     ))}
@@ -58,7 +58,7 @@ export default function WorkloadContainers({ containers }: Props) {
                 <ContainerKvRow label="Limits">
                   <div className="flex flex-wrap gap-1.5">
                     {toEntryPairs(container.limits).map(([k, v]) => (
-                      <span data-detail-chip="" key={`lim-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span key={`lim-${k}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                         {k}={v}
                       </span>
                     ))}
@@ -74,7 +74,7 @@ export default function WorkloadContainers({ containers }: Props) {
                 <ContainerKvRow label="Mounts">
                   <div className="flex flex-wrap gap-1.5">
                     {toMounts(container.volume_mounts).map((mount, mountIdx) => (
-                      <span data-detail-chip="" key={`${mount}-${mountIdx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                      <span key={`${mount}-${mountIdx}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-100 font-mono">
                         {mount}
                       </span>
                     ))}
