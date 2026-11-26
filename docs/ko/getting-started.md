@@ -334,6 +334,7 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 
 - `bedrock`, `geminivertexai`, `anthropicvertexai`는 API 서버가 거절합니다. 전에는 받았지만 Kubeast에 이 공급자들을 부르는 코드가 없었습니다.
 - 이 모델들은 OpenAI 호환 엔드포인트로 쓰세요. 공급자가 제공하면 그 엔드포인트를, 아니면 그 앞에 둔 LiteLLM 같은 게이트웨이를 씁니다. provider `openai`에 `spec.baseURL`로 주소를 넣거나, **Admin > AI Models**에서 provider `custom`을 고르세요.
+- LiteLLM은 뒤에 둔 모델이 받지 않는 값(예: 추론 모델의 `temperature`)을 400("does not support parameters")으로 거절합니다. Kubeast는 그 값을 빼고 다시 보내고, 그 뒤로는 처음부터 뺍니다(ai-service 파드마다, 재시작 전까지). 프록시 설정의 `litellm_settings` 아래에 `drop_params: true`를 두면 LiteLLM이 그런 값을 스스로 빼고 거절하지 않습니다.
 - 업그레이드 전에 이 값으로 저장된 ModelConfig는 그대로 남고, 컨트롤러가 더는 동기화하지 않습니다. `kubectl get modelconfigs -A`로 각 공급자를 볼 수 있습니다. `spec.provider`를 바꾸거나 지우세요. 지우면 **Admin > AI Models**의 그 설정도 함께 없어집니다.
 
 **API로 저장하는 설정**(`POST`·`PATCH /api/v1/ai/model-configs`)은 위 공급자나 `azure`, `google`(Gemini), `custom`을 씁니다. 다른 OpenAI 호환 엔드포인트를 새로 넣을 때는 `custom`에 `base_url`을 넣으세요.

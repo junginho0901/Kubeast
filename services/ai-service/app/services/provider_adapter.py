@@ -49,6 +49,10 @@ _DROPPABLE = frozenset({
 # Azure's form names the parameter without quotes.
 _REFUSED_IN_MESSAGE = re.compile(
     r"Unsupported (?:parameter|value): '(\w+)'|Unrecognized request argument supplied: (\w+)")
+# LiteLLM lists what the model behind it refuses, unless drop_params is on (litellm/utils.py get_optional_params,
+# v1.111.0): "<provider> does not support parameters: ['temperature', 'top_p'], for model=…", a 400 with param null.
+_REFUSED_BY_GATEWAY = re.compile(r"does not support parameters: \[([^\]]*)\]")
+_LISTED = re.compile(r"\\?'(\w+)\\?'")
 # (provider, base URL, model) → the parameters it refused, so later calls leave them out.
 _refused: Dict[tuple, set] = {}
 # Function tools in Chat Completions only with reasoning_effort "none" (developers.openai.com/api/docs/guides/latest-model).
@@ -71,6 +75,10 @@ def _refused_param(err: Exception) -> Optional[str]:
     if not param:
         m = _REFUSED_IN_MESSAGE.search(str(err))
         param = (m.group(1) or m.group(2)) if m else None
+    if not param:
+        # the first of the listed parameters that may be left out; the next refusal names the next
+        listed = _REFUSED_BY_GATEWAY.search(str(err))
+        param = next((p for p in _LISTED.findall(listed.group(1)) if p in _DROPPABLE), None) if listed else None
     return param if param in _DROPPABLE else None
 
 
