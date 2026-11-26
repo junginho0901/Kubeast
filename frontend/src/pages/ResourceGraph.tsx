@@ -635,7 +635,7 @@ export default function ResourceGraph() {
                   <line x1="0" y1="4" x2="20" y2="4" stroke={style.stroke} strokeWidth="2" strokeDasharray={style.strokeDasharray || ''} />
                   <polygon points="20,1 24,4 20,7" fill={style.stroke} />
                 </svg>
-                <span style={{ color: style.stroke }}>{style.label}</span>
+                <span className="text-slate-400">{style.label}</span>
               </div>
             )
           })}
@@ -647,7 +647,7 @@ export default function ResourceGraph() {
                   <line x1="0" y1="4" x2="20" y2="4" stroke={lineColor[st]} strokeWidth="2.5" strokeDasharray={st === 'dropped' ? '6 4' : ''} />
                   <polygon points="20,1 24,4 20,7" fill={lineColor[st]} />
                 </svg>
-                <span style={{ color: lineColor[st] }}>{t(`resourceGraph.traffic.legend.${st}`, legendText[st])}</span>
+                <span className="text-slate-400">{t(`resourceGraph.traffic.legend.${st}`, legendText[st])}</span>
               </div>
             ))}
             <div className="flex items-center gap-2">
