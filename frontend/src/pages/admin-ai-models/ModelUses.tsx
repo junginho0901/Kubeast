@@ -55,24 +55,24 @@ export default function ModelUses({ configs }: { configs: ModelConfigResponse[] 
   }
 
   return (
-    <div className="card space-y-4" data-testid="model-uses">
+    <div className="card min-w-0 space-y-5" data-testid="model-uses">
       <div>
         <h2 className="text-lg font-semibold text-ink">{tr('admin.aiModels.perUse.title', 'Which model answers')}</h2>
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="mt-1 text-sm leading-relaxed text-slate-400">
           {tr('admin.aiModels.perUse.intro', 'The chat runs on the active model, and the floating assistant and history summaries on an economy one when there is one. Choose a model for the rest here.')}
         </p>
-        <p className="mt-1 text-sm text-slate-400" data-testid="model-uses-stronger">
+        <p className="mt-1 text-sm leading-relaxed text-slate-400" data-testid="model-uses-stronger">
           {tr('admin.aiModels.perUse.stronger', 'Finding the cause of a hard problem goes better with a stronger model. It is slower and more expensive.')}
         </p>
       </div>
       {uses.isError && !uses.data ? (
-        <p role="alert" className="text-sm text-red-400 break-words" data-testid="model-uses-error">
+        <p role="alert" className="text-sm text-notice-text-failed break-words" data-testid="model-uses-error">
           {tr('admin.aiModels.perUse.readFailed', 'Could not read which model answers: {{reason}}', { reason: failureText(uses.error) })}
         </p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid divide-y divide-hairline md:grid-cols-3 md:divide-x md:divide-y-0">
           {uses.data?.map((u) => (
-            <div key={u.use} data-testid={`model-use-${u.use}`}>
+            <div key={u.use} className="min-w-0 py-4 first:pt-0 last:pb-0 md:px-5 md:py-0 md:first:pl-0 md:last:pr-0" data-testid={`model-use-${u.use}`}>
               {u.chart_model ? (
                 <CustomDropdown
                   label={label(u.use)}
@@ -94,13 +94,13 @@ export default function ModelUses({ configs }: { configs: ModelConfigResponse[] 
                 />
               )}
               {linesOf(u, tr).map((line) => (
-                <p key={line.text} className={`mt-1 text-xs break-words ${line.problem ? 'text-amber-300' : 'text-slate-400'}`}>{line.text}</p>
+                <p key={line.text} className={`mt-2 text-xs leading-relaxed break-words ${line.problem ? 'text-notice-text-warning' : 'text-slate-400'}`}>{line.text}</p>
               ))}
               {u.chart_model && u.choice && (
                 // the locked field does not show it, and it answers again once the chart names no model, a disabled one not then either
-                <div className="mt-1 flex items-start justify-end gap-2 text-xs" data-testid={`model-use-${u.use}-kept`}>
+                <div className="mt-2 flex items-start justify-end gap-2 text-xs" data-testid={`model-use-${u.use}-kept`}>
                   {u.choice.enabled && (
-                    <span className="min-w-0 flex-1 break-words text-amber-300">
+                    <span className="min-w-0 flex-1 break-words text-notice-text-warning">
                       {tr('admin.aiModels.perUse.kept', '"{{name}}" is chosen here and applies once the chart names no model.', { name: u.choice.name })}
                     </span>
                   )}

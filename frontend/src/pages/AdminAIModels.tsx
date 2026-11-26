@@ -28,10 +28,10 @@ export default function AdminAIModels() {
 
   return (
     // page-scrolls: with a model's edit form open the page is longer than the screen, and its Update ends the page
-    <div className="page-scrolls space-y-6">
+    <div className="page-scrolls min-w-0 space-y-6">
       {/* header */}
-      <div className="page-head items-center mb-6">
-        <div>
+      <div className="page-head items-center">
+        <div className="min-w-0">
           <h1 className="text-3xl font-semibold text-ink flex items-center gap-2">
             <Bot className="h-5 w-5 text-slate-400" />
             {tr('admin.aiModels.title', 'AI Model Configuration')}
@@ -91,7 +91,7 @@ export default function AdminAIModels() {
         </div>
       ) : (
         // configs an admin adds one at a time: no pager (the list guard skips it)
-        <div className="space-y-3 mt-4" data-list-bounded="model configs made by hand" data-testid="ai-model-list">
+        <div className="min-w-0 space-y-3" data-list-bounded="model configs made by hand" data-testid="ai-model-list">
           {configs?.map((cfg) => {
             const isEditing = editingId === cfg.id
             return (

@@ -319,7 +319,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
       <InfoSection title="Endpoint Status">
         {/* the endpoints come from the describe answer only: not read is not 0 Ready and no addresses */}
         {describeError && !describe ? (
-          <p className="text-xs text-slate-500" data-testid="service-endpoints-unread">—</p>
+          <p className="text-xs text-notice-text-muted" data-testid="service-endpoints-unread">—</p>
         ) : describe?.endpoints_error ? (
           <ListReadFailure error={describe.endpoints_error} testId="service-endpoints-failed" list="Endpoint Status" />
         ) : (
