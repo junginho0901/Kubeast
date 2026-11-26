@@ -419,7 +419,7 @@ export default function AdminUsers() {
             >
               <Clock className="w-4 h-4" />
               {tr('adminUsers.pendingBtn', 'Pending')}
-              <span className="rounded-full bg-amber-950 px-1.5 text-[10px] font-semibold text-amber-300">
+              <span className="rounded-full bg-badge-surface-pending px-1.5 text-[10px] font-semibold text-badge-text-pending">
                 {pendingRows.length}
               </span>
             </button>

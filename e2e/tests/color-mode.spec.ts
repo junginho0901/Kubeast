@@ -6,9 +6,7 @@ import { test, expect, type Page } from '@playwright/test'
 // white; the sign-in page keeps the default navy in every mode.
 
 const KEY = 'kubeast.colorMode'
-const PAGE_BG = { dark: 'rgb(20, 20, 20)', light: 'rgb(247, 248, 248)' }
-// Chromium reports the default page colour in the oklch it is written in
-const DEFAULT_BG = /^oklch\(0\.129 0\.042 264\.69/
+const PAGE_BG = { default: 'rgb(13, 17, 25)', dark: 'rgb(20, 20, 20)', light: 'rgb(245, 247, 248)' }
 
 const htmlMode = (page: Page) => page.evaluate(() => document.documentElement.dataset.colorMode ?? null)
 const htmlBg = (page: Page) => page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)
@@ -22,7 +20,7 @@ test.describe('Color mode', () => {
     await page.evaluate((k) => localStorage.removeItem(k), KEY)
     await page.reload()
     expect(await htmlMode(page)).toBeNull()
-    await expect.poll(() => htmlBg(page)).toMatch(DEFAULT_BG)
+    await expect.poll(() => htmlBg(page)).toBe(PAGE_BG.default)
     await expect(page.getByTestId('color-mode-default')).toHaveAttribute('aria-checked', 'true')
 
     await page.getByTestId('color-mode-dark').click()
@@ -41,7 +39,7 @@ test.describe('Color mode', () => {
     await page.getByTestId('color-mode-default').click()
     expect(await htmlMode(page)).toBeNull()
     expect(await stored(page)).toBeNull()
-    await expect.poll(() => htmlBg(page)).toMatch(DEFAULT_BG)
+    await expect.poll(() => htmlBg(page)).toBe(PAGE_BG.default)
   })
 
   test('text on a surface follows the mode, white on the sky stays white', async ({ page }) => {

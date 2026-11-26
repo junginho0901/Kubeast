@@ -153,7 +153,7 @@ export default function AccessRequests() {
           >
             {k === 'pending' ? tr('accessRequests.tabs.pending', 'Pending') : tr('accessRequests.tabs.history', 'History')}
             {k === 'pending' && pendingCount > 0 && (
-              <span className="ml-2 rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-black">{pendingCount}</span>
+              <span className="ml-2 rounded-full bg-badge-surface-pending px-1.5 text-[10px] font-semibold text-badge-text-pending">{pendingCount}</span>
             )}
           </button>
         ))}

@@ -66,7 +66,7 @@
   --color-notice-text-failed-detail: var(--color-red-300);
   --color-notice-text-succeeded: var(--color-emerald-300);
   --color-notice-text-warning: var(--color-amber-300);
-  --color-notice-text-warning-heading: var(--color-amber-100);
+  --color-notice-text-warning-heading: var(--color-amber-200);
   --color-notice-text-warning-detail: var(--color-amber-200);
   --color-notice-icon-warning: var(--color-amber-300);
   --color-notice-surface-warning: var(--color-amber-900);
@@ -90,6 +90,9 @@
   --color-drain-status-active: var(--color-primary-300);
   --color-drain-surface-active: var(--color-primary-500);
   --color-drain-border-active: var(--color-primary-500);
+
+  --color-badge-surface-pending: var(--color-amber-950);
+  --color-badge-text-pending: var(--color-amber-300);
 }
 
 /* Colour modes (DESIGN.md, utils/colorMode.ts): the data-color-mode attribute on <html> swaps the neutral ladders;
@@ -129,8 +132,32 @@
     --color-gray-950: oklch(12.9% 0.042 264.695);
   }
 
+  /* The console's default is a quieter navy. Local default scopes on sign-in keep the brand palette above. */
   :root:not([data-color-mode]),
   :root[data-color-mode='default'] {
+    --color-ink: #fff;
+    --color-slate-50: #f6f8fb;
+    --color-slate-100: #eef2f7;
+    --color-slate-200: #dce3eb;
+    --color-slate-300: #bcc5d1;
+    --color-slate-400: #a8b4c4;
+    --color-slate-500: #9aa7b8;
+    --color-slate-600: #475566;
+    --color-slate-700: #202936;
+    --color-slate-800: #151b25;
+    --color-slate-900: #0d1119;
+    --color-slate-950: #0a0e15;
+    --color-gray-50: #f6f8fb;
+    --color-gray-100: #eef2f7;
+    --color-gray-200: #dce3eb;
+    --color-gray-300: #bcc5d1;
+    --color-gray-400: #a8b4c4;
+    --color-gray-500: #9aa7b8;
+    --color-gray-600: #475566;
+    --color-gray-700: #202936;
+    --color-gray-800: #151b25;
+    --color-gray-900: #0d1119;
+    --color-gray-950: #0a0e15;
     --color-hairline: #303a49;
     --color-control: #718096;
   }
@@ -163,7 +190,7 @@
     --color-gray-950: #0a0a0a;
   }
 
-  /* light — off-white page (#f7f8f8) with white cards; text and line greys from GitHub Primer's light neutral scale
+  /* light — off-white page (#f5f7f8) with white cards; text and line greys from GitHub Primer's light neutral scale
      (primitives 11.10: fgColor-default #1f2328, fgColor-muted #59636e, the lightest text that keeps 4.5:1 here).
      The hues turn over around their fills (500-700 stay): text shades made for a dark ground (200-400) take
      Tailwind's 950-800 of the same hue and the dark tints and borders (800-950) its 200-50, so text keeps 4.5:1 on
@@ -180,9 +207,9 @@
     --color-slate-400: #454c54;
     --color-slate-500: #59636e;
     --color-slate-600: #c8d1da;
-    --color-slate-700: #e0e6eb;
+    --color-slate-700: #edf1f4;
     --color-slate-800: #ffffff;
-    --color-slate-900: #f7f8f8;
+    --color-slate-900: #f5f7f8;
     --color-slate-950: #ffffff;
     --color-gray-50: #1f2328;
     --color-gray-100: #1f2328;
@@ -191,9 +218,9 @@
     --color-gray-400: #454c54;
     --color-gray-500: #59636e;
     --color-gray-600: #c8d1da;
-    --color-gray-700: #e0e6eb;
+    --color-gray-700: #edf1f4;
     --color-gray-800: #ffffff;
-    --color-gray-900: #f7f8f8;
+    --color-gray-900: #f5f7f8;
     --color-gray-950: #ffffff;
     --color-primary-bright: #0284c7;
     --color-primary-200: #0c4a6e;
