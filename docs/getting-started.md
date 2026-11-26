@@ -331,6 +331,12 @@ The code is in `app/services/anthropic_messages.py`, and responses are converted
 - **Private Link**: for resources that resolve to a private address through Private Link, add that host to `ai.baseUrlAllowedHosts`.
 - **CRD**: put the v1 address in `spec.baseURL` and the deployment name in `spec.model`. The CRD has no `azureOpenAI` block, so the API server does not keep one.
 
+**A ModelConfig's provider** (`spec.provider`) is one of `openai`, `anthropic`, `azureopenai`, `gemini`, `ollama` and `claude-code`.
+
+- The API server refuses `bedrock`, `geminivertexai` and `anthropicvertexai`. It took them before, but Kubeast had no code that calls them.
+- For those models, use an OpenAI-compatible endpoint: the provider's own where it offers one, or a gateway such as LiteLLM in front of it. Set provider `openai` with the address in `spec.baseURL`, or provider `custom` in **Admin > AI Models**.
+- A ModelConfig stored with one of them before the upgrade stays, and the controller no longer syncs it. `kubectl get modelconfigs -A` shows each one's provider. Change its `spec.provider` or delete it; deleting it also removes its setting from **Admin > AI Models**.
+
 **Using a Claude subscription (provider `claude-code`, personal use)** lets you chat with the `claude setup-token` value of a Claude Pro/Max subscription instead of an API key.
 Only Claude Code accepts subscription tokens, so ai-service starts Claude Code for each model call (Claude Agent SDK, `app/services/claude_code.py`).
 The tools Claude Code calls are handled inside this process by the chat's tool code.

@@ -1,0 +1,32 @@
+suite: ModelConfig CRD — spec.provider takes only the providers ai-service can call
+templates:
+  - model-config-crd.yaml
+tests:
+  - it: lists the providers ai-service can call, the same as the controller's ProviderSet
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.provider.enum
+          value: [openai, anthropic, azureopenai, gemini, ollama, claude-code]
+      - equal:
+          path: spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.provider.default
+          value: openai
+
+  - it: refuses bedrock, geminivertexai and anthropicvertexai, which had no implementation, and has no block for them
+    documentIndex: 0
+    asserts:
+      - notContains:
+          path: spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.provider.enum
+          content: bedrock
+      - notContains:
+          path: spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.provider.enum
+          content: geminivertexai
+      - notContains:
+          path: spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.provider.enum
+          content: anthropicvertexai
+      - notExists:
+          path: spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.bedrock
+      - notExists:
+          path: spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.geminiVertexAI
+      - notExists:
+          path: spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.anthropicVertexAI

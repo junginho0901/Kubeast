@@ -13,15 +13,13 @@ var (
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 	AddToScheme   = SchemeBuilder.AddToScheme
 	Codecs        = serializer.NewCodecFactory(runtime.NewScheme())
-	ProviderSet   = sets.NewString(
+	// ProviderSet: the providers ai-service can call, the same values as the CRD's spec.provider enum.
+	ProviderSet = sets.NewString(
 		"openai",
 		"anthropic",
 		"azureopenai",
 		"gemini",
-		"geminivertexai",
-		"anthropicvertexai",
 		"ollama",
-		"bedrock",
 		"claude-code",
 	)
 )
@@ -41,17 +39,14 @@ type ModelConfigSpec struct {
 	Tier      string `json:"tier,omitempty"` // "default" (empty) or "economy": the model chat summaries and the floating assistant use
 	// The model's own limits, as the AI Models fields set them: the longest answer in tokens and the longest tool result
 	// the model is given, in characters. Empty: ai-service's defaults (4 096 or 2 048 tokens, 6 000 characters).
-	MaxTokens         *int64                   `json:"maxTokens,omitempty"`
-	ToolResultChars   *int64                   `json:"toolResultChars,omitempty"`
-	ModelInfo         *ModelInfo               `json:"modelInfo,omitempty"`
-	OpenAI            *OpenAIConfig            `json:"openAI,omitempty"`
-	Anthropic         *AnthropicConfig         `json:"anthropic,omitempty"`
-	AzureOpenAI       *AzureOpenAIConfig       `json:"azureOpenAI,omitempty"`
-	Gemini            *GeminiConfig            `json:"gemini,omitempty"`
-	GeminiVertexAI    *GeminiVertexAIConfig    `json:"geminiVertexAI,omitempty"`
-	AnthropicVertexAI *AnthropicVertexAIConfig `json:"anthropicVertexAI,omitempty"`
-	Ollama            *OllamaConfig            `json:"ollama,omitempty"`
-	Bedrock           *BedrockConfig           `json:"bedrock,omitempty"`
+	MaxTokens       *int64             `json:"maxTokens,omitempty"`
+	ToolResultChars *int64             `json:"toolResultChars,omitempty"`
+	ModelInfo       *ModelInfo         `json:"modelInfo,omitempty"`
+	OpenAI          *OpenAIConfig      `json:"openAI,omitempty"`
+	Anthropic       *AnthropicConfig   `json:"anthropic,omitempty"`
+	AzureOpenAI     *AzureOpenAIConfig `json:"azureOpenAI,omitempty"`
+	Gemini          *GeminiConfig      `json:"gemini,omitempty"`
+	Ollama          *OllamaConfig      `json:"ollama,omitempty"`
 }
 
 type SecretKeyRef struct {
@@ -111,35 +106,9 @@ type GeminiConfig struct {
 	ResponseMimeType string   `json:"responseMimeType,omitempty"`
 }
 
-type GeminiVertexAIConfig struct {
-	ProjectID        string   `json:"projectID,omitempty"`
-	Location         string   `json:"location,omitempty"`
-	MaxOutputTokens  *int64   `json:"maxOutputTokens,omitempty"`
-	Temperature      string   `json:"temperature,omitempty"`
-	TopP             string   `json:"topP,omitempty"`
-	TopK             string   `json:"topK,omitempty"`
-	StopSequences    []string `json:"stopSequences,omitempty"`
-	ResponseMimeType string   `json:"responseMimeType,omitempty"`
-	CandidateCount   *int64   `json:"candidateCount,omitempty"`
-}
-
-type AnthropicVertexAIConfig struct {
-	ProjectID     string   `json:"projectID,omitempty"`
-	Location      string   `json:"location,omitempty"`
-	MaxTokens     *int64   `json:"maxTokens,omitempty"`
-	Temperature   string   `json:"temperature,omitempty"`
-	TopP          string   `json:"topP,omitempty"`
-	TopK          string   `json:"topK,omitempty"`
-	StopSequences []string `json:"stopSequences,omitempty"`
-}
-
 type OllamaConfig struct {
 	Host    string            `json:"host,omitempty"`
 	Options map[string]string `json:"options,omitempty"`
-}
-
-type BedrockConfig struct {
-	Region string `json:"region,omitempty"`
 }
 
 type ModelConfigStatus struct {

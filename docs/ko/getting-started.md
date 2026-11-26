@@ -330,6 +330,12 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - Private Link로 사설 주소가 나오는 리소스는 그 호스트를 `ai.baseUrlAllowedHosts`에 넣으세요.
 - CRD로 만들 때는 `spec.baseURL`에 v1 주소를, `spec.model`에 배포 이름을 넣습니다. CRD에는 `azureOpenAI` 블록이 없어 API 서버가 그 값을 받지 않습니다.
 
+**ModelConfig의 provider**(`spec.provider`)는 `openai`, `anthropic`, `azureopenai`, `gemini`, `ollama`, `claude-code` 중 하나입니다.
+
+- `bedrock`, `geminivertexai`, `anthropicvertexai`는 API 서버가 거절합니다. 전에는 받았지만 Kubeast에 이 공급자들을 부르는 코드가 없었습니다.
+- 이 모델들은 OpenAI 호환 엔드포인트로 쓰세요. 공급자가 제공하면 그 엔드포인트를, 아니면 그 앞에 둔 LiteLLM 같은 게이트웨이를 씁니다. provider `openai`에 `spec.baseURL`로 주소를 넣거나, **Admin > AI Models**에서 provider `custom`을 고르세요.
+- 업그레이드 전에 이 값으로 저장된 ModelConfig는 그대로 남고, 컨트롤러가 더는 동기화하지 않습니다. `kubectl get modelconfigs -A`로 각 공급자를 볼 수 있습니다. `spec.provider`를 바꾸거나 지우세요. 지우면 **Admin > AI Models**의 그 설정도 함께 없어집니다.
+
 **Claude 구독으로 쓰기 (provider `claude-code`, 개인용)** — API 키 대신 Claude Pro/Max 구독의 `claude setup-token` 값으로 채팅합니다.
 구독 토큰은 Claude Code에서만 쓸 수 있으므로, ai-service는 모델을 호출할 때마다 Claude Agent SDK(`app/services/claude_code.py`)로 Claude Code를 띄웁니다.
 Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 안에서 처리합니다.
