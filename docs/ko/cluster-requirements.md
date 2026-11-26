@@ -247,7 +247,7 @@ VictoriaMetrics는 Prometheus 질의 API를 그대로 제공하므로 화면과 
 | kube-state-metrics의 `kube_pod_container_status_restarts_total`, `kube_pod_container_resource_limits`(`resource="memory"`), cAdvisor의 `container_cpu_cfs_periods_total`, `container_cpu_cfs_throttled_periods_total`, `container_memory_working_set_bytes`(라벨 `namespace`·`pod`·`container`) | kube-state-metrics, kubelet의 cAdvisor | AI의 미리 좁히기(`anomaly_rank`): 재시작, CPU 걸림, limit 대비 메모리 |
 | `container_cpu_usage_seconds_total`, `container_cpu_cfs_periods_total`, `container_cpu_cfs_throttled_periods_total`, kubelet이 내면 `container_pressure_cpu_waiting_seconds_total`(라벨 `namespace`·`pod`·`container`와, 노드를 담은 `node` 또는 `instance`), `node_cpu_seconds_total` 또는 `system_cpu_time_seconds_total{cpu,state}`, `node_pressure_cpu_waiting_seconds_total` | kubelet의 cAdvisor, node-exporter 또는 hostmetrics | AI의 노드 이웃(`get_node_metrics`의 `node`): 코어, CPU 걸림, CPU를 기다린 시간, CPU별 사용 비율 |
 | `kubelet_volume_stats_used_bytes`·`capacity_bytes`·`available_bytes` | kubelet `/metrics` — CSI 드라이버가 볼륨 통계를 내야 합니다(hostPath·local-path는 내지 않아 N/A) | 스토리지 분석 |
-| `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`·`FB_FREE`, `DCGM_FI_DEV_MEMORY_TEMP` | NVIDIA DCGM exporter | GPU 화면 |
+| `DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_FB_USED`·`FB_FREE`, `DCGM_FI_DEV_MEMORY_TEMP`, 또는 dcgm-exporter 4.9.0의 이름 `DCGM_FI_DEV_GPU_UTIL_RATIO`(0~1 비율, 퍼센트로 표시)·`DCGM_FI_DEV_FB_USED_BYTES`·`FB_FREE_BYTES`(바이트, MiB로 표시)·`DCGM_FI_DEV_MEMORY_TEMP_CELSIUS` | NVIDIA DCGM exporter | GPU 화면 |
 | `nginx_ingress_controller_request_duration_seconds_bucket` | ingress-nginx 컨트롤러 | Ingress 드로어 지연(P50/P95/P99) |
 | OpenCost가 내는 지표 | OpenCost(§4) | 비용 |
 
@@ -359,12 +359,12 @@ Read 사용자에게도 열어 주려면 이 주소를 §1의 `viewerProxyServic
 | Intel GPU plugin | 노드의 `gpu.intel.com/i915`·`gpu.intel.com/xe` 자원을 NVIDIA와 같은 규칙으로 셉니다. `gpu.intel.com/monitoring`(`i915_monitoring`·`xe_monitoring`)과 v0.32까지 플러그인의 `millicores`·`memory.max`·`tiles`는 장치가 아니라 세지 않습니다. DaemonSet `default` 또는 `kube-system`의 `intel-gpu-plugin`(kustomize 기본)·`inteldeviceplugins-system/intel-gpu-plugin-gpudeviceplugin-sample`(예제·차트 이름의 GpuDevicePlugin인 오퍼레이터) | GPU 수·할당, 플러그인 상태 |
 | Intel NFD 규칙 | 노드 라벨 `gpu.intel.com/product`·`gpu.intel.com/family`(메모리·드라이버 라벨 없음) | GPU 모델, Node 상세 창 |
 | time-slicing 설정 | ConfigMap `time-slicing-config`·`nvidia-plugin-configs`·`time-slicing`(위 Namespace) | 시분할 설정 |
-| DCGM exporter | §3 표의 `DCGM_FI_DEV_*` 지표와 라벨 `UUID`(또는 `uuid`)·`hostname`(dcgm-exporter 4.6.0 전에는 `Hostname`)·`gpu`·`modelName`, GPU를 쓰는 Pod는 스크레이프가 이름을 바꿨으면(`honor_labels: false`이고 대상에 자기 `pod` 라벨이 있을 때) `exported_pod`·`exported_namespace`, 아니면 `pod`·`namespace`. GPU Dashboard는 GPU를 요청한 Pod이거나 할당된 ResourceClaim이 예약된 Pod(DRA)일 때만 GPU의 Pod 이름을 보여 주므로, 쉬는 GPU에 붙은 exporter 자기 Pod 이름은 나오지 않습니다 | 사용률·메모리·온도, GPU Pod별 사용률 |
+| DCGM exporter | §3 표의 `DCGM_FI_DEV_*` 지표와 라벨 `UUID`(또는 `uuid`)·`hostname`(dcgm-exporter 4.6.0 전에는 `Hostname`)·`gpu`·`modelName`, GPU를 쓰는 Pod는 스크레이프가 이름을 바꿨으면(`honor_labels: false`이고 대상에 자기 `pod` 라벨이 있을 때) `exported_pod`·`exported_namespace`, 아니면 `pod`·`namespace`. GPU Dashboard는 GPU를 요청한 Pod이거나 할당된 ResourceClaim이 예약된 Pod(DRA)일 때만 GPU의 Pod 이름을 보여 주므로, 쉬는 GPU에 붙은 exporter 자기 Pod 이름은 나오지 않습니다. 지표는 dcgm-exporter 4.9.0 전 이름과 4.9.0 이름(DCGM 4.7의 이름, 바이트와 0~1 비율)을 둘 다 읽어 옛 단위(퍼센트·MiB·°C)로 바꾸고, 두 이름의 라벨이 같으면 옛 이름 시리즈를 읽으므로 어느 판의 exporter든, 두 판의 GPU가 섞여 있든 숫자가 같습니다 | 사용률·메모리·온도, GPU Pod별 사용률 |
 | DRA | `resource.k8s.io`(1.34+ v1, 1.32–1.33 v1beta2/v1beta1, 1.31 v1alpha3) — API 탐색으로 버전 선택. 네 종류의 목록과 실시간 갱신(watch), 상세 창용으로 ResourceClaim(Used By·Device Allocations)과 그 Namespace의 Pod(Using Pods·Related ResourceClaims)를, GPU Dashboard용으로 ResourceClaim의 `status.reservedFor` Pod을 사용자로 읽습니다 — `view`와 `kubeast:cluster-reader`가 덮습니다 | DeviceClass·ResourceClaim·ResourceClaimTemplate·ResourceSlice |
 
 NVIDIA GPU Operator를 쓰면 위 구성 요소가 한 번에 설치됩니다. 회사는 Kubernetes "Schedule GPUs"가 드는 셋이며, 다른 가속기(`habana.ai/gaudi`·`aws.amazon.com/neuron` 등)는 GPU로 세지 않고, 사용률·메모리·온도는 NVIDIA DCGM exporter에서만 읽습니다. 이 절은 코드를 기준으로 썼으며, 실제 GPU 클러스터에서는 검증하지 않았습니다. 위의 수·라벨·지표 라벨은 `nvidia.com/gpu`·`nvidia.com/mig-1g.5gb`를 확장 자원으로 받은 kind 노드와 대역 exporter로(e2e `number-check-gpu.spec.ts`), AMD·Intel은 그 자원과 라벨을 받은 kubelet 없는 Node 객체 2개로 확인합니다(e2e `number-check-gpu-vendors.spec.ts`).
 
-- **확인**: `kubectl describe node <node>`(Allocated resources), `kubectl get node <node> --show-labels`, Prometheus에서 `DCGM_FI_DEV_GPU_UTIL`과 그 라벨.
+- **확인**: `kubectl describe node <node>`(Allocated resources), `kubectl get node <node> --show-labels`, Prometheus에서 `DCGM_FI_DEV_GPU_UTIL`(dcgm-exporter 4.9.0부터는 `DCGM_FI_DEV_GPU_UTIL_RATIO`)과 그 라벨.
 
 ## 7. 있으면 보여 주는 API
 

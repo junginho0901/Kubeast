@@ -1200,7 +1200,7 @@ K8S_READONLY_TOOLS: List[Dict] = [
             "description": (
                 "GPUs and DRA, as the GPU screens show them: capacity, allocatable, in use (kubectl describe node's Allocated resources), free and waiting, in total, per company (NVIDIA, AMD, Intel) "
                 "and per node; each pod's request and status; device plugins, MIG and time-slicing; DeviceClasses and ResourceClaimTemplates; utilization, memory and temperature from DCGM where the "
-                "cluster's Prometheus has it. free is allocatable minus in use on each node, whatever the node's status. Use the counts here instead of adding up rows. A number a source could not give is null and the source is named in \"refused\" (the user's grant does not "
+                "cluster's Prometheus has it, under dcgm-exporter's metric names before 4.9.0 or its 4.9.0 names, in the same units either way. free is allocatable minus in use on each node, whatever the node's status. Use the counts here instead of adding up rows. A number a source could not give is null and the source is named in \"refused\" (the user's grant does not "
                 "reach it), \"not_read\" or \"not_served\", and utilization says why: it is not counted, not zero. ResourceClaims and ResourceSlices are k8s_get_resources."
             ),
             "parameters": {"type": "object", "properties": {}},

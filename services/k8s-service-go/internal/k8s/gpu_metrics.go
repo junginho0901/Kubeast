@@ -23,14 +23,17 @@ func (s *Service) GetGPUMetrics(ctx context.Context) (map[string]interface{}, er
 		err     error
 	}
 
+	// dcgm-exporter 4.9.0 writes these under DCGM 4.7's names, utilization as a 0 to 1 ratio and memory in bytes: each
+	// query reads the name before 4.9.0 and, where no series of it has the same labels, the new one in the old unit
+	// (percent, MiB, °C), so an exporter of either version, or both, gives the same numbers.
 	queries := []struct {
 		name  string
 		query string
 	}{
-		{"gpu_util", "DCGM_FI_DEV_GPU_UTIL"},
-		{"fb_used", "DCGM_FI_DEV_FB_USED"},
-		{"fb_free", "DCGM_FI_DEV_FB_FREE"},
-		{"mem_temp", "DCGM_FI_DEV_MEMORY_TEMP"},
+		{"gpu_util", "DCGM_FI_DEV_GPU_UTIL or (DCGM_FI_DEV_GPU_UTIL_RATIO * 100)"},
+		{"fb_used", "DCGM_FI_DEV_FB_USED or (DCGM_FI_DEV_FB_USED_BYTES / 1048576)"},
+		{"fb_free", "DCGM_FI_DEV_FB_FREE or (DCGM_FI_DEV_FB_FREE_BYTES / 1048576)"},
+		{"mem_temp", "DCGM_FI_DEV_MEMORY_TEMP or DCGM_FI_DEV_MEMORY_TEMP_CELSIUS"},
 	}
 
 	results := make([]queryResult, len(queries))
