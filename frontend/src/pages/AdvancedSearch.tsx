@@ -218,7 +218,7 @@ export default function AdvancedSearch() {
       <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink flex items-center gap-3">
-            <Search className="w-7 h-7 text-primary-400" />
+            <Search className="w-7 h-7 text-slate-400" />
             {t('advancedSearch.title', 'Advanced Search')}
             <BetaTag label={t('common.beta', 'Beta')} size="md" />
           </h1>

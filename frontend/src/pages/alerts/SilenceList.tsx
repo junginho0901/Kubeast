@@ -77,9 +77,9 @@ export default function SilenceList({ canExpire }: { canExpire: boolean }) {
               </td>
               <td className="py-3 px-4">
                 <span className="flex flex-wrap gap-1">
-                  {s.matchers.map((m) => <span key={m} className="rounded-sm border border-slate-600 px-1.5 py-0.5 font-mono text-xs text-slate-200">{m}</span>)}
+                  {s.matchers.map((m) => <span key={m} className="rounded-lg border border-hairline px-1.5 py-0.5 font-mono text-xs text-slate-200 break-all">{m}</span>)}
                 </span>
-                {s.comment && <span className="mt-1 block text-xs text-slate-400">{s.comment}</span>}
+                {s.comment && <span className="mt-1 block text-xs text-slate-400 break-words">{s.comment}</span>}
               </td>
               <td className="py-3 px-4 text-xs break-all">{s.createdBy || '-'}</td>
               <td className="py-3 px-4 text-xs whitespace-nowrap" title={utcTitle(s.endsAt)}>{formatTime(s.endsAt)}</td>

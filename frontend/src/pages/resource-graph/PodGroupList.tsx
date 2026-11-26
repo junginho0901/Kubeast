@@ -93,13 +93,13 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
+        className="bg-slate-800 rounded-xl border border-hairline shadow-xl max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={t('resourceGraph.group.title', { defaultValue: '{{kind}} group', kind: group.kind })}
         data-testid="pod-group-list"
       >
-        <div className="p-6 border-b border-slate-700 space-y-4">
+        <div className="p-5 border-b border-hairline space-y-4 shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-xl">{kindIcon[group.kind] || '📄'}</span>
@@ -107,7 +107,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
                 <p className="text-xs text-slate-400">
                   {isPods ? `${group.ownerKind} · ${group.namespace}` : t('resourceGraph.group.title', { defaultValue: '{{kind}} group', kind: group.kind })}
                 </p>
-                <h2 className="text-xl font-semibold text-ink truncate">{isPods ? group.ownerName : group.name}</h2>
+                <h2 className="text-lg font-semibold text-ink break-all">{isPods ? group.ownerName : group.name}</h2>
                 <p className="text-sm text-slate-400">
                   {t('resourceGraph.group.inGraph', { defaultValue: '{{count}} in this box of the graph', count: group.count })}
                 </p>
@@ -127,7 +127,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
                   aria-pressed={health === value}
                   data-health={value ?? 'all'}
                   className={`h-8 px-3 rounded-lg border text-xs transition-colors ${
-                    health === value ? 'border-primary-500 bg-primary-600 text-white' : `border-slate-600 bg-slate-700 hover:border-slate-500 ${color}`
+                    health === value ? 'border-primary-400 bg-slate-700 text-ink' : `border-control bg-slate-800 hover:bg-slate-700 ${color}`
                   }`}
                 >
                   {label} {count ?? '-'}
@@ -143,12 +143,12 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
               onChange={(e) => setSearch(e.target.value)}
               placeholder={isPods ? t('resourceGraph.group.searchPods', 'Search name, node or IP') : t('resourceGraph.group.searchMembers', 'Search name')}
               aria-label={t('resourceGraph.group.search', 'Search this group')}
-              className="w-full h-10 pl-10 pr-3 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-3 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-400 transition-colors"
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-slate-800 text-slate-400 text-xs">
               <tr className="border-b border-slate-700">
@@ -195,7 +195,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
         </div>
 
         <ListPager currentPage={page} totalPages={totalPages} total={total} rowsPerPage={ROWS} onPageChange={setPage} showPageSize={false} testId="pod-group-pager" />
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-slate-700">
+        <div className="flex flex-wrap justify-end gap-2 px-4 py-3 border-t border-hairline shrink-0">
           {isPods && (
             <button type="button" className="btn btn-primary" onClick={() => onExpand(group.id)} data-testid="pod-group-expand">
               {t('resourceGraph.group.expand', 'Expand this group in the graph')}

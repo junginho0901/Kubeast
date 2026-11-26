@@ -71,7 +71,7 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
     <ModalFrame
       title={tr('alertInbox.silence.title', 'Silence alerts')}
       subtitle={tr('alertInbox.silence.subtitle', 'In the alert store for this cluster: alerts matching every condition are not sent while the silence lasts.')}
-      icon={<BellOff className="w-5 h-5 text-primary-400" />}
+      icon={<BellOff className="w-5 h-5 text-slate-400" />}
       size="lg"
       body="scroll"
       onClose={onClose}
@@ -97,15 +97,15 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
           <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.silence.conditions', 'Label conditions')}</h3>
           <div className="space-y-2">
             {rows.map((r, i) => (
-              <div key={i} className="flex items-center gap-2" data-testid="silence-matcher">
+              <div key={i} className="flex flex-wrap items-center gap-2" data-testid="silence-matcher">
                 <input value={r.name} onChange={(e) => set(i, { name: e.target.value })} placeholder="label"
-                  className="h-10 w-44 rounded-lg border border-slate-700 bg-slate-950/60 px-3 font-mono text-sm text-ink" aria-label={tr('alertInbox.silence.label', 'Label')} />
+                  className="h-10 w-44 max-w-full rounded-lg border border-control bg-slate-900 px-3 font-mono text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500" aria-label={tr('alertInbox.silence.label', 'Label')} />
                 <select value={r.op} onChange={(e) => set(i, { op: e.target.value as Op })}
-                  className="h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-2 font-mono text-sm text-ink" aria-label={tr('alertInbox.silence.operator', 'Operator')}>
+                  className="h-10 rounded-lg border border-control bg-slate-900 px-2 font-mono text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500" aria-label={tr('alertInbox.silence.operator', 'Operator')}>
                   {OPS.map((op) => <option key={op} value={op}>{op}</option>)}
                 </select>
                 <input value={r.value} onChange={(e) => set(i, { value: e.target.value })}
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950/60 px-3 font-mono text-sm text-ink" aria-label={tr('alertInbox.silence.value', 'Value')} />
+                  className="h-10 min-w-40 flex-1 rounded-lg border border-control bg-slate-900 px-3 font-mono text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500" aria-label={tr('alertInbox.silence.value', 'Value')} />
                 <button type="button" onClick={() => setRows((all) => all.filter((_, j) => j !== i))} className="rounded-sm p-1.5 text-slate-400 hover:text-ink"
                   aria-label={tr('alertInbox.silence.remove', 'Remove condition')}>
                   <X className="w-4 h-4" />
@@ -129,7 +129,7 @@ export default function SilenceModal({ initial, maxHours, onClose }: {
           <div>
             <label className="block text-xs font-semibold text-slate-400 mb-1" htmlFor="silence-comment">{tr('alertInbox.silence.comment', 'Why (required)')}</label>
             <input id="silence-comment" value={comment} onChange={(e) => setComment(e.target.value)} maxLength={500}
-              className="h-10 w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink" data-testid="silence-comment" />
+              className="h-10 w-full rounded-lg border border-control bg-slate-900 px-3 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500" data-testid="silence-comment" />
           </div>
         </div>
 
@@ -170,7 +170,7 @@ export function SilencePreviewAlerts({ preview }: { preview: SilencePreview }) {
       </p>
       <ul className="space-y-1 text-xs">
         {items.map((a) => (
-          <li key={a.fingerprint} className="flex gap-2 text-slate-300"><span className="font-mono text-slate-100">{a.alertname}</span><span className="text-slate-500">{a.labels.namespace ?? ''}</span><span>{a.state}</span></li>
+          <li key={a.fingerprint} className="flex flex-wrap gap-2 text-slate-300 break-all"><span className="font-mono text-slate-100">{a.alertname}</span><span className="text-slate-500">{a.labels.namespace ?? ''}</span><span>{a.state}</span></li>
         ))}
       </ul>
       {nav}

@@ -90,7 +90,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
       <button
         ref={buttonRef}
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-ink text-sm font-medium transition-colors"
+        className="btn btn-secondary h-10 flex items-center gap-2 text-sm"
       >
         <Search className="w-4 h-4 text-slate-400" />
         {t('advancedSearch.selectResources', 'Select Resources')}
@@ -105,7 +105,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-2 z-50 w-80 max-h-[70vh] bg-slate-800 border border-slate-600 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+          <div className="absolute top-full left-0 mt-2 z-50 w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] bg-slate-800 border border-hairline rounded-xl shadow-xl overflow-hidden flex flex-col">
             <div className="p-3 border-b border-slate-700">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -114,15 +114,15 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                   placeholder={t('advancedSearch.filterResources', 'Filter resources...')}
                   value={filter}
                   onChange={e => setFilter(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-900 border border-slate-600 text-ink text-sm placeholder-slate-500 focus:outline-hidden focus:border-primary-500"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-slate-900 border border-control text-ink text-sm placeholder-slate-500 focus:outline-hidden focus:border-primary-400 focus:ring-1 focus:ring-primary-400"
                   autoFocus
                 />
               </div>
               <div className="flex gap-2 mt-2">
-                <button onClick={selectAll} className="flex-1 text-xs py-1.5 rounded-sm bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
+                <button onClick={selectAll} className="btn-row flex-1">
                   {t('advancedSearch.selectAll', 'Select All')}
                 </button>
-                <button onClick={clearAll} className="flex-1 text-xs py-1.5 rounded-sm bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
+                <button onClick={clearAll} className="btn-row flex-1">
                   {t('advancedSearch.clearAll', 'Clear All')}
                 </button>
               </div>
@@ -130,7 +130,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
             <div className="overflow-y-auto p-2 space-y-1">
               {grouped.map(([group, resources]) => (
                 <div key={group}>
-                  <div className="px-2 py-1.5 text-xs font-semibold text-slate-500">
+                  <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 [overflow-wrap:anywhere]">
                     {group}
                   </div>
                   {resources.map(r => {
@@ -140,18 +140,18 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
                         key={r.type}
                         data-testid={`search-type-${r.type}`}
                         onClick={() => toggle(r.type)}
-                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                          checked ? 'bg-primary-500/10 text-primary-300' : 'text-slate-300 hover:bg-slate-700'
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-left focus-visible:outline-2 focus-visible:outline-primary-400 transition-colors ${
+                          checked ? 'bg-slate-700 text-ink' : 'text-slate-300 hover:bg-slate-700'
                         }`}
                       >
-                        <div className={`w-4 h-4 rounded-sm border flex items-center justify-center ${
-                          checked ? 'bg-primary-500 border-primary-500' : 'border-slate-500'
+                        <div className={`w-4 h-4 shrink-0 rounded-sm border flex items-center justify-center ${
+                          checked ? 'bg-primary-600 border-primary-600' : 'border-control'
                         }`}>
-                          {checked && <Check className="w-3 h-3 text-ink" />}
+                          {checked && <Check className="w-3 h-3 text-white" />}
                         </div>
-                        <span className="font-medium">{r.kind}</span>
+                        <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{r.kind}</span>
                         {!r.namespaced && (
-                          <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-sm bg-amber-500/10 text-amber-400">
+                          <span className="ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-900 text-slate-400">
                             {t('advancedSearch.clusterScoped', 'cluster')}
                           </span>
                         )}

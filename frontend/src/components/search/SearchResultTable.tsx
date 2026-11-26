@@ -107,7 +107,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
         </div>
       )}
 
-      <div className="flex-1 min-h-0 rounded-xl border border-slate-700/50 overflow-hidden">
+      <div className="flex-[0_1_auto] min-h-0 rounded-xl border border-hairline bg-slate-800 overflow-auto">
         <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="bg-slate-800/95">
@@ -128,7 +128,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700/30">
+          <tbody className="divide-y divide-hairline">
             {pageItems.map((item, i) => {
               const globalIdx = safePage * pageSize + i
               return (
@@ -180,7 +180,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                   <td className="px-4 py-2 text-right">
                     <button
                       onClick={() => openResult(item)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-ink transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-ink btn-secondary focus-visible:outline-2 focus-visible:outline-primary-400 transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       {t('advancedSearch.detail', 'Detail')}
@@ -194,7 +194,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
       </div>
 
       {/* Pagination */}
-      <div className="shrink-0 flex items-center justify-between pt-2 px-1" data-testid="search-pager">
+      <div className="shrink-0 flex flex-wrap gap-2 items-center justify-between pt-2 px-1" data-testid="search-pager">
         <span className="text-xs text-slate-500" data-testid="search-page-info">
           {t('common.paginationRange', {
             start: safePage * pageSize + 1,
@@ -209,14 +209,14 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
             disabled={safePage === 0}
-            className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 btn-secondary focus-visible:outline-2 focus-visible:outline-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
             disabled={safePage >= totalPages - 1}
-            className="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 btn-secondary focus-visible:outline-2 focus-visible:outline-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronRight className="w-4 h-4" />
           </button>

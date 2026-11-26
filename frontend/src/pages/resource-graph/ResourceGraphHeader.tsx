@@ -123,12 +123,12 @@ export function ResourceGraphHeader({
   }
 
   return (
-    <div className="shrink-0 px-6 py-4 border-b border-slate-700">
-      <div className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-semibold text-ink">
+    <div className="shrink-0 px-5 py-4 border-b border-hairline bg-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h1 className="text-xl font-medium text-ink">
           {t('resourceGraph.title', 'Resource Graph')}
         </h1>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 tabular-nums">
           <span data-testid="graph-node-count" data-shown={shown.nodes} data-total={totals.nodes}>
             {shown.nodes < totals.nodes
               ? t('resourceGraph.nodeCountOf', { defaultValue: '{{shown}} of {{n}} nodes', shown: shown.nodes, n: totals.nodes })
@@ -168,7 +168,7 @@ export function ResourceGraphHeader({
             onClick={() => setIsNsDropdownOpen(!isNsDropdownOpen)}
             title={[...selectedNamespaces].join(', ') || undefined}
             data-testid="resource-graph-namespaces"
-            className="h-9 w-[220px] px-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500 flex items-center gap-2 justify-between"
+            className="h-9 w-[220px] px-3 bg-slate-900 border border-control rounded-lg text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-400 flex items-center gap-2 justify-between"
           >
             <span className="truncate min-w-0">
               {selectedNamespaces.size === 0
@@ -180,12 +180,12 @@ export function ResourceGraphHeader({
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isNsDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isNsDropdownOpen && (
-            <div className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[360px] bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[280px] overflow-y-auto">
+            <div className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[min(360px,90vw)] bg-slate-800 border border-control rounded-lg shadow-xl z-100 max-h-[280px] overflow-y-auto">
               {selectedNamespaces.size > 0 && (
                 <button
                   type="button"
                   onClick={() => setSelectedNamespaces(new Set())}
-                  className="w-full px-4 py-2 text-left text-xs text-slate-400 hover:bg-slate-600 transition-colors border-b border-slate-600"
+                  className="w-full px-4 py-2 text-left text-xs text-slate-400 hover:bg-slate-700 transition-colors border-b border-hairline"
                 >
                   {t('resourceGraph.clearSelection', 'Clear selection')}
                 </button>
@@ -195,7 +195,7 @@ export function ResourceGraphHeader({
                   key={ns.name}
                   type="button"
                   onClick={() => toggleNs(ns.name)}
-                  className="w-full px-4 py-2 text-left text-sm text-ink hover:bg-slate-600 transition-colors flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-sm text-ink hover:bg-slate-700 transition-colors flex items-center gap-2 break-all"
                 >
                   {selectedNamespaces.has(ns.name) && <CheckCircle className="w-3.5 h-3.5 text-primary-400 shrink-0" />}
                   <span className={selectedNamespaces.has(ns.name) ? 'font-medium' : ''}>{ns.name}</span>
@@ -213,7 +213,7 @@ export function ResourceGraphHeader({
             placeholder={t('resourceGraph.search', 'Search resources...')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="h-9 w-full pl-8 pr-3 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
+            className="h-9 w-full pl-8 pr-8 bg-slate-900 border border-control rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-400"
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2" aria-label={t('common.clearSearch', 'Clear the search')}>
@@ -223,14 +223,14 @@ export function ResourceGraphHeader({
         </div>
 
         {/* Group By */}
-        <div className="flex items-center gap-1 bg-slate-700 rounded-lg p-0.5">
+        <div className="flex flex-wrap items-center gap-1 bg-slate-900/50 rounded-lg p-0.5">
           {([['none', 'No grouping'], ['namespace', 'Namespace'], ['node', 'Node'], ['instance', 'Instance']] as const).map(([val, label]) => (
             <button
               key={val}
               type="button"
               onClick={() => setGroupBy(val)}
               className={`px-2.5 py-1.5 rounded-md text-xs transition-colors ${
-                groupBy === val ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink'
+                groupBy === val ? 'bg-slate-700 text-ink ring-1 ring-inset ring-primary-400' : 'text-slate-400 hover:text-ink hover:bg-slate-700/50'
               }`}
             >
               {t(`resourceGraph.groupBy.${val}`, label)}
@@ -240,7 +240,7 @@ export function ResourceGraphHeader({
 
         {/* Pod grouping: groups of a large owner's pods, or every pod a box */}
         {groupPods && setGroupPods && (
-          <div className="flex items-center gap-1 bg-slate-700 rounded-lg p-0.5" data-testid="pod-grouping">
+          <div className="flex flex-wrap items-center gap-1 bg-slate-900/50 rounded-lg p-0.5" data-testid="pod-grouping">
             {([[true, 'grouped', 'Group pods'], [false, 'all', 'Expand all']] as const).map(([on, state, label]) => (
               <button
                 key={state}
@@ -248,7 +248,7 @@ export function ResourceGraphHeader({
                 onClick={() => setGroupPods(on)}
                 aria-pressed={groupPods === state}
                 className={`px-2.5 py-1.5 rounded-md text-xs transition-colors ${
-                  groupPods === state ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink'
+                  groupPods === state ? 'bg-slate-700 text-ink ring-1 ring-inset ring-primary-400' : 'text-slate-400 hover:text-ink hover:bg-slate-700/50'
                 }`}
               >
                 {t(on ? 'resourceGraph.group.groupPods' : 'resourceGraph.group.expandAll', label)}
@@ -264,7 +264,7 @@ export function ResourceGraphHeader({
           type="button"
           onClick={() => setStatusFilter(prev => prev === 'all' ? 'issues' : 'all')}
           className={`h-9 px-3 rounded-lg text-sm flex items-center gap-1.5 transition-colors ${
-            statusFilter === 'issues' ? 'bg-red-600/30 text-red-300 border border-red-500/50' : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600'
+            statusFilter === 'issues' ? 'bg-red-600/10 text-red-300 border border-red-500/50' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-control'
           }`}
         >
           ⚠ {t('resourceGraph.issuesOnly', 'Issues')}
@@ -275,7 +275,7 @@ export function ResourceGraphHeader({
           type="button"
           onClick={() => setShowFilters(!showFilters)}
           className={`h-9 px-3 rounded-lg text-sm flex items-center gap-1.5 transition-colors ${
-            showFilters ? 'bg-primary-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            showFilters ? 'bg-slate-700 text-ink ring-1 ring-inset ring-primary-400' : 'bg-slate-800 text-slate-300 hover:bg-slate-700 ring-1 ring-inset ring-control'
           }`}
         >
           <Filter className="w-4 h-4" />
@@ -285,7 +285,7 @@ export function ResourceGraphHeader({
 
       {/* Filter panel */}
       {showFilters && (
-        <div className="mt-3 p-3 bg-slate-800 border border-slate-700 rounded-lg grid grid-cols-2 gap-4">
+        <div className="mt-3 pt-3 border-t border-hairline grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Source groups */}
           <div>
             <div className="text-xs font-medium text-slate-400 mb-2">{t('resourceGraph.sources', 'Sources')}</div>
@@ -298,12 +298,12 @@ export function ResourceGraphHeader({
                     key={group.id}
                     type="button"
                     onClick={() => toggleSourceGroup(group.id)}
-                    className={`px-2.5 py-1 rounded-sm text-xs transition-colors ${
+                    className={`px-2.5 py-1 rounded-lg text-xs transition-colors ${
                       allEnabled
-                        ? 'bg-primary-600/30 text-primary-300 border border-primary-500/50'
+                        ? 'bg-slate-700 text-primary-300 border border-primary-400'
                         : someEnabled
-                        ? 'bg-primary-600/10 text-primary-400 border border-primary-500/30'
-                        : 'bg-slate-700 text-slate-500 border border-slate-600'
+                        ? 'bg-slate-900 text-primary-400 border border-primary-400/50'
+                        : 'bg-slate-800 text-slate-400 border border-control'
                     }`}
                   >
                     {group.label}
@@ -324,10 +324,10 @@ export function ResourceGraphHeader({
                       return next
                     })
                   }}
-                  className={`px-1.5 py-0.5 rounded-sm text-[10px] transition-colors ${
+                  className={`px-1.5 py-0.5 rounded-md text-xs transition-colors ${
                     kindFilters.has(kind)
-                      ? 'bg-primary-500/25 text-ink'
-                      : 'bg-slate-800 text-slate-600'
+                      ? 'bg-slate-700 text-ink ring-1 ring-inset ring-primary-400/50'
+                      : 'bg-slate-800 text-slate-500'
                   }`}
                 >
                   {kindIcon[kind] || '📄'} {kind}
@@ -347,10 +347,10 @@ export function ResourceGraphHeader({
                     key={type}
                     type="button"
                     onClick={() => toggleEdgeType(type)}
-                    className={`px-2 py-0.5 rounded-sm text-xs flex items-center gap-1.5 transition-colors ${
+                    className={`px-2 py-0.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors ${
                       edgeTypeFilters.has(type)
-                        ? 'bg-primary-500/20 border border-primary-500/60'
-                        : 'bg-slate-800 text-slate-500 border border-slate-700'
+                        ? 'bg-slate-700/50 border border-primary-400/60'
+                        : 'bg-slate-800 text-slate-500 border border-control'
                     }`}
                   >
                     <span

@@ -37,14 +37,14 @@ function NodeShellCard({ ready }: { ready: boolean }) {
           <SquareTerminal className="w-6 h-6 text-slate-300" />
         </div>
         <div>
-          <h2 className="text-xl font-semibold text-ink">{tr('account.nodeShell.title', 'Node Shell')}</h2>
+          <h2 className="text-lg font-semibold text-ink">{tr('account.nodeShell.title', 'Node Shell')}</h2>
           <p className="text-sm text-slate-400">
             {tr('account.nodeShell.subtitle', 'Debug shell settings for nodes. Kept in this browser.')}
           </p>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4 space-y-4">
+      <div className="border-t border-hairline pt-4 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-ink">
@@ -88,7 +88,7 @@ function NodeShellCard({ ready }: { ready: boolean }) {
               save({ linuxImage: e.target.value.trim() })
             }}
             placeholder={tr('account.nodeShell.imagePlaceholder', 'Server default (first image on the allow list)')}
-            className="w-full h-10 rounded-lg border border-slate-700 bg-slate-950/40 px-3 text-sm text-slate-200"
+            className="w-full h-10 rounded-lg border border-control bg-slate-900 px-3 text-sm text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-primary-500"
           />
           <p className="mt-1 text-[11px] text-slate-500">
             {tr(

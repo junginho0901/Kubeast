@@ -81,16 +81,16 @@ export default function SearchQueryEditor({
   return (
     <div className="space-y-2">
       <div
-        className={`relative flex items-center rounded-xl border transition-colors ${
-          focused ? 'border-primary-500/50 bg-slate-800/80' : 'border-slate-600 bg-slate-800/50'
+        className={`relative flex items-center rounded-lg border transition-colors ${
+          focused ? 'border-primary-400 bg-slate-800 ring-1 ring-primary-400' : 'border-control bg-slate-800'
         }`}
       >
         {!focused && !value && (
-          <div className="absolute left-4 text-slate-500 text-sm pointer-events-none">
+          <div className="absolute left-4 right-4 truncate text-slate-500 text-sm pointer-events-none">
             {t('advancedSearch.queryPlaceholder', 'Search resources by JavaScript expression...')}
           </div>
         )}
-        <div className="flex-1 py-1" onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
+        <div className="min-w-0 flex-1 py-1" onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
           <MonacoEditor
             height="28px"
             language="javascript"
@@ -129,7 +129,7 @@ export default function SearchQueryEditor({
         {value && (
           <button
             onClick={onClear}
-            className="p-2 mr-1 text-slate-400 hover:text-ink transition-colors"
+            className="shrink-0 rounded-lg p-2 mr-1 text-slate-400 hover:text-ink hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-primary-400 transition-colors"
             aria-label={t('common.clearSearch', 'Clear the search')}
           >
             <X className="w-4 h-4" />
@@ -137,9 +137,9 @@ export default function SearchQueryEditor({
         )}
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-slate-500 h-5 ml-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 min-h-5 ml-1">
         {isSearching && (
-          <span className="flex items-center gap-1.5 text-primary-400">
+          <span className="flex items-center gap-1.5 text-slate-300">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             {t('advancedSearch.searching', 'Searching...')}
           </span>
