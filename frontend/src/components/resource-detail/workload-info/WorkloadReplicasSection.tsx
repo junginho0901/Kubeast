@@ -21,7 +21,7 @@ interface PromMetrics {
   available: boolean
   // set when the cluster's Prometheus is set but did not answer (usePrometheusQueries)
   failure?: unknown
-  data: Record<string, { available: boolean; results?: Array<{ value: number; metric?: Record<string, string> }> } | undefined>
+  data: Record<string, { available: boolean; results?: PodSample[] } | undefined>
 }
 
 interface Props {
@@ -123,18 +123,22 @@ function PerPodCpu({ results }: { results: PodSample[] }) {
   return (
     <div className="space-y-2" data-testid="per-pod-cpu">
       <div className="text-xs text-slate-400 font-medium"><Tx>Per-Pod CPU (millicores)</Tx></div>
-      {paged.map((r) => (
-        <div key={r.metric?.pod} className="flex flex-wrap items-center gap-3" data-testid="per-pod-cpu-row">
-          <span className="text-xs text-slate-400 w-full sm:w-48 break-all">{r.metric?.pod}</span>
-          <div className="flex-1 min-w-[80px] h-2 bg-slate-700 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${r.value >= 500 ? 'bg-red-500' : r.value >= 200 ? 'bg-amber-500' : 'bg-primary-bright'}`}
-              style={{ width: `${Math.min((r.value / 1000) * 100, 100)}%` }}
-            />
+      {paged.map((r) => {
+        // null: Prometheus answered NaN or ±Inf, shown as "-" with an empty bar
+        const cpu = r.value ?? 0
+        return (
+          <div key={r.metric?.pod} className="flex flex-wrap items-center gap-3" data-testid="per-pod-cpu-row">
+            <span className="text-xs text-slate-400 w-full sm:w-48 break-all">{r.metric?.pod}</span>
+            <div className="flex-1 min-w-[80px] h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${cpu >= 500 ? 'bg-red-500' : cpu >= 200 ? 'bg-amber-500' : 'bg-primary-bright'}`}
+                style={{ width: `${Math.min((cpu / 1000) * 100, 100)}%` }}
+              />
+            </div>
+            <span className="text-xs font-mono text-slate-300 w-14 text-right">{r.value === null ? '-' : `${r.value.toFixed(0)}m`}</span>
           </div>
-          <span className="text-xs font-mono text-slate-300 w-14 text-right">{r.value.toFixed(0)}m</span>
-        </div>
-      ))}
+        )
+      })}
       {nav}
     </div>
   )

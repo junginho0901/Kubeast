@@ -3,7 +3,8 @@ import { failureText } from '@/utils/failureText'
 import { Tx } from './DetailCommon'
 
 /**
- * A horizontal metric bar with label, value text, and color-coded progress bar.
+ * A horizontal metric bar with label, value text, and color-coded progress bar. A null value (Prometheus answered NaN
+ * or ±Inf) reads "-" over an empty bar.
  */
 export function MetricBar({
   label,
@@ -13,13 +14,13 @@ export function MetricBar({
   thresholds = { warn: 60, danger: 80 },
 }: {
   label: string
-  value: number
+  value: number | null
   max?: number
   unit?: string
   thresholds?: { warn: number; danger: number }
 }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
-  const displayVal = unit === '%' ? Math.round(value) : value.toFixed(1)
+  const pct = value !== null && max > 0 ? Math.min((value / max) * 100, 100) : 0
+  const displayVal = value === null ? '-' : `${unit === '%' ? Math.round(value) : value.toFixed(1)}${unit}`
   const color =
     pct >= thresholds.danger ? 'bg-red-500'
     : pct >= thresholds.warn ? 'bg-amber-500'
@@ -29,7 +30,7 @@ export function MetricBar({
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
         <span className="text-slate-400">{label}</span>
-        <span className="font-mono text-slate-300">{displayVal}{unit}</span>
+        <span className="font-mono text-slate-300">{displayVal}</span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-slate-700">
         <div

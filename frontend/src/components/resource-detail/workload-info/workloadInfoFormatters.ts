@@ -2,11 +2,13 @@ export function boolText(value: unknown): string {
   return value ? 'Yes' : 'No'
 }
 
-export type PodSample = { value: number; metric?: Record<string, string> }
+export type PodSample = { value: number | null; metric?: Record<string, string> }
 
-// Every pod's CPU, busiest first so the first page is the top ten, then by name so a page keeps its order.
+// Every pod's CPU, busiest first so the first page is the top ten, then by name so a page keeps its order; a pod whose
+// value is not a number (null) goes last.
 export function busiestFirst(results: PodSample[]): PodSample[] {
-  return [...results].sort((a, b) => b.value - a.value || String(a.metric?.pod ?? '').localeCompare(String(b.metric?.pod ?? '')))
+  const cpu = (s: PodSample) => s.value ?? Number.NEGATIVE_INFINITY
+  return [...results].sort((a, b) => (cpu(a) === cpu(b) ? 0 : cpu(b) - cpu(a)) || String(a.metric?.pod ?? '').localeCompare(String(b.metric?.pod ?? '')))
 }
 
 export function formatContainerCommand(command: unknown, args: unknown): string {

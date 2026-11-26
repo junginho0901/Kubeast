@@ -208,18 +208,16 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
     { enabled: !!name && !!namespace },
   )
 
-  const getContainerCpuMillis = (containerName: string): number | null => {
-    const resp = promPodMetrics.data['cpu']
-    if (!resp?.available || !resp.results?.length) return null
-    const match = resp.results.find((r) => r.metric?.container === containerName)
-    return match ? match.value : null
+  // undefined: no series for the container; null: a series whose value Prometheus answered as NaN or ±Inf
+  const containerSample = (metric: 'cpu' | 'memory', containerName: string): number | null | undefined => {
+    const resp = promPodMetrics.data[metric]
+    if (!resp?.available || !resp.results?.length) return undefined
+    return resp.results.find((r) => r.metric?.container === containerName)?.value
   }
-
-  const getContainerMemoryMB = (containerName: string): number | null => {
-    const resp = promPodMetrics.data['memory']
-    if (!resp?.available || !resp.results?.length) return null
-    const match = resp.results.find((r) => r.metric?.container === containerName)
-    return match ? match.value / (1024 * 1024) : null
+  const getContainerCpuMillis = (containerName: string) => containerSample('cpu', containerName)
+  const getContainerMemoryMB = (containerName: string): number | null | undefined => {
+    const bytes = containerSample('memory', containerName)
+    return bytes == null ? bytes : bytes / (1024 * 1024)
   }
   const qosClass = (podDescribe?.qos_class as string | undefined) || (status.qosClass as string | undefined)
   const priority = podDescribe?.priority ?? spec.priority
@@ -480,7 +478,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           {containers.map((c: any) => {
             const cpuMillis = getContainerCpuMillis(c.name)
             const memMB = getContainerMemoryMB(c.name)
-            if (cpuMillis === null && memMB === null) return null
+            if (cpuMillis === undefined && memMB === undefined) return null
             const cpuLimitStr = c.limits?.cpu || c.resources?.limits?.cpu
             const memLimitStr = c.limits?.memory || c.resources?.limits?.memory
             const cpuLimitMillis = cpuLimitStr ? (cpuLimitStr.endsWith('m') ? parseFloat(cpuLimitStr) : parseFloat(cpuLimitStr) * 1000) : null
@@ -489,18 +487,18 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               <div key={c.name} className="border-t border-hairline pt-3">
                 <div className="text-xs font-medium text-slate-300 mb-2">{c.name}</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {cpuMillis !== null && (
+                  {cpuMillis !== undefined && (
                     <MetricBar
-                      label={`CPU ${cpuMillis.toFixed(0)}m${cpuLimitMillis ? ` / ${cpuLimitMillis}m` : ''}`}
-                      value={cpuLimitMillis ? (cpuMillis / cpuLimitMillis) * 100 : Math.min(cpuMillis / 10, 100)}
+                      label={`CPU ${cpuMillis === null ? '-' : `${cpuMillis.toFixed(0)}m`}${cpuLimitMillis ? ` / ${cpuLimitMillis}m` : ''}`}
+                      value={cpuMillis === null ? null : cpuLimitMillis ? (cpuMillis / cpuLimitMillis) * 100 : Math.min(cpuMillis / 10, 100)}
                       max={100}
                       unit="%"
                     />
                   )}
-                  {memMB !== null && (
+                  {memMB !== undefined && (
                     <MetricBar
-                      label={`${dl('Memory')} ${memMB.toFixed(0)} MiB${memLimitMB ? ` / ${memLimitMB.toFixed(0)} MiB` : ''}`}
-                      value={memLimitMB ? (memMB / memLimitMB) * 100 : Math.min((memMB / 512) * 100, 100)}
+                      label={`${dl('Memory')} ${memMB === null ? '-' : `${memMB.toFixed(0)} MiB`}${memLimitMB ? ` / ${memLimitMB.toFixed(0)} MiB` : ''}`}
+                      value={memMB === null ? null : memLimitMB ? (memMB / memLimitMB) * 100 : Math.min((memMB / 512) * 100, 100)}
                       max={100}
                       unit="%"
                     />

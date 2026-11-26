@@ -220,6 +220,22 @@ describe('a workload drawer\'s per-pod CPU', () => {
     expect(shown(html, /web-\d\d/g)).toEqual(['web-03', 'web-02', 'web-01', 'web-00'])
     expect(noPager(html)).toBe(true)
   })
+
+  // null is a value Prometheus answered as NaN or ±Inf: the pod stays, last, as "-" over an empty bar
+  it('draws a pod whose CPU is not a number last, as "-"', () => {
+    const results = [{ metric: { pod: 'web-00' }, value: null }, { metric: { pod: 'web-01' }, value: 30 }, { metric: { pod: 'web-02' }, value: 600 }]
+    const html = draw(createElement(WorkloadReplicasSection, {
+      isJob: false, isCronJob: false, isDaemonSet: false, isReplicaSet: false,
+      replicaView: { desired: 3, current: 3, ready: 3, updated: 3, available: 3 },
+      daemonSetStatus: { misscheduled: 0, unavailable: 0 },
+      promWorkloadMetrics: { available: true, data: { cpu_per_pod: { available: true, results } } },
+      getWorkloadMetric: () => null,
+    }))
+    expect(shown(html, /web-\d\d/g)).toEqual(['web-02', 'web-01', 'web-00'])
+    const rows = html.split('data-testid="per-pod-cpu-row"').slice(1)
+    expect(rows.map((row) => row.match(/w-14 text-right">([^<]*)</)?.[1])).toEqual(['600m', '30m', '-'])
+    expect(rows[2]).toContain('width:0%')
+  })
 })
 
 describe('a drawer\'s policy violations', () => {
