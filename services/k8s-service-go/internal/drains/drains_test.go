@@ -598,6 +598,48 @@ func TestAnOwnerCutOffHoldsItsEvictionsBeforeAnotherServerMarksIt(t *testing.T) 
 	}
 }
 
+// beatAfterLook is a held drain's context that runs the owner's beat right after its first look at the
+// context, as when the beat goroutine comes back between an eviction's check of its context and its read
+// of the heartbeat.
+type beatAfterLook struct {
+	context.Context
+	once sync.Once
+	beat func()
+}
+
+func (c *beatAfterLook) Err() error {
+	err := c.Context.Err()
+	c.once.Do(c.beat)
+	return err
+}
+
+// The beat that no longer finds a held drain stops it and saves the heartbeat in one go: an eviction that
+// looked at its context just before that beat is told the drain stopped, not that the heartbeat is saved.
+func TestTheBeatThatStopsAHeldDrainDoesNotLetItsEvictionGoOn(t *testing.T) {
+	c := &clock{t: time.Date(2026, 11, 26, 2, 0, 0, 0, time.UTC)}
+	mem := NewMemory(c.now)
+	cut := &atomic.Bool{}
+	a, b := NewTracker(pausable{Store: mem, down: cut}, nil), NewTracker(mem, nil)
+	onClock(c, a, b)
+	running := begin(t, a, "d1", "n1")
+	cut.Store(true)
+	c.add(a.staleAfter + time.Second)
+	inContact(b)
+	if r := status(t, b, "d1"); r.Status != StatusInterrupted {
+		t.Fatalf("past the stale time the other server reads %+v", r)
+	}
+
+	cut.Store(false)
+	look := &beatAfterLook{Context: running, beat: func() { a.beat(context.Background()) }}
+	err := a.Ready(look)
+	if running.Err() == nil {
+		t.Fatal("the beat did not stop the drain the other server marked")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("the eviction after the beat that stopped its drain: %v, want the drain's stop", err)
+	}
+}
+
 // A server judges another's drain only after its own calls have answered without a break for the stale
 // time: a failed call, or a gap between answers longer than a pause that leaves a beating owner's row
 // stale, starts the count again.
