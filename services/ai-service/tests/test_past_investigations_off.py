@@ -12,8 +12,9 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import text
 
-from app.services.investigation import inbox, runner, store
+from app.services.investigation import inbox, past, runner, store
 from app.services.investigation import settings as inv_settings
 from tests.test_alert_inbox import client, labels
 from tests.test_alert_investigation import NOW, FakeCompletions, FakeService, completion, row, tool_call
@@ -112,6 +113,9 @@ async def _window(monkeypatch, tmp_path, query) -> dict:
 
     db = DatabaseService(f"sqlite+aiosqlite:///{tmp_path}/off{next(_DATABASES)}.db")  # one of its own each time
     await db.init_db()
+    async with db.engine.begin() as conn:
+        await conn.execute(text("CREATE TABLE clusters (id VARCHAR PRIMARY KEY, created_at TIMESTAMP)"))  # auth-service's
+        await conn.execute(past._CLUSTERS.insert().values(id="self", created_at=NOW - timedelta(days=400)))
     try:
         monkeypatch.setattr(inbox, "uuid", SimpleNamespace(uuid4=lambda: "alert-1"))
         await inbox.record(db, cluster="self", fingerprint="fp1", firing=True, starts_at=NOW, ends_at=None, labels=labels(),
@@ -121,12 +125,15 @@ async def _window(monkeypatch, tmp_path, query) -> dict:
                                starts_at=at, received_at=at, status="running")
             await store.finish(db, f"inv-{n}", status="done", report=f"## Summary\n{n}", finished_at=at + timedelta(minutes=1))
             await store.bump_repeat(db, f"inv-{n}", at)
+        window_on = inv_settings.load().past_window
         c, audits = client(monkeypatch, db, at=NOW, matrix={"self": ("resource.pod.read", "resource.alert.investigate")},
-                           past_window=inv_settings.load().past_window)
+                           past_window=window_on)
         base = "/api/v1/alerts/inbox/alert-1"
         answers = [c.get(base + query), c.patch(base + query, json={"done": True}), c.post(base + "/investigate" + query),
                    c.get(base + "/investigation"), c.get("/api/v1/alerts/inbox?cluster=self")]
         assert [a.status_code for a in answers] == [200] * 5
+        if window_on and query:
+            assert [p["id"] for p in answers[0].json()["past_investigations"]] == ["inv-0"]
         return {"answers": _sha([a.text for a in answers]), "audit": _sha(audits)}
     finally:
         await db.engine.dispose()
@@ -136,10 +143,14 @@ async def recorded(monkeypatch, tmp_path) -> dict:
     out = {}
     for namespace in ("apps", ""):
         for name, switches in (("defaults", DEFAULTS), ("none", ())):
-            for part, sha in (await _run(monkeypatch, namespace, switches)).items():
+            with monkeypatch.context() as mp:  # each run starts from the test's environment, settings and store
+                got = await _run(mp, namespace, switches)
+            for part, sha in got.items():
                 out[f"{namespace or 'no namespace'}, {name}: {part}"] = sha
     for asked, query in (("", ""), (", asked", "?past=true")):
-        for part, sha in (await _window(monkeypatch, tmp_path, query)).items():
+        with monkeypatch.context() as mp:
+            got = await _window(mp, tmp_path, query)
+        for part, sha in got.items():
             out[f"window{asked}: {part}"] = sha
     return out
 
