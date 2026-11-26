@@ -38,13 +38,13 @@ export default function ClusterPicker() {
   }
 
   return (
-    <div ref={ref} className="relative px-4 py-3 border-b border-slate-700">
+    <div ref={ref} className="relative px-4 py-3 border-b border-hairline">
       <button
         type="button"
         data-testid="cluster-picker"
         onClick={() => setOpen((v) => !v)}
         disabled={clusters.length <= 1}
-        className="w-full flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-left hover:bg-slate-700/30 disabled:cursor-default disabled:hover:bg-slate-900/40"
+        className="w-full flex items-center gap-2 rounded-lg border border-control bg-slate-800 px-3 py-2 text-left hover:bg-slate-700/50 disabled:cursor-default disabled:hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
         title={tr('cluster.picker.label', 'Cluster')}
       >
         <Server className="w-4 h-4 text-slate-400 shrink-0" />
@@ -62,7 +62,7 @@ export default function ClusterPicker() {
       </button>
 
       {open && (
-        <div className="absolute left-4 right-4 z-30 mt-1 max-h-72 overflow-auto rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-xl">
+        <div className="absolute left-4 right-4 z-30 mt-1 max-h-72 overflow-auto rounded-lg border border-control bg-slate-800 py-1 shadow-xl">
           {clusters.map((c) => (
             <button
               key={c.id}
@@ -72,7 +72,7 @@ export default function ClusterPicker() {
                 setCurrentCluster(c.id)
                 setOpen(false)
               }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-700/50"
+              className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-700/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-400"
             >
               <span className={`w-2 h-2 rounded-full shrink-0 ${healthDotClass(c.health_status)}`} />
               <span className="flex-1 truncate text-ink">{c.display_name}</span>

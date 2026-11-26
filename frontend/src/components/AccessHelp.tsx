@@ -16,7 +16,7 @@ export default function AccessHelp({ className = '' }: { className?: string }) {
   })
   if (!data?.help_text && !data?.help_url) return null
   return (
-    <div className={`text-slate-300 ${className}`} data-testid="access-help">
+    <div className={`text-slate-300 [overflow-wrap:anywhere] ${className}`} data-testid="access-help">
       {data.help_text && <p>{data.help_text}</p>}
       {data.help_url && (
         <a
