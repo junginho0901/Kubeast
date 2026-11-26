@@ -53,7 +53,7 @@ func (s *Searcher) Estimate(ctx context.Context, req QueryRequest) (Volume, stri
 	if !ok {
 		return Volume{}, "", ErrNotConfigured
 	}
-	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace, req.HiddenNamespace))
+	effective, err := InjectMatchers(req.Query, s.cfg.scope(value, req.Namespace, req.HiddenNamespace))
 	if err != nil {
 		return Volume{}, "", err
 	}
@@ -107,7 +107,7 @@ func (s *Searcher) PatternSamples(ctx context.Context, req QueryRequest) ([]Patt
 	if !ok {
 		return nil, "", ErrNotConfigured
 	}
-	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace, req.HiddenNamespace))
+	effective, err := InjectMatchers(req.Query, s.cfg.scope(value, req.Namespace, req.HiddenNamespace))
 	if err != nil {
 		return nil, "", err
 	}

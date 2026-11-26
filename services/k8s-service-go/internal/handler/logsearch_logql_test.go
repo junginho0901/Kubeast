@@ -88,9 +88,9 @@ func TestLogQLRunsWithTheScopeAddedAndAudits(t *testing.T) {
 		t.Fatal("the audit row carries a log line")
 	}
 
-	// every namespace, for an unscoped admin: the cluster matcher only
+	// every namespace, for an unscoped grant: the cluster matcher and a namespace label, as a structured search asks
 	w = f.logql(logSearchRequestAs(logqlTarget("/api/v1/logsearch/query", raw, ""), "self", "", logqlUser), "")
-	if w.Code != http.StatusOK || f.queries[1] != `{k8s_cluster_name="kubeast", app="web"} |= "boom"` {
+	if w.Code != http.StatusOK || f.queries[1] != `{k8s_cluster_name="kubeast", k8s_namespace_name=~".+", app="web"} |= "boom"` {
 		t.Fatalf("every namespace: %d %s sent %q", w.Code, w.Body, f.queries[1])
 	}
 }

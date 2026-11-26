@@ -291,10 +291,10 @@ Loki and the collector are set up separately ([docs/cluster-requirements.md §14
   - "Check connection" (`GET /api/v1/cluster/logsearch/status`) shows which store is used, and whether it answers with the authentication and tenant.
   - With `networkPolicy` on, add that store's host and port to `egressCIDRs` too.
 - **Direct LogQL input**: with `features.logSearch.logql: true` (default off), everyone who can use log search gets a "LogQL" toggle next to the search box.
-  There is no separate permission. In one Namespace, which is what the screen searches, the readable scope is the same as structured search. Over all Namespaces it is wider, as below.
+  There is no separate permission; the readable scope is the same as structured search, as below.
   - The server does not parse the query. It skips strings and comments with the same rules as the Loki lexer, and **adds the cluster (+Namespace) matcher to every stream selector** before sending.
     - Even if the user writes `k8s_cluster_name="other"`, it is ANDed, so anything outside the cluster gives an empty result.
-    - Over all Namespaces only the cluster matcher is added (none where the store has no label value for that cluster), so streams of that cluster without a Namespace label are read too, such as node or control-plane logs kept in the same Loki. Structured search leaves them out: its selector always asks for a Namespace label.
+    - Over all Namespaces the Namespace matcher is `k8s_namespace_name=~".+"`, as in structured search, so streams without a Namespace label, such as node or control-plane logs kept in the same Loki, are not read.
     - Log queries only (metric queries get 400), up to 4 KB.
     - 400 when there is no selector, or when a literal, comment or selector is not closed.
     - The response and the screen show the query actually sent (`effectiveQuery`).
@@ -303,8 +303,8 @@ Loki and the collector are set up separately ([docs/cluster-requirements.md §14
   - The gate (Pod read + `get pods/log` as the user's identity + the per-minute limit) and the audit readiness check are the same as structured search.
   - The former permission `admin.logsearch.query` is gone (DB migration 00019 removes it from roles).
 - **The AI's LogQL** (`loki_query`, `loki_labels` and `loki_patterns`): on clusters with log search on, **the AI of anyone who can use structured search** uses them. This does not depend on the screen's `logql` switch.
-  - The same injector as above adds the cluster (+Namespace) matcher to every selector. In one Namespace the AI cannot read more widely than structured search. Over all Namespaces it reads that cluster's streams without a Namespace label too, as above.
-  - Otherwise what it gains is expressiveness, such as counting, grouping and `| json`.
+  - The same injector as above adds the cluster (+Namespace) matcher to every selector, so the AI cannot read more widely than structured search.
+  - What it gains is only expressiveness, such as counting, grouping and `| json`.
   - Metric queries (`count_over_time`, `rate`, `topk`) answer with series, which are also drawn as a chart under the answer (`chart=true`).
   - API: `GET /api/v1/[cluster/namespaces/{ns}/]logsearch/logql?q=&step=`, `…/logsearch/labels[?label=]` and `…/logsearch/patterns?q=<selector>`.
     - The same gate: Pod read + `get pods/log` + per-minute limit.
