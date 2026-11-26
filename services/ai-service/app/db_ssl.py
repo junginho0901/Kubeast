@@ -52,6 +52,12 @@ def _ssl_argument(mode: str | None, rootcert: str | None) -> Any:
         # Trust exactly the given CA (RDS bundle, a company CA) instead of the
         # system store; verify-full also checks the host name.
         ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=rootcert)
+        # Since Python 3.13 this context also has VERIFY_X509_STRICT, which
+        # libpq, the Go services (pgx) and asyncpg's own sslmode contexts do not
+        # apply: a chain they take (a server certificate without an Authority
+        # Key Identifier, as some cloud CAs issue) would fail here alone. The
+        # chain and, for verify-full, the host name are still checked.
+        ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
         ctx.check_hostname = mode == "verify-full"
         ctx.verify_mode = ssl.CERT_REQUIRED
         return ctx
