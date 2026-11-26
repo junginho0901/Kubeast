@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -62,7 +63,8 @@ type matrixResponse struct {
 }
 
 // readMatrix reads a metric query's answer: at most MaxSeries series, the
-// rest counted as Truncated and in SeriesTotal. A step with no sample has no point.
+// rest counted as Truncated and in SeriesTotal. A step with no sample has no point,
+// nor one whose value JSON cannot hold (NaN or an infinity, as a division by zero gives).
 func readMatrix(body []byte, query string, step time.Duration) (Result, error) {
 	var mr matrixResponse
 	if err := json.Unmarshal(body, &mr); err != nil {
@@ -82,7 +84,7 @@ func readMatrix(body []byte, query string, step time.Duration) (Result, error) {
 				continue
 			}
 			f, err := strconv.ParseFloat(raw, 64)
-			if err != nil {
+			if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
 				continue
 			}
 			series.Points = append(series.Points, Point{T: t, V: f})

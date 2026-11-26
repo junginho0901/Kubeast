@@ -76,6 +76,27 @@ func TestLogQLSearchRunsAMetricQueryForAPodReader(t *testing.T) {
 	}
 }
 
+// Loki writes a metric sample's value as Prometheus does, NaN for 0/0 and +Inf or -Inf for x/0. JSON holds neither:
+// the whole answer was a 200 with no body. Such a sample has no point, as an unreadable one has; the series stay.
+func TestLogQLSearchLeavesOutANaNOrInfiniteSampleAndKeepsTheSeries(t *testing.T) {
+	f := newLogSearchFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"status":"success","data":{"resultType":"matrix","result":[` +
+			`{"metric":{"k8s_pod_name":"web-0"},"values":[[1760443200,"0.25"],[1760443500,"NaN"],[1760443800,"0.5"]]},` +
+			`{"metric":{"k8s_pod_name":"web-1"},"values":[[1760443200,"+Inf"],[1760443500,"-Inf"]]}]}}`))
+	})
+	raw := `sum by (k8s_pod_name) (rate({app="web"} |= "error" [5m])) / sum by (k8s_pod_name) (rate({app="web"} [5m]))`
+	w := f.serve(f.h.LogQLSearchNamespace, logSearchRequestAs(logqlTarget("/api/v1/namespaces/apps/logsearch/logql", raw, "&since=1h&step=300"), "self", "apps", podReader))
+	var res logsearch.Result
+	if err := json.Unmarshal(w.Body.Bytes(), &res); w.Code != http.StatusOK || err != nil {
+		t.Fatalf("status %d %q: %v", w.Code, w.Body.String(), err)
+	}
+	if res.SeriesTotal != 2 || len(res.Series) != 2 || res.Series[0].Metric["k8s_pod_name"] != "web-0" ||
+		len(res.Series[0].Points) != 2 || res.Series[0].Points[0] != (logsearch.Point{T: 1760443200, V: 0.25}) || res.Series[0].Points[1] != (logsearch.Point{T: 1760443800, V: 0.5}) ||
+		res.Series[1].Metric["k8s_pod_name"] != "web-1" || res.Series[1].Points == nil || len(res.Series[1].Points) != 0 {
+		t.Fatalf("series %+v", res.Series)
+	}
+}
+
 func TestLogQLSearchLogQueryAndSeriesCap(t *testing.T) {
 	f := newLogSearchFixture(t, lokiAnswers("level=error msg=boom"))
 	w := f.serve(f.h.LogQLSearchAll, logSearchRequestAs(logqlTarget("/api/v1/logsearch/logql", `{app="web"} | logfmt | level="error"`, ""), "self", "", podReader))
