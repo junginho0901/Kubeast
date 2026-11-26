@@ -142,7 +142,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
               maxLength={NAME_MAX}
               onChange={(e) => setDisplayName(e.target.value)}
               placeholder="prod-seoul"
-              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-ink"
+              className="w-full rounded-lg bg-slate-900 border border-control px-3 py-2 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -169,7 +169,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                   }}
                   rows={8}
                   placeholder="apiVersion: v1&#10;kind: Config&#10;..."
-                  className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-ink"
+                  className="w-full rounded-lg bg-slate-900 border border-control px-3 py-2 text-xs font-mono text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                 />
                 <p className="mt-1 text-[11px] text-slate-500">
                   {tr(
@@ -187,11 +187,11 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                   value={apiServerURL}
                   onChange={(e) => setApiServerURL(e.target.value)}
                   placeholder={tr('cluster.register.apiServerPlaceholder', 'Empty = the server in the kubeconfig')}
-                  className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-ink"
+                  className="w-full rounded-lg bg-slate-900 border border-control px-3 py-2 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-500"
                 />
                 <UrlFieldProblem problem={apiServerProblem} testId="register-api-server-problem" />
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
                   onClick={runTest}
@@ -202,7 +202,7 @@ export default function RegisterClusterDialog({ onClose, onRegistered }: Props) 
                   {tr('cluster.register.test', 'Test connection')}
                 </button>
                 {test && (
-                  <span role="status" data-testid="register-test-result" className={`flex items-center gap-1 text-sm min-w-0 ${test.healthy ? 'text-green-400' : 'text-red-400'}`}>
+                  <span role="status" data-testid="register-test-result" className={`flex items-center gap-1 text-sm min-w-0 break-all ${test.healthy ? 'text-green-400' : 'text-red-400'}`}>
                     {test.healthy ? <CheckCircle className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
                     <span className="break-words">{test.healthy ? test.server_version || 'OK' : test.message || tr('cluster.register.testFailed', 'Failed')}</span>
                   </span>

@@ -32,7 +32,7 @@ export default function AdminAIModels() {
       <div className="page-head items-center mb-6">
         <div>
           <h1 className="text-3xl font-semibold text-ink flex items-center gap-2">
-            <Bot className="h-5 w-5 text-primary-400" />
+            <Bot className="h-5 w-5 text-slate-400" />
             {tr('admin.aiModels.title', 'AI Model Configuration')}
           </h1>
           <p className="text-sm text-slate-400 mt-1">
