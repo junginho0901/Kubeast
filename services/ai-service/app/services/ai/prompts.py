@@ -382,6 +382,11 @@ ANOMALY_RANK_GUIDE = (
     "자료가 없어 새것인지 모른다는 뜻). `normal`은 아무것도 못 찾은 검사, `not_run`은 "
     "못 한 검사와 까닭 — 못 한 것은 정상이 아님 (켜진 설치에서만 제공)"
 )
+# What to do with an answer that says the window before has no data for most values (anomaly_rank's no_baseline): in both
+# lines of the order rule below, after the step that calls it.
+ANOMALY_NO_BASELINE = (
+    "답에 `no_baseline`이 있으면 앞 구간 자료가 없어 순위가 달라진 것을 말하지 않으니, 맨 위 발견을 쫓기 전에 그 네임스페이스의 이벤트·최근 바뀐 것(②)·로그부터 읽으세요. "
+)
 # The one order for broad "why did this break?" questions, by the switches that are on; each switch alone gives its own
 # pull request's words, and the combined words come only with both on. It takes the place of the changes view's own
 # "changes first" rule (_TIME_RULE's addition) whenever it names that view.
@@ -390,7 +395,7 @@ ANOMALY_RANK_RULE = (
     "- **\"왜 깨졌어?\"·\"뭐가 달라졌어?\"처럼 넓게 물으면 이 차례로 보세요** (먼저 부를 도구를 정하는 규칙은 이것 하나입니다): ① 네임스페이스가 정해져 있고 `anomaly_rank`가 "
     "제공되면 그것을 **한 번** → ② 거기 나온 구간(없으면 증상이 시작된 시각 앞 몇 시간)으로 `timeline`에서 그동안 바뀐 것 → ③ 여러 워크로드가 같이 아프면 "
     "`resource_graph`를 `include: [\"calls\"]`로(제공될 때, 같은 구간을 `since_time`·`until_time`으로) 불러 누가 누구를 부르는지 — 고장 난 쪽을 "
-    "부르는 워크로드는 원인보다 피해자일 때가 많습니다. `anomaly_rank`가 없으면 ②부터. 순위는 단서이지 원인이 아닙니다 — 나온 대상을 읽어 확인하고, `not_run`에 있는 검사는 \"못 "
+    "부르는 워크로드는 원인보다 피해자일 때가 많습니다. `anomaly_rank`가 없으면 ②부터. " + ANOMALY_NO_BASELINE + "순위는 단서이지 원인이 아닙니다 — 나온 대상을 읽어 확인하고, `not_run`에 있는 검사는 \"못 "
     "봤다\"고 말하세요. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 원인으로 대지 마세요."
 )
 # anomaly_rank and the changes view on: step 2 reads the changes view.
@@ -399,7 +404,7 @@ ANOMALY_RANK_RULE_WITH_CHANGES = (
     "제공되면 그것을 **한 번** → ② 거기 나온 구간(없으면 증상이 시작된 시각 앞 몇 시간)을 `since_time`·`until_time`으로 `timeline`을 `view: "
     "\"changes\"`로 불러 그동안 바뀐 것 → ③ 여러 워크로드가 같이 아프면 `resource_graph`를 `include: [\"calls\"]`로(제공될 때, 같은 구간을 "
     "`since_time`·`until_time`으로) 불러 누가 누구를 부르는지 — 고장 난 쪽을 부르는 워크로드는 원인보다 피해자일 때가 많습니다. `anomaly_rank`가 없으면 ②부터. "
-    "순위는 단서이지 원인이 아닙니다 — 나온 대상을 읽어 확인하고, `not_run`에 있는 검사는 \"못 봤다\"고 말하세요. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 원인으로 대지 마세요."
+    + ANOMALY_NO_BASELINE + "순위는 단서이지 원인이 아닙니다 — 나온 대상을 읽어 확인하고, `not_run`에 있는 검사는 \"못 봤다\"고 말하세요. 바뀐 것이 있어도 증상과 시각·대상이 맞지 않으면 원인으로 대지 마세요."
 )
 # anomaly_rank off, resource_graph's calls on (CALL_GRAPH_ENABLED): the lines of the rule not about anomaly_rank, timeline first.
 CALL_GRAPH_RULE = (

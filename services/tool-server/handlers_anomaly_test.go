@@ -139,6 +139,42 @@ func TestAnomalyRank_KeepsEveryReasonACheckDidNotRun(t *testing.T) {
 	}
 }
 
+// no_baseline comes right after the windows, before the counts and the findings the model reads after it, and stays when
+// the answer is cut; an answer without it is written as the key list before it wrote it.
+func TestAnomalyRank_NoBaselineComesFirstAndStays(t *testing.T) {
+	findings := make([]string, 10)
+	for i := range findings {
+		findings[i] = anomalyFinding(i, true)
+	}
+	noBaseline := `"no_baseline":{"compared":30,"no_earlier_data":30,"note":"Most values compared have no data in the window before, so the findings show what is there now, not what changed. ` +
+		`Read the namespace's events, recent changes and logs before following the first finding."}`
+	fakeK8sService(t, func(r *http.Request) (int, string) {
+		return 200, strings.Replace(anomalyReply(findings), `"findings":[`, noBaseline+`,"findings":[`, 1)
+	})
+	out, err := handleAnomalyRank(ctxFor("c1"), map[string]interface{}{"namespace": "shop"}, bearer())
+	if err != nil || len(out) > anomalyRankChars {
+		t.Fatalf("%d characters, %v", len(out), err)
+	}
+	if !strings.Contains(out, `"compared_with":{"end":"2026-11-15T00:30:00Z","start":"2026-11-14T23:30:00Z"},`+noBaseline+`,"findings_total":10,`) {
+		t.Fatalf("no_baseline is not right after the windows: %s", out)
+	}
+	if m := decode(t, out); m["findings_note"] == nil {
+		t.Fatalf("not cut: %s", out)
+	}
+
+	before := []string{"namespace", "workload", "window", "compared_with", "findings_total", "findings_note", "examples_note", "call_order", "not_run", "normal", "store_queries"}
+	reply := anomalyReply([]string{anomalyFinding(1, true)})
+	fakeK8sService(t, func(r *http.Request) (int, string) { return 200, reply })
+	out, err = handleAnomalyRank(ctxFor("c1"), map[string]interface{}{"namespace": "shop"}, bearer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := marshalOrdered(decode(t, reply), before, anomalyLastKeys)
+	if err != nil || out != want || strings.Contains(out, "no_baseline") {
+		t.Fatalf("without no_baseline\n%s\nwant\n%s", out, want)
+	}
+}
+
 func TestAnomalyRank_OffIsUnavailableWithTheIssueCheckInstead(t *testing.T) {
 	fakeK8sService(t, func(r *http.Request) (int, string) {
 		return 404, `{"detail":"anomaly ranking is off (features.anomalyRank.enabled)"}`

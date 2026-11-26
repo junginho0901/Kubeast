@@ -19,17 +19,18 @@ OTHERS = ("AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED")
 COMBINATIONS = [on for n in range(len(OTHERS) + 1) for on in itertools.combinations(OTHERS, n)]
 
 # The prompt before this switch (81f6eda1e) with each set of the other switches on: characters, bytes, sha256. With
-# anomaly_rank's on, 81f6eda1e's with that tool's two lines as test_anomaly_rank_switch.py holds them.
+# anomaly_rank's on, 81f6eda1e's with that tool's two lines as test_anomaly_rank_switch.py holds them, and the order rule's
+# sentence on no_baseline (prompts.ANOMALY_NO_BASELINE, 104 characters and 230 bytes more).
 CHANGES, ANOMALY, CALLS = OTHERS
 BEFORE = {
     (): (25850, 35837, "2a1b00a8b9bead52beded5f8b6fbcd11467e8e52c4f7a5578fd4fa9e7b5b9a47"),
     (CHANGES,): (26593, 37030, "9c81984f213c6ed5f8c1c863767f2734bbd63bf85db351e4926ac84ad0b626b6"),
-    (ANOMALY,): (27105, 37917, "774798c9b4fd7c5adbc7d7ac8dc4575f93289b27e30826a80bd264441ee1593e"),
+    (ANOMALY,): (27209, 38147, "95b2aa82160e28a3ab7554c7928ce8485e1f6c3744ba0fbed4a4a6624af1fdb4"),
     (CALLS,): (26167, 36481, "94e31865484fa79b751f26f06199159dcda3cc5b57f30b6133ae232658fef857"),
-    (CHANGES, ANOMALY): (27710, 38806, "73b7e008020ad1b9386e621f54f2ab86bc26e2b1b64e43afcbce38ef7d67f5d8"),
+    (CHANGES, ANOMALY): (27814, 39036, "097b479fef746ce96c00024337ca1026a5a2a50448076af89052e64ca97c604d"),
     (CHANGES, CALLS): (26772, 37370, "55d5d6e86f4467c7860ee7c3a49d87017e654af7d6dfdcc5937e86176555d67a"),
-    (ANOMALY, CALLS): (27105, 37917, "774798c9b4fd7c5adbc7d7ac8dc4575f93289b27e30826a80bd264441ee1593e"),
-    (CHANGES, ANOMALY, CALLS): (27710, 38806, "73b7e008020ad1b9386e621f54f2ab86bc26e2b1b64e43afcbce38ef7d67f5d8"),
+    (ANOMALY, CALLS): (27209, 38147, "95b2aa82160e28a3ab7554c7928ce8485e1f6c3744ba0fbed4a4a6624af1fdb4"),
+    (CHANGES, ANOMALY, CALLS): (27814, 39036, "097b479fef746ce96c00024337ca1026a5a2a50448076af89052e64ca97c604d"),
 }
 # What the rules add to any of them, so a longer text is seen here: every model call of an answer sends it.
 ADDED_CHARS, ADDED_BYTES = 1942, 4042
