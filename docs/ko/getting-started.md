@@ -336,6 +336,14 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - 이 모델들은 OpenAI 호환 엔드포인트로 쓰세요. 공급자가 제공하면 그 엔드포인트를, 아니면 그 앞에 둔 LiteLLM 같은 게이트웨이를 씁니다. provider `openai`에 `spec.baseURL`로 주소를 넣거나, **Admin > AI Models**에서 provider `custom`을 고르세요.
 - 업그레이드 전에 이 값으로 저장된 ModelConfig는 그대로 남고, 컨트롤러가 더는 동기화하지 않습니다. `kubectl get modelconfigs -A`로 각 공급자를 볼 수 있습니다. `spec.provider`를 바꾸거나 지우세요. 지우면 **Admin > AI Models**의 그 설정도 함께 없어집니다.
 
+**API로 저장하는 설정**(`POST`·`PATCH /api/v1/ai/model-configs`)은 위 공급자와 `azure`, `google`(Gemini), `custom`을 받습니다. 다른 공급자는 400으로 거절합니다.
+
+- `custom`은 다른 OpenAI 호환 엔드포인트이고 `base_url`이 있어야 합니다.
+- `base_url`이 없는 설정은 그 공급자의 주소로 갑니다. **Test**, 모델 드롭다운, 채팅이 같은 주소를 씁니다.
+- `base_url`이 있는 Gemini 설정의 **Test**는 채팅처럼 그 주소의 OpenAI 호환 API를 부릅니다.
+- 0.8.0 전에는 provider가 `groq`, `deepseek`, `mistral`, `together`, `fireworks`이고 `base_url`이 없는 설정을 **Test**는 그 공급자로, 채팅은 OpenAI 주소로 보냈습니다. 이제 이 공급자들은 거절합니다.
+- 업그레이드 전에 다른 공급자로 저장된 설정은 목록에 그대로 남습니다. 채팅과 **Test**는 그 설정을 거절하고 아무것도 보내지 않으며, 공급자를 바꾸기 전에는 저장도 거절합니다. provider를 `custom`으로 바꾸고 `base_url`을 넣거나 지우세요.
+
 **Claude 구독으로 쓰기 (provider `claude-code`, 개인용)** — API 키 대신 Claude Pro/Max 구독의 `claude setup-token` 값으로 채팅합니다.
 구독 토큰은 Claude Code에서만 쓸 수 있으므로, ai-service는 모델을 호출할 때마다 Claude Agent SDK(`app/services/claude_code.py`)로 Claude Code를 띄웁니다.
 Claude Code가 부르는 도구는 채팅의 도구 코드가 이 프로세스 안에서 처리합니다.

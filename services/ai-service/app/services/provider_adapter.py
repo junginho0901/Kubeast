@@ -23,20 +23,9 @@ from app.services.ai import thought_signatures
 from app.services.ai.debug_dump import log as logger
 from app.services.ai.limits import KUBEAST_KEYS
 from app.services.ai.model_requests import CountedChat
-from app.services.model_config_policy import AZURE_PROVIDERS, AZURE_V1_URL_HINT
+from app.services.model_config_policy import AZURE_PROVIDERS, AZURE_V1_URL_HINT, default_base_url
 from app.services.model_http import model_client
 from app.services.tls import build_verify
-
-
-# 프로바이더별 기본 OpenAI-compatible 엔드포인트
-_PROVIDER_BASE_URLS: Dict[str, str] = {
-    "openai": "https://api.openai.com/v1",
-    "anthropic": "https://api.anthropic.com",
-    "google": "https://generativelanguage.googleapis.com/v1beta/openai/",
-    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
-    "ollama": "http://localhost:11434/v1",
-    # Azure OpenAI는 기본값 없음 — 리소스마다 v1 주소(https://<resource>.openai.azure.com/openai/v1/)를 적어야 함
-}
 
 
 # OpenAI-호환 엔드포인트가 top-level 파라미터로 인식하는 표준 생성 파라미터.
@@ -236,13 +225,6 @@ class ProviderAdapter:
                 raise ValueError(f"Azure OpenAI needs its v1 endpoint as base_url ({AZURE_V1_URL_HINT})")
             default_headers = {**(default_headers or {}), "api-key": api_key}
 
-        if clean_base_url:
-            resolved_base_url = clean_base_url
-        else:
-            resolved_base_url = _PROVIDER_BASE_URLS.get(
-                self.provider, "https://api.openai.com/v1"
-            )
-
         self._default_options = options or None
 
         if self.provider == "claude-code":
@@ -253,6 +235,9 @@ class ProviderAdapter:
             self.chat = self.claude_code.chat
             print(f"[Provider Adapter] provider=claude-code (Claude subscription), model={model}", flush=True)
             return
+
+        # the table the connection test and the model list read; no fallback to another provider
+        resolved_base_url = clean_base_url or default_base_url(self.provider)
 
         http_client = model_client(build_verify(tls_verify, ca_cert), judged=bool(clean_base_url) and not installer_base_url)
 

@@ -167,18 +167,6 @@ async def _test_google(
             return {"success": False, "message": _provider_refusal(resp, api_key)}
 
 
-# Provider routing table
-_OPENAI_COMPATIBLE_DEFAULTS: dict[str, str] = {
-    "openai": "https://api.openai.com/v1",
-    "groq": "https://api.groq.com/openai/v1",
-    "deepseek": "https://api.deepseek.com/v1",
-    "mistral": "https://api.mistral.ai/v1",
-    "together": "https://api.together.xyz/v1",
-    "fireworks": "https://api.fireworks.ai/inference/v1",
-    "ollama": "http://localhost:11434/v1",
-}
-
-
 async def _test_azure_openai(
     provider: str,
     api_key: str,
@@ -322,10 +310,10 @@ async def _test_model_connection(request: dict) -> dict:
             return await claude_code.test_connection(model, api_key)
 
         elif provider == "anthropic":
-            base = user_base_url or "https://api.anthropic.com"
+            base = user_base_url or model_config_policy.default_base_url(provider)
             return await _test_anthropic(api_key, model, base, verify, judged=judged)
 
-        elif provider in ("google", "gemini"):
+        elif provider in ("google", "gemini") and not user_base_url:
             return await _test_google(api_key, model, verify)
 
         elif provider in model_config_policy.AZURE_PROVIDERS:
@@ -333,16 +321,12 @@ async def _test_model_connection(request: dict) -> dict:
                                             body.get("tls_verify", True), body.get("ca_cert"), options=options)
 
         elif provider == "ollama":
-            return await _test_ollama(model, user_base_url or "http://localhost:11434", verify, judged=judged)
+            return await _test_ollama(model, user_base_url or model_config_policy.default_base_url(provider), verify,
+                                      judged=judged)
 
         else:
-            # OpenAI-compatible providers
-            base = user_base_url or _OPENAI_COMPATIBLE_DEFAULTS.get(provider, "")
-            if not base:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"base_url is required for provider '{provider}'",
-                )
+            # OpenAI-compatible providers, Gemini at a base_url too, as the chat calls them
+            base = user_base_url or model_config_policy.default_base_url(provider)
             return await _test_openai_compatible(api_key, model, base, verify, provider=provider, judged=judged,
                                                  options=options)
 
@@ -361,7 +345,6 @@ async def _test_model_connection(request: dict) -> dict:
 
 # What an OpenAI-compatible /models list returns besides chat models.
 _NOT_CHAT = re.compile(r"embed|tts|whisper|dall-e|moderation|transcribe|image|audio|realtime|search|davinci|babbage", re.I)
-_GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
 
 
 async def _list_models(provider: str, api_key: str, base: str, verify: Union[bool, ssl.SSLContext], judged: bool = True) -> list[dict]:
@@ -429,19 +412,15 @@ async def _list_provider_models(request: dict) -> dict:
     if provider != "ollama" and not api_key:
         return {"models": [], "error": f"environment variable {api_key_env or '(none)'} is not set in ai-service"}
 
-    if provider == "anthropic":
-        base = user_base_url or "https://api.anthropic.com"
-    elif provider in ("google", "gemini"):
-        base = user_base_url or _GEMINI_OPENAI_BASE
-    elif provider == "ollama":
-        base = (user_base_url or "http://localhost:11434").rstrip("/")
-        base = base if base.endswith("/v1") else base + "/v1"
-    elif provider in model_config_policy.AZURE_PROVIDERS:
+    if provider in model_config_policy.AZURE_PROVIDERS:
         return {"models": [], "error": "Azure OpenAI lists deployments, not models; type the deployment name"}
-    else:
-        base = user_base_url or _OPENAI_COMPATIBLE_DEFAULTS.get(provider, "")
-        if not base:
-            return {"models": [], "error": f"base_url is required for provider '{provider}'"}
+    try:
+        base = user_base_url or model_config_policy.default_base_url(provider)
+    except model_config_policy.PolicyError as e:
+        return {"models": [], "error": str(e)}
+    if provider == "ollama":
+        base = base.rstrip("/")
+        base = base if base.endswith("/v1") else base + "/v1"
     # The connection test's provider rule, before the key leaves: the subscription token goes to no other provider.
     try:
         model_config_policy.check_provider_fields(provider, (api_key_env,), user_base_url)
