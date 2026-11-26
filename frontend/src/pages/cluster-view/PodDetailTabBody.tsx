@@ -51,7 +51,7 @@ export function PodDetailTabBody({ manifest, describeData, describeError, podRea
   }
 
   return (
-    <div className={`flex-1 p-6 ${showExec ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+    <div className={`flex-1 min-h-0 p-5 ${showExec ? 'overflow-hidden' : 'overflow-y-auto'}`}>
       {activeTab === 'summary' && (
         <PodSummaryTab
           pod={selectedPod}

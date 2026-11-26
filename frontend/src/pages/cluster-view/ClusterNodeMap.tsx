@@ -162,7 +162,7 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
   const speak = (i: number | null) => say(i === null ? '' : speech.cell(entries[i]))
 
   return (
-    <div className="card" data-testid="cluster-view-map" data-list-bounded="one canvas of every node: about 194 px tall at 1,000 nodes, about 1.5 screens at 5,000">
+    <div className="card px-4 py-3" data-testid="cluster-view-map" data-list-bounded="one canvas of every node: about 194 px tall at 1,000 nodes, about 1.5 screens at 5,000">
       <div ref={wrapRef} className="w-full">
         <canvas
           ref={canvasRef}

@@ -35,7 +35,7 @@ function RbacRule({ rule, surface, tr }: { rule: any; surface: string; tr: Tr })
   const names: string[] = rule.resource_names || []
   const none = tr('clusterView.rbac.none', 'None')
   return (
-    <div data-testid="pod-rbac-rule" className={`${surface} rounded-lg p-3 text-sm`}>
+    <div data-testid="pod-rbac-rule" className={`${surface} border-b py-3 text-sm`}>
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap gap-2">
           <span className="text-slate-400">{tr('clusterView.rbac.verbsLabel', 'verbs')}</span>
@@ -72,8 +72,8 @@ function RbacBindingCard({ binding: b, broad, matching, tr }: { binding: any; br
   const rules: any[] = role?.rules || []
   const none = tr('clusterView.rbac.none', 'None')
   return (
-    <div className={`${broad ? 'bg-slate-900' : 'bg-slate-800'} rounded-lg p-4`} data-testid="pod-rbac-binding" data-name={b.name}>
-      <div className="flex items-start justify-between gap-4">
+    <div className={`${broad ? 'border-l-2 border-yellow-500/30' : 'border-l border-hairline'} pl-4 py-3`} data-testid="pod-rbac-binding" data-name={b.name}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-ink font-medium wrap-break-word" data-testid="pod-rbac-binding-name">{b.name}</p>
           <p className="text-sm text-slate-400 wrap-break-word">
@@ -103,7 +103,7 @@ function RbacBindingCard({ binding: b, broad, matching, tr }: { binding: any; br
             {(b.subjects || []).map((s: any, idx: number) => (
               <span
                 key={idx}
-                className="px-2 py-1 rounded-sm bg-slate-700 text-slate-200 text-xs wrap-break-word"
+                className="px-2 py-1 rounded-lg bg-slate-700 text-slate-200 text-xs wrap-break-word"
                 title={`${s.kind || ''} ${s.namespace ? `${s.namespace}/` : ''}${s.name || ''}`}
               >
                 {s.kind}:{s.namespace ? `${s.namespace}/` : ''}{s.name}
@@ -122,7 +122,7 @@ function RbacBindingCard({ binding: b, broad, matching, tr }: { binding: any; br
             {rules.length ? (
               <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1" data-testid="pod-rbac-rules">
                 {rules.map((r: any, idx: number) => (
-                  <RbacRule key={idx} rule={r} surface={broad ? 'bg-slate-800' : 'bg-slate-900'} tr={tr} />
+                  <RbacRule key={idx} rule={r} surface={broad ? 'border-yellow-500/30' : 'border-hairline'} tr={tr} />
                 ))}
               </div>
             ) : (
@@ -150,7 +150,7 @@ interface SectionProps {
 function RbacBindingSection({ testId, keyPrefix, title, broadTitle, broadHint, list, includeBroad, matchingOf, tr }: SectionProps) {
   return (
     <div className="space-y-3" data-testid={testId}>
-      <h4 className="text-ink font-semibold">{title}</h4>
+      <h4 className="text-lg text-ink font-semibold">{title}</h4>
       {!list.read && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
           <p className="text-yellow-200 text-sm wrap-break-word">
@@ -170,8 +170,8 @@ function RbacBindingSection({ testId, keyPrefix, title, broadTitle, broadHint, l
       )}
 
       {includeBroad && list.broad.length > 0 && (
-        <div className="bg-slate-800 rounded-lg p-4 border border-yellow-500/30">
-          <div className="flex items-start justify-between gap-4">
+        <div className="border-l-2 border-yellow-500/30 pl-4 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-yellow-200 font-medium wrap-break-word">{broadTitle}</p>
               <p className="text-xs text-slate-400 mt-1">{broadHint}</p>
@@ -247,13 +247,13 @@ export function PodRbacTab({ pod, tr }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
           <h3 className="text-lg font-semibold text-ink">
             {tr('clusterView.rbac.title', 'RBAC')}
           </h3>
           <span
-            className="px-2 py-1 rounded-sm bg-slate-700 text-slate-200 text-xs border border-slate-600"
+            className="px-2 py-1 rounded-lg bg-slate-700 text-slate-200 text-xs border border-slate-600"
             title={tr(
               'clusterView.rbac.tooltip',
               'This view summarizes RBAC (Role/RoleBinding/ClusterRole/ClusterRoleBinding) only. Actual allow/deny can differ due to Admission (OPA/Gatekeeper), NetworkPolicy/CNI, and controller behavior.',
@@ -297,13 +297,13 @@ export function PodRbacTab({ pod, tr }: Props) {
 
       {rbacData && (
         <div className="space-y-6">
-          <div className="bg-slate-800 rounded-lg p-4">
+          <div className="border-t border-hairline pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-slate-400">
                   {tr('clusterView.rbac.serviceAccountLabel', 'ServiceAccount')}
                 </p>
-                <p className="text-ink font-medium">
+                <p className="text-ink font-medium break-all">
                   {serviceAccountName}
                   {serviceAccountName === 'default' && (
                     <span className="ml-2 text-xs text-slate-400">
@@ -319,7 +319,7 @@ export function PodRbacTab({ pod, tr }: Props) {
                 <p className="text-sm text-slate-400">
                   {tr('clusterView.rbac.bindingsLabel', 'Bindings')}
                 </p>
-                <p className="text-ink font-medium" data-testid="pod-rbac-binding-counts">
+                <p className="text-ink font-medium break-all" data-testid="pod-rbac-binding-counts">
                   {roleBindings.read
                     ? tr('clusterView.rbac.roleBindingCount', 'RoleBinding {{count}}', { count: roleBindings.all.length })
                     : 'RoleBinding -'}
@@ -361,10 +361,10 @@ export function PodRbacTab({ pod, tr }: Props) {
             const { resourceItems, nonResourceItems, incomplete } = buildRbacPermissionSummary(rbacData)
             const total = resourceItems.length + nonResourceItems.length
             return (
-              <div className="bg-slate-800 rounded-lg p-4" data-testid="pod-rbac-summary">
-                <div className="flex items-start justify-between gap-4">
+              <div className="border-t border-hairline pt-4" data-testid="pod-rbac-summary">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h4 className="text-ink font-semibold">
+                    <h4 className="text-lg text-ink font-semibold">
                       {tr('clusterView.rbac.summary.title', 'Permission summary')}
                     </h4>
                     <p className="text-slate-400 text-xs mt-1">
