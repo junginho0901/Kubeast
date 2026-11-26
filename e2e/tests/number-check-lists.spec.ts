@@ -111,6 +111,10 @@ type Screen = {
   cards?: (list: Obj[]) => Record<string, number>
   // every column the API server's Table prints — the wide ones (priority 1) too — is on the screen
   allColumns?: boolean
+  // what the cluster reaches before the screen is read, so a value that moves holds still while kubectl and the screen are read
+  settle?: () => Promise<void>
+  // the read the screen sends again on a timer in place of live updates (Pods, every 3 s)
+  polls?: (url: URL) => boolean
 }
 
 // Healthy = all wanted replicas ready, Unavailable = none available, Degraded = the rest that want replicas, Idle =
@@ -125,9 +129,30 @@ const replicaCards = (desired: (o: Obj) => number, ready: (o: Obj) => number, av
 const n = (v: unknown) => Number(v ?? 0)
 const AGE = 'nice-to-have: dates-pages.spec.ts compares the Pods age with kubectl; the format is formatAge everywhere'
 
+// num-crash exits 2 s after each start, so its Ready, Status and Restarts change three times in a few seconds around a
+// restart: past its third restart it waits in CrashLoopBackOff for its back-off (40 s, then longer), and is read then
+async function crashLoopHolds() {
+  const state = () => {
+    try {
+      return kubectl(`get pod num-crash -n ${NS} -o jsonpath='{.status.containerStatuses[0].restartCount} {.status.containerStatuses[0].state.waiting.reason}'`)
+    } catch {
+      return ''
+    }
+  }
+  const holds = (s: string) => Number(s.split(' ')[0]) >= 3 && s.split(' ')[1] === 'CrashLoopBackOff'
+  try {
+    await expect.poll(() => holds(state()), { timeout: 150_000, intervals: [1_000] }).toBe(true)
+  } catch {
+    const s = state()
+    expect.soft(holds(s), `num-crash past its third restart, waiting in CrashLoopBackOff (kubectl: "${s}")`).toBe(true)
+  }
+}
+
 const SCREENS: Screen[] = [
   {
     path: '/workloads/pods', api: `/api/v1/namespaces/${NS}/pods`, plural: 'pods',
+    settle: crashLoopHolds,
+    polls: (u) => u.pathname === '/api/v1/cluster/pods/page' && u.searchParams.get('namespace') === NS,
     alias: { 'Pod IP': 'IP' },
     shape: { Restarts: (v) => v.replace(/\s*\(.*\)$/, '') },
     skip: { Age: AGE },
@@ -825,12 +850,21 @@ const screenUrl = (s: Screen) =>
 // a value the screen holds and the cluster's, where they differ
 type Difference = { what: string; got: unknown; want: unknown }
 
+// the screen's next read sent from now on, answered and drawn (two frames); none in 10 s leaves the screen as it is
+const nextAnswer = (page: Page, polls: (url: URL) => boolean) =>
+  page.waitForRequest((r) => polls(new URL(r.url())), { timeout: 10_000 })
+    .then(async (r) => { await (await r.response())?.finished() })
+    .then(() => page.evaluate(() => new Promise<void>((drawn) => requestAnimationFrame(() => requestAnimationFrame(() => drawn())))))
+    .catch(() => {})
+
 // one screen read one way: its rows, every column and every card against the cluster, each difference a soft failure
 // (open = false: the screen already on the page, as live updates left it). The two reads are a moment apart, so a value that
 // moves (a crashing pod's STATUS goes Error, CrashLoopBackOff, Running) can differ once: what differs is read again, twice at
-// most and 2 s apart, a page whose live updates are held back opened again, and what differs on each of them is a failure
+// most and 2 s apart (a live screen that polls: once its next read is answered), a page whose live updates are held back
+// opened again, and what differs on each of them is a failure
 async function compareScreen(page: Page, s: Screen, way: string, open = true) {
   const { apiTable } = on(s.cluster)
+  await s.settle?.()
   if (open) {
     await page.goto(screenUrl(s))
     await s.prepare?.(page)
@@ -909,7 +943,8 @@ async function compareScreen(page: Page, s: Screen, way: string, open = true) {
   let found = await differences()
   for (let again = 0; found.length > 0 && again < 2; again++) {
     test.info().annotations.push({ type: 'read again', description: found.map((d) => d.what).join(' | ') })
-    await page.waitForTimeout(2_000)
+    if (way !== 'list API' && s.polls) await nextAnswer(page, s.polls)
+    else await page.waitForTimeout(2_000)
     if (open && way === 'list API') {
       await page.goto(screenUrl(s))
       await s.prepare?.(page)
