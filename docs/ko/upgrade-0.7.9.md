@@ -157,7 +157,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 \
   -n kubeast --reset-then-reuse-values
 ```
 
-- 마이그레이션은 auth-service가 시작할 때 적용하고, `migrations.mode: job`이면 마이그레이션 Job이 적용합니다. 00031(#882), 00032(#1077), 00033(#1077)입니다. 00032는 `auth_users.self_signed_up` 칸을 더하고(상수 기본값이라 표를 다시 쓰지 않음), `auth_audit_logs`를 action 인덱스로 한 번 읽어 자기 가입 계정을 표시한 뒤, SSO가 닿은 자기 가입 계정의 `auth_users` 행을 바꿉니다. 00033은 다른 마이그레이션처럼 인덱스 두 개를 마이그레이션의 트랜잭션 안에서 만들므로, 그것이 끝날 때까지 `tool_approvals`에 쓰는 일이 기다립니다(행 100만 개에 1.5초쯤). 〔걸린 시간: 리허설 뒤에 씁니다.〕 0.7.9 서비스는 스키마 33을 기다립니다.
+- 마이그레이션은 auth-service가 시작할 때 적용하고, `migrations.mode: job`이면 마이그레이션 Job이 적용합니다. 00031(#882), 00032(#1077), 00033(#1077)입니다. 00032는 `auth_users.self_signed_up` 칸을 더하고(상수 기본값이라 표를 다시 쓰지 않음), `auth_audit_logs`를 action 인덱스로 한 번 읽어 자기 가입 계정을 표시한 뒤, SSO가 닿은 자기 가입 계정의 `auth_users` 행을 바꿉니다. 00033은 다른 마이그레이션처럼 인덱스 두 개를 마이그레이션의 트랜잭션 안에서 만들므로, 그것이 끝날 때까지 `tool_approvals`에 쓰는 일이 기다립니다(행 100만 개에 1.5초쯤). 〔걸린 시간: 리허설 뒤에 씁니다.〕 0.7.9 서비스는 스키마 33을 기다립니다. `migrations.mode: job`이면 마이그레이션 Job은 아무도 로그인시키지 않으므로 `auth.oidc.enabled`와 상관없이 OIDC를 끈 채(`OIDC_ENABLED` false) 돕니다. SSO를 켰는데 주 Secret에 `OIDC_CLIENT_SECRET`이 없으면(`auth.oidc.existingSecret`을 쓰거나, `auth.oidc.clientSecret`으로 SSO를 켜는 업그레이드) 0.7.8 이하의 Job은 시작하자마자 끝났고, 설치나 업그레이드가 아무것도 바꾸기 전에 멈췄습니다(#1098).
 - Kubeast 서버의 Deployment는 모두 이미지와, `podStartup.quickReady`면 프로브가 바뀌어 파드를 하나씩 바꿉니다. 0.7.8 파드는 `preStop` 기다림을 거쳐 멈춥니다. 멈추는 파드에 열려 있던 터미널과 따라가던 로그는 0.7.8처럼 끝납니다([0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md#4-저절로-바뀌는-것)).
 - 0.7.9의 변경은 번들 PostgreSQL과 Redis를 건드리지 않습니다. 차트가 둘의 파드를 0.7.8과 같게 렌더합니다. [1.6](#16-데이터베이스-연결)을 위해 `postgresql.maxConnections`를 올리면 PostgreSQL 파드가 바뀝니다.
 - 〔업그레이드 동안 요청이 겪은 것(실패, 다시 로그인, 초): 리허설 뒤에 씁니다.〕
