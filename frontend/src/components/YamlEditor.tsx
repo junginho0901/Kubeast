@@ -200,9 +200,11 @@ export default function YamlEditor({
           </button>
           {canEdit && (
             <>
+              {/* keyed, so Apply never takes over the pressed Edit and its focus */}
               {isEditing ? (
                 <>
                   <button
+                    key="apply"
                     ref={applyButtonRef}
                     type="button"
                     onClick={handleApply}
@@ -212,6 +214,7 @@ export default function YamlEditor({
                     {isApplying ? labels.applying : labels.apply}
                   </button>
                   <button
+                    key="cancel"
                     type="button"
                     onClick={() => {
                       setIsEditing(false)
@@ -226,6 +229,7 @@ export default function YamlEditor({
                 </>
               ) : (
                 <button
+                  key="edit"
                   ref={editButtonRef}
                   type="button"
                   onClick={() => {
