@@ -12,7 +12,7 @@ describe('a header a click sorts by', () => {
   it('holds a button that takes the Tab order and has no click of its own', () => {
     const button = SortButton({ children: 'Name' })
     expect(button.type).toBe('button')
-    expect(button.props).toMatchObject({ type: 'button', className: 'inline-flex items-center gap-1', children: 'Name' })
+    expect(button.props).toMatchObject({ type: 'button', className: 'inline-flex items-center gap-1 [text-align:inherit]', children: 'Name' })
     expect(button.props).not.toHaveProperty('onClick')
     expect(SortButton({ children: 'Name', className: 'text-left' }).props.className).toBe('text-left')
   })
@@ -36,6 +36,38 @@ describe('a header a click sorts by', () => {
     ;(heads[2].props.onClick as () => void)()
     expect(setSortKey).toHaveBeenCalledWith('pv')
     expect(setSortDir).toHaveBeenCalledWith('asc')
+  })
+})
+
+// A button centres its text, and the span a sortable header held before it took its cell's alignment: a header of two
+// lines ("Max / Unavailable", "Allowed / Disruptions") moved to the middle of its cell. Each SortButton of the console
+// takes its cell's alignment or names its own.
+
+const sources = import.meta.glob(['/src/**/*.tsx', '!/src/**/*.test.*'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const ALIGNED = /(?:^|\s)(?:text-(?:left|right|center|start|end)|\[text-align:inherit\])(?=\s|$)/
+
+describe('a header a click sorts by keeps its cell\'s alignment', () => {
+  it('the button takes the cell\'s alignment unless it is given its own', () => {
+    expect(SortButton({ children: 'Name' }).props.className).toMatch(ALIGNED)
+    expect(SortButton({ children: 'Name' }).props.className).toContain('[text-align:inherit]')
+    expect('flex items-center gap-1').not.toMatch(ALIGNED)
+  })
+
+  it('every SortButton of the console has an alignment, with a class written out where it is given one', () => {
+    const unaligned: string[] = []
+    let buttons = 0
+    let read = 0
+    for (const [path, source] of Object.entries(sources)) {
+      buttons += source.match(/<SortButton\b/g)?.length ?? 0
+      for (const m of source.matchAll(/<SortButton(?:\s+className="([^"]*)")?\s*>/g)) {
+        read += 1
+        if (m[1] !== undefined && !ALIGNED.test(m[1])) unaligned.push(`${path}: ${m[1]}`)
+      }
+    }
+    expect(unaligned).toEqual([])
+    // each one read (none given a class some other way), and the console's sortable headers when the buttons came
+    expect(read).toBe(buttons)
+    expect(buttons).toBeGreaterThanOrEqual(334)
   })
 })
 
