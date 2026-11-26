@@ -22,6 +22,7 @@ from app.services.ai import chat_steps
 from app.services.ai import formatters
 from app.services.ai import history as history_mod
 from app.services.ai import limits
+from app.services.ai import reasoning_text
 from app.services.ai import repeats as repeats_mod
 from app.services.ai import thought_signatures
 from app.services.ai import tool_replay
@@ -1048,6 +1049,7 @@ async def session_chat_stream(
 
                 # --- streaming delta 수집 ---
                 collected_tool_calls = {}  # index -> {id, name, arguments}
+                collected_reasoning: dict = {}  # a thinking model's reasoning text by key (reasoning_text)
                 stream_usage = None
                 last_finish_reason = None
 
@@ -1064,6 +1066,7 @@ async def session_chat_stream(
                     fr = getattr(chunk.choices[0], "finish_reason", None)
                     if fr:
                         last_finish_reason = fr
+                    reasoning_text.add_delta(service, collected_reasoning, delta)
 
                     # 텍스트 content → 즉시 프론트엔드로 스트리밍
                     if delta.content:
@@ -1141,6 +1144,7 @@ async def session_chat_stream(
                     "role": "assistant",
                     "content": stream_content or None,
                     "tool_calls": tc_list,
+                    **reasoning_text.kept(service, collected_reasoning),
                 }
                 messages.append(assistant_msg)
                 turn_tool_calls += len(tc_list)

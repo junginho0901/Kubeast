@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from typing import Optional, Dict, Any
 
-from app.services.ai import thought_signatures
+from app.services.ai import reasoning_text, thought_signatures
 from app.services.ai.debug_dump import log as logger
 from app.services.ai.limits import KUBEAST_KEYS
 from app.services.ai.model_requests import CountedChat
@@ -59,6 +59,9 @@ _TOOLS_NEED_NO_REASONING = re.compile(r"function tools with reasoning_effort are
 _without_reasoning: set = set()
 # What a model refuses only at an effort other than "none" (the latest-model guide above).
 _SAMPLING_AT_NONE = frozenset({"temperature", "top_p", "top_logprobs", "logprobs"})
+# (provider, base URL, model) that refused the reasoning text sent back and took the request without it
+# (reasoning_text.refused): later calls leave it out.
+_reasoning_refused: set = set()
 
 
 def _refused_param(err: Exception) -> Optional[str]:
@@ -128,9 +131,15 @@ class _CompletionsProxy:
 
         for param in list(_refused.get(key, ())):
             drop(param)
+        if key in _reasoning_refused and "messages" in kwargs:
+            kwargs["messages"] = reasoning_text.without(kwargs["messages"])
+        sent_without_reasoning = False
         while True:
             try:
-                return await self._inner.create(**kwargs)
+                out = await self._inner.create(**kwargs)
+                if sent_without_reasoning:
+                    _reasoning_refused.add(key)
+                return out
             except Exception as e:
                 # Sent once at "none" at most: after it reasoning_effort is in the call, or refused and remembered.
                 if (not given and kwargs.get("tools") and "reasoning_effort" not in kwargs
@@ -149,6 +158,12 @@ class _CompletionsProxy:
                         logger.info("model %s takes tools only at reasoning_effort none; sending it", kwargs.get("model"))
                     continue
                 param = _refused_param(e)
+                if param is None and not sent_without_reasoning and reasoning_text.refused(e, kwargs.get("messages")):
+                    # kept only when this request without it is taken: a 400 asking for it back is not remembered
+                    sent_without_reasoning = True
+                    kwargs["messages"] = reasoning_text.without(kwargs["messages"])
+                    logger.info("model %s refused the reasoning text sent back; sending again without it", kwargs.get("model"))
+                    continue
                 if param is None or param not in kwargs:
                     raise
                 if param in _SAMPLING_AT_NONE and "reasoning_effort" not in kwargs and key in _without_reasoning:
@@ -216,6 +231,8 @@ class ProviderAdapter:
 
         # base_url 결정: 사용자 지정 > 프로바이더 기본값
         clean_base_url = (base_url or "").strip()
+        # whether both tool loops keep a thinking model's reasoning text and send it back here (reasoning_text)
+        self.reasoning_back = reasoning_text.applies(self.provider, clean_base_url)
 
         if self.provider in AZURE_PROVIDERS:
             # The v1 API: an OpenAI-compatible endpoint per resource. Without one the

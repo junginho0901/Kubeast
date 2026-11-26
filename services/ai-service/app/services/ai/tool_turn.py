@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional, Sequence
 
 from app.services.ai import limits
+from app.services.ai import reasoning_text
 from app.services.ai import thought_signatures
 from app.services.ai import tool_results
 from app.services.ai import usage as usage_acct
@@ -129,6 +130,7 @@ async def run_tool_turn(service, messages: list[dict[str, Any]], tools: Sequence
                  **thought_signatures.kept(getattr(service, "provider", None), c)}
                 for c in calls
             ],
+            **reasoning_text.kept(service, msg),
         })
         for c in calls:
             result = await run_tool(c.function.name, _args(c.function.arguments), step)
