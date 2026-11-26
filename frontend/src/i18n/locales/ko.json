@@ -230,6 +230,10 @@
     "generatedAt": "기준 시각 {{when}} · 임시 권한은 {{since}} 이후.",
     "tabCountExpired": "({{count}} · 만료 {{expired}})",
     "requestsCut": "{{since}} 이후 요청 {{total}}건 중 최근 {{shown}}건만 여기와 CSV에 있습니다.",
+    "rolePermissions": {
+      "count": "권한 {{count}}개",
+      "description": "이 역할의 권한 {{count}}개를 표시합니다."
+    },
     "section": {
       "users": "계정",
       "cluster_roles": "클러스터 역할",
