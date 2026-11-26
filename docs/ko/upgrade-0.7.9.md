@@ -27,7 +27,7 @@
 - k8s-service 하나(`streams.enabled`면 k8s-service-stream)는 모든 계정을 합쳐 자기에게 열린 터미널과 실시간 로그가 443개를 넘으면, 넘는 것을 계정 상한처럼 거절합니다(`multicluster.maxStreamsPerServer`, `0`이면 상한 없음. [4](#4-저절로-바뀌는-것), #1060).
 - AI의 새 읽기와 확인은 스위치입니다. `features.anomalyRank.enabled`는 기본 켬이라 AI 채팅, 플로팅 채팅, MCP 서버가 도구 `anomaly_rank`를 받습니다([4](#4-저절로-바뀌는-것), #1088). `ai.ruleCards.investigations`와 `features.alertInvestigation.rules` · `changesFirst` · `narrowFirst` · `ledger` · `evidenceCheck` · `verdict`도 기본 켬이지만 알림 조사만 바꾸고, 알림 조사는 꺼진 채입니다(`features.alertInvestigation.enabled`). 나머지는 꺼져 있습니다. 0.7.8처럼 두려면 그 스위치를 `false`로 둡니다. 스위치 없이 바뀌는 AI는 다음과 같습니다. AI가 쓴 글 속 이미지는 링크가 되고(#917), 알림은 링크 없이 규칙 식으로 모델에 가고(#1087), 채팅 질문은 출력 형식을 달라고 할 때만 그 형식의 도구로 좁혀지고(#1078), Gemini 모델에서는 도구 호출마다 thought signature가 함께 돌아가고(#1087), Claude 모델(공급자 `anthropic`)에서는 도구를 부르는 차례 뒤의 호출이 그 도구 목록을 그대로 보내되 부르지 않게 하고(#1082), Claude 구독의 알림 조사에서는 조사를 닫는 호출과 다시 묻기가 도구 결과를 표식 사이에 담고(#1087), 채팅 답 하나는 모델 호출을 20번까지 하고 마지막 호출은 도구를 부르지 않고 답하고(`ai.chat.maxSteps`, #1084), 길이에서 잘린 채팅 답의 나머지를 청하는 글이 바뀌고(#1084), Claude Code는 모든 프롬프트를 쓴 그대로 받고(#1086), AI 도구 `get_pod_metrics` · `issues`(#1088), `logsearch`(#1077), `alerts_inbox` · `investigations`(#1087), `k8s_get_pod_logs`(#1094)의 답이 바뀝니다([4](#4-저절로-바뀌는-것)).
 - 기본 역할 Read는 시작할 때 `ai.tool.anomaly_rank`를 받고(이 도구는 기본 켬) Write는 `ai.tool.*`를 갖고 있습니다. AI 도구를 하나씩 나열한 사용자 정의 역할은 `ai.tool.anomaly_rank`를 더해야 새 도구를 받습니다([3](#3-바꿔야-하는-값), #902).
-- 먼저 데이터베이스를 백업합니다. 〔되돌려도 남는 것: 리허설 뒤에 씁니다.〕
+- 먼저 데이터베이스를 백업합니다. `helm rollback`은 마이그레이션을 되돌리지 않으므로, 0.7.8이 남긴 그대로의 데이터베이스는 백업에서만 나옵니다. 리허설에서는 0.7.8에서 뜬 백업을 새로 설치한 0.7.8에 되살렸고, 그 설치가 다시 0.7.9로 올라갔습니다([7](#7-078로-되돌리기)).
 
 ## 1. 업그레이드 전에
 
@@ -38,7 +38,7 @@ helm list -n kubeast                          # CHART kubeast-0.7.8
 helm get values kubeast -n kubeast -o yaml    # 직접 넣은 값
 ```
 
-0.7.7 이하에서 올린다면 먼저 [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md)대로 0.7.8로 올리고 자리 잡게 둡니다. 〔0.7.8에서 시작한 리허설 뒤에 확인합니다.〕
+0.7.7 이하에서 올린다면 먼저 [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md)대로 0.7.8로 올리고 자리 잡게 둡니다. 이 업그레이드는 0.7.8에서 올리는 경우만 리허설했습니다(kind, 쿠버네티스 1.37.0, Helm 4.2.4).
 
 ### 1.2 드라이런으로 미리 해 보기
 
@@ -157,10 +157,10 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 \
   -n kubeast --reset-then-reuse-values
 ```
 
-- 마이그레이션은 auth-service가 시작할 때 적용하고, `migrations.mode: job`이면 마이그레이션 Job이 적용합니다. 00031(#882), 00032(#1077), 00033(#1077)입니다. 00032는 `auth_users.self_signed_up` 칸을 더하고(상수 기본값이라 표를 다시 쓰지 않음), `auth_audit_logs`를 action 인덱스로 한 번 읽어 자기 가입 계정을 표시한 뒤, SSO가 닿은 자기 가입 계정의 `auth_users` 행을 바꿉니다. 00033은 다른 마이그레이션처럼 인덱스 두 개를 마이그레이션의 트랜잭션 안에서 만들므로, 그것이 끝날 때까지 `tool_approvals`에 쓰는 일이 기다립니다(행 100만 개에 1.5초쯤). 〔걸린 시간: 리허설 뒤에 씁니다.〕 0.7.9 서비스는 스키마 33을 기다립니다. `migrations.mode: job`이면 마이그레이션 Job은 아무도 로그인시키지 않으므로 `auth.oidc.enabled`와 상관없이 OIDC를 끈 채(`OIDC_ENABLED` false) 돕니다. SSO를 켰는데 주 Secret에 `OIDC_CLIENT_SECRET`이 없으면(`auth.oidc.existingSecret`을 쓰거나, `auth.oidc.clientSecret`으로 SSO를 켜는 업그레이드) 0.7.8 이하의 Job은 시작하자마자 끝났고, 설치나 업그레이드가 아무것도 바꾸기 전에 멈췄습니다(#1098).
+- 마이그레이션은 auth-service가 시작할 때 적용하고, `migrations.mode: job`이면 마이그레이션 Job이 적용합니다. 00031(#882), 00032(#1077), 00033(#1077)입니다. 00032는 `auth_users.self_signed_up` 칸을 더하고(상수 기본값이라 표를 다시 쓰지 않음), `auth_audit_logs`를 action 인덱스로 한 번 읽어 자기 가입 계정을 표시한 뒤, SSO가 닿은 자기 가입 계정의 `auth_users` 행을 바꿉니다. 00033은 다른 마이그레이션처럼 인덱스 두 개를 마이그레이션의 트랜잭션 안에서 만들므로, 그것이 끝날 때까지 `tool_approvals`에 쓰는 일이 기다립니다(행 100만 개에 1.5초쯤). 리허설의 작은 데이터베이스에서 셋은 4, 32, 16 ms 걸렸습니다. 0.7.9 서비스는 스키마 33을 기다립니다. `migrations.mode: job`이면 마이그레이션 Job은 아무도 로그인시키지 않으므로 `auth.oidc.enabled`와 상관없이 OIDC를 끈 채(`OIDC_ENABLED` false) 돕니다. SSO를 켰는데 주 Secret에 `OIDC_CLIENT_SECRET`이 없으면(`auth.oidc.existingSecret`을 쓰거나, `auth.oidc.clientSecret`으로 SSO를 켜는 업그레이드) 0.7.8 이하의 Job은 시작하자마자 끝났고, 설치나 업그레이드가 아무것도 바꾸기 전에 멈췄습니다(#1098).
 - Kubeast 서버의 Deployment는 모두 이미지와, `podStartup.quickReady`면 프로브가 바뀌어 파드를 하나씩 바꿉니다. 0.7.8 파드는 `preStop` 기다림을 거쳐 멈춥니다. 멈추는 파드에 열려 있던 터미널과 따라가던 로그는 0.7.8처럼 끝납니다([0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md#4-저절로-바뀌는-것)).
 - 0.7.9의 변경은 번들 PostgreSQL과 Redis를 건드리지 않습니다. 차트가 둘의 파드를 0.7.8과 같게 렌더합니다. [1.6](#16-데이터베이스-연결)을 위해 `postgresql.maxConnections`를 올리면 PostgreSQL 파드가 바뀝니다.
-- 〔업그레이드 동안 요청이 겪은 것(실패, 다시 로그인, 초): 리허설 뒤에 씁니다.〕
+- kind 리허설(6번 — 차트의 Secret, 있는 Secret, 바깥 데이터베이스, AI 끔, 서비스마다 파드 셋)에서 `helm upgrade`는 30~32초 걸렸습니다. 그동안 로그인한 것과 안 한 것을 합쳐 여섯 길에 1초마다 물었고 200이 아닌 답은 0, 멈춘 요청은 0, 가장 느린 답은 0.12초였습니다. 다시 로그인한 사람은 없고 번들 PostgreSQL 파드는 그대로였습니다.
 
 ## 3. 바꿔야 하는 값
 
@@ -276,13 +276,12 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 \
 ## 5. 이번 업그레이드에서 한 번 일어나는 일
 
 - **Kubeast 서버 파드가 모두 바뀜**(#1072). 이미지가 바뀌고, `podStartup.quickReady`면 프로브도 바뀝니다.
-- **`tool_approvals` 인덱스**(#1077). 00033이 마이그레이션의 트랜잭션 안에서 한 번 만들고, 그것이 끝날 때까지 `tool_approvals`에 쓰는 일(새 승인 카드, Approve, Reject)이 기다립니다(행 100만 개에 1.5초쯤). 〔리허설 데이터에서 걸린 시간: 리허설 뒤에 씁니다.〕
+- **`tool_approvals` 인덱스**(#1077). 00033이 마이그레이션의 트랜잭션 안에서 한 번 만들고, 그것이 끝날 때까지 `tool_approvals`에 쓰는 일(새 승인 카드, Approve, Reject)이 기다립니다(행 100만 개에 1.5초쯤). 표가 거의 빈 리허설에서는 16 ms 걸렸습니다.
 - **SSO가 닿은 자기 가입 계정**(#1077). 00032가 `user.register` 행으로 가입 화면이 만든 계정을 표시하고(`self_signed_up`), 표시된 비밀번호 계정 가운데 비밀번호가 없거나 앞선 `user.account.link` 행이 가리키는 계정을 한 번 `oidc` 계정으로 바꿉니다. 가진 비밀번호는 두고 세션은 끝내며, 계정마다 `system` / `migration`의 `user.account.link` 행(`sessions_ended`)을 남깁니다. 관리자가 만든 계정은 등급이 무엇이든 바꾸지 않습니다. 보존 기간 정리가 `user.register` 행을 이미 지운 자기 가입 계정은 표시되지 않아 비밀번호 계정으로 남고, `user.account.link` 행이 지워졌고 그 뒤 관리자가 비밀번호를 준 계정도 같습니다.
 - **http·https가 아닌 주소로 저장된 알림**(#1060). 0.7.9 전에 저장된 행은 그 주소를 그대로 두고 창은 글로 보여 줍니다. 새 알림은 빈 값으로 저장합니다.
 - **SSO 계정의 비밀번호**(#1077). 업그레이드한 때부터 로그인하지 않습니다. 이미 열린 세션은 `auth.sessionAbsoluteHours`까지 이어집니다.
 - **첫 보존 기간 정리**(#1072). 채팅 표에 `ON DELETE CASCADE`가 없는 곳에서 0.7.8은 매번 첫 만료 대화에서 실패했고, 채팅 창 뒤의 창(검토 서명, 알림 조사, 알림함)도 건너뛰었습니다. 그래서 0.7.9의 첫 정리는 만료된 대화와 함께, 그 창들의 기간을 넘겨 쌓인 것을 모두 지웁니다.
 - **새로 고치지 않은 페이지**(#1060). 열어 둔 0.7.8 페이지는 다시 불러올 때까지, 서버 상한에서 거절된 터미널을 까닭을 알리는 줄 없이 닫고, 그곳에서 거절된 실시간 로그에는 계정 상한 글을 보여 줍니다.
-- 〔리허설에서 한 번 보인 그 밖의 일: 리허설 뒤에 씁니다.〕
 
 ## 6. 업그레이드한 뒤
 
@@ -326,15 +325,15 @@ helm history kubeast -n kubeast                        # 0.7.8의 revision
 helm rollback kubeast <revision> -n kubeast
 ```
 
-- **데이터베이스**(#882, #1077): `helm rollback`은 Down 마이그레이션을 돌리지 않으므로 `alert_investigations.result`, `auth_users.self_signed_up`, `tool_approvals`의 인덱스 두 개는 남습니다. 0.7.8 서비스는 스키마 30 이상을 기다리며, 스키마 33은 그 조건에 맞습니다. 〔0.7.8이 그 데이터베이스에서 뜨는지: 리허설 뒤에 씁니다.〕
+- **데이터베이스**(#882, #1077): `helm rollback`은 Down 마이그레이션을 돌리지 않으므로 `alert_investigations.result`, `auth_users.self_signed_up`, `tool_approvals`의 인덱스 두 개는 남습니다. 0.7.8 서비스는 스키마 30 이상을 기다리며, 스키마 33은 그 조건에 맞습니다. 리허설에서 0.7.8은 스키마 33 데이터베이스에서 마이그레이션 오류 없이 떴고 주요 화면 시험이 통과했습니다.
 - **프로브**(#1072): `helm rollback`이 0.7.8의 프로브를 되돌립니다.
 - **k8s-service의 Secret 키**(#1072): `helm rollback`은 k8s-service와 k8s-service-stream에 다시 주 Secret을 통째로 환경으로 줍니다.
 - **Kubernetes 버전 검사**(#1072): `helm rollback`은 0.7.8 릴리스의 매니페스트를 그대로 적용하고 렌더하지 않으므로 검사가 돌지 않습니다.
 - **알림 규칙**(#1060): `helm rollback`이 0.7.8의 PrometheusRule을 되돌려 놓고, AI 알림 두 개는 없어집니다.
 - **보존 기간 정리**(#1072): 0.7.8의 auth-service는 파드마다 따로 정리를 돌리고, 채팅 표에 `ON DELETE CASCADE`가 없는 곳에서는 첫 만료 대화에서 실패합니다.
 - **AWS Application Load Balancer 뒤 게이트웨이**(#1072): 0.7.8은 등록 해제 지연 없이 Ingress를 만듭니다. 대상 그룹이 20초로 남을 수 있으니 기본값으로 돌리려면 `ingress.annotations`의 `alb.ingress.kubernetes.io/target-group-attributes`에 `deregistration_delay.timeout_seconds=300`을 적습니다.
-- **API 답과 감사 행**: 0.7.9가 쓴 감사 행은 쓴 그대로 남습니다. 〔그 밖은 리허설 뒤에 씁니다.〕
-- **SSO 계정의 비밀번호 로그인**(#1077): 0.7.8은 거절하지 않으므로 그런 계정이 가진 비밀번호로 다시 로그인되고, 관리자 재설정도 비밀번호를 줍니다. 00032는 되돌지 않습니다. 바꾼 계정은 `oidc`로 남고, 0.7.8은 이 값을 표시에만 읽습니다. 0.7.8은 `self_signed_up`을 모르므로, 업그레이드 뒤 0.7.8에서 만든 자기 가입 계정은 0.7.9로 돌아와도 표시가 없어 비밀번호 계정으로 남고, 0.7.8에서 SSO가 닿은 자기 가입 계정은 0.7.9에서 다음 SSO 로그인 때까지 비밀번호 계정으로 남습니다. `helm rollback`은 Down 마이그레이션을 돌리지 않으므로 `self_signed_up` 칸은 남습니다. 00032의 Down은 돌리면 칸을 지우고, 바꾼 계정은 `oidc`로 둡니다. 〔리허설에서 확인합니다.〕
+- **API 답과 감사 행**: 0.7.9가 쓴 감사 행은 쓴 그대로 남습니다. 리허설에서 되돌린 뒤의 0.7.8에서 로그인, 목록, 파드 로그, 알림 받은함이 답했고, 거기서 만든 역할은 다시 올린 0.7.9에서도 목록에 있었습니다.
+- **SSO 계정의 비밀번호 로그인**(#1077): 0.7.8은 거절하지 않으므로 그런 계정이 가진 비밀번호로 다시 로그인되고, 관리자 재설정도 비밀번호를 줍니다. 00032는 되돌지 않습니다. 바꾼 계정은 `oidc`로 남고, 0.7.8은 이 값을 표시에만 읽습니다. 0.7.8은 `self_signed_up`을 모르므로, 업그레이드 뒤 0.7.8에서 만든 자기 가입 계정은 0.7.9로 돌아와도 표시가 없어 비밀번호 계정으로 남고, 0.7.8에서 SSO가 닿은 자기 가입 계정은 0.7.9에서 다음 SSO 로그인 때까지 비밀번호 계정으로 남습니다. `helm rollback`은 Down 마이그레이션을 돌리지 않으므로 `self_signed_up` 칸은 남습니다. 00032의 Down은 돌리면 칸을 지우고, 바꾼 계정은 `oidc`로 둡니다. 이것은 코드와, PostgreSQL에서 올리고 내리고 다시 올린 마이그레이션 시험으로 확인한 것입니다. 리허설의 계정은 SSO 계정이 아닙니다.
 - **터미널과 실시간 로그의 서버 상한**(#1060): 0.7.8에는 `multicluster.maxStreamsPerServer`가 없으므로, `helm rollback` 뒤 k8s-service는 계정마다의 상한(`multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount`)이 허락하는 만큼 받고, 모든 계정을 합친 상한은 없습니다.
 - **AI 스위치**: 0.7.8은 하나도 읽지 않습니다. auth-service가 시작할 때 기본 역할의 권한을 다시 쓰므로 Read에서 `ai.tool.anomaly_rank`가 빠집니다. 사용자 정의 역할에는 그 줄이 남고, 0.7.8에는 그 이름의 도구가 없습니다. `alert_investigations.result`에 남은 결과는 그대로 있고 0.7.8은 보여 주지 않습니다.
 - **채팅의 호출 상한**(#1084): 0.7.8은 `ai.chat.maxSteps`를 읽지 않고, 채팅 답 하나는 다시 모델 호출을 10번까지 합니다.
@@ -362,4 +361,4 @@ git fetch --tags && git checkout v0.7.9
 - **채팅의 호출 상한**(#1084): Compose는 값을 정하지 않으므로 ai-service가 코드 기본값 20을 씁니다. 차트의 `ai.chat.maxSteps` 기본값과 같습니다. 바꾸려면 `.env`에 `AI_CHAT_MAX_STEPS`를 정합니다.
 - **0.7.9의 AI 스위치**: Compose는 하나도 정하지 않으므로, 차트의 기본값과 상관없이 모두 꺼져 있습니다. 차트 설치에는 있는 `anomaly_rank`가 Compose 설치에는 없습니다. 켜려면 ai-service · k8s-service · tool-server가 읽는 `.env`에 그 변수를 `true`로 적습니다. `AI_TIMELINE_CHANGES`, `AI_REFUSE_REPEATED_READS`, `AI_TOOL_RESULT_DETAILS`, `AI_RULE_CARDS_CHAT`, `AI_RULE_CARDS_INVESTIGATIONS`, `AI_TOOL_RESULTS_JSON`, `ANOMALY_RANK_ENABLED`, `CALL_GRAPH_ENABLED`, `ALERT_INVESTIGATION_RULES`, `ALERT_INVESTIGATION_CHANGES_FIRST`, `ALERT_INVESTIGATION_NARROW_FIRST`, `ALERT_INVESTIGATION_LEDGER`, `ALERT_INVESTIGATION_EVIDENCE_CHECK`, `ALERT_INVESTIGATION_VERDICT`, `AI_TIMELINE_CHANGES_MORE`, `AI_CAUSE_QUESTIONS`, `AI_RULE_CARDS_SYMPTOMS`, `NODE_NEIGHBORS_ENABLED`입니다.
 - **차트와 같은 것**: 마이그레이션(스키마 33), 클러스터 읽기 기다림, 차단기, API 답, 감사 행은 차트와 같습니다.
-- **되돌리기**: `git checkout v0.7.8 && ./install-docker.sh --port <지금 포트>`를 씁니다. 〔리허설 뒤에 씁니다〕
+- **되돌리기**: `git checkout v0.7.8 && ./install-docker.sh --port <지금 포트>`를 씁니다. 이 길은 리허설하지 않았습니다.
