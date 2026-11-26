@@ -195,7 +195,7 @@ helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 \
 
 **파드**
 
-- `podStartup.quickReady`(true)이면 Kubeast 서버마다(번들 PostgreSQL과 Redis는 빼고) 180초까지 1초마다 묻는 startup 프로브와, 처음 기다림 없이 3초마다 묻는 readiness가 붙습니다. 그래서 하나뿐인 파드를 대신하는 파드(지워졌거나 노드 드레인이 내보낸 파드)는 듣기 시작한 뒤 1초쯤에 준비됩니다. 0.7.8은 auth-service, k8s-service, session-service에 5초마다 묻는 startup 프로브를 주고 나머지에는 주지 않았으며, readiness는 기다린 뒤 10초마다 물었습니다. kind에서 파드 하나로 ai-service, 프론트엔드, 게이트웨이를 바꿀 때 6초쯤, auth-service, k8s-service, session-service를 바꿀 때 1초쯤 아무것도 답하지 않았습니다. 〔숫자: 0.7.9 측정으로 다시 맞춥니다.〕 kubelet이 Kubeast 서버 파드마다 묻는 횟수는 1분에 8번에서 22번으로 늘었습니다. `false`면 0.7.8의 프로브를 바이트까지 그대로 렌더합니다(#1072).
+- `podStartup.quickReady`(true)이면 Kubeast 서버마다(번들 PostgreSQL과 Redis는 빼고) 180초까지 1초마다 묻는 startup 프로브와, 처음 기다림 없이 3초마다 묻는 readiness가 붙습니다. 그래서 하나뿐인 파드를 대신하는 파드(지워졌거나 노드 드레인이 내보낸 파드)는 듣기 시작한 뒤 1초쯤에 준비됩니다. 0.7.8은 auth-service, k8s-service, session-service에 5초마다 묻는 startup 프로브를 주고 나머지에는 주지 않았으며, readiness는 기다린 뒤 10초마다 물었습니다. kind에서 파드 하나로 ai-service, 프론트엔드, 게이트웨이를 바꿀 때 6초쯤, auth-service, k8s-service, session-service를 바꿀 때 1초쯤 아무것도 답하지 않았습니다. kubelet이 Kubeast 서버 파드마다 묻는 횟수는 1분에 8번에서 22번으로 늘었습니다. `false`면 0.7.8의 프로브를 바이트까지 그대로 렌더합니다(#1072).
 - k8s-service와 k8s-service-stream은 주 Secret에서 자기 키만 받습니다([1.4](#14-k8s-service가-주-secret에서-읽는-것), #1072).
 
 **클러스터 요청**
