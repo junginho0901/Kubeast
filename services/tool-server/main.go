@@ -431,7 +431,7 @@ func buildToolRegistry() map[string]ToolDefinition {
 	})
 	register(ToolDefinition{
 		Name:        "gpu",
-		Description: "The GPU screens' numbers: GPUs per node and company with what is in use and free, pods' requests, device plugins, DeviceClasses, ResourceClaimTemplates, DCGM utilization (dcgm-exporter's metric names before 4.9.0 and since)",
+		Description: "The GPU screens' numbers: GPUs per node and company with what is in use and free, pods' requests, device plugins, DeviceClasses, ResourceClaimTemplates, DCGM utilization",
 		Handler:     handleGPU,
 	})
 	register(ToolDefinition{
