@@ -374,15 +374,52 @@ describe('how an answer ends', () => {
     expect(state).toMatchObject({ status: 'error', content: 'Checking.', error: 'AI model call failed', errorKey: 'modelCall', errorArgs: { provider: 'p', detail: 'd' } })
   })
 
-  it('a connection that breaks part way keeps the letters', async () => {
+  // A read that broke (the browser's TypeError) said the browser's words in red, "TypeError: network error": it says
+  // what a stream that closed early says.
+  it('a connection that breaks part way keeps the letters and says the answer was cut', async () => {
     let reads = 0
     const state = await ended(new Response(new ReadableStream({
       pull(controller) {
-        if (reads++ === 0) controller.enqueue(new TextEncoder().encode(sse({ content: 'partial' })))
+        if (reads++ < 2) controller.enqueue(new TextEncoder().encode(sse({ content: reads === 1 ? 'partial ' : 'answer' })))
         else controller.error(new TypeError('network error'))
       },
     })))
-    expect(state).toMatchObject({ status: 'error', isStreaming: false, content: 'partial', error: 'TypeError: network error', errorKey: null })
+    expect(state).toMatchObject({ status: 'error', isStreaming: false, streamingPhase: null, content: 'partial answer', userMessage: 'how many?', errorKey: 'streamCut' })
+    expect(state.error).toContain('before the answer finished')
+    expect(state.error).not.toContain('TypeError')
+  })
+
+  it('a connection that breaks before any letter says no answer came', async () => {
+    const state = await ended(new Response(new ReadableStream({
+      pull(controller) {
+        controller.error(new TypeError('network error'))
+      },
+    })))
+    expect(state).toMatchObject({ status: 'error', isStreaming: false, streamingPhase: null, content: '', userMessage: 'how many?', errorKey: 'streamEmpty' })
+    expect(state.error).toContain('without an answer')
+  })
+
+  it('a connection that breaks after the model line and a tool call keeps the block and says the answer was cut', async () => {
+    let reads = 0
+    const state = await ended(new Response(new ReadableStream({
+      pull(controller) {
+        if (reads++ === 0) controller.enqueue(new TextEncoder().encode(sse({ model_info: { provider: 'p', model: 'm' } }, { function: 'list_clusters', args: {}, call_id: 0 })))
+        else controller.error(new TypeError('network error'))
+      },
+    })))
+    expect(state).toMatchObject({ status: 'error', errorKey: 'streamCut' })
+    expect(state.content).toContain('<strong>list_clusters</strong>')
+  })
+
+  it('a request that reaches no server says no answer came, not the browser\'s words', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('window', globalThis)
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch') }))
+    const manager = new ChatStreamManager({ bodyJson: true })
+    await manager.startSessionChat('s1', 'how many?')
+    await vi.runAllTimersAsync()
+    expect(manager.getState()).toMatchObject({ status: 'error', isStreaming: false, content: '', userMessage: 'how many?', errorKey: 'streamEmpty' })
+    expect(manager.getState().error).not.toContain('Failed to fetch')
   })
 
   it('a stopped answer stays stopped, with no error, also when the stream ends right after', async () => {
@@ -492,8 +529,18 @@ describe('an answer whose stream was cut is saved as it shows', () => {
         else controller.error(new TypeError('network error'))
       },
     })))
-    expect(state).toMatchObject({ status: 'error', content: 'partial', error: 'TypeError: network error' })
+    expect(state).toMatchObject({ status: 'error', content: 'partial', errorKey: 'streamCut' })
     expect(saves.map((s) => s.body.messages[0])).toEqual([{ role: 'assistant', content: 'partial', failed: true, answers: 'how many?' }])
+  })
+
+  it('a connection that breaks before any letter saves nothing', async () => {
+    const { state, saves } = await asked(() => new Response(new ReadableStream({
+      pull(controller) {
+        controller.error(new TypeError('network error'))
+      },
+    })))
+    expect(state).toMatchObject({ status: 'error', content: '', errorKey: 'streamEmpty' })
+    expect(saves).toEqual([])
   })
 
   it.each([

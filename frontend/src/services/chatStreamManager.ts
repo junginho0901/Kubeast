@@ -345,6 +345,17 @@ export class ChatStreamManager {
     }).then(() => undefined, () => undefined)
   }
 
+  // An answer whose stream closed or broke before [DONE] or an error event: with the letters that came, cut and saved
+  // as it shows; with none, no answer.
+  private _endedEarly = () => {
+    if (this.state.content || this._charQueue.length > 0) {
+      this._fail({ error: STREAM_CUT, errorKey: 'streamCut' })
+      this._keepCutAnswer()
+    } else {
+      this._fail({ error: STREAM_EMPTY, errorKey: 'streamEmpty' })
+    }
+  }
+
   // The failed turns of a conversation as its next question is sent: the one that just failed or was stopped joins them.
   private _failedTurnsBefore = (sessionId: string, savedMessages: number): FailedTurn[] => {
     const { status, userMessage, content, toolCalls, error, errorKey, errorArgs, savedBefore, failedTurns } = this.state
@@ -636,11 +647,8 @@ export class ChatStreamManager {
       // Every answer the server finishes ends with [DONE] or an error event: a stream without either was cut off.
       if (buffer.trim() === 'data: [DONE]') {
         this._finishWhenDrained({ status: 'completed', isStreaming: false, streamingPhase: null, queued: false })
-      } else if (this.state.content || this._charQueue.length > 0) {
-        this._fail({ error: STREAM_CUT, errorKey: 'streamCut' })
-        this._keepCutAnswer()
       } else {
-        this._fail({ error: STREAM_EMPTY, errorKey: 'streamEmpty' })
+        this._endedEarly()
       }
     } catch (error: any) {
       // reset cancelled this run: the state is a new tab's now
@@ -650,8 +658,14 @@ export class ChatStreamManager {
         return
       }
 
+      // a connection that broke (fetch and a body read reject with a TypeError) says what a stream that closed early
+      // says, not the browser's words
+      if (error instanceof TypeError) {
+        this._endedEarly()
+        return
+      }
+
       this._fail({ error: String(error) })
-      // a read that broke part way: the letters that came, as a stream that closed early
       this._keepCutAnswer()
     } finally {
       // a run that ended after the next one started leaves that one's controller to it
