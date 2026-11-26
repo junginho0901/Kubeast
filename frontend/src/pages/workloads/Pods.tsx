@@ -118,14 +118,14 @@ export default function Pods() {
     () => {
       const n = (v: number) => (page ? v : NOT_COUNTED)
       return [
-        [tr('pods.stats.total', 'Total'), n(podStats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-        [tr('pods.stats.ready', 'Ready'), n(podStats.ready), 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-        [tr('pods.stats.notReady', 'Not Ready'), n(podStats.notReady), 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-        [tr('pods.stats.pending', 'Pending'), n(podStats.pending), 'border-yellow-700/40 bg-yellow-900/10', 'text-yellow-300'],
-        [tr('pods.stats.terminating', 'Terminating'), n(podStats.terminating), 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-        [tr('pods.stats.error', 'Error'), n(podStats.error), 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
-        [tr('pods.stats.restarted', 'Restarted'), n(podStats.restarted), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-        [tr('pods.stats.completed', 'Completed'), n(podStats.completed), 'border-slate-600/50 bg-slate-800/30', 'text-slate-300'],
+        [tr('pods.stats.total', 'Total'), n(podStats.total), 'border-slate-700/70', 'text-slate-400'],
+        [tr('pods.stats.ready', 'Ready'), n(podStats.ready), 'border-slate-700/70', 'text-emerald-300'],
+        [tr('pods.stats.notReady', 'Not Ready'), n(podStats.notReady), 'border-slate-700/70', 'text-amber-300'],
+        [tr('pods.stats.pending', 'Pending'), n(podStats.pending), 'border-slate-700/70', 'text-yellow-300'],
+        [tr('pods.stats.terminating', 'Terminating'), n(podStats.terminating), 'border-slate-700/70', 'text-amber-300'],
+        [tr('pods.stats.error', 'Error'), n(podStats.error), 'border-slate-700/70', 'text-rose-300'],
+        [tr('pods.stats.restarted', 'Restarted'), n(podStats.restarted), 'border-slate-700/70', 'text-slate-400'],
+        [tr('pods.stats.completed', 'Completed'), n(podStats.completed), 'border-slate-700/70', 'text-slate-300'],
       ]
     },
     [podStats.completed, podStats.error, podStats.notReady, podStats.pending, podStats.ready, podStats.restarted, podStats.terminating, podStats.total, tr, page],
@@ -245,7 +245,7 @@ spec:
             {tr('pods.subtitle', 'Inspect pod health and placement across namespaces.')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -289,21 +289,21 @@ spec:
         </p>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 shrink-0">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-y-1 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelColor]) => (
-          <div key={label} className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
-            <div className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelColor}`}>{label}</div>
-            <div className="mt-1 text-lg font-semibold text-ink">{value}</div>
+          <div key={label} className={`border-l first:border-l-0 px-3 py-2.5 ${boxClass}`}>
+            <div className={`text-xs leading-4 whitespace-nowrap ${typeof value === 'number' && value > 0 ? labelColor : 'text-slate-400'}`}>{label}</div>
+            <div className="mt-1 text-lg font-medium tabular-nums text-ink">{value}</div>
           </div>
         ))}
       </div>
 
       {podStats.topReasons.length > 0 && (
-        <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3 shrink-0">
+        <div className="border-b border-slate-700/70 pb-3 shrink-0">
           <div className="text-xs text-slate-400 mb-2">{tr('pods.topStatusReasons', 'Top status reasons')}</div>
           <div className="flex flex-wrap gap-2">
             {podStats.topReasons.map(([reason, count]) => (
-              <span key={reason} className="badge badge-info font-mono">
+              <span key={reason} className="badge badge-neutral font-mono">
                 {reason}: {count}
               </span>
             ))}

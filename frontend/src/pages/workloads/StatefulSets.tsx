@@ -213,7 +213,7 @@ spec:
           <h1 className="text-3xl font-semibold text-ink">{tr('statefulsets.title', 'Stateful Sets')}</h1>
           <p className="mt-2 text-slate-400">{tr('statefulsets.subtitle', 'Inspect and manage StatefulSets across namespaces.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canWrite && (
             <button
               onClick={() => setCreateDialogOpen(true)}
@@ -247,26 +247,26 @@ spec:
         allNamespacesLabel={tr('statefulsets.allNamespaces', 'All namespaces')}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-0 gap-y-1 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
+        <div className="px-4 py-2.5">
           <p className="text-xs text-slate-400">{tr('statefulsets.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.total}</p>
         </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
+        <div className="px-4 py-2.5">
           <p className="text-xs text-emerald-300">{tr('statefulsets.stats.healthy', 'Healthy')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.healthy}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.healthy}</p>
         </div>
-        <div className="rounded-lg border border-slate-600/50 bg-slate-800/30 px-4 py-3">
+        <div className="px-4 py-2.5">
           <p className="text-xs text-slate-300">{tr('statefulsets.stats.idle', 'Idle')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.idle}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.idle}</p>
         </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
+        <div className="px-4 py-2.5">
           <p className="text-xs text-amber-300">{tr('statefulsets.stats.degraded', 'Degraded')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.degraded}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.degraded}</p>
         </div>
-        <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
+        <div className="px-4 py-2.5">
           <p className="text-xs text-red-300">{tr('statefulsets.stats.unavailable', 'Unavailable')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.unavailable}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.unavailable}</p>
         </div>
       </div>
 
