@@ -228,9 +228,9 @@ spec:
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('grpcRoutesPage.title', 'GRPC Routes')}</h1>
-          <p className="mt-2 text-slate-400">{tr('grpcRoutesPage.subtitle', 'Inspect and manage Gateway API GRPCRoute resources across namespaces.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('grpcRoutesPage.subtitle', 'Inspect and manage Gateway API GRPCRoute resources across namespaces.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -268,19 +268,19 @@ spec:
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('grpcRoutesPage.stats.total', 'Total')}</p>
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('grpcRoutesPage.stats.total', 'Total')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('grpcRoutesPage.stats.accepted', 'Accepted')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-xs leading-4 break-words text-emerald-300">{tr('grpcRoutesPage.stats.accepted', 'Accepted')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{cards.accepted}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('grpcRoutesPage.stats.resolvedRefs', 'ResolvedRefs')}</p>
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('grpcRoutesPage.stats.resolvedRefs', 'ResolvedRefs')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{cards.resolvedRefs}</p>
         </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('grpcRoutesPage.stats.withHostnames', 'With Hostnames')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('grpcRoutesPage.stats.withHostnames', 'With Hostnames')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{cards.withHostnames}</p>
         </div>
       </div>

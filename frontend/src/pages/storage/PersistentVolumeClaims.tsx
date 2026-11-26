@@ -223,7 +223,7 @@ spec:
           <h1 className="text-3xl font-semibold text-ink">{tr('pvcs.title', 'Persistent Volume Claims')}</h1>
           <p className="mt-2 text-slate-400">{tr('pvcs.subtitle', 'Inspect and manage PVCs across namespaces.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -259,22 +259,22 @@ spec:
         allNamespacesLabel={tr('pvcs.allNamespaces', 'All namespaces')}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('pvcs.stats.total', 'Total')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-0 gap-y-1 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('pvcs.stats.total', 'Total')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.total}</p>
         </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('pvcs.stats.bound', 'Bound')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.bound}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('pvcs.stats.bound', 'Bound')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.bound}</p>
         </div>
-        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-amber-300">{tr('pvcs.stats.pending', 'Pending')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.pending}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-amber-300">{tr('pvcs.stats.pending', 'Pending')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.pending}</p>
         </div>
-        <div className="rounded-lg border border-red-700/40 bg-red-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-red-300">{tr('pvcs.stats.lost', 'Lost')}</p>
-          <p className="text-lg text-ink font-semibold mt-1">{cards.lost}</p>
+        <div className="px-4 py-2.5">
+          <p className="text-xs leading-4 whitespace-nowrap text-red-300">{tr('pvcs.stats.lost', 'Lost')}</p>
+          <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.lost}</p>
         </div>
       </div>
 

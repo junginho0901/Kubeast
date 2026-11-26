@@ -115,8 +115,8 @@ export default function NetworkPolicies() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('networkPoliciesPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('networkPoliciesPage.stats.defaultDenyIngress', 'Default Deny Ingress'), cards.defaultDenyIngress, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [tr('networkPoliciesPage.stats.defaultDenyEgress', 'Default Deny Egress'), cards.defaultDenyEgress, 'border-orange-700/40 bg-orange-900/10', 'text-orange-300'],
+      [tr('networkPoliciesPage.stats.defaultDenyIngress', 'Default Deny Ingress'), cards.defaultDenyIngress, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
+      [tr('networkPoliciesPage.stats.defaultDenyEgress', 'Default Deny Egress'), cards.defaultDenyEgress, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [tr('networkPoliciesPage.stats.selectsAllPods', 'Selects All Pods'), cards.selectsAllPods, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [cards.defaultDenyEgress, cards.defaultDenyIngress, cards.selectsAllPods, cards.total, tr],
@@ -241,9 +241,9 @@ spec:
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('networkPoliciesPage.title', 'Network Policies')}</h1>
-          <p className="mt-2 text-slate-400">{tr('networkPoliciesPage.subtitle', 'Inspect and manage NetworkPolicy resources across namespaces.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('networkPoliciesPage.subtitle', 'Inspect and manage NetworkPolicy resources across namespaces.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -282,7 +282,7 @@ spec:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
-            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
+            <p className={`text-xs leading-4 break-words ${labelClass}`}>{label}</p>
             <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}

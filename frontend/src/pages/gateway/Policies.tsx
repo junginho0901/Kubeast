@@ -108,7 +108,7 @@ export default function Policies() {
     () => [
       [tr('policiesPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [tr('policiesPage.stats.kinds', 'Kinds'), cards.kinds, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('policiesPage.stats.accepted', 'Accepted'), cards.accepted, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
+      [tr('policiesPage.stats.accepted', 'Accepted'), cards.accepted, 'border-slate-700 bg-slate-900/50', 'text-emerald-300'],
     ],
     [cards.total, cards.kinds, cards.accepted, tr],
   )
@@ -207,9 +207,9 @@ export default function Policies() {
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('policiesPage.title', 'Policies')}</h1>
-          <p className="mt-2 text-slate-400">{tr('policiesPage.subtitle', 'Policies attached to Gateway API objects, from every implementation installed on the cluster.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('policiesPage.subtitle', 'Policies attached to Gateway API objects, from every implementation installed on the cluster.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={handleRefresh} disabled={isRefreshing} title={tr('policiesPage.refreshTitle', 'Force refresh')} className="btn btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             {tr('policiesPage.refresh', 'Refresh')}
@@ -219,14 +219,14 @@ export default function Policies() {
 
       <RefreshFailure failure={refreshFailure} />
 
-      <div className="flex gap-3 shrink-0">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3 shrink-0">
+        <div className="relative flex-1 min-w-[min(100%,18rem)]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input type="text" placeholder={tr('policiesPage.searchPlaceholder', 'Search by name, namespace, kind, group, or target...')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
         </div>
         <CustomDropdown
           size="lg"
-          className="min-w-[180px]"
+          className="min-w-[180px] flex-1 xl:flex-none"
           testId="policies-kind"
           value={kindFilter}
           onChange={setKindFilter}
@@ -234,7 +234,7 @@ export default function Policies() {
         />
         <CustomDropdown
           size="lg"
-          className="min-w-[180px]"
+          className="min-w-[180px] flex-1 xl:flex-none"
           testId="policies-namespace"
           value={namespaceFilter}
           onChange={setNamespaceFilter}
@@ -245,7 +245,7 @@ export default function Policies() {
       <div className="grid grid-cols-3 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
-            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
+            <p className={`text-xs leading-4 break-words ${labelClass}`}>{label}</p>
             <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}
@@ -264,7 +264,7 @@ export default function Policies() {
             title={`${k.plural}.${k.group}/${k.version} · ${sourceLabel(k.source)}${k.error ? ` · ${k.error}` : ''}`}
             className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${k.error ? 'border-amber-700/60 bg-amber-900/20 text-amber-300' : 'border-slate-700 bg-slate-800/60 text-slate-300'}`}
           >
-            <span className="font-mono">{kindLabel(k)}</span>
+            <span className="font-mono break-all">{kindLabel(k)}</span>
             <span className="text-slate-500">{k.error ? (k.error === 'forbidden' ? tr('policiesPage.kinds.forbidden', 'no permission') : k.error) : k.count}</span>
           </span>
         ))}
