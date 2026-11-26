@@ -1,8 +1,8 @@
-// Resource graph 노드 호버 · 키보드 초점 때 우측에 뜨는 미니 프리뷰 카드
+// The small preview card shown to the right of a Resource graph node on hover or keyboard focus
 //
 // frontend/src/pages/ResourceGraph.tsx 의 Glance 함수를 컴포넌트로 추출.
-// position 은 viewport 기준 fixed. 카드 왼쪽 16px(before)은 노드 끝까지 이어진 칸이라 포인터가 노드에서 카드로 옮겨도
-// 카드가 남는다(WCAG 2.2 1.4.13 — useGlance).
+// position is fixed to the viewport. The card's left 16px (before) is a strip that reaches the node's edge, so the card
+// stays while the pointer moves from the node onto the card (WCAG 2.2 1.4.13 — useGlance).
 
 import { useTranslation } from 'react-i18next'
 import type { ResourceGraphNode } from '@/services/api'
