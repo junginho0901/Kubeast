@@ -17,7 +17,7 @@ import { test, expect, type Locator, type Page, type Route } from '@playwright/t
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 const CLUSTER = 'self'
 const MARK = '__kubeast_e2e_ran'
-const ASSISTANT = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+const ASSISTANT = '[data-testid="chat-message"][data-message-role="assistant"]'
 const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 const BEFORE = 'Before the planted text.'
 const AFTER = 'After the planted text.'

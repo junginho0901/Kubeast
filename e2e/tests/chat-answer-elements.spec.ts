@@ -8,7 +8,7 @@ import { test, expect, type Locator, type Page, type Route } from '@playwright/t
 // is answered in the browser too.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
-const ASSISTANT = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+const ASSISTANT = '[data-testid="chat-message"][data-message-role="assistant"]'
 const MARK = 'e2e-answer-elements'
 
 const FLOATS = 'position:fixed;inset:0;z-index:2147483647;display:block;background:#000'

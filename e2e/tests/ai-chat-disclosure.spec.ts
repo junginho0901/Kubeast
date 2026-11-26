@@ -6,7 +6,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 // through the session API, so it needs no model; the streaming test needs the dev default model.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
-const ASSISTANT = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+const ASSISTANT = '[data-testid="chat-message"][data-message-role="assistant"]'
 const TOOL_MESSAGE = [
   '<details><summary>🔧 k8s_get_resources</summary>',
   '',

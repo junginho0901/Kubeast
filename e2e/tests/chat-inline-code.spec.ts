@@ -5,7 +5,7 @@ import { test, expect, type Locator } from '@playwright/test'
 // chat's answer a stubbed stream, so no model is called.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
-const ASSISTANT = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+const ASSISTANT = '[data-testid="chat-message"][data-message-role="assistant"]'
 const ANSWER = ['Run `kubectl get pods -n shop` and look at `checkout-api`.', '', '```', 'kubectl get pods -n shop', '```'].join('\n')
 
 async function inlineCode(code: Locator) {

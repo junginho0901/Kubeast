@@ -17,7 +17,7 @@ import { test, expect, type Page } from '@playwright/test'
 
 const PLACEHOLDER_RE = /메시지|message/i
 const SEND_RE = /^전송$|^send$/i
-const ASSISTANT_MSG = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+const ASSISTANT_MSG = '[data-testid="chat-message"][data-message-role="assistant"]'
 
 // Names of pods that exist ONLY in this kind cluster's `kubeast` namespace — never in the external 'default' cluster:
 // <Deployment>-<template hash>-<5>, since a tool's own note or the model's prose may name a service without a pod.

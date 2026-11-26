@@ -7,7 +7,7 @@ import { test, expect, type Page } from '@playwright/test'
 // model); the others need the dev default model.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
-const ASSISTANT = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+const ASSISTANT = '[data-testid="chat-message"][data-message-role="assistant"]'
 const STOPPED_RE = /Stopped · usage not available|멈춤 · 사용량을 표시할 수 없음/
 const TABLE_ANSWER = ['Pods by phase:', '', '| Namespace | Running | Pending |', '|---|---|---|', '| default | 3 | 0 |', '| kube-system | 9 | 1 |'].join('\n')
 
