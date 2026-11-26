@@ -173,13 +173,13 @@ export default function MonitoringPods({
 
   return (
     <div className="card overflow-visible flex-1 min-h-0 flex flex-col">
-      <div className="flex items-start justify-between mb-4 shrink-0">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4 shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-slate-700/60">
             <Box className="w-6 h-6 text-slate-300" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-ink">{t('monitoring.pods.title')}</h2>
+            <h2 className="text-lg font-semibold text-ink">{t('monitoring.pods.title')}</h2>
             <p className="text-sm text-slate-400">{t('monitoring.pods.subtitle')}</p>
           </div>
         </div>
@@ -218,7 +218,7 @@ export default function MonitoringPods({
 
       {/* 네임스페이스 미선택 시 안내 메시지 */}
       {!selectedNamespace && (
-        <div className="text-center py-12 bg-slate-700/50 rounded-lg border-2 border-dashed border-slate-600">
+        <div className="text-center py-8 border-t border-slate-700">
           <Box className="w-12 h-12 text-slate-500 mx-auto mb-4" />
           <p className="text-slate-400 text-lg font-medium">
             {t('monitoring.namespace.promptTitle')}
@@ -240,10 +240,10 @@ export default function MonitoringPods({
             [Cpu, t('monitoring.pods.totalCpu'), podStats ? `${podStats.totalCpu}m` : '-'],
             [HardDrive, t('monitoring.pods.totalMemory'), podStats ? `${podStats.totalMemory}Mi` : '-'],
           ] as const).map(([Icon, label, value]) => (
-            <div key={label} className="px-4 py-2 bg-slate-700 rounded-lg flex items-center gap-3">
+            <div key={label} className="px-4 py-2 border-l border-slate-700 flex items-center gap-3">
               <Icon className="w-5 h-5 text-slate-500 shrink-0" />
               <p className="flex-1 min-w-0 text-sm text-slate-400">{label}</p>
-              <p className="text-2xl font-bold text-ink tabular-nums">{value}</p>
+              <p className="text-2xl font-medium text-ink tabular-nums">{value}</p>
             </div>
           ))}
         </div>

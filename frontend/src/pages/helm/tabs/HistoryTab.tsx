@@ -69,7 +69,7 @@ export default function HistoryTab({
 
   return (
     <>
-      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-lg border border-slate-700">
+      <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-xl border border-hairline">
         <div ref={bodyRef} className="overflow-auto flex-1 min-h-0">
         <table className="w-full text-sm">
           <thead ref={theadRef} className="bg-slate-800 text-slate-400 text-left">
@@ -83,7 +83,7 @@ export default function HistoryTab({
               <th className="px-3 py-2 w-px" />
             </tr>
           </thead>
-          <tbody className="bg-slate-900/40 divide-y divide-slate-800">
+          <tbody className="bg-slate-900/40 divide-y divide-hairline">
             {paged.map((h, idx) => {
               const isCurrent = h.revision === currentRevision
               return (
@@ -96,7 +96,7 @@ export default function HistoryTab({
                   <td className="px-3 py-2 text-ink font-medium">
                     {h.revision}
                     {isCurrent && (
-                      <span className="ml-2 rounded-sm bg-primary-600/30 px-1.5 py-0.5 text-[10px] text-primary-200">
+                      <span className="ml-2 rounded bg-slate-700/50 px-1.5 py-0.5 text-xs text-primary-300">
                         {t('helmReleaseDetail.history.current')}
                       </span>
                     )}
@@ -118,7 +118,7 @@ export default function HistoryTab({
                           e.stopPropagation()
                           setRollbackTarget(h.revision)
                         }}
-                        className="inline-flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200 hover:bg-amber-500/20"
+                        className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                       >
                         <HistoryIcon className="w-3 h-3" />
                         {t('helmReleaseDetail.rollback.button')}
