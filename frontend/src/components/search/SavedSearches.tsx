@@ -96,7 +96,7 @@ export default function SavedSearches({ query, resources, namespace, onLoad }: P
           <Bookmark className="w-4 h-4" />
           {t('advancedSearch.saved.list', 'Saved searches')}
           <span className="text-xs text-slate-400 tabular-nums" data-testid="saved-search-count">{searches.length}</span>
-          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} />
         </button>
         {open && (
           <div className="absolute right-0 top-full mt-2 z-100 w-[min(28rem,90vw)] max-h-80 overflow-y-auto rounded-lg border border-hairline bg-slate-800 shadow-xl" data-testid="saved-search-menu">

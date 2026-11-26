@@ -88,13 +88,13 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copyRes
                     ))}
                 {hasToolCalls && isWaitingForAnswer && (
                   <div className="flex gap-2 items-center py-3 mt-4">
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce motion-reduce:animate-none" />
                     <div
-                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce motion-reduce:animate-none"
                       style={{ animationDelay: '0.1s' }}
                     />
                     <div
-                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce motion-reduce:animate-none"
                       style={{ animationDelay: '0.2s' }}
                     />
                   </div>
@@ -104,17 +104,17 @@ export const MessageBubble = memo(function MessageBubble({ message, idx, copyRes
           } else if (message.role === 'assistant') {
             return (
               <div className="flex gap-2 items-center py-1">
-                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce motion-reduce:animate-none" />
                 <div
-                  className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                  className="w-2 h-2 bg-slate-400 rounded-full animate-bounce motion-reduce:animate-none"
                   style={{ animationDelay: '0.1s' }}
                 />
                 <div
-                  className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                  className="w-2 h-2 bg-slate-400 rounded-full animate-bounce motion-reduce:animate-none"
                   style={{ animationDelay: '0.2s' }}
                 />
                 {message.isTemporary && message.queued && (
-                  <span className="ml-1 text-sm text-slate-300" role="status" data-testid="chat-waiting-turn">
+                  <span className="ml-1 text-sm text-notice-text-waiting" role="status" data-testid="chat-waiting-turn">
                     {t('aiChat.waitingTurn', { defaultValue: 'Waiting for a turn — another question is running' })}
                   </span>
                 )}

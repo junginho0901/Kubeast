@@ -99,7 +99,7 @@ export default function ResourceTypePicker({ selected, onChange, extraResources 
             {selected.size}
           </span>
         )}
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (

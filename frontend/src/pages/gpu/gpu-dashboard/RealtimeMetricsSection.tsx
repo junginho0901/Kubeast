@@ -121,7 +121,7 @@ export function RealtimeMetricsSection({ metricsAvailable, metricsFailure = null
                     <span className="text-xs text-slate-500 w-8 shrink-0">{tr('gpuDashboardPage.realtime.core', 'Core')}</span>
                     <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${(gpu.gpu_util ?? 0) >= 80 ? 'bg-red-500' : (gpu.gpu_util ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
+                        className={`h-full rounded-full transition-all motion-reduce:transition-none ${(gpu.gpu_util ?? 0) >= 80 ? 'bg-red-500' : (gpu.gpu_util ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                         style={{ width: `${Math.min(gpu.gpu_util ?? 0, 100)}%` }}
                       />
                     </div>
@@ -131,7 +131,7 @@ export function RealtimeMetricsSection({ metricsAvailable, metricsFailure = null
                     <span className="text-xs text-slate-500 w-8 shrink-0">{tr('gpuDashboardPage.realtime.mem', 'Mem')}</span>
                     <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${(gpu.memory_util_percent ?? 0) >= 80 ? 'bg-red-500' : (gpu.memory_util_percent ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
+                        className={`h-full rounded-full transition-all motion-reduce:transition-none ${(gpu.memory_util_percent ?? 0) >= 80 ? 'bg-red-500' : (gpu.memory_util_percent ?? 0) >= 50 ? 'bg-amber-500' : 'bg-primary-bright'}`}
                         style={{ width: `${Math.min(gpu.memory_util_percent ?? 0, 100)}%` }}
                       />
                     </div>

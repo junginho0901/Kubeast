@@ -42,7 +42,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
           // 초기 로딩: 스켈레톤 표시
           <div className="divide-y divide-slate-700/60">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="flex items-center gap-3 py-3 animate-pulse">
+              <div key={i} className="flex items-center gap-3 py-3 animate-pulse motion-reduce:animate-none">
                 <div className="h-3 w-4 bg-slate-700 rounded-sm" />
                 <div className="flex-1 space-y-2">
                   <div className="h-4 bg-slate-700 rounded-sm w-3/4" />
@@ -131,7 +131,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
           // 초기 로딩: 스켈레톤 표시
           <div className="space-y-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="space-y-3 py-2 animate-pulse">
+              <div key={i} className="space-y-3 py-2 animate-pulse motion-reduce:animate-none">
                 <div className="flex items-center gap-3">
                   <div className="h-3 w-4 bg-slate-700 rounded-sm" />
                   <div className="flex-1 space-y-2">
@@ -199,7 +199,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
                     </div>
                     <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-[width] duration-200 ${cpuPercent >= 80
+                        className={`h-full rounded-full transition-[width] motion-reduce:transition-none duration-200 ${cpuPercent >= 80
                             ? 'bg-red-500'
                             : cpuPercent >= 60
                               ? 'bg-amber-500'
@@ -223,7 +223,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
                     </div>
                     <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-[width] duration-200 ${memoryPercent >= 80
+                        className={`h-full rounded-full transition-[width] motion-reduce:transition-none duration-200 ${memoryPercent >= 80
                             ? 'bg-red-500'
                             : memoryPercent >= 60
                               ? 'bg-amber-500'

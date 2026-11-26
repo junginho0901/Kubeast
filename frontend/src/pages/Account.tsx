@@ -165,7 +165,7 @@ export default function Account() {
                   : tr('account.language.english', 'English')}
               </span>
               <ChevronDown
-                className={`h-4 w-4 text-slate-400 transition-transform ${
+                className={`h-4 w-4 text-slate-400 transition-transform motion-reduce:transition-none ${
                   isLanguageDropdownOpen ? 'rotate-180' : ''
                 }`}
               />
@@ -301,7 +301,7 @@ export default function Account() {
                   aria-describedby={currentRefused ? 'password-current-error' : undefined}
                 />
                 {currentRefused && (
-                  <p id="password-current-error" role="alert" data-testid="password-current-error" className="mt-1 text-[11px] text-red-400">
+                  <p id="password-current-error" role="alert" data-testid="password-current-error" className="mt-1 text-[11px] text-notice-text-failed">
                     {tr('account.password.wrongCurrent', 'The current password is wrong.')}
                   </p>
                 )}

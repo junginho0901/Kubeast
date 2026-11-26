@@ -220,7 +220,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
               onChange={(e) => setKubeconfig(e.target.value)}
               placeholder={tr('cluster.edit.kubeconfigHint', 'Leave blank to keep the current kubeconfig. Paste a new one to rotate credentials.')}
               rows={7}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 font-mono text-xs text-ink focus:border-primary-500 focus:outline-hidden"
+              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 font-mono text-xs text-ink focus:border-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
             />
             <p className="mt-1 text-[11px] text-slate-500">
               {tr('cluster.edit.sameClusterNote', 'A new kubeconfig must point to the same cluster — RBAC grants and chat history are preserved.')}

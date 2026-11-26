@@ -17,7 +17,7 @@ function Calls({ refs, toolCalls }: { refs: InvestigationCallRef[]; toolCalls: I
       {refs.map((r) => (
         <span
           key={r.call}
-          className={`rounded-sm border px-1.5 py-0.5 font-mono ${r.failed ? 'border-red-800/60 text-red-300' : 'border-hairline text-slate-300'}`}
+          className={`rounded-sm border px-1.5 py-0.5 font-mono ${r.failed ? 'border-red-800/60 text-notice-text-failed-detail' : 'border-hairline text-slate-300'}`}
           title={JSON.stringify(toolCalls[r.call - 1]?.args ?? {}) + (r.failed ? ` (${t('investigations.tool.error', { defaultValue: 'refused' })})` : '')}
           data-testid="investigation-result-call"
         >
@@ -30,7 +30,7 @@ function Calls({ refs, toolCalls }: { refs: InvestigationCallRef[]; toolCalls: I
 
 // Under a list the server cut at what it keeps of it: the first how many of how many it shows (cutText).
 function CutNote({ text, testId = 'investigation-result-cut' }: { text: string; testId?: string }) {
-  return text ? <div className="mt-1 text-amber-300" data-testid={testId}>{text}</div> : null
+  return text ? <div className="mt-1 text-notice-text-warning" data-testid={testId}>{text}</div> : null
 }
 
 // The outcome the server keeps and its lists, made from the run's calls.
@@ -45,7 +45,7 @@ function Outcome({ verdict, toolCalls }: { verdict: InvestigationVerdict; toolCa
         {verdict.outcome
           ? <span className={outcomeBadge[verdict.outcome] ?? 'badge badge-neutral'} data-outcome={verdict.outcome}>{outcomeText(verdict.outcome, tr)}</span>
           : <span className="text-slate-500">-</span>}
-        {why && <span className="text-amber-300 break-words" data-testid="investigation-outcome-why">{why}</span>}
+        {why && <span className="text-notice-text-warning break-words" data-testid="investigation-outcome-why">{why}</span>}
       </div>
       {verdict.symptom && (
         <div className="flex flex-wrap items-center gap-2" data-testid="investigation-outcome-symptom">
@@ -78,7 +78,7 @@ function Outcome({ verdict, toolCalls }: { verdict: InvestigationVerdict; toolCa
                 <span className="font-mono text-ink break-all">{checkText(c)}</span>
                 {c.since && c.until && <span className="text-slate-400">{`${formatTime(c.since)} – ${formatTime(c.until)}`}</span>}
                 <Calls refs={[{ call: c.call, tool: c.tool }]} toolCalls={toolCalls} />
-                {c.partial && <span className="text-amber-300 break-words">{tr('investigations.result.partialCheck', 'read in part: {{reason}}', { reason: c.partial })}</span>}
+                {c.partial && <span className="text-notice-text-warning break-words">{tr('investigations.result.partialCheck', 'read in part: {{reason}}', { reason: c.partial })}</span>}
               </li>
             ))}
           </ul>
@@ -112,7 +112,7 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
       </h3>
       <div className="min-w-0 space-y-3 border-t border-hairline pt-3 text-xs">
         {notes.map((n) => (
-          <div key={n} className={result.status === 'ok' ? 'text-slate-400' : 'text-amber-300'} data-testid="investigation-result-note">{n}</div>
+          <div key={n} className={result.status === 'ok' ? 'text-notice-text-empty' : 'text-notice-text-warning'} data-testid="investigation-result-note">{n}</div>
         ))}
         {result.verdict && <Outcome verdict={result.verdict} toolCalls={toolCalls} />}
         {result.status === 'ok' && (
@@ -131,7 +131,7 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
                       {c.started_at && <span className="text-slate-400">{tr('investigations.result.started', 'from {{at}}', { at: formatTime(c.started_at) })}</span>}
                       <Calls refs={c.evidence} toolCalls={toolCalls} />
                       {c.cut?.evidence && (
-                        <span className="text-amber-300" data-testid="investigation-cause-calls-cut">{cutText(c.cut.evidence, tr)}</span>
+                        <span className="text-notice-text-warning" data-testid="investigation-cause-calls-cut">{cutText(c.cut.evidence, tr)}</span>
                       )}
                       {c.verified === false && (
                         <span className="badge badge-warning" data-testid="investigation-cause-unverified">{notVerifiedText(c, tr)}</span>
@@ -185,7 +185,7 @@ export function InvestigationResultView({ result, toolCalls }: { result: Investi
                           {h.blocked && (
                             <div className="mt-1 text-slate-400 break-words">{tr('investigations.result.blockedBecause', 'Blocked: {{reason}}', { reason: h.blocked })}</div>
                           )}
-                          {!h.closed && <div className="mt-1 text-amber-300 break-words" data-testid="investigation-hypothesis-open">{notClosedText(h, tr)}</div>}
+                          {!h.closed && <div className="mt-1 text-notice-text-warning break-words" data-testid="investigation-hypothesis-open">{notClosedText(h, tr)}</div>}
                         </td>
                         <td className="px-2 py-1">
                           <Calls refs={h.for} toolCalls={toolCalls} />

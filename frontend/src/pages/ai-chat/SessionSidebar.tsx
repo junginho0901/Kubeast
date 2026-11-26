@@ -104,7 +104,7 @@ export function SessionSidebar({
   return (
     <>
       <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
-        <div className={`p-4 border-b border-slate-700 space-y-2 flex flex-col justify-center transition-all ${
+        <div className={`p-4 border-b border-slate-700 space-y-2 flex flex-col justify-center transition-all motion-reduce:transition-none ${
           isMultiSelectMode ? 'h-[160px]' : 'h-[100px]'
         }`}>
           <button
@@ -245,7 +245,7 @@ export function SessionSidebar({
                           value={editingTitle}
                           maxLength={NAME_MAX}
                           onChange={(e) => setEditingTitle(e.target.value)}
-                          className="flex-1 px-2 py-1 text-sm bg-slate-900 border border-control rounded-lg text-ink min-w-0 focus:outline-none focus:border-primary-500"
+                          className="flex-1 px-2 py-1 text-sm bg-slate-900 border border-control rounded-lg text-ink min-w-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSaveEdit(session.id)

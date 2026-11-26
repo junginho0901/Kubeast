@@ -131,7 +131,7 @@ export default function AdminOrganizations() {
         </div>
       </form>
       {nameMissing && (
-        <p id="team-name-problem" role="alert" data-testid="team-name-problem" className="mt-1 shrink-0 text-[11px] text-red-400">
+        <p id="team-name-problem" role="alert" data-testid="team-name-problem" className="mt-1 shrink-0 text-[11px] text-notice-text-failed">
           {inputValue === ''
             ? tr('adminOrg.nameRequired', 'Enter a team name.')
             : tr('adminOrg.nameBlank', 'Enter a team name: spaces alone are not one.')}
@@ -278,7 +278,7 @@ export default function AdminOrganizations() {
               <button
                 type="button"
                 onClick={() => setSelectedOrg(null)}
-                className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800"
+                className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800 hit-area-40"
                 aria-label={tr('common.close', 'Close')}
               >
                 <X className="w-5 h-5" />

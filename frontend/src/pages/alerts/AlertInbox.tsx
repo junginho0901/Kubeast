@@ -496,7 +496,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
         onClose={onClose}
         busy={save.isPending || start.isPending}
         testId="alert-detail"
-        footer={<button type="button" onClick={onClose} className="btn btn-secondary">{tr('common.close', 'Close')}</button>}
+        footer={<button type="button" onClick={onClose} className="btn btn-secondary hit-area-40">{tr('common.close', 'Close')}</button>}
       >
         {isLoading && <div className="py-6 text-center text-slate-500">{tr('common.loading', 'Loading…')}</div>}
         {error && (
@@ -574,7 +574,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={2000}
                 rows={3}
-                className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-ink focus:outline-none focus:border-primary-500"
+                className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
                 data-testid="alert-note"
               />
               <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">

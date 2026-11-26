@@ -33,7 +33,7 @@ export function MetricBar({
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-slate-700">
         <div
-          className={`h-full rounded-full transition-all ${color}`}
+          className={`h-full rounded-full transition-all motion-reduce:transition-none ${color}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -113,7 +113,7 @@ export function PrometheusSection({
   return (
     <div className="mt-4 border-t border-hairline pt-4">
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+        <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none" />
         <h3 className="text-lg font-semibold text-ink"><Tx>{title}</Tx></h3>
       </div>
       {children}

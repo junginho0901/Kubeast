@@ -139,7 +139,7 @@ export default function SearchQueryEditor({
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 min-h-5 ml-1">
         {isSearching && (
-          <span className="flex items-center gap-1.5 text-slate-300">
+          <span className="flex items-center gap-1.5 text-notice-text-waiting">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             {t('advancedSearch.searching', 'Searching...')}
           </span>

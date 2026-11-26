@@ -113,7 +113,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
                 </p>
               </div>
             </div>
-            <button type="button" onClick={onClose} className="p-2 hover:bg-slate-700 rounded-lg transition-colors" aria-label={t('common.close', 'Close')}>
+            <button type="button" onClick={onClose} className="p-2 hover:bg-slate-700 rounded-lg transition-colors hit-area-40" aria-label={t('common.close', 'Close')}>
               <X className="w-5 h-5 text-slate-400" />
             </button>
           </div>
@@ -143,7 +143,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
               onChange={(e) => setSearch(e.target.value)}
               placeholder={isPods ? t('resourceGraph.group.searchPods', 'Search name, node or IP') : t('resourceGraph.group.searchMembers', 'Search name')}
               aria-label={t('resourceGraph.group.search', 'Search this group')}
-              className="w-full h-10 pl-10 pr-3 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-400 transition-colors"
+              className="w-full h-10 pl-10 pr-3 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-400 transition-colors"
             />
           </div>
         </div>

@@ -170,7 +170,7 @@ ${yamlBodyTemplate}`
             <span className="text-sm font-medium truncate min-w-0">
               {selectedNamespace === 'all' ? strings.allNamespaces : selectedNamespace}
             </span>
-            <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-4 h-4 shrink-0 text-slate-400 transition-transform motion-reduce:transition-none ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isNamespaceDropdownOpen && (
             <div className="absolute top-full left-0 mt-2 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-100 max-h-[240px] overflow-y-auto">

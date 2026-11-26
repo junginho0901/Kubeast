@@ -58,7 +58,7 @@ export function ModalFrame({ title, subtitle, icon, size = 'md', onClose, busy, 
             onClick={close}
             disabled={busy}
             aria-label={t('common.close', { defaultValue: 'Close' })}
-            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:text-ink hover:bg-slate-700 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:text-ink hover:bg-slate-700 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 hit-area-40"
           >
             <X className="w-5 h-5" />
           </button>

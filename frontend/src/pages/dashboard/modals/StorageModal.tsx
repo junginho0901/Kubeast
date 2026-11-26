@@ -128,7 +128,7 @@ export function StorageModal({
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-slate-700 rounded-lg transition-colors hit-area-40"
               aria-label={tr('common.close', 'Close')}
             >
               <X className="w-5 h-5 text-slate-400" />
@@ -187,7 +187,7 @@ export function StorageModal({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="h-10 px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] max-w-full justify-between"
+                className="h-10 px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] max-w-full justify-between"
                 title={tr('dashboard.storage.namespaceFilter', 'Namespace filter')}
               >
                 <span className="text-sm font-medium truncate min-w-0" title={namespaceFilter}>
@@ -196,7 +196,7 @@ export function StorageModal({
                     : namespaceFilter}
                 </span>
                 <ChevronDown
-                  className={`w-4 h-4 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                  className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${isDropdownOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
@@ -245,7 +245,7 @@ export function StorageModal({
                 : tr('dashboard.storage.searchPvsPlaceholder', 'Search (name/status/capacity/StorageClass/reclaim policy/claim)...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button

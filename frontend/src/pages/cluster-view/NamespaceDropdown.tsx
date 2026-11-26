@@ -27,7 +27,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
             : selectedNamespace}
         </span>
         <ChevronDown
-          className={`w-4 h-4 text-slate-400 transition-transform ${
+          className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${
             isNamespaceDropdownOpen ? 'rotate-180' : ''
           }`}
         />

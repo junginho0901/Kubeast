@@ -46,7 +46,7 @@ function Slot({ label, title, value, figure, normalClass, missing, testId }: {
       <div className="h-2 w-full overflow-hidden rounded-full bg-slate-700">
         {value !== null && (
           <div
-            className={`h-full rounded-full transition-[width] duration-200 ${threshold(value, normalClass)}`}
+            className={`h-full rounded-full transition-[width] motion-reduce:transition-none duration-200 ${threshold(value, normalClass)}`}
             style={{ width: `${Math.min(value, 100)}%` }}
           />
         )}

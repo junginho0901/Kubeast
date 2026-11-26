@@ -256,7 +256,7 @@ export default function HelmReleasesPage() {
       ) : helmForbidden ? (
         <div
           data-testid="helm-forbidden"
-          className="flex items-center justify-center rounded-lg border border-hairline bg-slate-800 py-16 text-center text-slate-400"
+          className="flex items-center justify-center rounded-lg border border-hairline bg-slate-800 py-16 text-center text-notice-text-empty"
         >
           {isProtectedNamespaceError(error) ? t('helmReleases.protected') : t('helmReleases.forbidden')}
         </div>
@@ -264,7 +264,7 @@ export default function HelmReleasesPage() {
         <div
           role="alert"
           data-testid="helm-read-failed"
-          className="flex items-center justify-center rounded-lg border border-hairline bg-slate-800 px-4 py-16 text-center text-red-400 break-words"
+          className="flex items-center justify-center rounded-lg border border-hairline bg-slate-800 px-4 py-16 text-center text-notice-text-failed break-words"
         >
           {t('common.readFailed', { defaultValue: 'Could not read the list: {{reason}}', reason: failureText(error) })}
         </div>

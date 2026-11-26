@@ -27,7 +27,7 @@ export function ClusterViewHeader({ namespaces }: Props) {
             placeholder={tr('clusterView.searchPlaceholder', 'Search pod name, namespace, node or IP...')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-10 pl-10 pr-10 bg-slate-800 text-sm text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors w-64 max-w-full"
+            className="h-10 pl-10 pr-10 bg-slate-800 text-sm text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors w-64 max-w-full"
           />
           {searchQuery && (
             <button

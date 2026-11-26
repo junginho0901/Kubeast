@@ -109,7 +109,7 @@ export function SummaryCardsRow({ data, allocationRate, devicePlugins, tr }: Pro
               {card.bar && (
                 <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-700">
                   <div
-                    className={`h-full rounded-full transition-all ${
+                    className={`h-full rounded-full transition-all motion-reduce:transition-none ${
                       allocationRate > 80
                         ? 'bg-amber-500'
                         : allocationRate > 50

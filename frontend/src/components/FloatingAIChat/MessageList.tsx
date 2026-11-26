@@ -113,9 +113,9 @@ const MessageBubble = memo(function MessageBubble({ role, content, pending, queu
           </div>
         ) : (
           <div className="flex items-center gap-2 py-1" data-testid="floating-waiting">
-            <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" />
-            <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '0.1s' }} />
-            <div className="h-2 w-2 animate-bounce rounded-full bg-slate-400" style={{ animationDelay: '0.2s' }} />
+            <div className="h-2 w-2 animate-bounce motion-reduce:animate-none rounded-full bg-slate-400" />
+            <div className="h-2 w-2 animate-bounce motion-reduce:animate-none rounded-full bg-slate-400" style={{ animationDelay: '0.1s' }} />
+            <div className="h-2 w-2 animate-bounce motion-reduce:animate-none rounded-full bg-slate-400" style={{ animationDelay: '0.2s' }} />
             {queued && (
               <span className="text-xs text-slate-400" role="status" data-testid="floating-waiting-turn">
                 {t('aiChat.waitingTurn', { defaultValue: 'Waiting for a turn — another question is running' })}
@@ -148,7 +148,7 @@ function CopyAnswer({ content }: { content: string }) {
       aria-label={label}
       title={label}
       data-testid="floating-copy"
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-50 transition-opacity duration-200 hover:bg-slate-800 hover:text-slate-200 hover:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none starting:opacity-0"
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-50 transition-opacity duration-200 hover:bg-slate-800 hover:text-slate-200 hover:opacity-100 focus-visible:opacity-100 motion-reduce:transition-none starting:opacity-0 hit-area-40"
     >
       {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : copied === false ? <X className="h-3.5 w-3.5 text-red-400" /> : <Copy className="h-3.5 w-3.5" />}
     </button>

@@ -287,7 +287,7 @@ export default function ClusterHygiene() {
             {tr('clusterHygiene.snapshot.viewing', 'Viewing the report as signed off on {{when}} by {{who}}.', { when: formatWhen(viewed.reviewed_at), who: viewed.reviewed_by_email })}
             {viewed.note && <span className="text-primary-200/80"> · {viewed.note}</span>}
           </span>
-          <button onClick={() => setViewId(null)} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-ink flex items-center gap-1">
+          <button onClick={() => setViewId(null)} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-ink flex items-center gap-1 hit-area-40">
             <X className="w-3 h-3" /> {tr('clusterHygiene.snapshot.back', 'Back to now')}
           </button>
         </div>
@@ -408,7 +408,7 @@ export default function ClusterHygiene() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={tr('clusterHygiene.search', 'Search Namespace, name, message, kind, container, exemption reason...')}
-              className="h-10 px-3 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 text-sm flex-1 min-w-48"
+              className="h-10 px-3 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 text-sm flex-1 min-w-48"
             />
           </div>
           {report?.truncated && (
@@ -595,7 +595,7 @@ export default function ClusterHygiene() {
             rows={4}
             placeholder={tr('clusterHygiene.signoff.notePlaceholder', 'Findings and actions taken (optional)')}
             data-testid="hygiene-signoff-note"
-            className="w-full px-3 py-2 bg-slate-900 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 text-sm"
+            className="w-full px-3 py-2 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 text-sm"
           />
         </ModalFrame>
       )}

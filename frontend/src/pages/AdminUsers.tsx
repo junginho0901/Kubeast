@@ -577,7 +577,7 @@ export default function AdminUsers() {
                         <span className="truncate">
                           {currentRoleName}
                         </span>
-                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${isOpen ? 'rotate-180' : ''}`} />
                       </button>
 
                       {isOpen && (
@@ -647,7 +647,7 @@ export default function AdminUsers() {
                     </button>
                     ) : (
                       <span
-                        className="text-xs text-slate-500"
+                        className="text-xs text-notice-text-muted"
                         title={tr('adminUsers.resetPasswordSso', 'This account signs in with single sign-on and has no password to reset.')}
                         data-testid="user-reset-password-sso"
                       >
@@ -784,7 +784,7 @@ export default function AdminUsers() {
                     placeholder={tr('adminUsers.searchPlaceholder', 'Search by name, email or team...')}
                     aria-label={tr('adminUsers.searchPlaceholder', 'Search by name, email or team...')}
                     data-testid="admin-users-pending-search"
-                    className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:border-primary-500"
+                    className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
                   />
                 </div>
                 <div className="mt-3 rounded-lg border border-hairline overflow-x-auto">
