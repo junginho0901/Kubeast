@@ -73,7 +73,7 @@ const UNVERIFIED_TEXT: Record<string, string> = {
   bad_calls: 'a call given is not a call of this investigation that answered',
   name_missing: 'its name does not appear in what the calls returned',
   after_alert: 'it starts after the alert did',
-  empty_answer: 'the calls given read nothing or their answer holds nothing',
+  empty_answer: 'the calls given read nothing, hold nothing, or read only alerts, rules or names',
 }
 
 // A cause the run's calls do not show (evidenceCheck), as the window and the floating chat say it.

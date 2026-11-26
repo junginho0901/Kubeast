@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from app.services.investigation import evidence, numbers
+from app.services.investigation import answers, evidence, numbers, verdict
 from app.services.investigation import rca as rca_block
 from app.services.investigation import prompt as inv_prompt
 from app.services.investigation import result as inv_result
@@ -213,6 +213,40 @@ def test_no_fault_and_an_alert_without_a_start_check_nothing_of_time():
     assert evidence.check(late, reads, None) == (1, [])
 
 
+ALERT_TEXT = "alert KubePodCrashLooping firing: Deployment/apps/web, pod web-7d9f4-x2k in apps"
+
+
+@pytest.mark.parametrize("tool", sorted(answers.NO_SYMPTOM))
+def test_a_cause_given_only_reads_of_alerts_rules_or_names_is_not_verified(tool):
+    """What an alert or its rule says, or a list of names, holds the name of what the alert is about, not what is wrong
+    with it: with the verdict off too (`nothing` unset), whatever names the answer holds."""
+    reads = [
+        evidence.Read(tool, {}, text=ALERT_TEXT),
+        evidence.Read("k8s_get_resources", PODS, text=POD_TABLE),
+        evidence.Read("k8s_get_resources", PODS, text="NAME READY STATUS\nother-1 1/1 Running"),
+        evidence.Read(tool, {}, same_as=1),  # a refused repeat of it
+        evidence.Read("timeline", {"view": "changes", "namespace": "apps"}, text="Deployment/apps/web revision 4"),
+    ]
+    for calls in ([1], [4], [1, 4]):
+        checked, problems = evidence.check({"causes": [cause("Deployment/apps/web", calls)]}, reads, NOW)
+        assert (checked, [(p.reason, p.values) for p in problems]) == (1, [("empty_answer", {"calls": calls})]), calls
+    assert evidence.reason_text(problems[0]) == "calls 1, 4 read nothing, hold nothing, or read only alerts, rules or names"
+    assert evidence.reason_text(problems[0], "ko") == "1, 4번 호출은 읽은 것이 없거나, 답에 담긴 것이 없거나, 알림·규칙·이름만 읽음"
+    # beside a read that shows it the cause stands on that read; beside one that does not name it, its name is missing there
+    assert evidence.check({"causes": [cause("Deployment/apps/web", [1, 2])]}, reads, NOW) == (1, [])
+    assert [(p.reason, p.values) for p in evidence.check({"causes": [cause("Deployment/apps/web", [1, 3])]}, reads, NOW)[1]] == [
+        ("name_missing", {"name": "web", "calls": [3]})]
+    # what changed is no symptom, but it shows a cause: a rollout stands on the changes view
+    assert evidence.check({"causes": [cause("Deployment/apps/web", [5], kind="rollout")]}, reads, NOW) == (1, [])
+
+
+def test_the_reads_that_show_no_cause_are_those_that_show_no_symptom():
+    assert verdict.NO_SYMPTOM is answers.NO_SYMPTOM
+    assert {"alerts_inbox", "alerts_list", "prometheus_rules", "k8s_find_resource"} <= answers.NO_SYMPTOM
+    assert not answers.NO_SYMPTOM & {"k8s_get_resources", "k8s_get_events", "k8s_describe_resource", "k8s_get_pod_logs", "timeline",
+                                     "prometheus_query", "issues", "anomaly_rank"}
+
+
 def test_the_second_ask_lists_what_failed_and_every_call():
     reads = [evidence.Read("k8s_get_resources", PODS, text=POD_TABLE),
              evidence.Read("k8s_get_pod_logs", {"pod_name": "db-0"}, failed=True),
@@ -333,6 +367,37 @@ async def test_a_failed_call_is_no_evidence(monkeypatch):
     out = await runner.investigate(cfg(max_steps=5, evidence_check=True), row())
     assert out["tool_calls"][0]["error"]
     assert out["report"].endswith("- Deployment/apps/web: calls 1 are not calls of this investigation that answered")
+
+
+ALERT_READ = json.dumps({"alerts": [{"labels": {"alertname": "KubePodCrashLooping", "namespace": "apps", "deployment": "web"},
+                                     "state": "firing", "summary": "Deployment/apps/web restarts"}]})
+
+
+@pytest.mark.parametrize("on", [False, True], ids=["the verdict off", "the verdict on"])
+@pytest.mark.asyncio
+async def test_a_cause_only_an_alert_read_is_given_for_is_asked_about_and_stays_not_verified(monkeypatch, on):
+    """The list of alerts names the alert's workload: the server does not take it for the cause, the model is asked once more
+    and the window and the floating chat read the cause as not verified."""
+    given = f"{WEB_REPORT}\n\n{rca(cause('Deployment/apps/web', [1]))}"
+    service = _service(completion(calls=[tool_call("c1", "alerts_list", {})]), completion(content=given), completion(content=given),
+                       answer=ALERT_READ)
+    service._get_tools_definition = lambda: [{"type": "function", "function": {"name": "alerts_list"}}]
+    install_loop(monkeypatch, service, [])
+    from app.services.ai import features
+
+    async def all_offered(tools, svc):  # the alert store's switch, which the cluster's features say
+        return tools
+
+    monkeypatch.setattr(features, "gate_tools", all_offered)
+    progress = {}
+    out = await runner.investigate(cfg(max_steps=5, evidence_check=True, verdict=on), row(), progress)
+    assert service.executed == [("alerts_list", {})] and not out["tool_calls"][0].get("error")
+    line = "- Deployment/apps/web: calls 1 read nothing, hold nothing, or read only alerts, rules or names"
+    assert line in service.completions.calls[2]["messages"][-1]["content"] and line in out["report"]
+    c = out["result"]["causes"][0]
+    assert (c["verified"], c["reason"]) == (False, "empty_answer")
+    assert {"kind": "cause_empty_answer", "resource": "Deployment/apps/web"} in out["result"]["failures"]
+    assert progress["evidence"]["unverified"] == 1 and progress["evidence"]["asked_again"] is True
 
 
 @pytest.mark.asyncio

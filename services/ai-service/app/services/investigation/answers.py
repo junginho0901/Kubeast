@@ -33,6 +33,13 @@ _RAW_SHAPES: dict[str, tuple[frozenset[str], frozenset[str]]] = {
 # permissions.namespace_scope_error: a grant limited to namespaces, refused before tool-server.
 _GRANT = re.compile(r"forbidden: .* your grant on ")
 
+# Reads that show no symptom and no cause: what an alert or its rule says and which names there are. Their answers name
+# what an alert is about, not what is wrong with it (verdict.can_show, evidence.check).
+NO_SYMPTOM = frozenset({
+    "alerts_list", "alerts_inbox", "prometheus_rules", "prometheus_metrics", "prometheus_labels", "loki_labels",
+    "traces_tags", "k8s_find_resource", "k8s_explain", "k8s_get_available_api_resources", "can_i", "clusters_list",
+})
+
 # The read tools whose answer lists what was found, so that an empty list is nothing found. Others answer about the one
 # thing asked (what a network policy allows, a release), where an empty list says something.
 _LISTS = frozenset({

@@ -1560,11 +1560,11 @@ async def test_a_cause_whose_calls_hold_nothing_says_so_and_not_that_its_name_is
     (c,) = out["result"]["causes"]
     assert (c["verified"], c["reason"]) == (False, "empty_answer")
     assert {"kind": "cause_empty_answer", "resource": POD} in out["result"]["failures"] and "cause_empty_answer" in rca.FAILURES
-    line = "- Pod/apps/web-1: calls 1 read nothing or their answer holds nothing"
+    line = "- Pod/apps/web-1: calls 1 read nothing, hold nothing, or read only alerts, rules or names"
     ask = service.completions.calls[2]["messages"][-1]["content"]
     assert line in ask and line in out["report"] and "web-1 does not appear" not in ask + out["report"]
     out, _ = await run_of(monkeypatch, calls, given, {"pod": "web-1"}, language="ko")
-    assert "- Pod/apps/web-1: 1번 호출은 읽은 것이 없거나 답에 담긴 것이 없음" in out["report"]
+    assert "- Pod/apps/web-1: 1번 호출은 읽은 것이 없거나, 답에 담긴 것이 없거나, 알림·규칙·이름만 읽음" in out["report"]
     # beside a call that holds something and does not name it, the name is missing from that one
     given = answer("A cause was found.", "cause_found", [cause("Pod/apps/cache", [1, 2])], shown(POD, 2))
     out, _ = await run_of(monkeypatch, calls, given, {"pod": "web-1"})
