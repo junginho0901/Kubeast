@@ -43,7 +43,7 @@ export function MetricBar({
 }
 
 /**
- * A compact metric card showing a single value with a bar. A count (`whole`) reads as a whole number.
+ * A compact metric card showing a single value with a bar. A count (`whole`) reads as a whole number; with `thresholds` null it is no state and keeps the text colour.
  */
 export function MetricCard({
   label,
@@ -58,12 +58,12 @@ export function MetricCard({
   unit?: string
   whole?: boolean
   subtext?: string
-  thresholds?: { warn: number; danger: number }
+  thresholds?: { warn: number; danger: number } | null
 }) {
-  const t = thresholds ?? { warn: 60, danger: 80 }
+  const t = thresholds === null ? null : thresholds ?? { warn: 60, danger: 80 }
   const color =
-    value >= t.danger ? 'text-red-400'
-    : value >= t.warn ? 'text-amber-400'
+    t && value >= t.danger ? 'text-red-400'
+    : t && value >= t.warn ? 'text-amber-400'
     : 'text-ink'
 
   return (
