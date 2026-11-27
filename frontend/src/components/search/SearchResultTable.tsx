@@ -120,7 +120,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                   className={`px-4 py-2.5 text-left text-xs font-semibold text-slate-400 cursor-pointer hover:text-slate-200 transition-colors ${col.className}`}
                   {...sortHead(col.key)}
                 >
-                  <SortButton className="flex items-center gap-1">
+                  <SortButton className="flex items-center gap-1 [text-align:inherit]">
                     {col.label}
                     <ArrowUpDown className={`w-3 h-3 ${sortKey === col.key ? 'text-primary-400' : 'text-slate-600'}`} />
                   </SortButton>

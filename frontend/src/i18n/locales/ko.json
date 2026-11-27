@@ -4818,6 +4818,7 @@
     },
     "loading": "불러오는 중...",
     "playRecording": "녹화 재생",
+    "rowDetails": "상세 정보",
     "detail": {
       "httpContext": "HTTP 컨텍스트",
       "targetType": "대상 유형",
