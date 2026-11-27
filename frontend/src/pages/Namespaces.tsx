@@ -94,9 +94,9 @@ export default function Namespaces() {
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('namespaces.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('namespaces.stats.active', 'Active'), cards.active, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('namespaces.stats.terminating', 'Terminating'), cards.terminating, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('namespaces.stats.total', 'Total'), cards.total, 'border-slate-700/70', 'text-slate-400'],
+      [tr('namespaces.stats.active', 'Active'), cards.active, 'border-slate-700/70', 'text-emerald-300'],
+      [tr('namespaces.stats.terminating', 'Terminating'), cards.terminating, 'border-slate-700/70', 'text-amber-300'],
       // no "With Labels": every Namespace carries kubernetes.io/metadata.name, so it always equalled Total
     ],
     [cards.active, cards.terminating, cards.total, tr],
@@ -149,7 +149,7 @@ export default function Namespaces() {
             {tr('namespaces.subtitle', 'Review all namespaces in the cluster and manage resources')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isWriteRole && (
             <button
               onClick={() => setCreateDialogOpen(true)}
@@ -180,15 +180,15 @@ export default function Namespaces() {
           placeholder={tr('namespaces.searchPlaceholder', 'Search namespaces...')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-10 w-full pl-10 pr-4 bg-slate-700 border border-control rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3 shrink-0">
+      <div className="grid grid-cols-3 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
-          <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
-            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
-            <p className="mt-1 text-lg font-semibold text-ink">{value}</p>
+          <div key={label} className={`border-l first:border-l-0 px-4 py-2.5 ${boxClass}`}>
+            <p className={`text-xs leading-4 whitespace-nowrap ${typeof value === 'number' && value > 0 ? labelClass : 'text-slate-400'}`}>{label}</p>
+            <p className="mt-1 text-lg font-medium tabular-nums text-ink">{value}</p>
           </div>
         ))}
       </div>
