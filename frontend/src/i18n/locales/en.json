@@ -4048,6 +4048,8 @@
     "usersWithRole": "Users with this global (account-level) role",
     "usersWithRoleNote": "This counts the global role only. Per-cluster access (Read/Write on a cluster) is granted separately in cluster access.",
     "noUsers": "No users assigned to this role.",
+    "selectedCount": "{{count}} permissions selected",
+    "selectedCount_one": "{{count}} permission selected",
     "deleteConfirm": "Delete role \"{{name}}\"?",
     "deleteTitle": "Delete role",
     "closeUsers": "Close",
