@@ -162,10 +162,15 @@ export default defineConfig({
           {
             name: 'guard',
             testDir: './guard',
-            // the comparisons need the old build beside the install (scripts/before-stack.sh); the other nets count what the namespace holds
-            testMatch: process.env.E2E_BEFORE_URL
-              ? (process.env.E2E_SCREEN_DIFF ? /screen-diff\.spec\.ts$/ : /response-diff\.spec\.ts$/)
-              : /(permission-matrix|response-compare|screen-compare)\.spec\.ts$/,
+            // E2E_A11Y=1 runs the accessibility net alone; the comparisons need the old build beside the install (scripts/before-stack.sh); the other nets count what the namespace holds;
+            // E2E_A11Y_VIEWS=1 runs the three accessibility views (guard/a11y-views.ts), the tree against the old build with E2E_BEFORE_URL
+            testMatch: process.env.E2E_A11Y === '1'
+              ? /a11y\.spec\.ts$/
+              : process.env.E2E_A11Y_VIEWS
+                ? /(aria-tree|reduced-motion|forced-colors)\.spec\.ts$/
+                : process.env.E2E_BEFORE_URL
+                  ? (process.env.E2E_SCREEN_DIFF ? /screen-diff\.spec\.ts$/ : /response-diff\.spec\.ts$/)
+                  : /(permission-matrix|response-compare|screen-compare)\.spec\.ts$/,
             use: {
               ...devices['Desktop Chrome'],
               // a missing element fails its step instead of the whole test timeout (Playwright Test defaults both to 0)

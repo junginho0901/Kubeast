@@ -97,6 +97,10 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 - **감사 싱크·세션 기록 스펙** — `deploy/kind/devtools.yaml`(S3 스탠드인, Mailpit, 웹훅 수신기)과 dev 값의 싱크 설정, `sessionRecording.enabled`가 필요합니다.
 - 리셋하면 위 데이터가 모두 사라지므로 다시 만드세요.
 
+`e2e/guard/a11y.spec.ts`는 옵트인 접근성 검사입니다. `self`에서 사이드바 화면 전부와 `/account`, 종류마다 첫 서랍을 색 모드 셋으로 1440 × 900에서 열고, WCAG 2.2 A · AA 태그로 axe-core를 돌리고, 조작마다 누를 수 있는 크기(24 × 24 CSS px, SC 2.5.8)를 잽니다.
+
+`E2E_GUARD=1 E2E_A11Y=1 npx playwright test --project=guard`로 실행합니다. `e2e/guard/a11y-baseline.json`에 없는 결과는 `e2e/guard/a11y-exempt.json`이 까닭과 함께 적지 않으면 실패합니다. `E2E_A11Y_WRITE=1`이 기준선을 쓰고, 기준선이 없으면 결과만 알립니다.
+
 `e2e/actions/`는 UI 동작 94개를 두 번째 클러스터에 실행하고 `kubectl`로 결과를 확인하는 옵트인 동작 스위트(약 12분)라서 기본 실행에 들어가지 않습니다.
 `E2E_ACTIONS=1 npx playwright test --project=actions`로 실행하고, 전제 조건은 [e2e/actions/README.md](../../e2e/actions/README.md)를 보세요.
 
@@ -162,7 +166,12 @@ npm run dev      # http://localhost:5173
 npm run build    # tsc + vite build
 npm run lint     # eslint (--max-warnings 0)
 npm run test     # vitest
+npm run check:contrast   # 색 모드 셋에서 색 토큰 짝의 대비를 WCAG 2.2로 셈(scripts/token-pairs.json)
+npm run check:colours    # src에 손으로 쓴 색(scripts/hand-colours-exempt.json이 까닭과 함께 일부를 넘김)
+npm run check:bundle     # vite build 뒤: dist의 gzip 크기를 scripts/bundle-budget.json과 비교
 ```
+
+세 검사는 결과만 알리고 `--strict`를 붙일 때만 실패합니다(`npm run check:contrast -- --strict`). CI 작업 "design checks (informational)"이 돌리며, main 브랜치의 필수 검사가 아닙니다.
 
 ### Go 서비스
 

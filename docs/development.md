@@ -96,6 +96,10 @@ Prerequisites (without them, the spec does not fail but skips and records the re
 - **Audit sink and session recording specs** — `deploy/kind/devtools.yaml` (S3 stand-in, Mailpit, webhook receiver) and the sinks and `sessionRecording.enabled` in the dev values.
 - A reset removes all of the data above, so create it again.
 
+`e2e/guard/a11y.spec.ts` is an opt-in accessibility check. It opens every sidebar screen, `/account` and the first drawer of each kind on `self` in the three colour modes at 1440 × 900, runs axe-core with the WCAG 2.2 A and AA tags, and measures how large each control is to press (24 × 24 CSS px, SC 2.5.8).
+
+Run it with `E2E_GUARD=1 E2E_A11Y=1 npx playwright test --project=guard`. A finding that `e2e/guard/a11y-baseline.json` does not hold fails unless `e2e/guard/a11y-exempt.json` names it with why; `E2E_A11Y_WRITE=1` writes the baseline, and without one the run only reports.
+
 `e2e/actions/` is an opt-in action suite. It runs 94 UI actions against the second cluster and checks them with `kubectl`, which takes about 12 minutes.
 
 It is not part of the default run. Run it with `E2E_ACTIONS=1 npx playwright test --project=actions`. Prerequisites are in [e2e/actions/README.md](../e2e/actions/README.md).
@@ -160,7 +164,12 @@ npm run dev      # http://localhost:5173
 npm run build    # tsc + vite build
 npm run lint     # eslint (--max-warnings 0)
 npm run test     # vitest
+npm run check:contrast   # colour token pairs in the three colour modes against WCAG 2.2 (scripts/token-pairs.json)
+npm run check:colours    # colours written by hand in src (scripts/hand-colours-exempt.json lets some through, with why)
+npm run check:bundle     # after vite build: gzip sizes of dist against scripts/bundle-budget.json
 ```
+
+The three checks report and fail only with `--strict` (`npm run check:contrast -- --strict`). The CI job "design checks (informational)" runs them; it is not one of the main branch's required checks.
 
 ### Go services
 

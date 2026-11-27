@@ -8,7 +8,10 @@
     "build": "tsc && vite build",
     "lint": "eslint . --max-warnings 0",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:contrast": "node scripts/token-contrast.mjs",
+    "check:colours": "node scripts/hand-colours.mjs",
+    "check:bundle": "node scripts/bundle-budget.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

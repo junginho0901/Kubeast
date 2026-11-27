@@ -1,0 +1,67 @@
+{
+  "about": "Colours written by hand that hand-colours.mjs lets through, each with why. file = path from the repository root; kinds = which kinds (all when left out); match = a piece of the found text, to let one line through and not the whole file. A rule that lets nothing through fails --strict.",
+  "rules": [
+    {
+      "file": "frontend/src/utils/chatChart.ts",
+      "kinds": ["hex"],
+      "why": "The chat's charts tell many series apart: a categorical palette is data, not decoration (DESIGN.md Colors, 'Not used on the console')."
+    },
+    {
+      "file": "frontend/src/pages/resource-graph/constants.ts",
+      "kinds": ["hex"],
+      "why": "The Resource Graph's relation lines and kinds: a categorical palette that is data (DESIGN.md Colors)."
+    },
+    {
+      "file": "frontend/src/pages/resource-graph/traffic.ts",
+      "kinds": ["hex"],
+      "why": "The Resource Graph's traffic lines (allowed, dropped, mixed): the graph library takes a colour value (DESIGN.md Colors, Literals)."
+    },
+    {
+      "file": "frontend/src/components/PodExecTerminal.tsx",
+      "kinds": ["hex"],
+      "why": "The xterm terminal theme takes colour values, not classes; terminals stay dark in every mode (DESIGN.md Literals, Colour modes)."
+    },
+    {
+      "file": "frontend/src/components/NodeShellTerminal.tsx",
+      "kinds": ["hex"],
+      "why": "The xterm terminal theme takes colour values (DESIGN.md Literals)."
+    },
+    {
+      "file": "frontend/src/components/search/SearchQueryEditor.tsx",
+      "kinds": ["hex"],
+      "match": "#00000000",
+      "why": "Monaco's theme takes colour values; a see-through editor ground lets the rounded field show (DESIGN.md Literals)."
+    },
+    {
+      "file": "frontend/src/utils/particles.ts",
+      "kinds": ["colour-function"],
+      "why": "The particle logo is drawn on a canvas, which takes colour values (DESIGN.md Literals: the three.js particles)."
+    },
+    {
+      "file": "frontend/src/pages/Login.tsx",
+      "kinds": ["hex", "colour-function", "arbitrary-class"],
+      "why": "The sign-in page is a brand surface pinned to the brand ground (bg-[#020617], data-color-mode=default) with its glow (DESIGN.md Brand ground)."
+    },
+    {
+      "file": "frontend/src/pages/Setup.tsx",
+      "kinds": ["hex", "colour-function", "arbitrary-class"],
+      "why": "First setup is a brand surface pinned to the brand ground (DESIGN.md Brand ground)."
+    },
+    {
+      "file": "frontend/src/components/PendingApproval.tsx",
+      "kinds": ["hex", "colour-function", "arbitrary-class"],
+      "why": "Waiting for approval is a brand surface pinned to the brand ground (DESIGN.md Brand ground)."
+    },
+    {
+      "file": "frontend/src/components/login/LoginHero.tsx",
+      "kinds": ["hex", "colour-function", "arbitrary-class", "off-palette"],
+      "why": "The sign-in scene and its particle logo are the brand surface DESIGN.md keeps unchanged (Overview, Interaction)."
+    },
+    {
+      "file": "frontend/src/index.css",
+      "kinds": ["hex"],
+      "match": "#000",
+      "why": "The sidebar menu's fade is a mask-image: only its alpha is used, no colour is drawn."
+    }
+  ]
+}

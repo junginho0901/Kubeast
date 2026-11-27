@@ -1,0 +1,4 @@
+{
+  "about": "Accessibility findings a11y.spec.ts lets through, each with why. screen = a regular expression on the screen id (as screen-diff names them: '<mode> · <path> on self', '<mode> · drawer <Kind> (<view>)'); finding = a regular expression on '<check> <key>' (check: axe:<rule> or hit-24; key: tag|role|testid|name|icon). SC 2.5.8's Equivalent and Essential exceptions go here, never a whole screen.",
+  "rules": []
+}
