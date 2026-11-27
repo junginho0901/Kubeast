@@ -479,13 +479,13 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
     if cards:
         first.append(cards)
     system = inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language, rules=cfg.rules,
-                                      call_paths=cfg.call_paths, verdict=verdict_on,
+                                      call_paths=cfg.call_paths, verdict=verdict_on, fault_onset=cfg.fault_onset,
                                       go_on=verdict_on or cfg.tool_result_details,
                                       # the token of an alert with a namespace is limited to it, and get_node_metrics
                                       # spans the cluster, so such a token is refused it (permissions.CLUSTER_WIDE_TOOLS)
                                       node_neighbors=cfg.node_neighbors and not row.namespace)
     if rca.on(cfg):
-        tail = rca.instruction(evidence=cfg.evidence_check, hypotheses=cfg.ledger, verdict=verdict_on)
+        tail = rca.instruction(evidence=cfg.evidence_check, hypotheses=cfg.ledger, verdict=verdict_on, naming=cfg.cause_naming)
     else:
         tail = numbers.NOTE if numbered else ""
     messages: list[dict[str, Any]] = [

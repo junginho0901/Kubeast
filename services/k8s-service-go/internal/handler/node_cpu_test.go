@@ -51,6 +51,28 @@ type fakeNodeCPU struct {
 	podReads   int
 	nodeLists  int
 	podLists   []string
+	// the busiest CPU's reads: the nodes' list, and the series of the query over all of them (n1's CPU 1 when nil)
+	nodes     []map[string]interface{}
+	nodesErr  error
+	nodeNames int
+	busiest   []k8s.PrometheusRangeSeries
+}
+
+// GetNodes is the cluster's nodes, n1 and n2 when none are set.
+func (f *fakeNodeCPU) GetNodes(context.Context) ([]map[string]interface{}, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nodeNames++
+	if f.nodesErr != nil {
+		return nil, f.nodesErr
+	}
+	if f.nodes != nil {
+		return f.nodes, nil
+	}
+	row := func(name, ip string) map[string]interface{} {
+		return map[string]interface{}{"name": name, "internal_ip": ip, "external_ip": "", "capacity": map[string]string{"cpu": "4"}}
+	}
+	return []map[string]interface{}{row("n1", "10.0.0.1"), row("n2", "10.0.0.2")}, nil
 }
 
 func nodeCPUPod(ns, name, owner, request, limit string, started time.Time) map[string]interface{} {
@@ -156,6 +178,14 @@ func (f *fakeNodeCPU) PrometheusQueryRange(_ context.Context, q string, start, e
 	}
 	byNode := strings.Contains(q, `node="n1"`)
 	switch {
+	case strings.HasPrefix(q, "topk("):
+		if f.busiest != nil {
+			return f.busiest, nil
+		}
+		return []k8s.PrometheusRangeSeries{
+			{Metric: map[string]interface{}{"cpu": "0", "node": "n2"}, Points: []k8s.PrometheusRangePoint{{T: float64(end.Unix()), V: 0.4}}},
+			{Metric: map[string]interface{}{"cpu": "1", "instance": "10.0.0.1:9100"}, Points: []k8s.PrometheusRangePoint{{T: float64(end.Unix()), V: 1}}},
+		}, nil
 	case strings.Contains(q, "container_cpu_usage_seconds_total"):
 		if f.noCPU || (f.noNode && byNode) {
 			return nil, nil

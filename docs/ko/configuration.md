@@ -211,12 +211,20 @@ ai:
   causeQuestions: false    # (alpha) 채팅의 원인 질문 규칙: 답하기 전에 확인할 것과, 원인 확인·이상 없음·알 수 없음 중 하나로
                            # 답하기(features.md). toolResultDetails와 함께 켜기를 권합니다. 그것이 꺼져 있으면 못 찾은 이름의
                            # 결과 글은 여전히 검색을 멈추고 물으라고 합니다. 끄면 전과 같습니다
+  faultOnset: false        # (alpha) 채팅과 알림 조사가 고장마다 시작한 때를 말하고, 전부터 있던 고장은 원인과 따로 적습니다.
+                           # issues와 anomaly_rank는 고장 난 객체의 상태를 언제부터 아는지 답합니다(features.md). 끄면 전과 같습니다
+  causeNaming: false       # (alpha) AI Chat의 답과 조사의 rca 묶음에서 원인을 적는 법: 증상이 보이는 객체가 아니라 잘못된 것을 가진 객체,
+                           # 뜻을 한 줄씩 붙인 고장 종류, 서로 다른 원인 모두. 결과로 못 가르는 호출의 양 끝은 원인이 아니라 후보
+                           # (features.md, ai-alerts.md). 끄면 전과 같습니다
   refuseRepeatedReads: false # (alpha) true면 채팅 답·조사 하나 안에서 같은 도구·같은 인자의 읽기를 앞 호출이 답한 지 60초 안에 또 하면
                              # 실행하지 않고 그 결과가 어디 있는지 모델에 알려 줍니다. 끄면 전과 같습니다
   toolResultDetails: false # (alpha) true면 도구 결과에 잘린 답의 "M of N", 범위를 정하지 않았을 때 읽은 시간 범위, 빈 결과의 까닭,
                            # 가리키는 오브젝트의 콘솔 경로를 이미 가진 것만으로 붙입니다(features.md). k8s_find_resource는
                            # 네임스페이스 이름도 찾고, 조사 프롬프트의 한 줄이 빈 검색으로 조사를 끝내지 않게 합니다(ai-alerts.md).
                            # 끄면 전과 같습니다
+  pastHints: false         # (alpha) true면 이벤트가 하나도 없거나 PolicyViolation 이벤트만 있는 답이 더 앞을 읽을 로그 질의와 지표를
+                           # 알려 주고, 줄이 하나도 없는 Pod 로그 답이 그 로그의 줄이 언제부터 언제까지인지 말하며, issues가
+                           # PolicyViolation을 맨 뒤에 둡니다(features.md). 끄면 전과 같습니다
   ruleCards:               # 고장 종류마다 원인을 자주 찾아 주는 확인과 그 도구(features.md "규칙 카드")
     chat: false            # (alpha) true면 카드가 아는 고장을 적은 채팅 질문이 그 턴에 카드를 최대 두 장 받습니다
     investigations: true   # (alpha) true면 알림 조사의 첫 입력에 알림 이름과 라벨로 고른 카드가 최대 두 장 들어갑니다
@@ -325,12 +333,17 @@ features:
   nodeNeighbors:
     enabled: false           # (alpha) true면 AI 도구 get_node_metrics가 노드를 받고 GET /nodes/{name}/neighbors가 답합니다 — 그 노드의 CPU를
                              # 앞 구간 대비 누가 썼고 누구를 의심할지(cluster-requirements.md). 끄면 그 경로는 404입니다
+    busiestCPU: false        # (alpha) enabled와 함께 켜면 node 없는 get_node_metrics가 한 줄을 더합니다 — 최근 1시간에 노드들의 가장 바쁜
+                             # CPU와 그 노드에서 CPU를 가장 많이 쓴 파드(GET /metrics/nodes/busiest-cpu). 노드 하나의 구간도 1/30 이하의
+                             # 걸음으로 나눕니다. 이것만 켜면 아무것도 열리지 않습니다. 끄면 그 경로는 404입니다
   logSearch:
     queryMaxBytes: 0         # (alpha) 바이트 수를 정하면 AI의 loki_query가 먼저 저장소 색인에 양을 묻고, 넘으면 좁히는 법과 함께
                              # 거절합니다(operations.md). 0이면 묻지 않고 전처럼 질의합니다
   callGraph:
     enabled: false           # (alpha) true면 AI 도구 resource_graph가 include calls를 받습니다 — 트레이스 서비스 그래프 지표와 Hubble로 본
                              # 호출 관계(cluster-requirements.md). 끄면 include calls는 아무것도 읽지 않고 AI에 주지 않습니다
+    clientLatency: false     # (alpha) enabled와 함께 true면 호출마다 부른 쪽이 잰 p90을 받은 쪽 p90 옆에 붙입니다. 한 번에 질의 하나가
+                             # 늘어납니다(cluster-requirements.md §20). 끄면 그 질의를 하지 않고 답은 이 값이 없을 때와 같습니다
 
 # 멀티클러스터 부하/장애 격리 튜닝
 multicluster:
@@ -381,20 +394,25 @@ multicluster:
 | `ai.chat.maxSteps` | 20 | beta | 이 한도에 닿는 채팅 질문을 API 키와 Claude 구독으로 kind 개발 설치에서 돌린 경우 |
 | `ai.refuseRepeatedReads` | false | alpha | 끄고 켠 AI 평가(`scripts/ai-eval.py`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.toolResultDetails` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.pastHints` | false | alpha | 70분 뒤에 묻는 AI 평가의 `16_past_outage`를 끄고 켠 경우, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.redaction.numbered` | false | alpha | `ai.redaction.pii`와 함께 켠 상태로 kind 개발 설치에서 한 채팅, 끄고 켠 AI 평가 |
 | `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, true, false, [], [] | alpha | `chat`과 `investigations`를 하나씩 끄고 켠 AI 평가, 그 옆에서 `symptoms`를 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.toolResultsJSON` | false | alpha | 켠 상태의 AI 평가를 모델로 돌린 경우. 돌려 봄: kind에서 끄고 켠 심어 둔 지시 문제를 모델로 돌림(2026-11-25), 따른 답 0 |
 | `ai.timelineChanges` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.timelineChangesMore` | false | alpha | `ai.timelineChanges`와 함께 끄고 켠 AI 평가, 둘 다 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.causeQuestions` | false | alpha | 끄고 켠 AI 평가, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.faultOnset` | false | alpha | 끄고 켠 AI 평가(채팅과 `--alerts`), `ai.causeQuestions`가 있을 때와 없을 때, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.causeNaming` | false | alpha | 끄고 켠 AI 평가의 채팅과 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | 돌려 봄: 네트워크 플러그인이 밖으로 나가는 규칙을 지킨 kind에서 `allowListOnly`를 켬(2026-11-24). 모델 공급자 주소를 목록에 넣은 채팅은 답했고, 뺀 채팅은 공급자 오류로 끝남 |
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | 스위치를 하나씩 끄고 켠 AI 평가의 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.ledger`, `evidenceCheck`(켜면 다시 물을 때 `maxSteps`에 모델 호출 하나가 더해짐) | true, true | alpha | 하나씩 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.verdict`(`evidenceCheck`나 `ledger`와 함께, 둘 다 끄면 아무것도 안 함) | true | alpha | `evidenceCheck` 옆에서 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | 이 값만 끄고 켠 AI 평가. 돌려 봄: AI 스위치를 켠 kind 설치의 전체 e2e에서 `ai-anomaly-rank.spec.ts`(2026-11-25), 시험 넷 모두 통과 |
 | `features.nodeNeighbors.enabled` | false | alpha | 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `features.nodeNeighbors.busiestCPU`(`enabled` 없이는 아무것도 안 함) | false | alpha | `enabled`와 함께 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 둘 다 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | 값을 정한 채 kind 개발 설치에서 한 `loki_query` |
 | `features.callGraph.enabled` | false | alpha | 끄고 켠 AI 평가. 돌려 봄: kind의 전체 e2e에서 `ai-call-graph.spec.ts`(2026-11-25) |
+| `features.callGraph.clientLatency` | false | alpha | 클라이언트 히스토그램이 있는 Prometheus에서 켠 상태로 한 번도 안 돌림, `features.callGraph.enabled`를 켠 채 끄고 켠 AI 평가의 `07_one_segment_slow` |
 | `gateway.servedByHeader` | false | alpha | 켠 상태로 한 번도 안 돌림 |
 
 ## Redis 사용자

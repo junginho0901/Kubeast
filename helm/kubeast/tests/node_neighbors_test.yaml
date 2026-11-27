@@ -26,3 +26,39 @@ tests:
           path: data.NODE_NEIGHBORS_ENABLED
           value: "false"
         documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NODE_NEIGHBORS_BUSIEST_CPU
+          value: "false"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: keeps the busiest CPU off by default, with the neighbours on too
+    set:
+      features.nodeNeighbors.enabled: true
+    asserts:
+      - equal:
+          path: data.NODE_NEIGHBORS_BUSIEST_CPU
+          value: "false"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: takes the busiest CPU's switch from features.nodeNeighbors.busiestCPU and leaves the neighbours' as it is
+    set:
+      features.nodeNeighbors.busiestCPU: true
+    asserts:
+      - equal:
+          path: data.NODE_NEIGHBORS_BUSIEST_CPU
+          value: "true"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+      - equal:
+          path: data.NODE_NEIGHBORS_ENABLED
+          value: "false"
+        documentSelector: {path: metadata.name, value: kubeast-config}
+
+  - it: renders the busiest CPU off on values from a chart without it (helm upgrade --reuse-values)
+    set:
+      features.nodeNeighbors.enabled: true
+      features.nodeNeighbors.busiestCPU: null
+    asserts:
+      - equal:
+          path: data.NODE_NEIGHBORS_BUSIEST_CPU
+          value: "false"
+        documentSelector: {path: metadata.name, value: kubeast-config}

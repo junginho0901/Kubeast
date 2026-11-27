@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -389,6 +391,73 @@ func TestResourceGraphCalls(t *testing.T) {
 		t.Fatalf("include: %v", err)
 	}
 }
+
+// Where k8s-service asked for the callers' p90 (features.callGraph.clientLatency: the traces source has client_p90, read
+// or not) calls_note says how to read it and the calls with time outside their callee come before the edges; an answer
+// without it has the note and the bytes of before.
+func TestResourceGraphCallsClientLatency(t *testing.T) {
+	answer := func(client, outside string) string {
+		var edges []string
+		for i := 0; i < graphCallsCap; i++ {
+			edges = append(edges, `{"from":{"id":"Deployment/otel-demo/frontend","namespace":"otel-demo","kind":"Deployment","name":"frontend","matched_by":"workload_name"},`+
+				`"to":{"id":"Deployment/otel-demo/svc-`+strconv.Itoa(i)+`","namespace":"otel-demo","kind":"Deployment","name":"svc-`+strconv.Itoa(i)+`","matched_by":"workload_name"},`+
+				`"sources":["traces"],"requests":`+strconv.Itoa(1000-i)+`,"p90_ms":3.2`+client+`}`)
+		}
+		return `{"nodes":[{"id":"Pod/otel-demo/p","kind":"Pod","name":"p"}],"edges":[],"calls":{"available":true,"range":"1h0m0s",` +
+			`"sources":[{"source":"traces","read":true,"series":40` + outside + `},{"source":"network","read":false,"reason":"no_metrics"}],` +
+			`"paths":[],"suspects":[],"edges_total":40,"edges":[` + strings.Join(edges, ",") + `]`
+	}
+	get := func(body string) (string, map[string]interface{}) {
+		fakeK8sService(t, func(*http.Request) (int, string) { return 200, body })
+		out, err := handleResourceGraph(ctxFor("c1"), map[string]interface{}{"namespace": "otel-demo", "include": []interface{}{"calls"}}, bearer())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out, decode(t, out)
+	}
+	before, m := get(answer("", "") + `}}`)
+	if m["calls_note"] != graphCallsNote || strings.Contains(before, "client_p90") || strings.Contains(before, "time_outside_callee") {
+		t.Fatalf("off: %s", before[:400])
+	}
+	if sum := fmt.Sprintf("%x", sha256.Sum256([]byte(before))); sum != callsAnswerBefore {
+		t.Errorf("the answer without client_p90 is not the one before: %s", sum)
+	}
+
+	var outside []string
+	for i := 0; i < 5; i++ {
+		outside = append(outside, `{"from":"Deployment/otel-demo/frontend","to":"Deployment/otel-demo/product-catalog-`+strconv.Itoa(i)+`","client_p90_ms":1302.5,"p90_ms":3.2,"outside_ms":1299.3}`)
+	}
+	out, m := get(answer(`,"client_p90_ms":1302.5`, `,"client_p90":{"read":true,"series":40}`) + `,"time_outside_callee":[` + strings.Join(outside, ",") + `]}}`)
+	if m["calls_note"] != graphCallsNote+graphClientLatencyNote {
+		t.Fatalf("on: %v", m["calls_note"])
+	}
+	// before the edges, and with them whole inside the model's cut (ai-service keeps the first 6000 characters)
+	at, edges := strings.Index(out, `"time_outside_callee":[`), strings.Index(out, `"edges":[{"client_p90_ms"`)
+	if at < 0 || edges < 0 || at > edges || edges > 6000 {
+		t.Fatalf("time_outside_callee at %d, the edges at %d: %s", at, edges, out[:600])
+	}
+	calls := m["calls"].(map[string]interface{})
+	first := calls["edges"].([]interface{})[0].(map[string]interface{})
+	if first["client_p90_ms"] != 1302.5 || first["p90_ms"] != 3.2 || len(calls["time_outside_callee"].([]interface{})) != 5 {
+		t.Fatalf("calls: %v", calls)
+	}
+
+	// asked and not available: the note still says how to read that
+	_, m = get(answer("", `,"client_p90":{"read":false,"reason":"no_metrics","detail":"not available: no such metric"}`) + `}}`)
+	source := m["calls"].(map[string]interface{})["sources"].([]interface{})[0].(map[string]interface{})
+	if m["calls_note"] != graphCallsNote+graphClientLatencyNote || source["client_p90"].(map[string]interface{})["detail"] != "not available: no such metric" {
+		t.Fatalf("not available: %v", m)
+	}
+	for _, words := range []string{"client_p90_ms", "p90_ms", "time_outside_callee", "at most 5", "three times", "50 ms", "name both ends as candidates, not as causes", "to tell them apart", "a timeout", "a tenth of its calls", "connection_type", "database",
+		"virtual_node", "messaging_system", "client_p90 with read false", "no_metrics: not available", "truncated true"} {
+		if !strings.Contains(graphClientLatencyNote, words) {
+			t.Errorf("the note says nothing of %q", words)
+		}
+	}
+}
+
+// sha256 of the answer of TestResourceGraphCallsClientLatency without client_p90, as main 981d53f65 gives it.
+const callsAnswerBefore = "35b43500ff0646a5aafa339fc0c9b36248e233ff07d4c9ab4adb2cd834c6c6cb"
 
 // since_time and until_time give a fixed window, parsed as anomaly_rank parses them; without them since stays the range.
 func TestResourceGraphCallsWindow(t *testing.T) {

@@ -68,6 +68,11 @@ class InvestigationSettings:
     node_neighbors: bool = False
     # features.callGraph: the prompt asks for who calls whom (resource_graph include calls) and the cause → … → symptom path.
     call_paths: bool = False
+    # ai.faultOnset: the prompt asks when each finding began, and what was there before the alert is not its cause by itself.
+    fault_onset: bool = False
+    # ai.causeNaming: the rca block's instruction says how its causes are named (app/services/cause_naming.py); nothing with
+    # evidence_check and ledger off.
+    cause_naming: bool = False
 
 
 def _on(name: str) -> bool:
@@ -114,4 +119,6 @@ def load() -> InvestigationSettings:
         tool_result_details=switch.env_on("AI_TOOL_RESULT_DETAILS"),
         node_neighbors=switch.env_on("NODE_NEIGHBORS_ENABLED"),
         call_paths=switch.env_on("CALL_GRAPH_ENABLED"),  # the one switch rule, as tools.call_graph_on
+        fault_onset=switch.env_on("AI_FAULT_ONSET"),
+        cause_naming=switch.env_on("AI_CAUSE_NAMING"),
     )

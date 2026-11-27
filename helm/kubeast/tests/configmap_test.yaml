@@ -835,6 +835,31 @@ tests:
       - equal:
           path: data.CALL_GRAPH_ENABLED
           value: "true"
+      - equal:
+          path: data.CALL_GRAPH_CLIENT_LATENCY
+          value: "false"
+  - it: keeps the calls' client side off by default
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_CLIENT_LATENCY
+          value: "false"
+  - it: takes the calls' client side from features.callGraph.clientLatency
+    set:
+      features.callGraph.clientLatency: true
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_CLIENT_LATENCY
+          value: "true"
+      - equal:
+          path: data.CALL_GRAPH_ENABLED
+          value: "false"
+  - it: values without the calls' client side, as an earlier chart's --reuse-values keeps them, render this chart's default
+    set:
+      features.callGraph.clientLatency: null
+    asserts:
+      - equal:
+          path: data.CALL_GRAPH_CLIENT_LATENCY
+          value: "false"
 
   - it: renders the step 0 narrowing as this chart's default for values from a chart without it (--reuse-values)
     set:
@@ -893,6 +918,47 @@ tests:
     asserts:
       - equal:
           path: data.AI_CAUSE_QUESTIONS
+          value: "false"
+  - it: keeps when a failure began off by default
+    asserts:
+      - equal:
+          path: data.AI_FAULT_ONSET
+          value: "false"
+  - it: turns when a failure began on from ai.faultOnset
+    set:
+      ai.faultOnset: true
+    asserts:
+      - equal:
+          path: data.AI_FAULT_ONSET
+          value: "true"
+  - it: values without ai.faultOnset, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.faultOnset: null
+    asserts:
+      - equal:
+          path: data.AI_FAULT_ONSET
+          value: "false"
+  - it: keeps how answers name causes off by default
+    asserts:
+      - equal:
+          path: data.AI_CAUSE_NAMING
+          value: "false"
+  - it: turns how answers name causes on from ai.causeNaming, on its own
+    set:
+      ai.causeNaming: true
+    asserts:
+      - equal:
+          path: data.AI_CAUSE_NAMING
+          value: "true"
+      - equal:
+          path: data.AI_CAUSE_QUESTIONS
+          value: "false"
+  - it: values without ai.causeNaming, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.causeNaming: null
+    asserts:
+      - equal:
+          path: data.AI_CAUSE_NAMING
           value: "false"
 
   - it: values without ai.redaction.numbered, as an earlier chart's --reuse-values keeps them, render it off
@@ -960,6 +1026,33 @@ tests:
       - equal:
           path: data.AI_TOOL_RESULT_DETAILS
           value: "true"
+
+  - it: keeps the past hints off by default, with the tool result details on too
+    set:
+      ai.toolResultDetails: true
+    asserts:
+      - equal:
+          path: data.AI_PAST_HINTS
+          value: "false"
+
+  - it: passes the past hints switch as it is set and leaves the tool result details' as it is
+    set:
+      ai.pastHints: true
+    asserts:
+      - equal:
+          path: data.AI_PAST_HINTS
+          value: "true"
+      - equal:
+          path: data.AI_TOOL_RESULT_DETAILS
+          value: "false"
+
+  - it: values without ai.pastHints, as an earlier chart's --reuse-values keeps them, render it off
+    set:
+      ai.pastHints: null
+    asserts:
+      - equal:
+          path: data.AI_PAST_HINTS
+          value: "false"
 
   - it: renders every 0.7.9 AI switch off when the values set it off
     set:

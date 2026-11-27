@@ -18,7 +18,8 @@ const emptyAnswerCasesFile = "../ai-service/tests/fixtures/empty_answers.json"
 type emptyAnswerCase struct {
 	Name    string `json:"name"`
 	Tool    string `json:"tool"`
-	Details bool   `json:"details"` // AI_TOOL_RESULT_DETAILS
+	Details bool   `json:"details"`        // AI_TOOL_RESULT_DETAILS
+	Past    bool   `json:"past,omitempty"` // AI_PAST_HINTS
 	Answer  string `json:"answer"`
 	Holds   string `json:"holds"` // something, nothing (it read and found none) or unread (it did not read)
 }
@@ -90,6 +91,20 @@ func emptyAnswerCaseSet(t *testing.T) []emptyAnswerCase {
 		{name: "a search of logs past a container that has not started", tool: "k8s_get_pod_logs", args: everyGrepped, kubectl: of("app side", sideWaits, appWrote), holds: "nothing"},
 		{name: "a log without a line past a container that has not started", tool: "k8s_get_pod_logs", args: every, kubectl: of("app side", sideWaits, appEmpty), holds: "nothing"},
 		{name: "a log that is gone past a container that has not started", tool: "k8s_get_pod_logs", args: every, kubectl: of("app side", sideWaits, appGone), holds: "unread"},
+		{name: "an empty log of a window", tool: "k8s_get_pod_logs", args: args{"pod_name": "web-1", "namespace": "shop", "since": "10m"}, kubectl: func(a []string) (string, error) {
+			if has(a, "--timestamps") {
+				return "2026-11-25T04:28:58.000000000Z ready", nil
+			}
+			return "", nil
+		}, holds: "nothing"},
+		{name: "a search without a match, of lines with times", tool: "k8s_get_pod_logs", args: grepped, kubectl: func(a []string) (string, error) {
+			if has(a, "--timestamps") {
+				return "2026-11-25T04:28:58.000000000Z ready", nil
+			}
+			return "ready\n", nil
+		}, holds: "nothing"},
+		{name: "no event", tool: "k8s_get_events", args: args{"namespace": "shop"}, status: 200, body: noEvents, holds: "nothing"},
+		{name: "an admission policy's events alone", tool: "k8s_get_events", args: args{"namespace": "shop"}, status: 200, body: eventsReply(policyEvent), holds: "something"},
 		{name: "a list of no name", tool: "k8s_get_resources", args: names, kubectl: kubectlSays(""), holds: "nothing"},
 		{name: "a list of no event's name", tool: "k8s_get_resources", args: args{"resource_type": "events", "all_namespaces": true, "output": "name"}, kubectl: kubectlSays(""), holds: "nothing"},
 		{name: "a list of a name", tool: "k8s_get_resources", args: names, kubectl: kubectlSays("configmap/web\n"), holds: "something"},
@@ -106,6 +121,7 @@ func emptyAnswerCaseSet(t *testing.T) []emptyAnswerCase {
 	} {
 		for _, details := range []bool{false, true} {
 			withDetails(t, details)
+			t.Setenv("AI_PAST_HINTS", "")
 			fakeK8sService(t, func(*http.Request) (int, string) {
 				if c.body == "" {
 					return 200, noEvents
@@ -121,6 +137,13 @@ func emptyAnswerCaseSet(t *testing.T) []emptyAnswerCase {
 			answer := runTool(t, ctxFor("empty-answers"), c.tool, c.args)
 			masked, _ := redactToolOutput(answer)
 			out = append(out, emptyAnswerCase{Name: c.name, Tool: c.tool, Details: details, Answer: masked, Holds: c.holds})
+			// the tools AI_PAST_HINTS adds to
+			if c.tool != "k8s_get_pod_logs" && c.tool != "k8s_get_events" && c.tool != "k8s_get_resources" {
+				continue
+			}
+			t.Setenv("AI_PAST_HINTS", "true")
+			masked, _ = redactToolOutput(runTool(t, ctxFor("empty-answers"), c.tool, c.args))
+			out = append(out, emptyAnswerCase{Name: c.name, Tool: c.tool, Details: details, Past: true, Answer: masked, Holds: c.holds})
 		}
 	}
 	return out

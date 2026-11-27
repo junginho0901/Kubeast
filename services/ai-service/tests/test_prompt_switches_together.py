@@ -13,6 +13,8 @@ LINES = {
     "ANOMALY_RANK_ENABLED": prompts.ANOMALY_RANK_LINES,
     "NODE_NEIGHBORS_ENABLED": prompts.NODE_NEIGHBORS_LINES,
     "AI_CAUSE_QUESTIONS": prompts.CAUSE_QUESTION_LINES,
+    "AI_FAULT_ONSET": {prompts._NAMESPACE_HEADING: prompts.ONSET_SECTION + "\n\n" + prompts._NAMESPACE_HEADING},
+    "AI_CAUSE_NAMING": prompts.CAUSE_NAMING_LINES,
 }
 SWITCHES = (*LINES, "CALL_GRAPH_ENABLED")
 SETS = [on for n in range(len(SWITCHES) + 1) for on in itertools.combinations(SWITCHES, n)]
@@ -33,6 +35,8 @@ def test_only_these_lines_are_taken_by_two_switches():
         ("AI_TIMELINE_CHANGES", "AI_TIMELINE_CHANGES_MORE"): sorted([prompts._TIMELINE_GUIDE, prompts._TIMELINE_SIGNATURE]),
         # the order rule is put after the line as the rules for why questions word it
         ("ANOMALY_RANK_ENABLED", "AI_CAUSE_QUESTIONS"): [prompts._STATE_RULE],
+        # when a failure began is a section after the rules for why questions
+        ("AI_CAUSE_QUESTIONS", "AI_FAULT_ONSET"): [prompts._NAMESPACE_HEADING],
     }
 
 
@@ -42,6 +46,7 @@ def test_each_switch_that_is_on_says_its_lines(monkeypatch, on):
     lines = text.split("\n")
     changes, more = "AI_TIMELINE_CHANGES" in on, "AI_TIMELINE_CHANGES_MORE" in on
     anomaly, calls, cause = "ANOMALY_RANK_ENABLED" in on, "CALL_GRAPH_ENABLED" in on, "AI_CAUSE_QUESTIONS" in on
+    onset = "AI_FAULT_ONSET" in on
     rule = (prompts.ANOMALY_RANK_RULE_WITH_CHANGES if changes else prompts.ANOMALY_RANK_RULE) if anomaly else (
         prompts.CALL_GRAPH_RULE_WITH_CHANGES if changes else prompts.CALL_GRAPH_RULE) if calls else None
     expected = {}
@@ -56,6 +61,10 @@ def test_each_switch_that_is_on_says_its_lines(monkeypatch, on):
         expected.update(prompts.NODE_NEIGHBORS_LINES)
     if cause:
         expected.update(prompts.CAUSE_QUESTION_LINES)
+    if onset:
+        expected[prompts._NAMESPACE_HEADING] = (prompts.CAUSE_SECTION + "\n\n" if cause else "") + prompts.ONSET_SECTION + "\n\n" + prompts._NAMESPACE_HEADING
+    if "AI_CAUSE_NAMING" in on:
+        expected.update(prompts.CAUSE_NAMING_LINES)
     if rule is not None:
         expected[prompts._STATE_RULE] = (prompts.CAUSE_STATE_RULE if cause else prompts._STATE_RULE) + "\n" + rule
     assert text == "\n".join(expected.get(line, line) for line in prompts.SYSTEM_MESSAGE.split("\n"))
@@ -66,6 +75,10 @@ def test_each_switch_that_is_on_says_its_lines(monkeypatch, on):
         assert "get_node_metrics(node" not in text
     if not cause:
         assert "원인을 묻는 질문" not in text
+    if not onset:
+        assert "전부터 있던" not in text
+    if "AI_CAUSE_NAMING" not in on:
+        assert "원인을 적는 법" not in text and "dependency_slow" not in text
     if not anomaly:
         assert "anomaly_rank" not in text
     assert (prompts.SYSTEM_MESSAGE == text) is (not set(on) - {"AI_TIMELINE_CHANGES_MORE"})

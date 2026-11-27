@@ -14,7 +14,7 @@ from app.services.investigation import answers
 from tests.test_investigation_verdict import NONE_FOUND, run_of
 
 CASES = json.loads((Path(__file__).parent / "fixtures" / "empty_answers.json").read_text())
-NAMES = [f"{c['tool']}: {c['name']}{', details' if c['details'] else ''}" for c in CASES]
+NAMES = [f"{c['tool']}: {c['name']}{', details' if c['details'] else ''}{', past hints' if c.get('past') else ''}" for c in CASES]
 
 
 def holds(tool, raw):

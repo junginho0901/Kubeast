@@ -220,12 +220,21 @@ ai:
   causeQuestions: false    # (alpha) the chat's rules for why questions: what to check before answering, and an answer of cause found,
                            # no fault found or cannot tell (features.md); best on together with toolResultDetails, without which the result
                            # of a name not found still says to stop searching and ask; off: as before
+  faultOnset: false        # (alpha) the chat and alert investigations say when each failure began and list one that was there before apart from
+                           # the cause; issues and anomaly_rank answer since when a failing object's state is known (features.md); off: as before
+  causeNaming: false       # (alpha) how an answer names its causes in AI Chat and in an investigation's rca block: the object that holds
+                           # what is wrong and not the one the symptom shows on, its kind with one line of meaning each, every independent
+                           # cause, and two ends of a call the results do not tell apart as candidates, not causes (features.md,
+                           # ai-alerts.md); off: as before
   refuseRepeatedReads: false # (alpha) true: a read made again with the same tool and arguments in one chat answer or investigation, less
                              # than 60 s after the first answered, is not run and the model is told where it has the result; off: as before
   toolResultDetails: false # (alpha) true: tool results say "M of N" for a cut answer, the window read when the call named none, why an empty
                            # one may be empty and the console paths of the objects they name, from what they hold (features.md);
                            # k8s_find_resource looks among namespace names too, and one line of an investigation's prompt says an empty
                            # search does not end it (ai-alerts.md); off: as before
+  pastHints: false         # (alpha) true: an event read that holds nothing, or nothing but PolicyViolation events, names the log query and the
+                           # metrics that reach further back; a pod log read without a line says from when to when its lines run; issues
+                           # lists the PolicyViolation findings last (features.md); off: as before
   ruleCards:               # per kind of failure, the checks that often find its cause and their tools (features.md "Rule cards")
     chat: false            # (alpha) true: a chat question naming a failure a card knows gets at most two cards for that turn
     investigations: true   # (alpha) true: an alert investigation's first message holds at most two, picked by the alert's name and labels
@@ -335,12 +344,17 @@ features:
   nodeNeighbors:
     enabled: false           # (alpha) true: the AI tool get_node_metrics takes a node and GET /nodes/{name}/neighbors answers, what used that
                              # node's CPU from the window before and whom to suspect (cluster-requirements.md); off: the route answers 404
+    busiestCPU: false        # (alpha) true, with enabled: get_node_metrics without a node adds one line, the nodes' busiest CPU in the last
+                             # hour and the pods that used the most CPU on its node (GET /metrics/nodes/busiest-cpu), and a node's window is
+                             # cut in steps of at most a thirtieth of it; alone it opens nothing; off: the route answers 404
   logSearch:
     queryMaxBytes: 0         # (alpha) a number of bytes: the AI's loki_query asks the store's index first and is refused past it, with how
                              # to narrow it (operations.md); 0: not asked, the query runs as before
   callGraph:
     enabled: false           # (alpha) true: the AI tool resource_graph takes include calls, who calls whom from the traces' service graph
                              # metrics and Hubble (cluster-requirements.md); off: include calls reads nothing and the AI is not offered it
+    clientLatency: false     # (alpha) true, with enabled: each call also has the p90 its caller measured, beside its callee's, one query
+                             # more a read (cluster-requirements.md §20); off: that query is not made and the answer is as without it
 
 # Multi-cluster load/failure isolation tuning
 multicluster:
@@ -391,20 +405,25 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `ai.chat.maxSteps` | 20 | beta | A chat question that reaches it, on the kind dev install, with an API key and on a Claude subscription |
 | `ai.refuseRepeatedReads` | false | alpha | The AI evaluation (`scripts/ai-eval.py`) with it off and on, and a run on the kind dev install with it on |
 | `ai.toolResultDetails` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
+| `ai.pastHints` | false | alpha | The AI evaluation's `16_past_outage` asked 70 minutes after with it off and on, and a run on the kind dev install with it on |
 | `ai.redaction.numbered` | false | alpha | A chat on the kind dev install with it and `ai.redaction.pii` on, and the AI evaluation with it off and on |
 | `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, true, false, [], [] | alpha | The AI evaluation with `chat` and `investigations` each off and on, then with `symptoms` off and on beside them, and a run on the kind dev install with them on |
 | `ai.toolResultsJSON` | false | alpha | The AI evaluation with it on, against a model. Tested: the planted instruction cases against a model on kind with it off and on (2026-11-25), none followed |
 | `ai.timelineChanges` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
 | `ai.timelineChangesMore` | false | alpha | The AI evaluation with it off and on beside `ai.timelineChanges`, and a run on the kind dev install with both on |
 | `ai.causeQuestions` | false | alpha | The AI evaluation with it off and on, the planted instruction cases with it on, and a run on the kind dev install with it on |
+| `ai.faultOnset` | false | alpha | The AI evaluation (chat and `--alerts`) with it off and on, with and without `ai.causeQuestions`, the planted instruction cases with it on, and a run on the kind dev install with it on |
+| `ai.causeNaming` | false | alpha | The AI evaluation with it off and on, chat and alert investigations (`scripts/ai-eval.py --alerts`), the planted instruction cases with it on, and a run on the kind dev install with it on |
 | `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | Tested: `allowListOnly` on kind, whose network plugin enforced the egress rules (2026-11-24): the chat answered with the model provider's addresses listed and ended with the provider's error without them |
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | The alert investigations of the AI evaluation (`scripts/ai-eval.py --alerts`) with each switch off and on, and a run on the kind dev install with them on |
 | `features.alertInvestigation.ledger`, `evidenceCheck` (on, either adds one model call to `maxSteps` when it asks again) | true, true | alpha | The alert investigations of the AI evaluation with each off and on, and a run on the kind dev install with them on |
 | `features.alertInvestigation.verdict` (with `evidenceCheck` or `ledger`; nothing with both off) | true | alpha | The alert investigations of the AI evaluation with it off and on beside `evidenceCheck`, and a run on the kind dev install with it on |
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | The AI evaluation with it alone off and on. Tested: the e2e `ai-anomaly-rank.spec.ts` in a whole e2e run on a kind install with the AI switches on (2026-11-25), its four tests passing |
 | `features.nodeNeighbors.enabled` | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on, and a run on the kind dev install with it on |
+| `features.nodeNeighbors.busiestCPU` (nothing without `enabled`) | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on beside `enabled`, and a run on the kind dev install with both on |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | A `loki_query` on the kind dev install with it set |
 | `features.callGraph.enabled` | false | alpha | The AI evaluation with it off and on. Tested: the e2e `ai-call-graph.spec.ts` in whole e2e runs on kind (2026-11-25) |
+| `features.callGraph.clientLatency` | false | alpha | Any run with it on against a Prometheus that holds the client histogram, and the AI evaluation's `07_one_segment_slow` with it off and on beside `features.callGraph.enabled` |
 | `gateway.servedByHeader` | false | alpha | Any run with it on |
 
 ## Redis users

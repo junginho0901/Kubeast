@@ -393,6 +393,7 @@ func handleIssues(ctx context.Context, args map[string]interface{}, headers http
 	if w := argInt(args, "window_minutes", 0); w > 0 {
 		q.Set("window", strconv.Itoa(w))
 	}
+	askSince(q)
 	status, body, err := k8sServiceGet(ctx, headers, "/issues", q)
 	if err != nil {
 		return "", err
@@ -449,6 +450,10 @@ func handleIssues(ctx context.Context, args map[string]interface{}, headers http
 		counts[sev]++
 		kept = append(kept, issue)
 	}
+	listedLast := ""
+	if pastHints() {
+		kept, listedLast = policyViolationsLast(kept, len(notRead) == 0 && severity == "")
+	}
 	total := len(kept)
 	truncated := false
 	if len(kept) > issuesCap {
@@ -475,5 +480,8 @@ func handleIssues(ctx context.Context, args map[string]interface{}, headers http
 	} else if total == 0 {
 		result["hint"] = "Nothing is failing in the checked scope right now (pods, workloads, nodes, PVCs, Warning events in the window)."
 	}
-	return marshalOrdered(result, []string{"not_read", "not_read_note"}, nil)
+	if listedLast != "" {
+		result["listed_last"] = listedLast
+	}
+	return marshalOrdered(result, []string{"not_read", "not_read_note", "listed_last"}, nil)
 }

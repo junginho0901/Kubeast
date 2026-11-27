@@ -538,7 +538,10 @@ func handleResourceGraph(ctx context.Context, args map[string]interface{}, heade
 			calls["edges_total"] = total // k8s-service's count before its own cap
 		}
 		reply["calls_note"] = graphCallsNote
-		ordered, err := marshalOrdered(calls, []string{"available", "reason", "range", "window", "sources", "paths", "no_start", "suspects", "suspects_total", "edges_total", "truncated"}, []string{"edges"})
+		if callsHaveClientLatency(calls) {
+			reply["calls_note"] = graphCallsNote + graphClientLatencyNote
+		}
+		ordered, err := marshalOrdered(calls, []string{"available", "reason", "range", "window", "sources", "paths", "no_start", "suspects", "suspects_total", "time_outside_callee", "edges_total", "truncated"}, []string{"edges"})
 		if err != nil {
 			return "", err
 		}
@@ -602,6 +605,29 @@ const graphCallsNote = "calls: who calls whom over the range, from the traces' s
 	"one before); no_start cycle means every failing workload calls another failing one, so no path starts (read failing_callees). " +
 	"drop_reasons are Hubble's reasons for dropped connections (POLICY_DENIED: a network policy refused them; it may have refused them " +
 	"before the failure too). A missing edge is not proof there is no call (no traces, no Hubble metrics)."
+
+// graphClientLatencyNote goes on after graphCallsNote where k8s-service asked for the callers' p90
+// (features.callGraph.clientLatency).
+const graphClientLatencyNote = " client_p90_ms is the p90 the caller measured for the same calls, beside p90_ms, its callee's. About equal: the time is " +
+	"spent in the callee or in what it calls. Well above it: outside the callee's handling, between the two (the network, a proxy, waiting " +
+	"for a connection) or in the caller; it does not show which is at fault, so name both ends as candidates, not as causes, and read a " +
+	"trace of that call to tell them apart. Well below it: the caller stopped waiting (a timeout) " +
+	"or the callee worked on after answering. Both cover the whole range, so slowness of fewer than a tenth of its calls does not show: ask " +
+	"over the slow time alone. time_outside_callee lists the edges (at most 5, the largest difference first) whose caller's p90 is at least " +
+	"three times the callee's and 50 ms above it. An edge with connection_type (database, virtual_node, messaging_system) is not the two ends of " +
+	"one call: do not compare its two. The traces source's client_p90 with read false says why there is no client_p90_ms (no_metrics: not " +
+	"available in this Prometheus), which says nothing of the callers; truncated true there: some edges have none."
+
+// callsHaveClientLatency: k8s-service asked for the callers' p90 and says on the traces source what came of it.
+func callsHaveClientLatency(calls map[string]interface{}) bool {
+	sources, _ := calls["sources"].([]interface{})
+	for _, s := range sources {
+		if m, ok := s.(map[string]interface{}); ok && m["client_p90"] != nil {
+			return true
+		}
+	}
+	return false
+}
 
 // handleNetworkPolicyCheck asks k8s-service whether NetworkPolicy allows src
 // to reach dst; it reads the policies, pods and namespaces as the user.

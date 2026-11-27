@@ -27,7 +27,14 @@ const (
 	RequestsMetric = "traces_service_graph_request_total"
 	FailedMetric   = "traces_service_graph_request_failed_total"
 	ServerSeconds  = "traces_service_graph_request_server_seconds_bucket"
+	// ClientSeconds is read only with features.callGraph.clientLatency.
+	ClientSeconds = "traces_service_graph_request_client_seconds_bucket"
 )
+
+// connectionLabel says what a service graph series pairs: empty for a client span and its server span, else database,
+// virtual_node or messaging_system, whose two sides are not the two ends of one call (a database's server side repeats
+// the client span, a virtual node's untraced side is 0, a queue's are the send and the receive).
+const connectionLabel = "connection_type"
 
 // Caps of an answer.
 const (
@@ -37,6 +44,16 @@ const (
 	MaxPaths    = 5
 	MaxDepth    = 6
 	MaxSuspects = 10
+	// MaxOutside caps TimeOutsideCallee.
+	MaxOutside = 5
+)
+
+// A call is named in TimeOutsideCallee when its caller's 90th percentile is at least OutsideRatio times its callee's and
+// OutsideMinMs above it. Both are interpolated inside histogram buckets, so two calls a moment apart on either side of a
+// bound read about twice each other in Tempo's default buckets, and under 50 ms over four times in the OpenTelemetry connector's.
+const (
+	OutsideRatio = 3
+	OutsideMinMs = 50
 )
 
 // Thresholds a call edge counts as failing at: both, so a single error on a quiet edge does not.
@@ -59,6 +76,7 @@ const (
 	ReasonNamespaceLimited = "namespace_limited" // a grant limited to namespaces reads no Prometheus series of other namespaces
 	ReasonPermission       = "permission"        // resource.networkflow.read is not held, as the traffic lines ask
 	ReasonFailed           = "failed"            // the read failed (detail says why)
+	ReasonNoCalls          = "no_calls"          // ClientP90: the traces count no call in the window, so it was not asked
 )
 
 // Unscoped ends a matched_by placed by name where the metric named no namespace for that end: a service of the same
@@ -67,6 +85,9 @@ const Unscoped = "_unscoped"
 
 // DetailUnscoped is the trace source's detail when the metric has no namespace labels.
 const DetailUnscoped = "the metric has no namespace dimension: services are placed by name, and a service of the same name in another namespace counts here (matched_by ends in " + Unscoped + ")"
+
+// DetailNoClientSeconds is ClientP90's detail when its answer held nothing for calls the traces do count.
+const DetailNoClientSeconds = "not available: this Prometheus has no " + ClientSeconds + " series for these calls, so no edge has client_p90_ms"
 
 // NoStartCycle: workloads fail but each calls another failing one, so no path has a start.
 const NoStartCycle = "cycle"
@@ -102,6 +123,8 @@ type Shape struct {
 	Namespace string
 	// Workloads: the client_/server_ label suffixes naming a workload, with their kind.
 	Workloads map[string]string
+	// Connection: the metric has connectionLabel.
+	Connection bool
 }
 
 // DetectShape reads the metric's label names; ok is false without client and server. namespaceAttribute is the trace
@@ -114,7 +137,7 @@ func DetectShape(labels []string, namespaceAttribute string) (Shape, bool) {
 	if !has["client"] || !has["server"] {
 		return Shape{}, false
 	}
-	s := Shape{Workloads: map[string]string{}}
+	s := Shape{Workloads: map[string]string{}, Connection: has[connectionLabel]}
 	if ns := labelName(namespaceAttribute); has["client_"+ns] && has["server_"+ns] {
 		s.Namespace = ns
 	}
@@ -143,9 +166,10 @@ func (s Shape) by() []string {
 }
 
 // Queries are the instant queries of one answer: requests and failed requests over the range, and the server side's
-// 90th percentile when the metric has its histogram.
+// 90th percentile when the metric has its histogram. ClientP90 is the client side's, by connectionLabel too when the
+// metric has it.
 type Queries struct {
-	Requests, Failed, P90 string
+	Requests, Failed, P90, ClientP90 string
 }
 
 // BuildQueries: with the namespace labels, the edges with either end in the namespace (the halves joined with or);
@@ -164,15 +188,21 @@ func BuildQueries(s Shape, namespace string, rng time.Duration) Queries {
 		return half("server") + " or " + half("client")
 	}
 	q := Queries{Requests: sum(RequestsMetric, "increase"), Failed: sum(FailedMetric, "increase")}
-	bucketBy := "le, " + by
-	if s.Namespace == "" {
-		q.P90 = fmt.Sprintf("topk(%d, histogram_quantile(0.9, sum by (%s) (rate(%s[%ds]))))", MaxSeries, bucketBy, ServerSeconds, secs)
-	} else {
-		half := func(end string) string {
-			return fmt.Sprintf(`sum by (%s) (rate(%s{%s_%s="%s"}[%ds]))`, bucketBy, ServerSeconds, end, s.Namespace, namespace, secs)
+	p90 := func(metric, by string) string {
+		bucketBy := "le, " + by
+		if s.Namespace == "" {
+			return fmt.Sprintf("topk(%d, histogram_quantile(0.9, sum by (%s) (rate(%s[%ds]))))", MaxSeries, bucketBy, metric, secs)
 		}
-		q.P90 = fmt.Sprintf("histogram_quantile(0.9, %s or %s)", half("server"), half("client"))
+		half := func(end string) string {
+			return fmt.Sprintf(`sum by (%s) (rate(%s{%s_%s="%s"}[%ds]))`, bucketBy, metric, end, s.Namespace, namespace, secs)
+		}
+		return fmt.Sprintf("histogram_quantile(0.9, %s or %s)", half("server"), half("client"))
 	}
+	q.P90 = p90(ServerSeconds, by)
+	if s.Connection {
+		by += ", " + connectionLabel
+	}
+	q.ClientP90 = p90(ClientSeconds, by)
 	return q
 }
 
@@ -342,6 +372,14 @@ func (e End) outsideName() string {
 	return "unnamed"
 }
 
+// title names an end: a box by its ID.
+func (e End) title() string {
+	if e.ID != "" {
+		return e.ID
+	}
+	return e.outsideName()
+}
+
 // placeService places a trace service name, with the namespace and workload labels when the metric had them. Without a
 // namespace for the end, a name is looked up in this namespace only, so matched_by says Unscoped.
 func (ix *Index) placeService(service, namespace string, workloads map[string]string) End {
@@ -402,7 +440,7 @@ func (ix *Index) placeTraffic(e nettraffic.End) End {
 	return End{Namespace: e.Namespace, Kind: e.Kind, Name: e.Name, Outside: e.Outside, Unnamed: e.Unnamed}
 }
 
-// Edge is a call from one end to another over the range. Requests, Errors and P90Ms come from the traces;
+// Edge is a call from one end to another over the range. Requests, Errors, P90Ms and ClientP90Ms come from the traces;
 // Connections (TCP connections opened), Dropped and DropReasons (the traffic lines' reasons, most first) from the
 // traffic lines.
 type Edge struct {
@@ -416,6 +454,10 @@ type Edge struct {
 	Connections int64             `json:"connections,omitempty"`
 	Dropped     int64             `json:"dropped,omitempty"`
 	DropReasons []netdrops.Reason `json:"drop_reasons,omitempty"`
+	// ClientP90Ms is the 90th percentile the caller measured, beside P90Ms, the callee's (Traces.ClientP90 read). With
+	// ConnectionType (connectionLabel) the two are not two ends of one call.
+	ClientP90Ms    float64 `json:"client_p90_ms,omitempty"`
+	ConnectionType string  `json:"connection_type,omitempty"`
 	// ErrorsUnknown: a series of the edge is not in the failed answer, which came back full (Traces.full), so its
 	// failed calls were not read. Errors and ErrorRatio then hold the failed calls read, at most what failed, and the
 	// answer gives them as null.
@@ -440,6 +482,20 @@ func (e *Edge) weight() int64 { return e.Requests + e.Connections + e.Dropped }
 // Failing: calls into To fail often enough to count, or the network drops them.
 func (e *Edge) Failing() bool {
 	return e.Errors >= FailingErrors && e.ErrorRatio >= FailingRatio || e.Dropped > 0
+}
+
+// addClientP90 takes the client side's 90th percentile of one series of the edge: a traced call's before one whose two
+// sides are not the two ends of one call, else the slowest.
+func (e *Edge) addClientP90(seconds float64, connection string) {
+	ms := math.Round(seconds*1000*10) / 10
+	if ms <= 0 {
+		return
+	}
+	plain, had := connection == "", e.ClientP90Ms > 0 && e.ConnectionType == ""
+	if had && !plain || had == plain && ms <= e.ClientP90Ms {
+		return
+	}
+	e.ClientP90Ms, e.ConnectionType = ms, connection
 }
 
 type builder struct {
@@ -491,12 +547,14 @@ func addSource(e *Edge, source string) {
 	e.Sources = append(e.Sources, source)
 }
 
-// Traces are the three answers of the trace queries.
+// Traces are the answers of the trace queries.
 type Traces struct {
 	Shape    Shape
 	Requests []Sample
 	Failed   []Sample
 	P90      []Sample
+	// ClientP90 is the client side's, empty when it was not asked (features.callGraph.clientLatency).
+	ClientP90 []Sample
 }
 
 // full: the answer of a query capped at MaxSeries (no namespace labels) came back with that many series, each above 0,
@@ -516,6 +574,9 @@ func (tr *Traces) full(answer []Sample) bool {
 // Cut: a capped query came back full, so an edge of the namespace below the busiest MaxSeries may be missing
 // (requests), an edge's failed calls may not have been read (failed: its errors are not known) or its 90th percentile (p90).
 func (tr *Traces) Cut() bool { return tr.full(tr.Requests) || tr.full(tr.Failed) || tr.full(tr.P90) }
+
+// ClientCut: the client side's answer came back full, so an edge's client_p90_ms may not have been read.
+func (tr *Traces) ClientCut() bool { return tr.full(tr.ClientP90) }
 
 // seriesKey names a series by its labels: the three queries sum by the same labels, so an edge's series has one key in each.
 func seriesKey(labels map[string]string) string {
@@ -592,6 +653,15 @@ func Build(ix *Index, tr *Traces, traffic []nettraffic.Line) (edges []Edge, tota
 				e.P90Ms = math.Round(s.Value*1000*10) / 10
 			}
 		}
+		for _, s := range tr.ClientP90 {
+			if math.IsNaN(s.Value) || math.IsInf(s.Value, 0) {
+				continue
+			}
+			from, to := place(s.Labels)
+			if e, ok := b.edges[from.key()+"→"+to.key()]; ok {
+				e.addClientP90(s.Value, s.Labels[connectionLabel])
+			}
+		}
 	}
 	for _, l := range traffic {
 		from, to := ix.placeTraffic(l.From), ix.placeTraffic(l.To)
@@ -629,6 +699,35 @@ func Build(ix *Index, tr *Traces, traffic []nettraffic.Line) (edges []Edge, tota
 		edges = append(edges, *e)
 	}
 	return edges, total, truncated
+}
+
+// Outside is a call whose caller waited much longer than its callee worked (the 90th percentiles of both): that time is
+// spent between the two or in the caller.
+type Outside struct {
+	From        string  `json:"from"`
+	To          string  `json:"to"`
+	ClientP90Ms float64 `json:"client_p90_ms"`
+	P90Ms       float64 `json:"p90_ms"`
+	OutsideMs   float64 `json:"outside_ms"`
+}
+
+// TimeOutsideCallee lists the edges whose ClientP90Ms is far above their P90Ms (OutsideRatio, OutsideMinMs), the largest
+// difference first, at most MaxOutside. An edge with one side not read, or whose sides are not the two ends of one call
+// (ConnectionType), is not compared.
+func TimeOutsideCallee(edges []Edge) []Outside {
+	var out []Outside
+	for _, e := range edges {
+		if e.P90Ms <= 0 || e.ConnectionType != "" || e.ClientP90Ms < OutsideRatio*e.P90Ms || e.ClientP90Ms-e.P90Ms < OutsideMinMs {
+			continue
+		}
+		out = append(out, Outside{From: e.From.title(), To: e.To.title(), ClientP90Ms: e.ClientP90Ms, P90Ms: e.P90Ms,
+			OutsideMs: math.Round((e.ClientP90Ms-e.P90Ms)*10) / 10})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].OutsideMs > out[j].OutsideMs })
+	if len(out) > MaxOutside {
+		out = out[:MaxOutside]
+	}
+	return out
 }
 
 // Suspect is a failing workload of the graph and where it stands among the calls.
@@ -798,6 +897,18 @@ type SourceState struct {
 	// Truncated: a trace query capped at MaxSeries came back full (Traces.Cut): an edge of the namespace may be
 	// missing (the answer's truncated too), an edge's errors not known (null) or its p90_ms not read.
 	Truncated bool `json:"truncated,omitempty"`
+	// ClientP90: what came of the client side's 90th percentile (the traces read, features.callGraph.clientLatency on).
+	ClientP90 *ClientP90 `json:"client_p90,omitempty"`
+}
+
+// ClientP90 says whether the client side's 90th percentile was read and, when not, why. Not read is no failure of the
+// traces: the rest of the answer stays.
+type ClientP90 struct {
+	Read      bool   `json:"read"`
+	Reason    string `json:"reason,omitempty"`
+	Detail    string `json:"detail,omitempty"`
+	Series    int    `json:"series,omitempty"`
+	Truncated bool   `json:"truncated,omitempty"` // Traces.ClientCut
 }
 
 // Result is the calls part of a graph answer. Suspects and Paths come before the edges, so a cut answer keeps them.
@@ -818,6 +929,8 @@ type Result struct {
 	EdgesTotal    int    `json:"edges_total"`
 	Truncated     bool   `json:"truncated,omitempty"`
 	Edges         []Edge `json:"edges"`
+	// TimeOutsideCallee: the edges whose caller waited much longer than its callee worked (nothing without ClientP90Ms).
+	TimeOutsideCallee []Outside `json:"time_outside_callee,omitempty"`
 }
 
 // Window is a fixed window as RFC3339 times.

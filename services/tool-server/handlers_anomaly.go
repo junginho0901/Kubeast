@@ -55,6 +55,7 @@ func handleAnomalyRank(ctx context.Context, args map[string]interface{}, headers
 		q.Set("workload_kind", kind)
 		q.Set("workload_name", name)
 	}
+	askSince(q)
 	status, body, err := k8sServiceGet(ctx, headers, "/namespaces/"+url.PathEscape(namespace)+"/anomalies", q)
 	if err != nil {
 		return "", err

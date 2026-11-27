@@ -393,6 +393,15 @@ ai:
   # the search for that name, not the investigation.
   # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   toolResultDetails: false
+  # For a question about something that is over: an event read that holds
+  # nothing, or nothing but an admission policy's PolicyViolation events, names
+  # the log query and the replica and restart metrics that reach further back
+  # than the events; a pod log read without a line says from when to when the
+  # lines that exist run (two or three more reads of that log, 36 bytes each);
+  # issues lists the PolicyViolation findings last. By itself, or beside
+  # toolResultDetails, whose own words stay. Off: the answers are as before.
+  # Stage: alpha, not run yet: the AI evaluation's 16_past_outage asked 70 minutes after, with it off and on (docs/configuration.md "Stages of new values").
+  pastHints: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
   # JWTs, credentials in URLs, Authorization values, API keys with a known
@@ -514,6 +523,35 @@ ai:
   # instructions are as before.
   # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
   causeQuestions: false
+  # When each failure began. The chat's and alert investigations' instructions
+  # ask for it: say when each finding began, look first at what began near the
+  # time asked about or the alert's start, and list what was there before apart
+  # instead of naming it as the cause, unless the question or the alert is about
+  # it, a call shows the symptom coming from it or it got worse at that time. A
+  # question that says nothing of what fails has the chat look for the symptom
+  # first, also in the logs of workloads that are Ready, so it reads more. The
+  # results of issues and anomaly_rank say from when the record shows a failing
+  # object failing (since), out of the lists they read anyway, and anomaly_rank
+  # puts a state that was there all through the window before its own, an hour
+  # and more (an alert's rule may wait that long), after the rest unless another
+  # check found it grown. The floating chat and the MCP server get those results, not the
+  # instructions. Off: the instructions and the results are as before.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  faultOnset: false
+  # How an answer names its causes, in AI Chat (in words, or in a form the
+  # question asks for) and in an alert investigation's rca block: the object
+  # that holds what is wrong (a changed ConfigMap, Secret, policy, Job, node or
+  # workload) and not the one the symptom shows on, what is wrong with it as one
+  # of the block's kinds, each with one line of meaning, and every independent
+  # cause, the main one first. Only what a tool result shows to be at fault is a
+  # cause: two ends of a call the results do not tell apart are candidates. The
+  # block keeps its shape. Adds about 2,300 characters to the chat's
+  # instructions and 3,000 to an investigation's with
+  # features.alertInvestigation.evidenceCheck or ledger on (nothing with
+  # both off); the floating chat and the MCP server are as before. Off: the
+  # instructions are as before.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  causeNaming: false
   # Provider claude-code: the chat with a Claude Pro/Max subscription instead of
   # an API key. Claude Code makes each model call and the chat's own tools answer
   # its tool calls (same tools, approval card for writes, masking and audit).
@@ -1190,9 +1228,18 @@ features:
   # caller), else the metrics API's current values; a namespace whose pods the
   # caller may not list is counted, not named. Off: the route answers 404,
   # reads nothing, and the AI's tool takes no node.
+  # busiestCPU (nothing without enabled): get_node_metrics without a node adds
+  # one line, the busiest CPU of the cluster's nodes in the last hour (30 steps
+  # of two minutes, since one full CPU does not show in a node's percentage) and
+  # the pods of every namespace that used the most CPU on its node then (at most
+  # four Prometheus queries, GET /metrics/nodes/busiest-cpu, kept a minute per
+  # caller; nodes with more than 2 000 CPUs together, or whose names do not fit
+  # one query, are not read), and the window of one node is cut in steps of at
+  # most a thirtieth of it, where they are a twelfth. Off: the tool, the route (404) and the steps are as before.
   # Stage: alpha, not run yet: the AI evaluation's 03_node_cpu_saturated with it off and on (docs/configuration.md "Stages of new values").
   nodeNeighbors:
     enabled: false
+    busiestCPU: false
   # Cluster hygiene report (Cluster → Cluster Hygiene, permissions
   # resource.hygiene.scan on the cluster, admin.hygiene.read/export/signoff
   # globally): Pod Security Standards, image tags,
@@ -1422,8 +1469,17 @@ features:
   # resource.networkflow.read. Off: include calls reads nothing and says so,
   # and the AI (the chat, investigations and the MCP tool list) is not offered it.
   # Stage: alpha, tested: the e2e ai-call-graph.spec.ts in whole e2e runs on kind (2026-11-25); not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  # clientLatency (off by default, nothing without enabled): the p90 the caller
+  # measured of each call (traces_service_graph_request_client_seconds) beside
+  # the p90 its callee measured, one query more a read, and the calls whose
+  # caller waited much longer than its callee worked, so a slow call says on
+  # which side its time is spent. Read as the traces are; a Prometheus without
+  # that metric says "not available" and the rest is answered. Off: that query
+  # is not made and the answer and the AI's tool are as without it.
+  # Stage: alpha, not run yet: any run with it on.
   callGraph:
     enabled: false
+    clientLatency: false
   # Alert store reads for the AI's alerts_list (off by default): an
   # Alertmanager's API v2 at url (http://alertmanager.monitoring:9093), a
   # Grafana data source proxy to one (https://<grafana>/api/datasources/proxy/uid/<Alertmanager UID>)

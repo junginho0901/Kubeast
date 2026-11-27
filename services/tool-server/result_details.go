@@ -154,6 +154,9 @@ func eventsEmpty(namespace string, narrowed bool) string {
 	if namespace != "" {
 		reason += noSuchNamespaceReason
 	}
+	if pastHints() {
+		reason += pastReads(namespace)
+	}
 	return reason
 }
 
@@ -162,6 +165,13 @@ func listEmpty(kind, namespace string, allNamespaces bool) string {
 	reason, otherNamespaces := listEmptyReason, listOneNamespaceReason
 	if isEventsKind(kind) {
 		reason, otherNamespaces = eventsEmptyReason, ""
+		if pastHints() {
+			of := namespace
+			if allNamespaces {
+				of = ""
+			}
+			reason += pastReads(of)
+		}
 	}
 	switch {
 	case allNamespaces:
@@ -180,8 +190,12 @@ func isEventsKind(kind string) bool {
 // reNoEvents is the line kubectl describe ends with for an object no event is kept of.
 var reNoEvents = regexp.MustCompile(`(?m)^Events:[ \t]+<none>[ \t]*$`)
 
-func withEventsReason(out string) string {
-	return reNoEvents.ReplaceAllString(out, "${0}\n"+describeNoEventsReason)
+func withEventsReason(out, namespace string) string {
+	reason := describeNoEventsReason
+	if pastHints() {
+		reason += pastReads(namespace)
+	}
+	return reNoEvents.ReplaceAllString(out, "${0}\n"+reason)
 }
 
 // noneInTable: kubectl's own sentence for a table without a row, after its warnings if any (it prints nothing for -o name).

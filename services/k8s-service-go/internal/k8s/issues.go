@@ -32,6 +32,11 @@ type Issue struct {
 	Events   int `json:"events,omitempty"`
 	// Namespaces are those of a limited grant a list was refused in, on the row (Kind Collector) that says so.
 	Namespaces []string `json:"namespaces,omitempty"`
+	// Since, with IssuesOptions.Since only: the time from which the record shows the object failing without a gap
+	// (issues_since.go). It may have begun earlier; "" is not known, which is not new.
+	Since string `json:"since,omitempty"`
+
+	pod podSince
 }
 
 const (
@@ -43,12 +48,13 @@ const (
 // IssuesOptions: Window is how far back Warning events are read;
 // IncludeRestartHistory also lists healthy pods whose last restart is older
 // than a day (as info); Namespace reads that namespace's objects only (the
-// nodes stay whole).
+// nodes stay whole); Since fills each issue's Since from the same lists.
 type IssuesOptions struct {
 	Window                time.Duration
 	IncludeRestartHistory bool
 	Now                   time.Time
 	Namespace             string
+	Since                 bool
 }
 
 // CollectIssues gathers the issues of the ctx cluster. Pods are required; a
@@ -100,11 +106,16 @@ func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issu
 	cronjobs := collect("cronjobs", each(s.GetAllCronJobs, s.GetCronJobs))
 	hpas := collect("hpas", each(s.GetAllHPAs, s.GetHPAs))
 	pvcs := collect("pvcs", each(s.GetAllPVCs, s.GetPVCs))
+	var loops backOffs
+	var also []func(*corev1.Event)
+	if opts.Since {
+		also = append(also, loops.add)
+	}
 	events := collect("events", func(ctx context.Context) ([]map[string]interface{}, error) {
 		if opts.Namespace != "" {
-			return s.warningEventRowsIn(ctx, opts.Namespace, opts.Now.Add(-opts.Window))
+			return s.warningEventRowsIn(ctx, opts.Namespace, opts.Now.Add(-opts.Window), also...)
 		}
-		return s.warningEventRows(ctx, opts.Now.Add(-opts.Window))
+		return s.warningEventRows(ctx, opts.Now.Add(-opts.Window), also...)
 	})
 
 	issues = append(issues, issuesFromNodes(nodes)...)
@@ -113,7 +124,15 @@ func (s *Service) CollectIssues(ctx context.Context, opts IssuesOptions) ([]Issu
 	issues = append(issues, issuesFromJobs(jobs, cronjobs)...)
 	issues = append(issues, issuesFromHPAs(hpas)...)
 	issues = append(issues, issuesFromPVCs(pvcs)...)
-	return mergeEvents(issues, events, opts.Now, opts.Window), nil
+	var own map[string]bool
+	if opts.Since {
+		own = issueIDs(issues)
+	}
+	issues = mergeEvents(issues, events, opts.Now, opts.Window)
+	if opts.Since {
+		fillSince(issues, own, events, &loops, opts.Now)
+	}
+	return issues, nil
 }
 
 // podIssues reads the pods podListChunk at a time — in each namespace of a namespace-limited user's scope, as
@@ -124,7 +143,11 @@ func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, e
 		err := eachPage(ctx, metav1.ListOptions{Limit: podListChunk}, func(lo metav1.ListOptions) (*corev1.PodList, error) {
 			return s.clientsetCtx(ctx).CoreV1().Pods(namespace).List(ctx, lo)
 		}, func(l *corev1.PodList) {
-			out = append(out, issuesFromPods(formatPodList(l.Items), opts)...)
+			found := issuesFromPods(formatPodList(l.Items), opts)
+			if opts.Since {
+				withPodSince(found, l.Items)
+			}
+			out = append(out, found...)
 		})
 		if err != nil {
 			return nil, err
@@ -142,19 +165,22 @@ func (s *Service) podIssues(ctx context.Context, opts IssuesOptions) ([]Issue, e
 
 // warningEventRows: the Warning events since since (the API server selects type=Warning), read a page at a time —
 // in each namespace of a namespace-limited user's scope, as listAcrossNamespaces — the newest of each object kept (by
-// eventObjectKind, as mergeEvents keys them): what mergeEvents takes from them.
-func (s *Service) warningEventRows(ctx context.Context, since time.Time) ([]map[string]interface{}, error) {
+// eventObjectKind, as mergeEvents keys them): what mergeEvents takes from them. also is given every one of them.
+func (s *Service) warningEventRows(ctx context.Context, since time.Time, also ...func(*corev1.Event)) ([]map[string]interface{}, error) {
 	return s.listAcrossNamespaces(ctx, func(namespace string) ([]map[string]interface{}, error) {
-		return s.warningEventRowsIn(ctx, namespace, since)
+		return s.warningEventRowsIn(ctx, namespace, since, also...)
 	})
 }
 
-func (s *Service) warningEventRowsIn(ctx context.Context, namespace string, since time.Time) ([]map[string]interface{}, error) {
+func (s *Service) warningEventRowsIn(ctx context.Context, namespace string, since time.Time, also ...func(*corev1.Event)) ([]map[string]interface{}, error) {
 	newest := map[string]*corev1.Event{}
 	var order []string
 	err := s.eachEvent(ctx, namespace, metav1.ListOptions{FieldSelector: "type=" + corev1.EventTypeWarning}, func(e *corev1.Event) {
 		if eventTimestamp(*e).Before(since) {
 			return
+		}
+		for _, f := range also {
+			f(e)
 		}
 		id := issueID(eventObjectKind(e.InvolvedObject.Kind, e.InvolvedObject.APIVersion), e.InvolvedObject.Namespace, e.InvolvedObject.Name)
 		if prev, ok := newest[id]; ok && !eventTimestamp(*e).After(eventTimestamp(*prev)) {
@@ -249,6 +275,9 @@ func issuesFromNodes(nodes []map[string]interface{}) []Issue {
 	return out
 }
 
+// restartedReason starts the reason of a pod that restarted and runs again.
+const restartedReason = "Restarted: "
+
 var criticalWaitingReasons = map[string]bool{
 	"CrashLoopBackOff": true, "ImagePullBackOff": true, "ErrImagePull": true, "InvalidImageName": true,
 	"CreateContainerConfigError": true, "CreateContainerError": true, "RunContainerError": true,
@@ -336,7 +365,7 @@ func issuesFromPods(pods []map[string]interface{}, opts IssuesOptions) []Issue {
 			continue
 		}
 		out = append(out, Issue{ID: issueID("Pod", ns, name), Kind: "Pod", Namespace: ns, Name: name, Severity: severity,
-			Reason: "Restarted: " + lastRestartReason, LastSeen: lastRestart.UTC().Format(time.RFC3339), Restarts: restarts})
+			Reason: restartedReason + lastRestartReason, LastSeen: lastRestart.UTC().Format(time.RFC3339), Restarts: restarts})
 	}
 	return out
 }

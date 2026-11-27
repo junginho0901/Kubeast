@@ -35,6 +35,7 @@ const (
 
 // nodeCPUSource is what a node neighbours read needs, all as the signed-in user (*k8s.Service; tests replace it).
 type nodeCPUSource interface {
+	GetNodes(ctx context.Context) ([]map[string]interface{}, error)
 	DescribeNodeWithoutEvents(ctx context.Context, name string) (map[string]interface{}, error)
 	GetNodePods(ctx context.Context, nodeName string) ([]map[string]interface{}, error)
 	GetPodMetrics(ctx context.Context, namespace string) ([]map[string]interface{}, error)
@@ -46,20 +47,23 @@ type nodeCPUSource interface {
 // NodeNeighborsOn is features.nodeNeighbors.enabled (NODE_NEIGHBORS_ENABLED), off by default.
 func NodeNeighborsOn() bool { return pkgconfig.EnvSwitch("NODE_NEIGHBORS_ENABLED") }
 
-// NodeNeighbors serves GET /api/v1/nodes/{name}/neighbors.
+// NodeNeighbors serves GET /api/v1/nodes/{name}/neighbors, and the busiest CPU of the nodes (node_busiest.go).
 type NodeNeighbors struct {
-	h   *Handler
-	on  bool
-	src nodeCPUSource
+	h  *Handler
+	on bool
+	// busiest is NodeBusiestOn: the busiest CPU's route, and steps of at most a thirtieth of a window.
+	busiest bool
+	src     nodeCPUSource
 	// mayListPods asks the cluster, as the caller, whether they may list the pods of a namespace.
 	mayListPods func(ctx context.Context, namespace string) (bool, error)
 	now         func() time.Time
 	answers     nodeAnswers
+	lines       keptAnswers[nodecpu.BusiestResult]
 }
 
-// NodeNeighbors is the node neighbours route of this server, its switch read once.
+// NodeNeighbors is the node neighbours route of this server, its switches read once.
 func (h *Handler) NodeNeighbors() *NodeNeighbors {
-	return &NodeNeighbors{h: h, on: NodeNeighborsOn(), src: h.svc, mayListPods: h.mayListPods, now: time.Now}
+	return &NodeNeighbors{h: h, on: NodeNeighborsOn(), busiest: NodeBusiestOn(), src: h.svc, mayListPods: h.mayListPods, now: time.Now}
 }
 
 func (h *Handler) mayListPods(ctx context.Context, namespace string) (bool, error) {
@@ -92,7 +96,11 @@ func (n *NodeNeighbors) Get(w http.ResponseWriter, r *http.Request) {
 	err := nodecpu.ParseNode(node)
 	var win nodecpu.Window
 	if err == nil {
-		win, err = nodecpu.ParseWindow(q.Get("start"), q.Get("end"), now)
+		parse := nodecpu.ParseWindow
+		if n.busiest {
+			parse = nodecpu.ParseFineWindow
+		}
+		win, err = parse(q.Get("start"), q.Get("end"), now)
 	}
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
@@ -434,32 +442,35 @@ func (b *readBudget) leftNow() int {
 // nodeAnswersMax bounds the answers kept: past it the oldest goes.
 const nodeAnswersMax = 256
 
-type nodeAnswer struct {
+type keptAnswer[T any] struct {
 	at     time.Time
-	result nodecpu.Result
+	result T
 }
 
-// nodeAnswers keeps each answer for nodeNeighborsCache, keyed by cluster, claims, node and window.
-type nodeAnswers struct {
+// keptAnswers keeps each answer for nodeNeighborsCache.
+type keptAnswers[T any] struct {
 	mu      sync.Mutex
-	entries map[string]nodeAnswer
+	entries map[string]keptAnswer[T]
 }
 
-func (c *nodeAnswers) get(key string, now time.Time) (nodecpu.Result, bool) {
+// nodeAnswers is keyed by cluster, claims, node and window.
+type nodeAnswers = keptAnswers[nodecpu.Result]
+
+func (c *keptAnswers[T]) get(key string, now time.Time) (result T, ok bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	e, ok := c.entries[key]
 	if !ok || now.Sub(e.at) >= nodeNeighborsCache {
-		return nodecpu.Result{}, false
+		return result, false
 	}
 	return e.result, true
 }
 
-func (c *nodeAnswers) put(key string, now time.Time, result nodecpu.Result) {
+func (c *keptAnswers[T]) put(key string, now time.Time, result T) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.entries == nil {
-		c.entries = map[string]nodeAnswer{}
+		c.entries = map[string]keptAnswer[T]{}
 	}
 	oldest, oldestAt := "", now
 	for k, e := range c.entries {
@@ -474,5 +485,5 @@ func (c *nodeAnswers) put(key string, now time.Time, result nodecpu.Result) {
 	if len(c.entries) >= nodeAnswersMax && oldest != "" {
 		delete(c.entries, oldest)
 	}
-	c.entries[key] = nodeAnswer{at: now, result: result}
+	c.entries[key] = keptAnswer[T]{at: now, result: result}
 }

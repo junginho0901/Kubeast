@@ -139,9 +139,10 @@ var namespaceRoutes = map[string]scopeRule{
 	"GET /api/v1/helm/releases/stream": scopeQuery,
 
 	// Metrics
-	"GET /api/v1/metrics/pods":          scopeQuery,
-	"GET /api/v1/metrics/nodes":         scopeClusterObject,
-	"GET /api/v1/metrics/top-resources": scopeNarrowed,
+	"GET /api/v1/metrics/pods":              scopeQuery,
+	"GET /api/v1/metrics/nodes":             scopeClusterObject,
+	"GET /api/v1/metrics/nodes/busiest-cpu": scopeClusterObject,
+	"GET /api/v1/metrics/top-resources":     scopeNarrowed,
 
 	// Custom resources
 	"GET /api/v1/custom-resources/all":                                                    scopeNarrowed,
