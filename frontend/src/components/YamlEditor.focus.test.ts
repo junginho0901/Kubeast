@@ -45,7 +45,7 @@ beforeAll(async () => {
 
 const LABELS = { title: 't', refresh: 'r', copy: 'c', edit: 'EDIT', apply: 'APPLY', applying: 'a', cancel: 'CANCEL', loading: 'l', error: 'err', readonly: 'ro', editHint: 'h', applied: 'd', refreshing: 'f' }
 
-type Node = ReactElement<{ children?: unknown; onClick?: () => unknown }>
+type Node = ReactElement<{ children?: unknown; onClick?: () => unknown; disabled?: boolean }>
 const findButton = (node: unknown, label: string): Node | null => {
   if (Array.isArray(node)) {
     for (const item of node) {
@@ -59,12 +59,13 @@ const findButton = (node: unknown, label: string): Node | null => {
   return element.type === 'button' && element.props.children === label ? element : findButton(element.props.children, label)
 }
 
-// A page whose focus is on the body (it fell there) and the three places the focus may go.
+// A page whose focus is on the body (it fell there) and the three places the focus may go; a disabled one takes no focus,
+// as a browser's disabled button does not.
 function page() {
   const doc = { activeElement: null as unknown, body: { isConnected: true } }
   doc.activeElement = doc.body
   const place = (name: string) => {
-    const p = { name, isConnected: true, focus: () => { doc.activeElement = p } }
+    const p = { name, isConnected: true, disabled: false, focus: () => { if (!p.disabled) doc.activeElement = p } }
     return p
   }
   const places = { editor: place('editor'), edit: place('Edit'), apply: place('Apply') }
@@ -75,17 +76,32 @@ function page() {
   return { doc, places }
 }
 
-function render(editing: boolean, onApply: (next: string) => Promise<boolean> = async () => true) {
+function render(editing: boolean, onApply: (next: string) => Promise<boolean> = async () => true, read: { isLoading?: boolean; value?: string } = {}) {
   state.initial[SLOT.editing] = editing
   let tree: unknown = null
   const Grab = () => {
-    tree = YamlEditor({ value: 'a: 1\n', canEdit: true, isLoading: false, onApply, labels: LABELS })
+    tree = YamlEditor({ value: 'a: 1\n', canEdit: true, isLoading: false, onApply, labels: LABELS, ...read })
     return tree as ReactElement
   }
   const html = renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(Grab)))
   return { tree, html }
 }
 const runEffects = () => { for (const effect of state.effects) effect() }
+
+// The editor back to read-only after an Apply, rendered and its effects run, the next render holding what they said last
+// about where the focus goes. `reading`: the drawer reads the YAML again after every Apply under a new key
+// (`invalidateAfterApply`), so it loads with no text and Edit is disabled until that read answers.
+function renderAfterApply(places: ReturnType<typeof page>['places'], reading: boolean) {
+  state.slot = 0
+  state.ref = 0
+  state.effects = []
+  state.sets = {}
+  const edit = findButton(render(false, undefined, reading ? { isLoading: true, value: '' } : {}).tree, LABELS.edit)!
+  places.edit.disabled = edit.props.disabled === true
+  runEffects()
+  const said = state.sets[SLOT.focusNext]
+  if (said) state.initial[SLOT.focusNext] = said[said.length - 1]
+}
 
 describe('YamlEditor keeps the focus when its buttons change', () => {
   beforeEach(() => {
@@ -134,6 +150,29 @@ describe('YamlEditor keeps the focus when its buttons change', () => {
     render(false)
     runEffects()
     expect(doc.activeElement).toBe(places.edit)
+  })
+
+  it('a saved or unchanged Apply sends it to Edit once the YAML read again after it has come, while Edit is disabled', async () => {
+    const { doc, places } = page()
+    await findButton(render(true, async () => true).tree, LABELS.apply)!.props.onClick!()
+    expect(state.sets[SLOT.focusNext]).toEqual(['edit'])
+    state.initial[SLOT.focusNext] = 'edit'
+    renderAfterApply(places, true)
+    expect(places.edit.disabled).toBe(true)
+    expect(doc.activeElement).toBe(doc.body)
+    renderAfterApply(places, false)
+    expect(places.edit.disabled).toBe(false)
+    expect(doc.activeElement).toBe(places.edit)
+  })
+
+  it('a focus the reader moved while that read went on stays where they put it', () => {
+    const { doc, places } = page()
+    state.initial[SLOT.focusNext] = 'edit'
+    renderAfterApply(places, true)
+    const close = { isConnected: true }
+    doc.activeElement = close
+    renderAfterApply(places, false)
+    expect(doc.activeElement).toBe(close)
   })
 
   it('an Apply that saved nothing, declined or refused, gives it back to Apply once Apply works again', async () => {

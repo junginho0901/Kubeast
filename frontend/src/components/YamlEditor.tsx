@@ -118,13 +118,14 @@ export default function YamlEditor({
     onDirtyChange(dirty)
   }, [draft, isEditing, onDirtyChange, value])
 
-  // The pressed button is gone (or was disabled while applying), so the focus fell to the page (WCAG 2.4.3).
+  // The pressed button is gone (or was disabled while applying), so the focus fell to the page (WCAG 2.4.3). A disabled
+  // button takes no focus, so the move also waits out a read of the YAML, which the drawer makes after every Apply.
   useEffect(() => {
-    if (!focusNext || isApplying) return
+    if (!focusNext || isApplying || !isReady) return
     const next = focusNext === 'editor' ? editorRef.current : focusNext === 'edit' ? editButtonRef.current : applyButtonRef.current
     refocusIfDropped(document, next)
     setFocusNext(null)
-  }, [focusNext, isApplying])
+  }, [focusNext, isApplying, isReady])
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor
