@@ -25,9 +25,18 @@ const SECRET_NAMES = new Set([
   'client_secret', 'kubeconfig', 'api_key', 'apikey', 'secret_key', 'private_key', 'access_key', 'key_hash', 'token_hash', 'secret_value', 'tls_key',
 ])
 const MASKED = /^(\*+|<REDACTED[^>]*>|\[REDACTED\])$/i
-// Cells a reader's answer has about the reader alone, which the admin's answer has empty.
+// Cells a reader's answer has about the reader alone (its grants, what it was refused), which the admin's answer has empty.
 const OWN: { route: RegExp; cell: RegExp; why: string }[] = [
-  { route: /^\/api\/v1\/auth\/me\?/, cell: /^\$\.cluster_namespaces\./, why: "the reader's own grant limited to namespaces" },
+  { route: /^\/api\/v1\/auth\/me\?/, cell: /^\$\.(cluster_namespaces|cluster_roles|permissions_matrix)\./, why: "the reader's own grants on each cluster" },
+  { route: /^\/api\/v1\/cluster\/features\?/, cell: /^\$\.writeGuardedNamespaces\[\]$/, why: 'the namespaces the reader may not write' },
+  { route: /\/logsearch\?/, cell: /^\$\.hiddenNamespace$/, why: "the namespace the reader's search leaves out" },
+  { route: /\/resource-graph\?/, cell: /^\$\.forbidden_kinds\[\]$/, why: 'the kinds the reader was refused' },
+  { route: /\/timeline\/changes\?/, cell: /^\$\.summary\.not_read\./, why: 'the sources the reader was refused' },
+  { route: /^\/api\/v1\/cluster\/overview\?/, cell: /^\$\.(refused\[\]|scoped)$/, why: "the counts the reader was refused and the reader's grant limited to namespaces" },
+]
+// Cells under a secret's name that hold the name of an object, not a value.
+const NAMES: { cell: RegExp; why: string }[] = [
+  { cell: /\.env_from\[\]\.secret$/, why: 'the Secret a container reads its environment from, as kubectl get pod shows' },
 ]
 
 const snake = (k: string) => k.replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/-/g, '_').toLowerCase()
@@ -48,7 +57,7 @@ function secretCells(value: unknown, at = '$', out: string[] = []): string[] {
   else if (value && typeof value === 'object') {
     for (const [k, v] of Object.entries(value)) {
       const shown = typeof v === 'string' ? v !== '' && !MASKED.test(v) : !!v && typeof v === 'object' && Object.keys(v).length > 0
-      if (SECRET_NAMES.has(snake(k)) && shown) out.push(`${at}.${k}`)
+      if (SECRET_NAMES.has(snake(k)) && shown && !NAMES.some((n) => n.cell.test(`${at}.${k}`))) out.push(`${at}.${k}`)
       secretCells(v, `${at}.${k}`, out)
     }
   }
@@ -129,8 +138,10 @@ test('a reader\'s answers hold no more fields than the admin\'s and no secret va
         problems.push(`${route} ${who}: ${a.status} where the admin had ${before.status} and ${after.status}`)
         continue
       }
-      const admins = new Set([...cells(ok(before) ? before.json : undefined), ...cells(ok(after) ? after.json : undefined)])
-      const extra = [...cells(a.json)].filter((c) => !admins.has(c) && !OWN.some((o) => o.route.test(route) && o.cell.test(c)))
+      const admins = [...new Set([...cells(ok(before) ? before.json : undefined), ...cells(ok(after) ? after.json : undefined)])]
+      // a cell the admin's answer holds more under (null or empty for the reader) holds less, not more
+      const held = (c: string) => admins.some((x) => x === c || x.startsWith(`${c}.`) || x.startsWith(`${c}[]`))
+      const extra = [...cells(a.json)].filter((c) => !held(c) && !OWN.some((o) => o.route.test(route) && o.cell.test(c)))
       if (extra.length) problems.push(`${route} ${who}: ${extra.length} field(s) the admin's answers lack: ${extra.slice(0, 10).join(' ')}`)
     }
   }
