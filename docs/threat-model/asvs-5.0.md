@@ -6,7 +6,7 @@ This page checks Kubeast against the OWASP Application Security Verification Sta
 | --- | --- |
 | Standard | ASVS 5.0.0, GitHub release [`v5.0.0_release`](https://github.com/OWASP/ASVS/releases/tag/v5.0.0_release) (2025-05-30), the latest stable version. The repository's `latest` release is the unreleased edge, not a version. Requirement numbers are those of the release file `OWASP_Application_Security_Verification_Standard_5.0.0_en.flat.json` (sha256 `8201b20eec2908c3380ac600c91c8ba746346fbb808859366abb232027532311`); cite one as `v5.0.0-1.2.5`. |
 | Counts in the standard | 345 requirements: 70 at level 1, 183 more at level 2, 92 more at level 3 |
-| Code read | `main` at `a5796663`, on 2026-11-20. Rows whose From is `first` were read first that day, with `frontend/src` at a branch of the v0.8.0 screen redesign (`cbf6479f`), before its pull requests merged: their `frontend/src` lines have not been read again against the merged screens. The files `main` changed up to `a79441da` were compared again and their line numbers moved. V6.1.1 and V7.1.2 cite the section that this page's change adds to `docs/security-audit.md`. |
+| Code read | `main` at `a5796663`, on 2026-11-20. Rows whose From is `first` were read first that day, with `frontend/src` at a branch of the v0.8.0 screen redesign (`cbf6479f`), before its pull requests merged: their `frontend/src` lines have not been read again against the merged screens. The files `main` changed up to `a79441da` were compared again and their line numbers moved. V6.1.1 and V7.1.2 cite the section that this page's change adds to `docs/security-audit.md`. On 2026-11-27 each file and line a level 1 row cites was checked to be in the last tree before the v0.8.0 merges, and V1.2.2 and V1.3.1, whose lines had moved, were read again there. |
 | Not read | 68 level 2 requirements outside the areas above (V3: 2, V4: 6, V5: 5, V10: 22, V11: 11, V12: 6, V14: 6, V15: 10) |
 | License | The "Asks (short)" column restates the requirements of the OWASP ASVS 5.0.0 in a few words. The standard is © the OWASP Foundation, under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). |
 
@@ -26,7 +26,7 @@ Paths are from the repository root. `nginx.conf` is `helm/kubeast/files/nginx.co
 
 | Area | Items | Met | Partly | Not met | To check | N/A |
 | --- | --- | --- | --- | --- | --- | --- |
-| Level 1, all chapters | 70 | 41 | 5 | 2 | 13 | 9 |
+| Level 1, all chapters | 70 | 42 | 4 | 2 | 13 | 9 |
 | Level 2, V1 Encoding and Sanitization | 19 | 11 | 1 | 0 | 2 | 5 |
 | Level 2, V2 Validation and Business Logic | 7 | 1 | 2 | 0 | 4 | 0 |
 | Level 2, V3.3 Cookies | 3 | 1 | 1 | 1 | 0 | 0 |
@@ -36,20 +36,20 @@ Paths are from the repository root. `nginx.conf` is `helm/kubeast/files/nginx.co
 | Level 2, V9.2 Token Content | 3 | 2 | 0 | 0 | 0 | 1 |
 | Level 2, V13 Configuration | 12 | 3 | 8 | 1 | 0 | 0 |
 | Level 2, V16 Security Logging and Error Handling | 16 | 6 | 9 | 0 | 1 | 0 |
-| Total | 167 | 76 | 33 | 7 | 23 | 28 |
+| Total | 167 | 77 | 32 | 7 | 23 | 28 |
 
-Level 1 by chapter: V1 8 (6 met, 1 partly, 1 N/A) · V2 4 (4 to check) · V3 8 (6 met, 1 partly, 1 to check) · V4 2 (1 partly, 1 to check) · V5 4 (3 met, 1 N/A) · V6 13 (10 met, 1 partly, 2 not met) · V7 6 (5 met, 1 to check) · V8 4 (3 met, 1 to check) · V9 4 (4 met) · V10 5 (5 N/A) · V11 3 (1 met, 2 N/A) · V12 3 (3 to check) · V13 1 (1 met) · V14 2 (2 met) · V15 3 (1 partly, 2 to check).
+Level 1 by chapter: V1 8 (7 met, 1 N/A) · V2 4 (4 to check) · V3 8 (6 met, 1 partly, 1 to check) · V4 2 (1 partly, 1 to check) · V5 4 (3 met, 1 N/A) · V6 13 (10 met, 1 partly, 2 not met) · V7 6 (5 met, 1 to check) · V8 4 (3 met, 1 to check) · V9 4 (4 met) · V10 5 (5 N/A) · V11 3 (1 met, 2 N/A) · V12 3 (3 to check) · V13 1 (1 met) · V14 2 (2 met) · V15 3 (1 partly, 2 to check).
 
 ## Level 1
 
 | Req. | Asks (short) | Status | Evidence | From | Left |
 | --- | --- | --- | --- | --- | --- |
 | V1.2.1 | Output encoded for its context | Met | React draws text and attributes escaped; the one HTML string, `frontend/src/pages/helm/modals/DiffView.tsx:35-39`, is diff2html 3.4.56's, which escapes each line; JSON by the encoder (`services/pkg/response/response.go:24`) | first | open |
-| V1.2.2 | URLs built from data encoded; safe protocols only | Partly | Alert addresses go to `href` as received: `frontend/src/components/InvestigationReportModal.tsx:114`, `:119`; `frontend/src/pages/alerts/AlertInbox.tsx:542`, `:547`. Done right in `frontend/src/utils/traceLinks.ts:8-21`, `frontend/src/components/chatMarkdown.ts:44-47`, `services/auth-service-go/internal/handler/access_requests.go:69-72` | first | v0.7.9 |
+| V1.2.2 | URLs built from data encoded; safe protocols only | Met | An alert's two addresses are drawn through `frontend/src/components/ExternalHttpLink.tsx`, a link only for an http or https URL with a host (`frontend/src/components/InvestigationReportModal.tsx:108-109`; `frontend/src/pages/alerts/AlertInbox.tsx:548-549`; `frontend/src/components/ExternalHttpLink.test.ts`), and the webhook stores no other value (`services/ai-service/tests/test_alert_webhook_addresses.py`). Also `frontend/src/utils/traceLinks.ts:8-21`, `frontend/src/components/chatMarkdown.ts:45-46`, `services/auth-service-go/internal/handler/access_requests.go:69-72` | first | — |
 | V1.2.3 | JavaScript and JSON built with encoding | Met | Two JSON strings made with `Sprintf`, both of fixed shape (`services/auth-service-go/internal/security/jwt.go:109`, `services/k8s-service-go/internal/k8s/workloads_cronjob.go:119`) | first | — |
 | V1.2.4 | Database queries parameterized | Met | `services/auth-service-go/internal/repository/repository_user.go:198-219`; `services/ai-service/app/services/claude_code_slots.py:46-51`, `:67-68` | first | — |
 | V1.2.5 | Operating system calls parameterized | Met | `services/tool-server/kubectl.go:85-97` runs `kubectl` with an argument list, no shell; arguments held to Kubernetes' shapes (`services/tool-server/argcheck.go:1-8`) | first | — |
-| V1.3.1 | HTML from a writer sanitized with a known library | Met | rehype-sanitize 6.0.0 with an allow list (`frontend/src/components/chatMarkdown.ts:17-48`, `:167`); reports show HTML as words (`frontend/src/components/AIMarkdown.tsx:6-13`) | first | open |
+| V1.3.1 | HTML from a writer sanitized with a known library | Met | rehype-sanitize 6.0.0 with an allow list (`frontend/src/components/chatMarkdown.ts:18-49`, `:160`); reports show HTML as words (`frontend/src/components/AIMarkdown.tsx:6-13`) | first | open |
 | V1.3.2 | No `eval` or other dynamic code | Met | Search of `frontend/src` and `services/ai-service/app`; the CSP has no `'unsafe-eval'` (`nginx.conf:86`) | first | — |
 | V1.5.1 | XML parsers do not resolve external entities | N/A | Search of `services`: no XML parser | first | — |
 | V2.1.1 | Documentation defines input validation rules | To check | No single page found; read `docs/` for each input that decides access | first | — |
