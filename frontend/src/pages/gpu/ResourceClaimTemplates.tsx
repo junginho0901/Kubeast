@@ -201,9 +201,9 @@ spec:
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('resourceClaimTemplatesPage.title', 'Resource Claim Templates')}</h1>
-          <p className="mt-2 text-slate-400">{tr('resourceClaimTemplatesPage.subtitle', 'Manage DRA ResourceClaimTemplate resources.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('resourceClaimTemplatesPage.subtitle', 'Manage DRA ResourceClaimTemplate resources.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -241,7 +241,7 @@ spec:
 
       <div className="grid grid-cols-1 gap-3 shrink-0">
         <div data-list-summary-card="" className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('resourceClaimTemplatesPage.stats.total', 'Total')}</p>
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('resourceClaimTemplatesPage.stats.total', 'Total')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{summary.total}</p>
         </div>
       </div>

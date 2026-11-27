@@ -19,7 +19,7 @@ function SkeletonCard() {
 
 export function GPUDashboardLoading() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <div className="h-8 w-48 animate-pulse rounded-sm bg-slate-700" />
@@ -43,13 +43,13 @@ interface ErrorEmptyProps {
 
 export function GPUDashboardError({ tr, onRefetch, forbidden }: ErrorEmptyProps & { forbidden?: string }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}
           </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-sm text-slate-400">
             {tr('gpuDashboardPage.subtitle', 'GPU resource overview across the cluster')}
           </p>
         </div>
@@ -61,14 +61,14 @@ export function GPUDashboardError({ tr, onRefetch, forbidden }: ErrorEmptyProps 
           {tr('common.refresh', 'Refresh')}
         </button>
       </div>
-      <div className="flex flex-col items-center justify-center rounded-xl border border-red-500/20 bg-red-500/5 py-24">
-        <XCircle className="mb-4 h-12 w-12 text-red-400" />
-        <p className="text-lg text-red-300" data-testid={forbidden ? 'gpu-dashboard-forbidden' : undefined}>
+      <div className="flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800/30 px-6 py-16 text-center">
+        <XCircle className="mb-4 h-8 w-8 text-red-400" />
+        <p className="text-sm text-red-300" data-testid={forbidden ? 'gpu-dashboard-forbidden' : undefined}>
           {forbidden ?? tr('gpuDashboardPage.error', 'Failed to load GPU data. The cluster may be temporarily unreachable.')}
         </p>
         <button
           onClick={onRefetch}
-          className="mt-4 rounded-lg bg-slate-700 px-4 py-2 text-sm text-ink hover:bg-slate-600"
+          className="btn btn-secondary mt-4"
         >
           {tr('gpuDashboardPage.retry', 'Retry')}
         </button>
@@ -79,13 +79,13 @@ export function GPUDashboardError({ tr, onRefetch, forbidden }: ErrorEmptyProps 
 
 export function GPUDashboardEmpty({ tr, onRefetch }: ErrorEmptyProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="page-head items-center">
         <div>
           <h1 className="text-3xl font-semibold text-ink">
             {tr('gpuDashboardPage.title', 'GPU Dashboard')}
           </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-sm text-slate-400">
             {tr('gpuDashboardPage.subtitle', 'GPU resource overview across the cluster')}
           </p>
         </div>
@@ -97,9 +97,9 @@ export function GPUDashboardEmpty({ tr, onRefetch }: ErrorEmptyProps) {
           {tr('common.refresh', 'Refresh')}
         </button>
       </div>
-      <div className="flex flex-col items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 py-24">
-        <Monitor className="mb-4 h-12 w-12 text-slate-600" />
-        <p className="text-lg text-slate-400">
+      <div className="flex flex-col items-center justify-center rounded-xl border border-slate-700/50 bg-slate-800/30 px-6 py-16 text-center">
+        <Monitor className="mb-4 h-8 w-8 text-slate-500" />
+        <p className="text-sm text-slate-400">
           {tr('gpuDashboardPage.empty', 'No GPU resources detected in this cluster.')}
         </p>
       </div>
