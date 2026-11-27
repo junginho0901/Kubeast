@@ -327,7 +327,7 @@ h2 { font-size: clamp(1.9rem, 3.4vw, 2.8rem); letter-spacing: -0.025em; line-hei
   position: relative;
   padding: 4px 0 4px 32px;
   font-size: 0.86rem;
-  color: var(--text-faint);
+  color: var(--text-dim);
   transition: color .3s;
 }
 .steps li::before {
@@ -462,7 +462,7 @@ h2 { font-size: clamp(1.9rem, 3.4vw, 2.8rem); letter-spacing: -0.025em; line-hei
 .tab-panel { display: none; margin: 0; padding: 22px 24px; overflow-x: auto; font-size: 0.9rem; line-height: 1.7; color: #e0f2fe; }
 .tab-panel.active { display: block; }
 .prompt { color: var(--sky-soft); user-select: none; }
-.comment { color: var(--text-faint); }
+.comment { color: var(--text-dim); }
 .install-note { text-align: center; color: var(--text-dim); margin: 20px 0 0; }
 
 /* FAQ */
