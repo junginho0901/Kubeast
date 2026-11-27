@@ -491,7 +491,8 @@
     "sessionRecordings": "Session Recordings",
     "validatingAdmissionPolicies": "Validating Admission Policies",
     "mutatingAdmissionPolicies": "Mutating Admission Policies",
-    "investigations": "Investigations"
+    "investigations": "Investigations",
+    "tagline": "K8s DevOps Platform"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -540,7 +541,8 @@
       "age": "Age",
       "node": "Node",
       "podIp": "Pod IP",
-      "notReadyHint": "Not ready ({{ready}})"
+      "notReadyHint": "Not ready ({{ready}})",
+      "phaseHint": "Phase: {{phase}}"
     },
     "stats": {
       "total": "Total",
@@ -1556,6 +1558,12 @@
       "detached": "Detached",
       "errors": "Errors"
     },
+    "status": {
+      "Attached": "Attached",
+      "Detached": "Detached",
+      "Error": "Error",
+      "Unknown": "Unknown"
+    },
     "delete": {
       "button": "Delete VolumeAttachment",
       "title": "Delete VolumeAttachment"
@@ -1689,6 +1697,7 @@
       "systemBootId": "Boot ID",
       "systemMachineId": "Machine ID",
       "systemUuid": "System UUID",
+      "systemRoles": "Roles",
       "eventsTitle": "Events"
     },
     "pods": {
@@ -2694,6 +2703,7 @@
     "nodePodsCount_one": "{{count}} Pod",
     "restarts": "Restarts: {{count}}",
     "podDeleting": "Deleting...",
+    "unscheduled": "Unscheduled",
     "noPods": "No pods found",
     "box": {
       "shown": "Showing {{shown}} of {{total}} Pods",
@@ -3294,6 +3304,28 @@
     "search": "Search resources...",
     "filter": "Filter",
     "legend": "Legend",
+    "edgeType": {
+      "owns": "owns",
+      "selects": "selects",
+      "mounts": "mounts",
+      "routes": "routes",
+      "binds": "binds",
+      "bound_to": "bound_to",
+      "provisions": "provisions",
+      "hpa_targets": "targets",
+      "network_policy": "policy",
+      "endpoint_of": "endpoint",
+      "sa_used_by": "uses SA"
+    },
+    "edgeAria": "{{source}} → {{target}} ({{relation}})",
+    "controls": {
+      "panel": "Control Panel",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "fitView": "Fit View",
+      "interactive": "Toggle Interactivity",
+      "miniMap": "Mini Map"
+    },
     "sources": "Sources",
     "issuesOnly": "Issues",
     "noData": "No resources found",
@@ -4462,7 +4494,8 @@
       "tierDefault": "Default",
       "tierDefaultHint": "the chat",
       "tierEconomy": "Economy",
-      "tierEconomyHint": "history summaries and the floating assistant"
+      "tierEconomyHint": "history summaries and the floating assistant",
+      "keyEnv": "env: {{name}}"
     }
   },
   "adminAudit": {

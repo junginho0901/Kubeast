@@ -5,6 +5,7 @@ import { retryUnlessRefused } from '@/services/queryDefaults'
 import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, NoneText, Tx } from './DetailCommon'
 import { fmtRel } from './detailFormat'
 import { limitRangeViolationsLayer, limitRangeViolationsSummary, violatingPodCount, violationsUnread } from './limitRangeViolations'
+import { useDetailLabel } from './useDetailLabel'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { usePagination } from './usePagination'
@@ -27,6 +28,7 @@ const typeColors: Record<string, 'green' | 'amber' | 'red' | 'default'> = {
 
 export default function LimitRangeInfo({ name, namespace }: Props) {
   const { open: openDetail } = useResourceDetail()
+  const dl = useDetailLabel()
   const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['limitrange-describe', namespace, name],
     queryFn: () => api.describeLimitRange(namespace, name),
@@ -86,7 +88,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Limit Types" value={limits.length} color="default" />
         {uniqueTypes.map(t => (
-          <SummaryBadge key={t} label={t} value="active" color={typeColors[t] || 'default'} />
+          <SummaryBadge key={t} label={t} value={dl('active')} color={typeColors[t] || 'default'} />
         ))}
         <SummaryBadge
           label="Violating Pods"
@@ -111,7 +113,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
           <div className="space-y-3">
             {limits.map((lim: any, li: number) => (
               <div key={li} data-detail-card="" className="border-t border-hairline pt-3">
-                <p className="text-xs text-slate-400 mb-1">Type: {lim.type || '-'}</p>
+                <p className="text-xs text-slate-400 mb-1"><Tx>Type</Tx>: {lim.type || '-'}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[480px]">
                     <thead className="text-slate-400">

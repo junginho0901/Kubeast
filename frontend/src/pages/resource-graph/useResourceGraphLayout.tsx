@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react'
 import i18next from 'i18next'
 import type { ResourceGraphNode, ResourceGraphEdge, TrafficEnd, TrafficLine } from '@/services/api'
-import { edgeStyles, isIssueNode, kindIcon, nodeColor, pointsUp, type GroupBy } from './constants'
+import { edgeLabel, edgeStyles, isIssueNode, kindIcon, nodeColor, pointsUp, type GroupBy } from './constants'
 import { applyElkLayout } from './elkLayout'
 import { boxHeight, buildTraffic, byPort, endText, lineColor, portText, BOX_HEIGHT, ROW_HEIGHT, ROWS_PADDING, type GraphView, type PortEdge, type PortRow, type TrafficEdge } from './traffic'
 
@@ -242,6 +242,7 @@ export function useResourceGraphLayout({
       .filter(e => edgeTypeFilters.has(e.type) && nodeIds.has(e.source) && nodeIds.has(e.target))
       .map((e, i) => {
         const style = edgeStyles[e.type] || edgeStyles.owns
+        const word = edgeLabel(edgeStyles[e.type] ? e.type : 'owns', (key, fallback) => i18next.t(key, fallback))
         const arrow = { type: MarkerType.ArrowClosed, color: style.stroke }
         const up = pointsUp(kindOf.get(e.source) ?? '', kindOf.get(e.target) ?? '')
         return {
@@ -251,7 +252,9 @@ export function useResourceGraphLayout({
           animated: e.type === 'selects',
           style: { stroke: style.stroke, strokeDasharray: style.strokeDasharray, strokeWidth: 1.5 },
           ...(up ? { markerStart: arrow } : { markerEnd: arrow }),
-          label: e.count && e.count > 1 ? `${style.label} · ${e.count}` : style.label,
+          label: e.count && e.count > 1 ? `${word} · ${e.count}` : word,
+          // React Flow's own name is "Edge from <id> to <id>" in English
+          ariaLabel: i18next.t('resourceGraph.edgeAria', { defaultValue: '{{source}} → {{target}} ({{relation}})', source: e.source, target: e.target, relation: word }),
           labelStyle: { fill: style.stroke, fontSize: 10 },
           labelBgStyle: { fill: 'var(--color-slate-900)', fillOpacity: 0.8 },
           labelBgPadding: [4, 2] as [number, number],

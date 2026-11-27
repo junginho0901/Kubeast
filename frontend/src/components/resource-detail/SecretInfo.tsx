@@ -31,6 +31,7 @@ interface Props {
 export default function SecretInfo({ name, namespace, rawJson }: Props) {
   const { t } = useTranslation()
   const tr = (key: string, fallback: string) => t(key, { defaultValue: fallback })
+  const dl = useDetailLabel()
   const { open: openDetail } = useResourceDetail()
 
   const enabled = !!namespace && !!name
@@ -196,7 +197,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
               <span className="text-xs text-slate-300">
                 {tlsInfo.hasCert ? (
                   <>
-                    {tlsInfo.certSize !== undefined && <span className="font-mono">{tlsInfo.certSize} bytes</span>}
+                    {tlsInfo.certSize !== undefined && <span className="font-mono">{dl('{{n}} bytes', { n: tlsInfo.certSize })}</span>}
                     {tlsInfo.isPem && <span className="ml-2 text-xs text-emerald-400/80"><Tx>(PEM format)</Tx></span>}
                   </>
                 ) : <span className="text-slate-500 italic"><Tx>not present</Tx></span>}
@@ -205,7 +206,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
             <InfoRow label="tls.key" value={
               <span className="text-xs text-slate-300">
                 {tlsInfo.hasKey ? (
-                  tlsInfo.keySize !== undefined ? <span className="font-mono">{tlsInfo.keySize} bytes</span> : <span><Tx>present</Tx></span>
+                  tlsInfo.keySize !== undefined ? <span className="font-mono">{dl('{{n}} bytes', { n: tlsInfo.keySize })}</span> : <span><Tx>present</Tx></span>
                 ) : <span className="text-slate-500 italic"><Tx>not present</Tx></span>}
               </span>
             } />
@@ -399,7 +400,7 @@ function SecretDataRow({ dataKey, size, value, canReveal }: { dataKey: string; s
   const [visible, setVisible] = useState(false)
   const [copied, setCopied] = useState(false)
   const [notCopied, setNotCopied] = useState(false)
-  const sizeStr = size !== undefined ? `${size} bytes` : ''
+  const sizeStr = size !== undefined ? dl('{{n}} bytes', { n: size }) : ''
 
   // the result stays beside the button until the next press, as a pressed button's result does on every screen
   const handleCopy = async () => {

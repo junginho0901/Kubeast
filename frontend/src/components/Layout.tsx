@@ -495,7 +495,7 @@ export default function Layout() {
             <div>
               {/* not an <h1>: the page title is the one heading of each screen */}
               <p className="text-xl font-bold text-ink">Kubeast</p>
-              <p className="text-xs text-slate-400">K8s DevOps Platform</p>
+              <p className="text-xs text-slate-400">{t('nav.tagline', 'K8s DevOps Platform')}</p>
             </div>
           </div>
 

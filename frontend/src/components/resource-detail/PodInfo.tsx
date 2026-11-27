@@ -411,9 +411,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Restart Policy" value={restartPolicy || '-'} />
           {runtimeClassName && <InfoRow label="Runtime Class" value={runtimeClassName} />}
           {preemptionPolicy && <InfoRow label="Preemption Policy" value={preemptionPolicy} />}
-          <InfoRow label="Host Network" value={hostNetwork ? 'Enabled' : 'Disabled'} />
-          <InfoRow label="Host PID" value={hostPID ? 'Enabled' : 'Disabled'} />
-          <InfoRow label="Host IPC" value={hostIPC ? 'Enabled' : 'Disabled'} />
+          <InfoRow label="Host Network" value={dl(hostNetwork ? 'Enabled' : 'Disabled')} />
+          <InfoRow label="Host PID" value={dl(hostPID ? 'Enabled' : 'Disabled')} />
+          <InfoRow label="Host IPC" value={dl(hostIPC ? 'Enabled' : 'Disabled')} />
           {(() => {
             // imagePullSecrets — registry 인증용 Secret list. backend snake_case +
             // raw spec camelCase 둘 다 처리. ResourceLink 로 Secret detail 점프.
@@ -895,7 +895,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               testId="pod-logs-lines"
               value={String(logLines)}
               onChange={(v) => setLogLines(Number(v))}
-              options={[50, 100, 500, 1000].map(n => ({ value: String(n), label: `${n} lines` }))}
+              options={[50, 100, 500, 1000].map(n => ({ value: String(n), label: tr('clusterView.logs.linesCount', '{{count}} lines', { count: n }) }))}
             />
             <button
               onClick={() => { setShowLogs(true); refetchLogs() }}
