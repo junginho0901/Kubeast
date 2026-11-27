@@ -92,13 +92,13 @@ test.describe('LogQL written by hand', () => {
     const here = await logqlAll(request, admin, CLUSTER, q)
     expect(here.status(), await here.text()).toBe(200)
     const hereBody = await here.json()
-    expect(hereBody.effectiveQuery).toBe(`{k8s_cluster_name="kubeast", k8s_cluster_name="kubeast-b"}`)
+    expect(hereBody.effectiveQuery).toBe(`{k8s_cluster_name="kubeast", k8s_namespace_name=~".+", k8s_cluster_name="kubeast-b"}`)
     expect(hereBody.lines).toEqual([])
 
     const there = await logqlAll(request, admin, OTHER, q)
     expect(there.status(), await there.text()).toBe(200)
     const thereBody = await there.json()
-    expect(thereBody.effectiveQuery).toBe(`{k8s_cluster_name="kubeast-b", k8s_cluster_name="kubeast-b"}`)
+    expect(thereBody.effectiveQuery).toBe(`{k8s_cluster_name="kubeast-b", k8s_namespace_name=~".+", k8s_cluster_name="kubeast-b"}`)
     expect(thereBody.lines.length).toBeGreaterThan(0)
   })
 
@@ -160,7 +160,7 @@ test.describe('LogQL written by hand', () => {
       const hidden = await logqlAll(request, reader, CLUSTER, inShell)
       expect(hidden.status(), await hidden.text()).toBe(200)
       const hiddenBody = await hidden.json()
-      expect(hiddenBody.effectiveQuery).toBe(`{k8s_cluster_name="kubeast", k8s_namespace_name!="${shellNs}", k8s_namespace_name="${shellNs}"} |= "${shellMarker}"`)
+      expect(hiddenBody.effectiveQuery).toBe(`{k8s_cluster_name="kubeast", k8s_namespace_name=~".+", k8s_namespace_name!="${shellNs}", k8s_namespace_name="${shellNs}"} |= "${shellMarker}"`)
       expect(hiddenBody.lines).toEqual([])
 
       const search = await request.get(`/api/v1/cluster/logsearch?cluster=${CLUSTER}&q=${shellMarker}&since=1h`, { headers: bearer(reader) })

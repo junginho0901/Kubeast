@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/anomaly"
@@ -98,32 +97,21 @@ func (c Config) NormalizeRange(start, end *time.Time, limit *int, now time.Time)
 }
 
 // LogQL builds the Loki query for req on cluster value clusterValue. Every
-// user value is a quoted literal; the cluster matcher (when the store has a
-// cluster label and this cluster a value in it — a cluster's own store may
-// hold it alone) and a namespace matcher are always present.
+// user value is a quoted literal; the matchers of scope (the cluster's when
+// the store has a cluster label and this cluster a value in it — a cluster's
+// own store may hold it alone — and a namespace matcher) are always present.
 func (c Config) LogQL(req Request, clusterValue string) string {
-	var m []string
-	if c.Labels.Cluster != "" && clusterValue != "" {
-		m = append(m, c.Labels.Cluster+"="+strconv.Quote(clusterValue))
-	}
-	if req.Namespace != "" {
-		m = append(m, c.Labels.Namespace+"="+strconv.Quote(req.Namespace))
-	} else {
-		m = append(m, c.Labels.Namespace+`=~".+"`)
-	}
-	if req.HiddenNamespace != "" {
-		m = append(m, c.Labels.Namespace+"!="+strconv.Quote(req.HiddenNamespace))
-	}
+	m := c.scope(clusterValue, req.Namespace, req.HiddenNamespace)
 	switch {
 	case req.Pod != "":
-		m = append(m, c.Labels.Pod+"="+strconv.Quote(req.Pod))
+		m = append(m, Matcher{Name: c.Labels.Pod, Value: req.Pod})
 	case req.WorkloadKind != "":
-		m = append(m, c.Labels.Pod+"=~"+strconv.Quote((&anomaly.Workload{Kind: req.WorkloadKind, Name: req.WorkloadName}).PodPattern()))
+		m = append(m, Matcher{Name: c.Labels.Pod, Value: (&anomaly.Workload{Kind: req.WorkloadKind, Name: req.WorkloadName}).PodPattern(), Regex: true})
 	}
 	if req.Container != "" {
-		m = append(m, c.Labels.Container+"="+strconv.Quote(req.Container))
+		m = append(m, Matcher{Name: c.Labels.Container, Value: req.Container})
 	}
-	q := "{" + strings.Join(m, ", ") + "}"
+	q := string(append(appendMatchers([]byte{'{'}, m), '}'))
 	switch {
 	case req.Text == "":
 	case req.Regex && req.IgnoreCase:

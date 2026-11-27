@@ -15,11 +15,39 @@ const MaxLogQLLength = 4096
 // ErrInvalidLogQL is a query the injector could not rewrite safely.
 var ErrInvalidLogQL = errors.New("invalid LogQL")
 
-// Matcher is one equality matcher added to every stream selector; Not makes it != instead.
+// Matcher is one matcher added to every stream selector: = by default, != with Not, =~ with Regex (!~ with both).
 type Matcher struct {
 	Name  string
 	Value string
 	Not   bool
+	Regex bool
+}
+
+// appendTo writes the matcher after b, its value a quoted literal.
+func (m Matcher) appendTo(b []byte) []byte {
+	b = append(b, m.Name...)
+	switch {
+	case m.Not && m.Regex:
+		b = append(b, "!~"...)
+	case m.Regex:
+		b = append(b, "=~"...)
+	case m.Not:
+		b = append(b, "!="...)
+	default:
+		b = append(b, '=')
+	}
+	return strconv.AppendQuote(b, m.Value)
+}
+
+// appendMatchers writes matchers after b, separated by ", ".
+func appendMatchers(b []byte, matchers []Matcher) []byte {
+	for i, m := range matchers {
+		if i > 0 {
+			b = append(b, ", "...)
+		}
+		b = m.appendTo(b)
+	}
+	return b
 }
 
 // InjectMatchers adds matchers to every stream selector of a LogQL query, so a
@@ -48,18 +76,7 @@ func injectMatchers(query string, matchers []Matcher, selector func(string)) (st
 	if strings.TrimSpace(query) == "" {
 		return "", fmt.Errorf("%w: empty query", ErrInvalidLogQL)
 	}
-	var added []byte
-	for i, m := range matchers {
-		if i > 0 {
-			added = append(added, ", "...)
-		}
-		added = append(added, m.Name...)
-		if m.Not {
-			added = append(added, '!')
-		}
-		added = append(added, '=')
-		added = strconv.AppendQuote(added, m.Value)
-	}
+	added := appendMatchers(nil, matchers)
 
 	out := make([]byte, 0, len(query)+len(matchers)*48)
 	selectors := 0

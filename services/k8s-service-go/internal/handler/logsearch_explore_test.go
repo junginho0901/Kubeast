@@ -81,7 +81,7 @@ func TestLogQLSearchLogQueryAndSeriesCap(t *testing.T) {
 	w := f.serve(f.h.LogQLSearchAll, logSearchRequestAs(logqlTarget("/api/v1/logsearch/logql", `{app="web"} | logfmt | level="error"`, ""), "self", "", podReader))
 	var res logsearch.Result
 	_ = json.Unmarshal(w.Body.Bytes(), &res)
-	if w.Code != http.StatusOK || res.ResultType != "streams" || len(res.Lines) != 1 || f.queries[0] != `{k8s_cluster_name="kubeast", app="web"} | logfmt | level="error"` {
+	if w.Code != http.StatusOK || res.ResultType != "streams" || len(res.Lines) != 1 || f.queries[0] != `{k8s_cluster_name="kubeast", k8s_namespace_name=~".+", app="web"} | logfmt | level="error"` {
 		t.Fatalf("status %d %s sent %v", w.Code, w.Body, f.queries)
 	}
 	if strings.Contains(w.Body.String(), "seriesTotal") {

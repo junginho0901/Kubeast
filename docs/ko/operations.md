@@ -283,17 +283,17 @@ Loki와 수집기는 따로 설치합니다([docs/ko/cluster-requirements.md §1
   - 모든 클러스터가 자기 저장소를 적는 운영이면 `url`·`clusters`는 둘 다 비워도 됩니다.
   - 레이블 **이름**과 한도는 배포 전체 값을 그대로 씁니다. "연결 확인"(`GET /api/v1/cluster/logsearch/status`)은 어느 저장소를 쓰는지, 그 저장소가 인증·테넌트까지 맞춰 응답하는지 보여 줍니다.
   - `networkPolicy`가 켜져 있으면 그 저장소의 호스트·포트도 `egressCIDRs`에 추가하세요.
-- **LogQL 직접 입력**: `features.logSearch.logql: true`(기본 off)이면 로그 검색을 쓸 수 있는 사람 모두에게 검색 칸 옆 "LogQL" 토글이 생깁니다. 따로 주는 권한은 없습니다. 한 Namespace를 읽을 때(화면은 이것만 합니다)는 읽는 범위가 구조화 검색과 같고, 전체 Namespace를 읽을 때는 아래처럼 더 넓습니다.
+- **LogQL 직접 입력**: `features.logSearch.logql: true`(기본 off)이면 로그 검색을 쓸 수 있는 사람 모두에게 검색 칸 옆 "LogQL" 토글이 생깁니다. 아래처럼 읽는 범위가 구조화 검색과 같으므로 따로 주는 권한은 없습니다.
   - 서버는 질의를 파싱하지 않고 Loki 렉서와 같은 규칙으로 문자열·주석을 건너뛴 뒤 **모든 스트림 선택자에 그 클러스터(+Namespace) 매처를 더해** 보냅니다.
     - 사용자가 `k8s_cluster_name="다른값"`을 써도 AND로 묶이므로 그 클러스터 밖은 빈 결과가 됩니다.
-    - 전체 Namespace를 읽을 때는 클러스터 매처만 붙습니다(저장소에 그 클러스터의 레이블 값이 없으면 그것도 안 붙음). 그래서 그 클러스터의 Namespace 레이블이 없는 스트림(같은 Loki에 모은 노드 로그·제어부 로그 같은 것)도 읽습니다. 구조화 검색은 선택자가 늘 Namespace 레이블을 요구하므로 그런 스트림이 빠집니다.
+    - 전체 Namespace를 읽을 때는 구조화 검색처럼 Namespace 매처가 `k8s_namespace_name=~".+"`이므로, Namespace 레이블이 없는 스트림(같은 Loki에 모은 노드 로그·제어부 로그 같은 것)은 읽지 않습니다.
     - 로그 쿼리만 받고(메트릭 쿼리는 400) 길이는 4 KB까지이며, 선택자가 없거나 리터럴·주석·선택자가 닫히지 않으면 400을 돌려줍니다.
     - 응답과 화면에는 실제로 보낸 질의(`effectiveQuery`)가 보이고, 감사는 `k8s.pod.logs.logql`로 남깁니다(쓴 질의·보낸 질의·줄 수).
   - API `GET /api/v1/namespaces/{ns}/logsearch/query?q=…` · `GET /api/v1/cluster/logsearch/query?q=…`(전체 NS, 범위 부여가 없을 때만).
   - 문(Pod 읽기 + 사용자 신원 `get pods/log` + 분당 한도)과 감사 준비 확인은 구조화 검색과 같습니다.
   - 예전 권한 `admin.logsearch.query`는 없어졌습니다(DB 마이그레이션 00019가 역할에서 지움).
 - **AI의 LogQL**(`loki_query`·`loki_labels`·`loki_patterns`): 로그 검색이 켜진 클러스터에서는 **구조화 검색을 쓸 수 있는 사람의 AI**가 이 도구를 씁니다(화면 `logql` 스위치와 무관).
-  - 위와 같은 주입기가 모든 선택자에 클러스터(+Namespace) 매처를 붙입니다. 한 Namespace를 읽을 때는 구조화 검색보다 넓게 읽지 못하고, 전체 Namespace를 읽을 때는 위처럼 그 클러스터의 Namespace 레이블이 없는 스트림도 읽습니다. 그 밖에 늘어나는 것은 세기·묶기·`| json` 같은 표현력입니다.
+  - 위와 같은 주입기가 모든 선택자에 클러스터(+Namespace) 매처를 붙이므로 구조화 검색보다 넓게 읽지 못하고, 늘어나는 것은 세기·묶기·`| json` 같은 표현력뿐입니다.
   - 메트릭 쿼리(`count_over_time`·`rate`·`topk`)는 시리즈로 답하고, 답 아래에 그래프로도 그립니다(`chart=true`).
   - API `GET /api/v1/[cluster/namespaces/{ns}/]logsearch/logql?q=&step=` · `…/logsearch/labels[?label=]` · `…/logsearch/patterns?q=<선택자>`
     - 문은 같습니다(Pod 읽기 + `get pods/log` + 분당 한도).

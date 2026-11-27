@@ -129,15 +129,15 @@ type QueryRequest struct {
 	HiddenNamespace string
 }
 
-// Query adds the cluster's matcher (when its store has a cluster label) and
-// the namespace matcher to every stream selector of req.Query, then runs it.
-// The query actually sent comes back as Result.EffectiveQuery.
+// Query adds the matchers of a structured search (scope) to every stream
+// selector of req.Query, then runs it. The query actually sent comes back as
+// Result.EffectiveQuery.
 func (s *Searcher) Query(ctx context.Context, req QueryRequest) (Result, error) {
 	store, value, ok := s.resolve(ctx, req.Cluster)
 	if !ok {
 		return Result{}, ErrNotConfigured
 	}
-	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace, req.HiddenNamespace))
+	effective, err := InjectMatchers(req.Query, s.cfg.scope(value, req.Namespace, req.HiddenNamespace))
 	if err != nil {
 		return Result{}, err
 	}
@@ -146,17 +146,24 @@ func (s *Searcher) Query(ctx context.Context, req QueryRequest) (Result, error) 
 	return res, err
 }
 
-// scope is the matchers a query on cluster label value (and namespace, without the hidden one) gets.
-func (s *Searcher) scope(value, namespace, hidden string) []Matcher {
+// scope is the matchers every read of cluster label value value starts from,
+// a structured search (LogQL) and a query written by hand or by the AI alike:
+// the cluster's, when the store has a cluster label and this cluster a value
+// in it; the namespace's, or across namespaces one that asks for a namespace
+// label, so streams without one (node or control-plane logs kept in the same
+// store) are not read; and the hidden namespace's.
+func (c Config) scope(value, namespace, hidden string) []Matcher {
 	var m []Matcher
-	if s.cfg.Labels.Cluster != "" && value != "" {
-		m = append(m, Matcher{Name: s.cfg.Labels.Cluster, Value: value})
+	if c.Labels.Cluster != "" && value != "" {
+		m = append(m, Matcher{Name: c.Labels.Cluster, Value: value})
 	}
 	if namespace != "" {
-		m = append(m, Matcher{Name: s.cfg.Labels.Namespace, Value: namespace})
+		m = append(m, Matcher{Name: c.Labels.Namespace, Value: namespace})
+	} else {
+		m = append(m, Matcher{Name: c.Labels.Namespace, Value: ".+", Regex: true})
 	}
 	if hidden != "" {
-		m = append(m, Matcher{Name: s.cfg.Labels.Namespace, Value: hidden, Not: true})
+		m = append(m, Matcher{Name: c.Labels.Namespace, Value: hidden, Not: true})
 	}
 	return m
 }
@@ -202,7 +209,7 @@ func (s *Searcher) Patterns(ctx context.Context, req QueryRequest) (PatternsResu
 	if !ok {
 		return PatternsResult{}, ErrNotConfigured
 	}
-	effective, err := InjectMatchers(req.Query, s.scope(value, req.Namespace, req.HiddenNamespace))
+	effective, err := InjectMatchers(req.Query, s.cfg.scope(value, req.Namespace, req.HiddenNamespace))
 	if err != nil {
 		return PatternsResult{}, err
 	}
