@@ -1,12 +1,13 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { NodeEntry } from './hooks/useClusterDerived'
 import type { ClusterViewNode } from './hooks/useClusterPodsQuery'
-import { GAP, focusSpokenCell, layoutMap, mapKey, mapNodeCount, mapSpeech, pointerFocusAfter, spokenAfter, type MapSpoken } from './nodeMapLayout'
+import { GAP, crossWidth, dotShape, focusSpokenCell, layoutMap, mapKey, mapNodeCount, mapSpeech, pointerFocusAfter, spokenAfter, traceDot, type MapSpoken } from './nodeMapLayout'
 import { nodeCordoned, nodeReadiness } from '@/utils/nodeStatus'
 
 // Every node at a glance: a cell per node in the boxes' order, a dot per pod in the cards' colour (errors first, then
-// warnings, then the rest, so a problem is never at the end of a cell). Canvas 2D, one fillRect per dot — static, so
-// 100 000 dots draw in milliseconds. The cell is large enough to hold the busiest node's dots, so no pod is left out.
+// warnings, then the rest, so a problem is never at the end of a cell), a healthy pod's a square, a warning's a triangle
+// and an error's a cross (dotShape). Canvas 2D, one fillRect per square and one path per kind for the others — static,
+// so 100 000 dots draw in milliseconds. The cell is large enough to hold the busiest node's dots, so no pod is left out.
 // While the boxes take more than one page, the cells of the page shown are outlined, and in a node's own view its cell.
 // While a search is on, the nodes with no pod it matched are faded. A node not Ready (kubectl's NotReady or Unknown)
 // has a solid red border, a cordoned one (SchedulingDisabled) a dashed yellow one, drawn over the page's outline, from
@@ -98,17 +99,30 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
       ctx.fillRect((i % cols) * (cell + GAP), Math.floor(i / cols) * (cell + GAP), cell, cell)
     })
     ctx.globalAlpha = 1
+    const size = Math.max(1, dot - (dot > 2 ? 1 : 0))
     for (const [key, color] of [['error', colors.error], ['warn', colors.warn], ['ok', colors.ok]] as const) {
       ctx.fillStyle = color
+      ctx.strokeStyle = color
+      // a triangle or a cross: every dot of the kind in one path, then one fill or one stroke
+      const shape = dotShape(key, size)
+      if (shape !== 'square') ctx.beginPath()
       entries.forEach((e, i) => {
         const x0 = (i % cols) * (cell + GAP) + 2
         const y0 = Math.floor(i / cols) * (cell + GAP) + 2
         const start = key === 'error' ? 0 : key === 'warn' ? e.counts.error : e.counts.error + e.counts.warn
         const count = e.counts[key]
         for (let k = start; k < start + count; k++) {
-          ctx.fillRect(x0 + (k % per) * dot, y0 + Math.floor(k / per) * dot, Math.max(1, dot - (dot > 2 ? 1 : 0)), Math.max(1, dot - (dot > 2 ? 1 : 0)))
+          const x = x0 + (k % per) * dot
+          const y = y0 + Math.floor(k / per) * dot
+          if (shape === 'square') ctx.fillRect(x, y, size, size)
+          else traceDot(ctx, shape, x, y, size)
         }
       })
+      if (shape === 'triangle') ctx.fill()
+      if (shape === 'cross') {
+        ctx.lineWidth = crossWidth(size)
+        ctx.stroke()
+      }
     }
     if (pageEnd > pageStart) {
       ctx.strokeStyle = cssColor('--color-ink', '#fff')
@@ -210,8 +224,9 @@ export function ClusterNodeMap({ entries, pageStart, pageEnd, onSelect, nodeList
       </div>
       <div className="mt-3 space-y-1 text-xs text-slate-400" data-testid="cluster-view-map-legend">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-red-400" />{tr('clusterView.map.error', 'Error')} {totals.error}</span>
-          <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-yellow-400" />{tr('clusterView.map.warn', 'Warning')} {totals.warn}</span>
+          {/* the dots' shapes: a cross, a triangle, a square */}
+          <span className="inline-flex items-center gap-1.5"><svg viewBox="0 0 8 8" className="h-2 w-2 shrink-0 stroke-red-400" fill="none" aria-hidden="true"><path d="M1.5 1.5L6.5 6.5M6.5 1.5L1.5 6.5" strokeWidth={2.5} /></svg>{tr('clusterView.map.error', 'Error')} {totals.error}</span>
+          <span className="inline-flex items-center gap-1.5"><svg viewBox="0 0 8 8" className="h-2 w-2 shrink-0 fill-yellow-400" aria-hidden="true"><path d="M4 0L8 8H0Z" /></svg>{tr('clusterView.map.warn', 'Warning')} {totals.warn}</span>
           <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2 w-2 rounded-sm bg-green-400" />{tr('clusterView.map.ok', 'Healthy')} {totals.pods - totals.error - totals.warn}</span>
           {notReady > 0 && (
             <button type="button" className={legendButton} data-testid="cluster-view-map-not-ready" onClick={() => onOpenNode?.(notReadyNodes[0].name)}
