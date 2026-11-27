@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // GET /api/v1/auth/admin/oidc/groups?email= — the Google Workspace groups a user would bring at sign-in and what
 // they map to (auth.oidc.googleGroups). With the lookup off the API says so (404); with it on it answers the
@@ -12,7 +13,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test('the group preview answers by the lookup state, and refuses a Read user', async ({ request }) => {

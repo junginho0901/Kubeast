@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // A real Argo CD (scripts/kind-argocd.sh up: the core install on the second cluster, `default`) syncing the
 // podinfo chart into e2e-argo as Application e2e-podinfo. gitops-guard.spec.ts and ai-admin-tools.spec.ts check
@@ -36,7 +37,7 @@ function application(): any {
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login ${EMAIL}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('Argo CD (real)', () => {

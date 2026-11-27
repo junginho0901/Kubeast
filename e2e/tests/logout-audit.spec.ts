@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // POST /auth/logout is a public route (a session that already expired must
 // still be able to sign out), so the audit row's actor comes from the token
@@ -19,7 +20,7 @@ const made: string[] = []
 async function login(request: APIRequestContext, email = EMAIL, password = PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email} should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function throwaway(request: APIRequestContext, name: string): Promise<string> {

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Chat history is scoped per cluster (step 13): sessions.cluster_id, written +
 // filtered by session-service. A session created while one cluster is selected
@@ -10,7 +11,7 @@ const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok()).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('multi-cluster chat history (step 13)', () => {

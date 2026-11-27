@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // H11: bumping a user's token_version (cluster grant change, role change,
 // password reset) revokes every token issued so far on every service, not
@@ -19,7 +20,7 @@ const PROBES = {
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 test.describe('token revocation (H11)', () => {

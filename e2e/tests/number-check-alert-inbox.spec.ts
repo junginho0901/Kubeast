@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Number check of the Alerts screen against the webhook, the inbox API and the database:
 // - one webhook message of 101 alerts (severity info, kept and not investigated) is 101 inbox rows: the webhook's
@@ -53,7 +54,7 @@ function am(method: 'GET' | 'POST' | 'DELETE', urlPath: string, body?: unknown):
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login ${ADMIN_EMAIL}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // the rows the table shows now, by inbox id

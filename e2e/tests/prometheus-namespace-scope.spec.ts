@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A grant limited to namespaces is refused the cluster's Prometheus, which answers for the whole cluster, whichever
 // way the cluster reaches it: through the API server's proxy as the user (a cluster-wide reader's cached answer was
@@ -34,7 +35,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 const READS = [

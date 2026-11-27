@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Optimization → "Apply without restart" (chart features.inPlaceResize, server 1.35+): one row's values go to the
 // workload's running pods through the pod resize subresource. The pod keeps running (same UID, no restart) with the
@@ -37,7 +38,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

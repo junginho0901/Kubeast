@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Number check of Advanced Search on cluster `default`: what it loads is each selected type's own list up to the
 // limit, as the cluster has it (core Events and events.k8s.io Events are two types of one Kind); a type that fails is
@@ -186,7 +187,7 @@ test.describe('Number check — Advanced Search loads what the cluster has', () 
     const login = async (email: string, password: string) => {
       const res = await request.post('/api/v1/auth/login', { data: { email, password } })
       expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-      return (await res.json()).access_token as string
+      return sessionToken(res)
     }
     const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' })
     const adminToken = await login(admin, process.env.E2E_USER_PASSWORD || '')

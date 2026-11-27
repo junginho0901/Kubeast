@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // `server reset-admin` gets an account back when its password is lost, it is locked or it lost the Admin role: run in
 // the auth-service pod, it sets the account to the DEFAULT_ADMIN_PASSWORD password (the dev admin's, which the suite
@@ -30,7 +31,7 @@ async function login(request: APIRequestContext, email: string, password: string
 test('reset-admin gives a locked, demoted account the Secret password and the Admin role back', async ({ request }) => {
   const kubectl = kubeastKubectl()
   test.skip(!kubectl, 'no kind cluster kubeast')
-  const admin = bearer((await (await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)).json()).access_token)
+  const admin = bearer(sessionToken(await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)))
   const roles = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
   const member = (Array.isArray(roles) ? roles : roles.roles || []).find((r: { name: string }) => r.name === 'Member').id
   const email = `e2e-recover-${Date.now().toString(36)}@kubeast.local`
@@ -47,7 +48,7 @@ test('reset-admin gives a locked, demoted account the Secret password and the Ad
 
     const res = await login(request, email, ADMIN_PASSWORD)
     expect(res.status(), 'the Secret password signs in').toBe(200)
-    const me = await (await request.get('/api/v1/auth/me', { headers: bearer((await res.json()).access_token) })).json()
+    const me = await (await request.get('/api/v1/auth/me', { headers: bearer(sessionToken(res)) })).json()
     expect(me.role?.name).toBe('Admin')
     expect((await login(request, email, 'e2e-recover-old-pw')).status(), 'the old password').toBe(401)
 

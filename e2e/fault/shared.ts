@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { expect, request as playwrightRequest, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from '../tests/session-token'
 
 // What the fault tests under e2e/fault share: the dev install's kubectl, sign-in, the pods of a Deployment, a
 // port-forward to one pod, a probe that keeps sending requests and writes down every answer, and the restore steps.
@@ -87,7 +88,7 @@ export const psql = (sql: string) => kubectl(['-n', NS, 'exec', 'deploy/postgres
 export async function login(request: APIRequestContext, email = ADMIN_EMAIL, password = ADMIN_PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token as string
+  return sessionToken(res)
 }
 
 export type Pod = { name: string; ready: boolean; restarts: number; deleting: boolean; ip: string }

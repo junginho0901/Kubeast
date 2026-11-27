@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
+import { sessionToken } from './session-token'
 
 // Audit sinks copy audit rows out of the database. The dev kind install points
 // three sinks at the stand-ins in deploy/kind/devtools.yaml: dev-s3 (an
@@ -61,7 +62,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 async function configMap(request: APIRequestContext, admin: string, name: string) {
   const made = await request.post(`/api/v1/cluster/resources/yaml/create?cluster=${CLUSTER}`, {

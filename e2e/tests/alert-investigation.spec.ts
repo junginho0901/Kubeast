@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // Alert → AI investigation (features.alertInvestigation on in the dev values). The webhook takes Alertmanager's
 // message with the Bearer token from kubeast-secrets; a queued alert is investigated by the worker with the read-only
@@ -41,7 +42,7 @@ const webhookToken = () =>
 async function login(request: APIRequestContext, email = ADMIN_EMAIL, password = ADMIN_PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 function message(alerts: Array<Record<string, unknown>>) {

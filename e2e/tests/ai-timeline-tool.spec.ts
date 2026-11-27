@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The AI tool timeline through the MCP endpoint, so the checks are exact, against the API the Timeline screen reads and
 // against kubectl on self: the counts are the screen's, the list says when it holds the newest M of N (520 recent
@@ -76,7 +77,7 @@ const counted = (s: Obj) => { const { time_range: _clock, ...rest } = s; return 
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function call(request: APIRequestContext, token: string, args: Record<string, unknown>) {

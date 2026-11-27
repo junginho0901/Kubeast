@@ -267,6 +267,8 @@ class Server:
                 self.send_response(status)
                 self.send_header("Content-Type", "text/event-stream" if stream else "application/json")
                 self.send_header("Content-Length", str(len(data)))
+                if url.path == "/api/v1/auth/login" and status == 200:  # the token in the cookie too, as auth-service sets it
+                    self.send_header("Set-Cookie", f"kubeast.token={answer['access_token']}; Path=/; HttpOnly; SameSite=Strict")
                 self.end_headers()
                 self.wfile.write(data)
 

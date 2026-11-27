@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A turn the user stops half-way still costs tokens, so it is still accounted
 // for: ai.chat.complete is written with finish_reason "cancelled". The ai.*
@@ -13,7 +14,7 @@ const STOP_RE = /^중단$|^stop$/i
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 type AuditItem = { Cluster?: string; cluster?: string; After?: any; after?: any; CreatedAt?: string }

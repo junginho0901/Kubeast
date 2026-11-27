@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The Alerts inbox (features.alertInvestigation on in the dev values): every alert the webhook gets, one row per alert
 // (cluster + fingerprint + startsAt), firing or resolved, for whoever reads the cluster as a whole. The alerts here
@@ -44,7 +45,7 @@ async function navigate(page: Page, to: string) {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 type Item = { id: string; alertname: string; status: string; received_count: number; resolved_at: string | null; starts_at: string; acknowledged: boolean; assignee: string; done: boolean; note?: string }

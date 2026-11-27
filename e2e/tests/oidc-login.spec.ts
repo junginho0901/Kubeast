@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { SESSION_COOKIE, sessionToken } from './session-token'
 
 // OpenID Connect sign-in against a mock provider (e2e/scripts/oidc-mock.sh up).
 // The provider is reached as host.docker.internal:8080 by both auth-service
@@ -52,7 +53,7 @@ async function me(page: Page) {
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // The kind cluster kubeast's database, for a row no route writes any more. The kubeconfig comes from `kind get
@@ -131,7 +132,7 @@ test.describe('OIDC sign-in', () => {
     expect(body.auth_source).toBe('oidc')
 
     const cookies = await page.context().cookies()
-    const session = cookies.find((c) => c.name === 'kubeast.token')
+    const session = cookies.find((c) => c.name === SESSION_COOKIE)
     expect(session?.httpOnly).toBe(true)
     // The one-shot login state cookie is consumed by the callback.
     expect(cookies.find((c) => c.name === 'kubeast.oidc')).toBeUndefined()

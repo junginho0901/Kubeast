@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Node values from the OpenTelemetry Collector's hostmetrics receiver instead of node-exporter
 // (scripts/kind-hostmetrics.sh: a collector on the first cluster writes system_* series with cluster="kubeast"
@@ -29,7 +30,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function value(request: APIRequestContext, admin: string, cluster: string, q: string): Promise<number | undefined> {

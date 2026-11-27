@@ -5,6 +5,7 @@ import {
   killNoSignal, killPod, kindKubectl, kubectl, kubectlOk, lastEnd, listSocketBack, listSockets, login, onPod, psql, readyPods, restartCounts,
   restartsSince, rolledOut, show, sleep, stopFor, stopPod, undoPending, watchListSockets, wsSubscriptions, type Answer, type Forward, type FreezeTarget,
 } from './shared'
+import { SESSION_COOKIE } from '../tests/session-token'
 
 // PR #858 (drain progress in the database): node_drains holds each drain's progress, its owner (the server running
 // it) refreshes a heartbeat every 5 s, and an open row whose heartbeat is 20 s old reads as interrupted on any replica
@@ -311,7 +312,7 @@ test.describe('drain progress in the database (PR #858)', () => {
       await expect.poll(async () => (await statusOf(onB, node, id)).body?.status, { timeout: 30_000 }).toBe('draining')
       const termCtx = await browser.newContext({ baseURL: `http://127.0.0.1:${fwd[victim].port}` })
       contexts.push(termCtx)
-      await termCtx.addCookies([{ name: 'kubeast.token', value: token, url: `http://127.0.0.1:${fwd[victim].port}` }])
+      await termCtx.addCookies([{ name: SESSION_COOKIE, value: token, url: `http://127.0.0.1:${fwd[victim].port}` }])
       const term = await termCtx.newPage()
       await term.goto('/health')
       await term.evaluate(({ pod }) => {

@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
 import { turnToRow } from './list-pages'
+import { sessionToken } from './session-token'
 
 // A custom role (docs/features.md "Roles and permissions"): the sidebar shows only the groups its menu.* permissions name, and the
 // dashboard overview is refused while the cluster has not bound the role's group kubeast:role:<slug> — the counts
@@ -14,7 +15,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function roleId(request: APIRequestContext, admin: string, name: string): Promise<number> {

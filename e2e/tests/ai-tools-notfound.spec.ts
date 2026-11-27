@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The read tools answer a miss with a result the model can act on instead of a kubectl error:
 // {"status":"not_found","similar":[...]}, unknown_kind, unavailable, container_required. k8s_find_resource
@@ -27,7 +28,7 @@ const kubectl = kubectlFor('kubeast')
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function call(request: APIRequestContext, token: string, name: string, args: Record<string, unknown>) {

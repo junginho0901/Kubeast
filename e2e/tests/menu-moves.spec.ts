@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Two screens left the Admin group. Node Shell's settings, which this browser keeps, are a card of the Account page;
 // Cluster Hygiene is in the Cluster group and its report goes with the cluster: an Admin grant there reads it, the Read
@@ -14,7 +15,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token as string
+  return sessionToken(res)
 }
 
 let admin = ''

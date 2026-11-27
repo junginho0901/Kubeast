@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A-2 (records/ns-scope-20261012.md): a namespace-scoped grant is enforced — a namespaced path outside the grant is
 // refused before any cluster call, the namespace list is the grant, all-namespaces lists fan out over it, the overview
@@ -31,7 +32,7 @@ const tryKubectl = (args: string) => { try { return kubectl(args) } catch { retu
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

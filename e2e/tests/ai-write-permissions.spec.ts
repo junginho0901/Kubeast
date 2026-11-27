@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Pod exec and a rollout undo ask for the screens' permissions through the AI too (resource.pod.exec,
 // resource.workload.rollback, next to ai.tool.*): over MCP and in the chat, Write is not offered exec and is told what
@@ -38,7 +39,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 type ToolResult = { isError?: boolean; content: { type: string; text: string }[] }

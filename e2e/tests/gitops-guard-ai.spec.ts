@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The Argo CD guard also holds for the AI write tools: an approved k8s_scale
 // on the managed fixture Deployment comes back refused, with the Application
@@ -14,7 +15,7 @@ const QUERY = 'self 클러스터의 default 네임스페이스에 있는 e2e-arg
 async function login(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 async function desiredReplicas(request: APIRequestContext, admin: Record<string, string>): Promise<number | null> {

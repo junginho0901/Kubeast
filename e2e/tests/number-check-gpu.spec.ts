@@ -6,6 +6,7 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { readEveryPage } from './list-pages'
+import { sessionToken } from './session-token'
 
 // The GPU Dashboard, GPU Nodes and GPU Pods screens' numbers are the cluster's, on test2 with fake GPUs
 // (scripts/kind-gpu.sh up: the node advertises nvidia.com/gpu and nvidia.com/mig-1g.5gb with GPU Feature Discovery's
@@ -331,7 +332,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
   const admin = async (request: APIRequestContext) => {
     const res = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
     expect(res.ok(), `admin login: ${res.status()}`).toBeTruthy()
-    return { Authorization: `Bearer ${(await res.json()).access_token as string}`, 'X-Requested-With': 'XMLHttpRequest' }
+    return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
   }
   const registeredOn = async (request: APIRequestContext, headers: Record<string, string>) => {
     const body = await (await request.get('/api/v1/clusters', { headers })).json()
@@ -1084,7 +1085,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       if (await mcpOn(request, headers)) {
         const signedIn = await request.post('/api/v1/auth/login', { data: { email, password } })
         expect(signedIn.ok(), `login ${email}`).toBeTruthy()
-        const tool = await gpuTool(request, `Bearer ${(await signedIn.json()).access_token as string}`)
+        const tool = await gpuTool(request, `Bearer ${sessionToken(signedIn)}`)
         expect({ capacity: tool.total_gpu_capacity, allocatable: tool.total_gpu_allocatable, used: tool.total_gpu_used, free: tool.total_gpu_free, nodes: tool.gpu_nodes, pods: tool.pod_counts, vendors: tool.vendors, gpus: tool.gpus })
           .toEqual({ capacity: null, allocatable: null, used: null, free: null, nodes: null, pods: null, vendors: null, gpus: null })
         expect(tool.refused.dashboard, 'the cluster refuses the nodes').toContain('forbidden')

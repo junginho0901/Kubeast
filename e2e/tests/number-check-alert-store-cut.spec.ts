@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page, type Route } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // What a silence would mute, and the alert store's limit, said: the second cluster's Alertmanager (NodePort 31093,
 // features.alertStore for cluster default, dev maxAlerts 100) gets 105 alerts of one name, so the silence window
@@ -49,7 +50,7 @@ async function resolveCase() {
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login ${ADMIN_EMAIL}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // the silence window's preview: the count line, its own notes, and per page the alerts' cells and the pager's range

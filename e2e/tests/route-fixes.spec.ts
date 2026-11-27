@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Three routes the Read-role sweep found misbehaving for everyone: a node delete never reached k8s-service through the
 // gateway (chi's "404 page not found"), a Helm diff with a bad revision answered 500, and a YAML create with no YAML
@@ -15,7 +16,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('routes found in the Read sweep', () => {

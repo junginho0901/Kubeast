@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The screens' Cordon, Suspend and Run now through the AI: each tool presses the button's route as the user, so what it
 // does is held to kubectl and its rows to the audit API, and the role that holds only a button is offered only that.
@@ -30,7 +31,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

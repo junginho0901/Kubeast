@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The AI's trace tools — traces_search, traces_get, traces_tags, traces_metrics, traces_compare — driven through
 // the MCP endpoint so the checks are exact, against the Tempo of scripts/kind-tracing.sh (one Tempo in the second
@@ -33,7 +34,7 @@ function kubectlFor(kindName: string) {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function call(request: APIRequestContext, token: string, name: string, args: Record<string, unknown>) {

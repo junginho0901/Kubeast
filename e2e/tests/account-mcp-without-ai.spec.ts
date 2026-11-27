@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The Settings page's API key card and the MCP options in it. With chart ai.enabled off there is no ai-service, and
 // /api/v1/ai/mcp/config is the gateway's 503 after its 3 s connect timeout: the card asks nothing of it and says in the
@@ -17,7 +18,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('the API key card when AI is off or does not answer', () => {

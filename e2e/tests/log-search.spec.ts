@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Log search (features.logSearch) against the kind setup of scripts/kind-logsearch.sh: one Loki in the
 // second cluster, a collector per cluster. A Job prints a unique line; the search finds it by text and by
@@ -29,7 +30,7 @@ const tryKubectl = (args: string) => { try { return kubectl(args) } catch { retu
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function search(request: APIRequestContext, token: string, cluster: string, query: string): Promise<Line[]> {

@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Resource Graph pod groups (group_pods): the healthy pods of an owner with more than 10 pods and the same lines
 // are one box whose lines stand for every pod, a failing pod stays a box of its own, a StatefulSet's per-pod PVCs
@@ -125,7 +126,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function graph(request: APIRequestContext, query = ''): Promise<Graph> {
   const login = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(login.ok()).toBeTruthy()
-  const res = await request.get(`/api/v1/resource-graph?namespaces=${NS}&cluster=self&group_pods=1${query}`, { headers: bearer((await login.json()).access_token) })
+  const res = await request.get(`/api/v1/resource-graph?namespaces=${NS}&cluster=self&group_pods=1${query}`, { headers: bearer(sessionToken(login)) })
   expect(res.ok(), `resource graph ${res.status()}`).toBeTruthy()
   return res.json()
 }

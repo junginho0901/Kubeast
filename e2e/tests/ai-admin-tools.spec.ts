@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { waitUntilListed } from './number-check.cr-shared'
+import { sessionToken } from './session-token'
 
 // gitops_status (a read tool: Argo CD Applications as the user) and the Admin-only audit_search,
 // nodes_stats_summary and nodes_log. Driven through the MCP endpoint as the admin and a temporary
@@ -48,7 +49,7 @@ const kubectl = kubectlFor('kubeast')
 async function login(request: APIRequestContext, email = EMAIL, password = PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createReadUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

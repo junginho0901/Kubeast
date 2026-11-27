@@ -6,6 +6,7 @@ import path from 'node:path'
 import { test, expect, type Page } from '@playwright/test'
 
 import { everyPage, pagesOf, type Pages } from './drawer-pages'
+import { sessionToken } from './session-token'
 
 // A policy report's result may pick its resources by label (resourceSelector) instead of naming them. On `default`, in
 // a namespace of its run with a hand-written report (Kyverno's report controller leaves those alone): each object whose
@@ -179,7 +180,7 @@ test.describe('number check — policy results that pick by label', () => {
 
         const login = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
         expect(login.ok(), `login: ${login.status()}`).toBeTruthy()
-        const token = (await login.json()).access_token as string
+        const token = sessionToken(login)
         const config = await request.get('/api/v1/ai/mcp/config', { headers: { Authorization: `Bearer ${token}` } })
         if (config.ok() && (await config.json()).enabled) {
           // the tool reads without a refresh too, so it may be another pod's answer of up to a minute ago

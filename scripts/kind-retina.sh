@@ -38,8 +38,9 @@ token() {
   if [ -z "$password" ]; then
     password=$(main_kubectl -n "$NAMESPACE" get secret kubeast-secrets -o jsonpath='{.data.DEFAULT_ADMIN_PASSWORD}' | base64 -d)
   fi
-  curl -s -X POST -H 'Content-Type: application/json' \
-    -d "$(jq -nc --arg e "$email" --arg p "$password" '{email:$e,password:$p}')" "$GATEWAY/api/v1/auth/login" | jq -r '.access_token'
+  curl -s -o /dev/null -D - -X POST -H 'Content-Type: application/json' \
+    -d "$(jq -nc --arg e "$email" --arg p "$password" '{email:$e,password:$p}')" "$GATEWAY/api/v1/auth/login" \
+    | awk -f "$ROOT/scripts/session-token.awk"
 }
 
 registered_id() { # the Kubeast cluster whose name is $NAME, if any

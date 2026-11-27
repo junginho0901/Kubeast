@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // OIDC sign-in through a real Keycloak (e2e/scripts/oidc-keycloak.sh up: Keycloak 26.8.1 on the host, realm
 // deploy/kind/keycloak-realm.json, Kubeast pointed at it with deploy/kind/keycloak-oidc-values.yaml). The groups
@@ -47,7 +48,7 @@ async function me(page: Page) {
 async function admin(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 // Keycloak's admin REST API as the bootstrap admin of the dev container.

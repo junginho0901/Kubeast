@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Two namespaces are guarded on top of what the cluster's RBAC says (services/pkg/protectedns). On `self`, where Kubeast
 // runs, its own namespace is for global admins: its Secrets and Helm releases, any change there and terminals in its
@@ -42,7 +43,7 @@ const kubectl = kubectlFor('kubeast')
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A release's editor without resource.secret.reveal reads its values masked. A placeholder left where it was shown stands
 // for the value, on the Values tab's save and on the API's: the release's values and what they render stay, and the edit
@@ -51,7 +52,7 @@ const textKey = async (page: Page, to: 'start' | 'end') => {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 const TEMPLATE = 'apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {{ .Release.Name }}-conf\ndata:\n  replicas: {{ .Values.replicaCount | quote }}\n  sum: {{ .Values.adminPassword | sha256sum | quote }}\n'

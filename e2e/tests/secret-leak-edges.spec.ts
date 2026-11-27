@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // What stays out of a tool's answer, an audit row and a window, called over MCP and the API with no model: a Secret in the
 // shapes kubectl does not print, a terminal's command in its row, what a read took out in its row's count, a server's
@@ -30,7 +31,7 @@ const stamp = () => Date.now().toString(36)
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function mcpOn(request: APIRequestContext, token: string): Promise<boolean> {

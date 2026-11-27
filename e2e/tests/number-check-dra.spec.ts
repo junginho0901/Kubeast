@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The DRA screens' numbers are the cluster's, on test2 with the DRA example driver (scripts/kind-gpu.sh up — eight
 // mock GPUs of gpu.example.com on the node): the four lists' rows, columns and cards against the API server's Table
@@ -559,7 +560,7 @@ test.describe('number check — DRA screens', () => {
     const login = async (email: string, password: string) => {
       const res = await request.post('/api/v1/auth/login', { data: { email, password } })
       expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-      return (await res.json()).access_token as string
+      return sessionToken(res)
     }
     const adminToken = await login(admin, process.env.E2E_USER_PASSWORD || '')
     const id = Date.now().toString(36)

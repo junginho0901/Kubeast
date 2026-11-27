@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // Dormant accounts: an account with no sign-in and no API key use for
 // DORMANT_ACCOUNTS_DAYS is locked by the sweeper and refused at login and at
@@ -36,7 +37,7 @@ async function login(request: APIRequestContext, email: string, password: string
     return ''
   }
   expect(res.ok(), `login ${email}: ${res.status()} ${await res.text()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function roleId(request: APIRequestContext, admin: string, name: string): Promise<number> {

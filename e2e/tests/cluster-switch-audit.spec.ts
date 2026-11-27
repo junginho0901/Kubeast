@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Switching clusters in the picker leaves a `user.cluster.switch` audit row
 // (POST /api/v1/audit/cluster-switch, fired by ClusterProvider.setCurrentCluster).
@@ -10,7 +11,7 @@ const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function switchRows(request: APIRequestContext, token: string, since: string) {

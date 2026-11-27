@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Number check of the RBAC tab of the Cluster View's pod window on cluster `self`: what the route answers and the tab
 // draws adds up to `kubectl auth can-i --list --as system:serviceaccount:<ns>:<sa> -n <ns>`, each binding is listed by
@@ -176,7 +177,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token as string
+  return sessionToken(res)
 }
 const adminToken = (request: APIRequestContext) => login(request, process.env.E2E_USER_EMAIL || 'admin', process.env.E2E_USER_PASSWORD || '')
 

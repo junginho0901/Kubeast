@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // customCAs against the kind setup of scripts/kind-private-ca.sh: an HTTPS front in the second cluster whose
 // certificate a throwaway CA signed, and Kubeast trusting that CA. k8s-service (Go) searches Loki through the
@@ -27,7 +28,7 @@ function hasDevCA(): boolean {
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `admin login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('custom CAs', () => {

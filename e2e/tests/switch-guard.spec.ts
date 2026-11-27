@@ -7,6 +7,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page, type Req
 
 import { sidebarScreens } from './sidebar-screens'
 import { afterSwitch, arm, disarm, holdAnswers, installSampler, pageNow, recording, rowNames, tellable, type Recording, type Watch } from './switch-guard'
+import { sessionToken } from './session-token'
 
 // After a condition changes — the cluster, a namespace, a tab, a filter or a search, the object a drawer or window
 // shows, the person signed in — no frame shows the condition before as the current one's. Each case opens condition A,
@@ -50,7 +51,7 @@ function kubectl(args: string[], input?: string): string {
 async function bearer(request: APIRequestContext): Promise<Record<string, string>> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.status(), `login ${ADMIN_EMAIL}`).toBe(200)
-  return { Authorization: `Bearer ${(await res.json()).access_token}`, ...XRW }
+  return { Authorization: `Bearer ${sessionToken(res)}`, ...XRW }
 }
 
 // The page's reads under /api/v1/: the ones in flight (XHR) and the GETs that answered 200, with when.

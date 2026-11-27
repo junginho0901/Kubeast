@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Writes the server refuses say why where they were pressed, and the line stays: each case answers its request in
 // the browser with a 409 and a reason of its own (the server is never asked, nothing changes), presses as a person
@@ -19,7 +20,7 @@ const failed = (action: string) => EN.common.failed[action].replace('{{reason}}'
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 // every request of these methods to a path the test names is refused in the browser
 async function refuse(page: Page, matches: (pathname: string) => boolean, methods = ['POST', 'PUT', 'PATCH', 'DELETE']): Promise<string[]> {

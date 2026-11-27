@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Deployment rollback replaces the whole pod template with the target
 // revision's (kubectl rollout undo semantics): a field the newer revision
@@ -19,7 +20,7 @@ const NAME = 'web'
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 function kubectlFor(cluster: string) {

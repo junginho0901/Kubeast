@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page, type Response } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Number check of four of Kubeast's own screens against the API and the database:
 // - Audit logs: a user of this run writes its own audit rows (every audit read is one); paging to the end while
@@ -43,7 +44,7 @@ const psql = (sql: string) =>
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // a minimal RFC 4180 reader: the CSV's records

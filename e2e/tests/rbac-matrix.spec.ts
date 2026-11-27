@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Role × action matrix behind docs/features.md "Roles and permissions": what each Kubeast role may do
 // on a cluster, checked end to end through the gateway — the JWT permission
@@ -16,7 +17,7 @@ type Headers = Record<string, string>
 async function login(request: APIRequestContext, email: string, password: string): Promise<Headers> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 async function roleId(request: APIRequestContext, headers: Headers, name: string) {

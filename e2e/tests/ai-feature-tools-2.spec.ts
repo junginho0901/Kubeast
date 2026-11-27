@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // The second batch of feature tools: helm_read (releases read-only), policy_reports, cost, optimization, can_i,
 // resource_graph and the Admin-only hygiene — all through k8s-service as the caller. Where the cluster lacks the
@@ -17,7 +18,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email = EMAIL, password = PASSWORD): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createReadUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

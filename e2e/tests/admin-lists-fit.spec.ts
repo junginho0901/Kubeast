@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { coveredByChatButton, pageScrolls, underChatButton } from './list-pages'
+import { sessionToken } from './session-token'
 
 // The admin lists and the Settings page's lists that grow with the data are paged. A list page is as high as the
 // screen at 1440×900: its table, its footer (with the rows-per-page choice) and nothing below them, so the page
@@ -23,7 +24,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function roleIdOf(request: APIRequestContext, admin: string, name: string): Promise<number> {

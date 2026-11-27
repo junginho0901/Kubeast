@@ -5,6 +5,7 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page, type Response } from '@playwright/test'
 import { rowsOfFirstPage } from './list-pages'
+import { sessionToken } from './session-token'
 
 // Number check of Access Requests and Access Review against the API and the database:
 // - Access Requests: a user of this run asks for Write on `default` and an admin rejects it, 205 times, then one
@@ -44,7 +45,7 @@ const dbCount = (sql: string) => Number(psql(sql))
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function roleIdOf(request: APIRequestContext, admin: string, name: string): Promise<number> {

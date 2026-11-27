@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A ServiceAccount drawer's Effective Permissions on self count what the API server applies to it, the subjects a pod's RBAC
 // tab matches: the ServiceAccount itself, its user name, the group of every ServiceAccount and of its namespace. Compared with
@@ -85,7 +86,7 @@ function makeFixture() {
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // The section as it reads now: its title, its cards and whether another page follows; clickNext also turns the page.

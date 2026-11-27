@@ -6,6 +6,7 @@ import path from 'node:path'
 import { test, expect, type APIRequestContext, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
 
 import { waitUntilListed } from './number-check.cr-shared'
+import { sessionToken } from './session-token'
 
 // What a Write user and a Read user limited to one namespace are shown is the cluster's answer for the identity Kubeast
 // acts as (X-Kubeast-Access, then kubectl auth can-i): a drawer's "Delete <Kind>" and the Create buttons of Endpoints,
@@ -64,7 +65,7 @@ function canI(who: Who, verb: string, target: string, namespace: string | null):
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token as string
+  return sessionToken(res)
 }
 // whom Kubeast acts as for a token on self (X-Kubeast-Access of a cluster answer); null when impersonation is off
 async function identity(request: APIRequestContext, token: string): Promise<Who | null> {

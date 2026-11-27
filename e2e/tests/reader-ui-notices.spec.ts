@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Browser } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Two notices for non-admin users found by walking the UI as a Read user:
 //  - a viewer may list most kinds but not Secrets (cluster RBAC 403): the page
@@ -15,7 +16,7 @@ const BASE = process.env.E2E_BASE_URL || 'http://localhost:30080'
 async function adminHeaders(request: APIRequestContext) {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), 'admin login').toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 async function createUser(request: APIRequestContext, admin: Record<string, string>, tag: string) {

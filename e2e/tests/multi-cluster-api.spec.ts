@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { SESSION_COOKIE, sessionToken } from './session-token'
 
 // Multi-cluster cluster CRUD API — step 07.
 //
@@ -31,7 +32,7 @@ async function login(request: APIRequestContext): Promise<string> {
     res.ok(),
     'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD',
   ).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 test.describe('multi-cluster — cluster CRUD API (step 07)', () => {
@@ -177,7 +178,7 @@ test.describe('per-cluster JWT permission matrix (step 06)', () => {
       data: { email: EMAIL, password: PASSWORD },
     })
     expect(res.ok()).toBeTruthy()
-    const token = (await res.json()).access_token as string
+    const token = sessionToken(res)
 
     const claims = decodeJwtPayload(token)
     const perms = claims.permissions
@@ -205,7 +206,7 @@ test.describe('per-cluster RBAC enforcement (step 08)', () => {
   async function userToken(request: APIRequestContext): Promise<string> {
     const res = await request.post('/api/v1/auth/login', { data: { email, password } })
     expect(res.ok(), 'throwaway user login should succeed').toBeTruthy()
-    return (await res.json()).access_token
+    return sessionToken(res)
   }
 
   test.beforeAll(async ({ request }) => {
@@ -342,7 +343,7 @@ test.describe('one role on several clusters (sign-in token size)', () => {
       }
       const res = await request.post('/api/v1/auth/login', { data: { email, password } })
       expect(res.status(), 'sign-in through the gateway').toBe(200)
-      const token = (await res.json()).access_token as string
+      const token = sessionToken(res)
       expect(token.length).toBeLessThan(3800)
       const perms = decodeJwtPayload(token).permissions as Record<string, string[] | string>
       const owner = [...ids].sort()[0]
@@ -358,7 +359,7 @@ test.describe('one role on several clusters (sign-in token size)', () => {
       await page.locator('input[type="password"]').fill(password)
       await page.locator('button[type="submit"]').first().click()
       await expect(page.locator('input[autocomplete="email"]')).toHaveCount(0, { timeout: 20_000 })
-      expect((await ctx.cookies()).some((c) => c.name === 'kubeast.token')).toBe(true)
+      expect((await ctx.cookies()).some((c) => c.name === SESSION_COOKIE)).toBe(true)
       await ctx.close()
     } finally {
       await request.delete(`/api/v1/auth/admin/users/${userId}`, { headers: auth, failOnStatusCode: false })

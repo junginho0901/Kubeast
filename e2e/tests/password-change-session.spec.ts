@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { SESSION_COOKIE, sessionToken } from './session-token'
 
 // Changing your own password bumps token_version so every other session is
 // revoked (H11). The caller must not be logged out by it: the response carries
@@ -10,18 +11,19 @@ import { test, expect, type APIRequestContext } from '@playwright/test'
 
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
-const COOKIE = 'kubeast.token'
+const COOKIE = SESSION_COOKIE
 
 async function login(request: APIRequestContext, email: string, password: string) {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token as string}` }
+  return { Authorization: `Bearer ${sessionToken(res)}` }
 }
 
 function sessionCookie(setCookie: string[]): string | null {
   for (const line of setCookie) {
-    const m = line.match(new RegExp(`^${COOKIE.replace('.', '\\.')}=([^;]*)`))
-    if (m && m[1]) return m[1]
+    if (!line.startsWith(`${COOKIE}=`)) continue
+    const value = line.slice(COOKIE.length + 1).split(';', 1)[0]
+    if (value) return value
   }
   return null
 }

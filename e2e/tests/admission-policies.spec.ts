@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Cluster → Validating / Mutating Admission Policies (admissionregistration.k8s.io/v1, read-only): a policy and its
 // binding created with kubectl show up in the list with the kubectl columns plus the binding count, and the drawer
@@ -36,7 +37,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 const configmapsOnCreate = { resourceRules: [{ apiGroups: [''], apiVersions: ['v1'], operations: ['CREATE'], resources: ['configmaps'] }] }

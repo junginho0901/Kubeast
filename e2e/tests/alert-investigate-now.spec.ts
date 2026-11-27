@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Locator, type Page, type Route } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // "Investigate now" in the alert window (ai-service POST /api/v1/alerts/inbox/{id}/investigate, permission
 // resource.alert.investigate, chart features.alertInvestigation.manual — on, and the dev values give the manual kind a
@@ -49,7 +50,7 @@ const psql = (sql: string) => kubectl(['-n', 'kubeast', 'exec', 'deploy/postgres
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function auditRows(request: APIRequestContext, admin: string, action: string, since: string): Promise<Obj[]> {

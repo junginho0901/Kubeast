@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Namespace-scoped grants (A-1, records/ns-scope-20261012.md): a per-cluster role limited to a list of namespaces.
 // The grant API validates the list, /auth/me and the token carry it, an access request can carry one too, an
@@ -14,7 +15,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

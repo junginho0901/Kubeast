@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { SESSION_COOKIE } from './session-token'
 
 // Setup and model-config endpoints must not be reachable without a session
 // (C3/M7). The project's storageState carries the admin session cookie, which
@@ -77,7 +78,7 @@ test.describe('browser session cookie', () => {
 
   test('the session cookie is HttpOnly and the page keeps no token', async ({ page }) => {
     await page.goto('/')
-    const cookie = (await page.context().cookies()).find((c) => c.name === 'kubeast.token')
+    const cookie = (await page.context().cookies()).find((c) => c.name === SESSION_COOKIE)
     expect(cookie?.httpOnly, 'session cookie is HttpOnly').toBe(true)
     expect(cookie?.sameSite).toBe('Strict')
     const stored = await page.evaluate(() =>

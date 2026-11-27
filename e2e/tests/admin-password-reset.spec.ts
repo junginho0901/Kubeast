@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // User Management → reset password. Another user's new password shows in a window. An admin resetting their own
 // sees the same window — the server keeps that session, as a password change does — and closing it signs out to the
@@ -14,7 +15,7 @@ async function login(request: APIRequestContext, email: string, password: string
 test.use({ storageState: { cookies: [], origins: [] } })
 
 test('an admin resetting their own password sees it, and signs in again with it', async ({ page, request }) => {
-  const admin = { Authorization: `Bearer ${(await (await login(request, ADMIN_EMAIL, ADMIN_PASSWORD)).json()).access_token}` }
+  const admin = { Authorization: `Bearer ${sessionToken(await login(request, ADMIN_EMAIL, ADMIN_PASSWORD))}` }
   const raw = await (await request.get('/api/v1/auth/roles', { headers: admin })).json()
   const adminRole = (Array.isArray(raw) ? raw : raw.roles || raw.items || []).find((r: { name: string }) => r.name === 'Admin')
   const email = `e2e-selfreset-${Date.now()}@kubeast.local`

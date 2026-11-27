@@ -6,6 +6,7 @@ import path from 'node:path'
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 
 import { waitUntilListed } from './number-check.cr-shared'
+import { sessionToken } from './session-token'
 
 // A save of a YAML window takes out of the object what left the text its edit began from, each kind in the patch its API
 // takes: a strategic merge patch by each list's merge key, a JSON merge patch for a custom resource, labels and annotations
@@ -32,7 +33,7 @@ const objectOf = (args: string) => JSON.parse(kubectl(`${args} -o json`))
 async function login(request: APIRequestContext): Promise<Record<string, string>> {
   const res = await request.post('/api/v1/auth/login', { data: { email: process.env.E2E_USER_EMAIL || 'admin', password: process.env.E2E_USER_PASSWORD || '' } })
   expect(res.ok(), `login: ${res.status()}`).toBeTruthy()
-  return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 
 // what the screen sends of the text an edit began from (frontend yamlOpenedOf)

@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Recent flows and the Resource Graph's traffic lines from Microsoft Retina's Hubble control plane, on the kind
 // cluster that scripts/kind-retina.sh up registers (kubeast-retina: kindnet, Retina with deploy/kind/retina-values.yaml,
@@ -57,7 +58,7 @@ test.describe('Recent flows and traffic lines from Retina', () => {
   test.beforeAll(async ({ request }) => {
     const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
     expect(res.ok()).toBeTruthy()
-    admin = (await res.json()).access_token
+    admin = sessionToken(res)
     const features = await (await request.get(`/api/v1/cluster/features?cluster=${CLUSTER}`, { headers: bearer(admin) })).json()
     kubectl = retinaKubectl()
     if (!kubectl || !(await registered(request, admin))) return

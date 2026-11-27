@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from '@playwright/tes
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // What the assistant's tools return is masked before it reaches the model:
 // a ConfigMap with a password and a connection string is planted, the chat is
@@ -40,7 +41,7 @@ const deleteConversation = (page: Page, id: string) =>
 async function adminToken(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // The ConfigMap is planted with kubectl against the kind cluster the suite runs

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Each AI tool call names the identity it reached the cluster as — the impersonation user and groups the service
 // that called the cluster sent, the Kubeast role and scope behind them, read or write — in its audit row
@@ -22,7 +23,7 @@ type Access = { cluster: string; kind: string; user?: string; groups?: string[];
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function mcpCall(request: APIRequestContext, token: string, name: string, args: Record<string, unknown>) {

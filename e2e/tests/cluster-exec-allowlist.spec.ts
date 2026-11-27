@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // A registered kubeconfig's exec credential plugin runs inside the k8s-service
 // and tool-server pods, so registration only accepts allow-listed commands
@@ -12,7 +13,7 @@ const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: EMAIL, password: PASSWORD } })
   expect(res.ok(), 'admin login should succeed — set E2E_USER_EMAIL / E2E_USER_PASSWORD').toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 function kubeconfigWithExec(command: string, env?: { name: string; value: string }): string {

@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test'
 import { rowsOfFirstPage, turnToRow } from './list-pages'
+import { sessionToken } from './session-token'
 
 // The admin screens count every user, not the first page the users API answers (200): with more than 200 accounts,
 // a team's member count and members, a role's user count and users, the Users list with its pager and the users
@@ -32,7 +33,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD } })
   expect(res.ok(), `login ${ADMIN_EMAIL}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 // every user, newest first, read 200 at a time until a page comes back empty

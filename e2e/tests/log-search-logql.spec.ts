@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // LogQL written by hand (features.logSearch.logql) by anyone who may search logs, against the kind setup of
 // scripts/kind-logsearch.sh: one Loki holding both clusters. A Job prints a unique line; a hand-written query
@@ -19,7 +20,7 @@ const bearer = (token: string) => ({ Authorization: `Bearer ${token}`, 'X-Reques
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 const logql = (request: APIRequestContext, token: string, cluster: string, q: string, rest = '&since=10m') =>

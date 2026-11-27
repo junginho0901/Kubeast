@@ -54,9 +54,9 @@ KUBECONFIG_BLOB=$(kind get kubeconfig --internal --name "$NAME")
 # 4. Get an admin token if not supplied.
 if [ -z "$TOKEN" ]; then
   if [ -n "${KUBEAST_EMAIL:-}" ] && [ -n "${KUBEAST_PASSWORD:-}" ]; then
-    TOKEN=$(curl -s -X POST -H 'Content-Type: application/json' \
+    TOKEN=$(curl -s -o /dev/null -D - -X POST -H 'Content-Type: application/json' \
       -d "$(jq -nc --arg e "$KUBEAST_EMAIL" --arg p "$KUBEAST_PASSWORD" '{email:$e,password:$p}')" \
-      "$GATEWAY/api/v1/auth/login" | jq -r '.access_token')
+      "$GATEWAY/api/v1/auth/login" | awk -f "$(dirname "$0")/session-token.awk")
   fi
 fi
 [ -n "$TOKEN" ] || { echo "no admin token — pass --token or set KUBEAST_EMAIL/PASSWORD" >&2; exit 1; }

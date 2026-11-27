@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // k8s-service's read gate (internal/handler/read_gate.go). The role screen's read permissions decide before the cluster
 // does: a custom role reads a list only with resource.objects.read or resource.*.read, whatever its group is bound to. The
@@ -37,7 +38,7 @@ const stamp = () => Date.now().toString(36)
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 type RoleRow = { id: number; name: string; permissions: string[] | null }

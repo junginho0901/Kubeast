@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { sessionToken } from './session-token'
 
 // Cost (OpenCost): /api/v1/cluster/cost and the Cost page read OpenCost's allocation through the
 // API server proxy. The second kind cluster (`default`) runs OpenCost (deploy/kind/second-cluster.yaml);
@@ -41,7 +42,7 @@ function money(amount: number): string {
 async function login(request: APIRequestContext, email: string, password: string): Promise<string> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.ok(), `login ${email}: ${res.status()}`).toBeTruthy()
-  return (await res.json()).access_token
+  return sessionToken(res)
 }
 
 async function createUser(request: APIRequestContext, admin: string, email: string): Promise<string> {

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test'
+import { sessionToken } from './session-token'
 
 // Real flows in a fresh browser, as a person uses the console rather than through a stored sign-in: a shared link
 // opened before signing in, a cluster switch kept through a reload and in a second tab, the browser's back button,
@@ -21,7 +22,7 @@ const users: string[] = []
 async function bearer(request: APIRequestContext, email: string, password: string): Promise<H> {
   const res = await request.post('/api/v1/auth/login', { data: { email, password } })
   expect(res.status(), `login ${email}`).toBe(200)
-  return { Authorization: `Bearer ${(await res.json()).access_token}`, 'X-Requested-With': 'XMLHttpRequest' }
+  return { Authorization: `Bearer ${sessionToken(res)}`, 'X-Requested-With': 'XMLHttpRequest' }
 }
 async function signIn(page: Page, email = ADMIN_EMAIL, password = ADMIN_PASSWORD) {
   await page.locator('input[autocomplete="email"]').first().fill(email)
@@ -261,7 +262,7 @@ test('signing out closes the live connection and stops the chat answers, and the
     for (const [who, ids] of [[first, asked.slice(0, 2)], [{ email, password }, asked.slice(2, 3)]] as const) {
       if (!ids.some(Boolean)) continue
       const login = await request.post('/api/v1/auth/login', { data: who })
-      const token = login.ok() ? (await login.json()).access_token : ''
+      const token = login.ok() ? sessionToken(login) : ''
       for (const id of ids) if (token && id) await request.delete(`/api/v1/sessions/${id}?cluster=default`, { headers: { Authorization: `Bearer ${token}`, 'X-Requested-With': 'XMLHttpRequest' }, failOnStatusCode: false })
     }
   }
