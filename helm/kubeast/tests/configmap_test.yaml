@@ -1054,6 +1054,49 @@ tests:
           path: data.AI_PAST_HINTS
           value: "false"
 
+  - it: keeps the trace span table and the YAML with the spec first off by default
+    asserts:
+      - equal:
+          path: data.AI_TRACE_SPAN_TABLE
+          value: "false"
+      - equal:
+          path: data.AI_YAML_SPEC_FIRST
+          value: "false"
+
+  - it: turns the trace span table on alone
+    set:
+      ai.traceSpanTable: true
+    asserts:
+      - equal:
+          path: data.AI_TRACE_SPAN_TABLE
+          value: "true"
+      - equal:
+          path: data.AI_YAML_SPEC_FIRST
+          value: "false"
+
+  - it: turns the YAML with the spec first on alone
+    set:
+      ai.yamlSpecFirst: true
+    asserts:
+      - equal:
+          path: data.AI_TRACE_SPAN_TABLE
+          value: "false"
+      - equal:
+          path: data.AI_YAML_SPEC_FIRST
+          value: "true"
+
+  - it: values without the two, as an earlier chart's --reuse-values keeps them, render them off
+    set:
+      ai.traceSpanTable: null
+      ai.yamlSpecFirst: null
+    asserts:
+      - equal:
+          path: data.AI_TRACE_SPAN_TABLE
+          value: "false"
+      - equal:
+          path: data.AI_YAML_SPEC_FIRST
+          value: "false"
+
   - it: renders every 0.7.9 AI switch off when the values set it off
     set:
       ai.timelineChanges: false

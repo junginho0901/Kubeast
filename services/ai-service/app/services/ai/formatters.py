@@ -54,6 +54,22 @@ def _cut_log_answer(content: str, max_chars: int, field: Optional[str]) -> Optio
     return json.dumps({**shape, field: kept}, ensure_ascii=False, indent=2)
 
 
+_CUT_MARK = "\n... (truncated for LLM) ..."
+
+# How the last line of k8s_get_resource_yaml's answer starts with AI_YAML_SPEC_FIRST, where the object has kubectl apply's
+# annotation (tool-server yaml_last_applied.go).
+YAML_DIFFERS = "# differs from last-applied: "
+
+
+def _cut_yaml_above_its_line(content: str, max_chars: int) -> Optional[str]:
+    """A YAML cut to the model's length above its last line, which says what differs from what was last applied, or None
+    of one without that line and where the line alone would take half of the length."""
+    line = content.rstrip("\n").rpartition("\n")[2]
+    if not line.startswith(YAML_DIFFERS) or len(line) * 2 > max_chars:
+        return None
+    return content[:max_chars - len(line) - 1] + _CUT_MARK + "\n" + line
+
+
 def _truncate_tool_result_for_llm(content: Optional[str], max_chars: int = LLM_RESULT_CHARS, tool: Optional[str] = None) -> str:
     """Tool 결과를 LLM 입력용으로 축약 (max_chars = 모델의 tool_result_chars, 없으면 6000)"""
     if not isinstance(content, str):
@@ -63,7 +79,11 @@ def _truncate_tool_result_for_llm(content: Optional[str], max_chars: int = LLM_R
             cut = _cut_log_answer(content, max_chars, _LOG_TOOLS[tool])
             if cut is not None:
                 return cut
-        return content[:max_chars] + "\n... (truncated for LLM) ..."
+        if tool == "k8s_get_resource_yaml" and switch.env_on("AI_YAML_SPEC_FIRST"):
+            cut = _cut_yaml_above_its_line(content, max_chars)
+            if cut is not None:
+                return cut
+        return content[:max_chars] + _CUT_MARK
     return content
 
 

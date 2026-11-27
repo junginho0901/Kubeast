@@ -141,6 +141,8 @@ data:
   REDACTION_NUMBERED: {{ dig "numbered" false .Values.ai.redaction | quote }}
   AI_DEBUG_DUMP: {{ .Values.ai.debugDump | quote }}
   AI_TOOL_RESULTS_JSON: {{ dig "toolResultsJSON" false .Values.ai | quote }}
+  AI_TRACE_SPAN_TABLE: {{ dig "traceSpanTable" false .Values.ai | quote }}
+  AI_YAML_SPEC_FIRST: {{ dig "yamlSpecFirst" false .Values.ai | quote }}
   AI_TIMELINE_CHANGES: {{ .Values.ai.timelineChanges | quote }}
   AI_TIMELINE_CHANGES_MORE: {{ dig "timelineChangesMore" false .Values.ai | quote }}
   AI_CAUSE_QUESTIONS: {{ dig "causeQuestions" false .Values.ai | quote }}

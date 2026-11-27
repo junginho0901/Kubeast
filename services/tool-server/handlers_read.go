@@ -127,6 +127,9 @@ func handleGetResourceYAML(ctx context.Context, args map[string]interface{}, hea
 	if err != nil {
 		return explainFailure(ctx, headers, err, resourceType, resourceName, namespace)
 	}
+	if yamlSpecFirst() {
+		out = specFirst(out, resourceType)
+	}
 	return stripCutSecret(ctx, out, resourceType), nil
 }
 

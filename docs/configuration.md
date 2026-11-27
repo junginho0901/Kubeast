@@ -235,6 +235,12 @@ ai:
   pastHints: false         # (alpha) true: an event read that holds nothing, or nothing but PolicyViolation events, names the log query and the
                            # metrics that reach further back; a pod log read without a line says from when to when its lines run; issues
                            # lists the PolicyViolation findings last (features.md); off: as before
+  traceSpanTable: false    # (alpha) true: traces_get answers one line per span in call order (start, duration, self time, the time a client
+                           # span spent outside the server span it called) instead of the spans with their attributes (features.md);
+                           # off: as before
+  yamlSpecFirst: false     # (alpha) true: k8s_get_resource_yaml gives the spec first, then the metadata without managedFields and the
+                           # last-applied annotation, then the status, and last a line of what differs from what was last applied
+                           # (features.md); what names a Secret stays as kubectl prints it; off: as before
   ruleCards:               # per kind of failure, the checks that often find its cause and their tools (features.md "Rule cards")
     chat: false            # (alpha) true: a chat question naming a failure a card knows gets at most two cards for that turn
     investigations: true   # (alpha) true: an alert investigation's first message holds at most two, picked by the alert's name and labels
@@ -406,6 +412,8 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `ai.refuseRepeatedReads` | false | alpha | The AI evaluation (`scripts/ai-eval.py`) with it off and on, and a run on the kind dev install with it on |
 | `ai.toolResultDetails` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
 | `ai.pastHints` | false | alpha | The AI evaluation's `16_past_outage` asked 70 minutes after with it off and on, and a run on the kind dev install with it on |
+| `ai.traceSpanTable` | false | alpha | The AI evaluation with it off and on (its problems with traces), and a run on the kind dev install with it on |
+| `ai.yamlSpecFirst` | false | alpha | The AI evaluation with it off and on, the planted instruction cases with it on, and a run on the kind dev install with it on |
 | `ai.redaction.numbered` | false | alpha | A chat on the kind dev install with it and `ai.redaction.pii` on, and the AI evaluation with it off and on |
 | `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, true, false, [], [] | alpha | The AI evaluation with `chat` and `investigations` each off and on, then with `symptoms` off and on beside them, and a run on the kind dev install with them on |
 | `ai.toolResultsJSON` | false | alpha | The AI evaluation with it on, against a model. Tested: the planted instruction cases against a model on kind with it off and on (2026-11-25), none followed |

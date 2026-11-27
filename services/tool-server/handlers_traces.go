@@ -108,7 +108,8 @@ func handleTracesSearch(ctx context.Context, args map[string]interface{}, header
 }
 
 // handleTracesGet reads one trace: the spans in the caller's cluster and
-// namespace, errors first.
+// namespace, errors first, or with AI_TRACE_SPAN_TABLE their table
+// (trace_table.go).
 func handleTracesGet(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	traceID := strings.TrimSpace(argString(args, "trace_id", ""))
 	if traceID == "" {
@@ -130,6 +131,11 @@ func handleTracesGet(ctx context.Context, args map[string]interface{}, headers h
 	}
 	if out, done, err := tracesGet(ctx, headers, namespace, "/traces/trace/"+url.PathEscape(traceID), q, &reply); done {
 		return out, err
+	}
+	if traceSpanTable() {
+		if spans, ok := traceSpansOf(reply.Spans); ok {
+			return traceTable(ctx, traceID, namespace, spans, reply.Total, reply.Hidden, reply.Errors, reply.Truncated)
+		}
 	}
 	spans := reply.Spans
 	truncated := reply.Truncated

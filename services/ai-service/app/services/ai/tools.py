@@ -99,6 +99,20 @@ ANOMALY_RANK_SINCE = (
     "found the same pod new or grown in the window. "
 )
 
+# What traces_get and k8s_get_resource_yaml say they answer with, and what they answer with AI_TRACE_SPAN_TABLE and
+# AI_YAML_SPEC_FIRST on (offer_result_shapes).
+TRACE_SPANS = " — service, name, kind, start, duration, status and attributes — errors first, then by start (max 100)."
+TRACE_TABLE = (
+    ", one line each in call order — start, duration, self time (what none of its child spans covers), of a client span the time outside the "
+    "server span it called, service, kind, name and error, without attributes."
+)
+YAML_AS_PRINTED = "(kubectl get -o yaml)."
+YAML_SPEC_FIRST = (
+    YAML_AS_PRINTED + " The spec (data, rules …) comes first, then the metadata without managedFields and the last-applied-configuration "
+    "annotation, then the status. Of an object with that annotation the last line says which of the fields it set are different now: "
+    "\"# differs from last-applied: spec.replicas: 3 → 5\"."
+)
+
 K8S_READONLY_TOOLS: List[Dict] = [
     {
         "type": "function",
@@ -2092,6 +2106,27 @@ def offer_fault_onset(tools: List[Dict]) -> List[Dict]:
         fn = (t or {}).get("function") or {}
         words = _FAULT_ONSET.get(fn.get("name"))
         out.append({**t, "function": {**fn, "description": fn["description"].replace(words[0], words[0] + words[1])}} if words else t)
+    return out
+
+
+# tool -> its switch, and the words of its description off and on
+_RESULT_SHAPES = {
+    "traces_get": ("AI_TRACE_SPAN_TABLE", TRACE_SPANS, TRACE_TABLE),
+    "k8s_get_resource_yaml": ("AI_YAML_SPEC_FIRST", YAML_AS_PRINTED, YAML_SPEC_FIRST),
+}
+
+
+def offer_result_shapes(tools: List[Dict]) -> List[Dict]:
+    """tools as the model is offered them: with AI_TRACE_SPAN_TABLE (chart ai.traceSpanTable) and AI_YAML_SPEC_FIRST (chart
+    ai.yamlSpecFirst), both off by default, traces_get and k8s_get_resource_yaml say the shape of the answers they then give."""
+    on = {name: words for name, (env, *words) in _RESULT_SHAPES.items() if switch.env_on(env)}
+    if not on:
+        return tools
+    out = []
+    for t in tools:
+        fn = (t or {}).get("function") or {}
+        words = on.get(fn.get("name"))
+        out.append({**t, "function": {**fn, "description": fn["description"].replace(*words)}} if words else t)
     return out
 
 

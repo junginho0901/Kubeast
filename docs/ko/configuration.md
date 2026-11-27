@@ -225,6 +225,11 @@ ai:
   pastHints: false         # (alpha) true면 이벤트가 하나도 없거나 PolicyViolation 이벤트만 있는 답이 더 앞을 읽을 로그 질의와 지표를
                            # 알려 주고, 줄이 하나도 없는 Pod 로그 답이 그 로그의 줄이 언제부터 언제까지인지 말하며, issues가
                            # PolicyViolation을 맨 뒤에 둡니다(features.md). 끄면 전과 같습니다
+  traceSpanTable: false    # (alpha) true면 traces_get이 스팬과 속성 대신 스팬마다 한 줄(시작, 걸린 시간, 자기 시간, 클라이언트 스팬이
+                           # 부른 서버 스팬 밖에서 쓴 시간)을 호출 순서로 답합니다(features.md). 끄면 전과 같습니다
+  yamlSpecFirst: false     # (alpha) true면 k8s_get_resource_yaml이 spec을 먼저, 그다음 managedFields와 last-applied 주석을 뺀 metadata,
+                           # 그다음 status를 주고, 끝에 마지막 apply와 다른 것 한 줄을 적습니다(features.md). Secret이 나오는 것은
+                           # kubectl이 찍은 그대로입니다. 끄면 전과 같습니다
   ruleCards:               # 고장 종류마다 원인을 자주 찾아 주는 확인과 그 도구(features.md "규칙 카드")
     chat: false            # (alpha) true면 카드가 아는 고장을 적은 채팅 질문이 그 턴에 카드를 최대 두 장 받습니다
     investigations: true   # (alpha) true면 알림 조사의 첫 입력에 알림 이름과 라벨로 고른 카드가 최대 두 장 들어갑니다
@@ -395,6 +400,8 @@ multicluster:
 | `ai.refuseRepeatedReads` | false | alpha | 끄고 켠 AI 평가(`scripts/ai-eval.py`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.toolResultDetails` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.pastHints` | false | alpha | 70분 뒤에 묻는 AI 평가의 `16_past_outage`를 끄고 켠 경우, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.traceSpanTable` | false | alpha | 끄고 켠 AI 평가(트레이스가 있는 문제), 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.yamlSpecFirst` | false | alpha | 끄고 켠 AI 평가, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.redaction.numbered` | false | alpha | `ai.redaction.pii`와 함께 켠 상태로 kind 개발 설치에서 한 채팅, 끄고 켠 AI 평가 |
 | `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, true, false, [], [] | alpha | `chat`과 `investigations`를 하나씩 끄고 켠 AI 평가, 그 옆에서 `symptoms`를 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.toolResultsJSON` | false | alpha | 켠 상태의 AI 평가를 모델로 돌린 경우. 돌려 봄: kind에서 끄고 켠 심어 둔 지시 문제를 모델로 돌림(2026-11-25), 따른 답 0 |

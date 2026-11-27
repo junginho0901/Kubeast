@@ -402,6 +402,22 @@ ai:
   # toolResultDetails, whose own words stay. Off: the answers are as before.
   # Stage: alpha, not run yet: the AI evaluation's 16_past_outage asked 70 minutes after, with it off and on (docs/configuration.md "Stages of new values").
   pastHints: false
+  # traces_get answers one line per span in call order (start, duration, self
+  # time, the time a client span spent outside the server span it called,
+  # service, kind, name, error) instead of the spans with their attributes, so
+  # a trace of 24 spans fits what the model reads of a result where six or
+  # seven did; a longer trace keeps the failed spans and those that took the
+  # time. Attributes are left out (traces_search reads them). Off: as before.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  traceSpanTable: false
+  # k8s_get_resource_yaml gives the spec (data, rules ...) first, then the
+  # metadata without managedFields and kubectl apply's last-applied-configuration
+  # annotation, then the status, and, of an object with that annotation, one
+  # last line of what the fields it set are now, where they differ (credentials
+  # masked); that line stays when the YAML above it is cut to what the model
+  # reads. What names a Secret stays as kubectl prints it. Off: as before.
+  # Stage: alpha, not run yet: the AI evaluation with it off and on (docs/configuration.md "Stages of new values").
+  yamlSpecFirst: false
   # What leaves for the model is masked first: credentials by key name
   # (password, token, api_key, dsn, ...) and by shape (AWS keys, private keys,
   # JWTs, credentials in URLs, Authorization values, API keys with a known

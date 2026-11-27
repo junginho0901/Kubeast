@@ -102,6 +102,15 @@
     - 이벤트가 하나도 없는 답(`k8s_get_events` · 이벤트 목록 · describe의 `Events: <none>`)이 이벤트(기본 약 1시간만 남음)보다 앞을 읽을 것을 알려 줍니다: 로그 저장소의 그 네임스페이스 오류 줄(`loki_query`), 더 긴 구간의 `kube_deployment_spec_replicas`·`kube_statefulset_replicas`·`kube_pod_container_status_restarts_total`(`prometheus_query`). 이벤트가 모두 어드미션 정책의 `PolicyViolation`인 `k8s_get_events`도 이벤트 앞의 `past_hint`에 같은 것을 적습니다. 이 이벤트는 객체가 그대로인 동안 되풀이해서 쓰입니다.
     - 줄이 하나도 없는 `k8s_get_pod_logs`는 그 로그의 줄이 언제부터 언제까지인지, 맞는 줄이 없는 `grep`은 찾아본 줄이 언제부터 언제까지인지와 로그가 어디까지 거슬러 가는지 말합니다. 로그의 첫 줄과 마지막 줄(과 찾아본 첫 줄) 앞의 시각을 그 사람 권한으로 컨테이너마다 36바이트씩 읽고, 로그의 줄은 답에 들어가지 않습니다. 시각을 못 읽으면 아무 말도 붙이지 않습니다.
     - `issues`는 이유가 `PolicyViolation`인 것을 다른 것 뒤에 두고 몇 개인지 `listed_last`에 적습니다. 그것뿐이면(모든 목록을 읽었고 심각도를 좁히지 않았을 때) 지금 다른 고장은 없다고 적습니다.
+  - `ai.traceSpanTable`(기본 꺼짐)을 켜면 `traces_get`이 스팬과 속성 대신 표를 답합니다. 스팬마다 한 줄이고 호출 순서이며, 한 단계 내려갈 때마다 `·` 하나입니다.
+    - 칸은 첫 스팬 뒤로 지난 시작 시각, 걸린 시간, 자기 시간(자식 스팬이 덮지 않는 시간), 서버 밖 시간, 서비스, 종류, 이름(실패한 스팬은 상태 코드와 메시지도)입니다. 서버 밖 시간은 클라이언트 스팬의 시간에서 그것이 부른 서버 스팬의 시간을 뺀 것으로, `서비스 → 서버의 서비스`로 두 끝을 함께 적습니다. 네트워크·프록시·연결·대기열에서 쓴 시간이고 서버가 일한 시간이 아닙니다. 클라이언트가 기다리기를 그만둔 뒤 서버가 계속했으면 음수이고, 읽을 수 있는 것 안에 서버 스팬이 없으면 `none`(그때는 `서비스 → 부른 주소`)입니다.
+    - 줄은 트레이스가 무엇이든 답의 나머지와 함께 6,000자 안입니다. 스팬 24개짜리는 전부 나오고, 더 긴 트레이스는 실패한 스팬, 그다음 자기 시간이나 서버 밖 시간이 긴 스팬을, 자리가 되면 부른 스팬들과 함께 남깁니다. 몇 개를 뺐고 그중 가장 긴 시간이 얼마인지 적습니다. `ai.redaction.pii`를 켰으면 개인정보가 든 이름이나 메시지는 240자까지 자르지 않으므로 값이 통째로 가려지고, 더 길면 길이만 적습니다(`(5078 characters, personal data)`).
+    - 다른 속성은 빠집니다. `traces_search`의 `select(…)`로 읽습니다.
+  - `ai.yamlSpecFirst`(기본 꺼짐)를 켜면 `k8s_get_resource_yaml`이 그 오브젝트의 내용(`spec`, ConfigMap의 `data`, Role의 `rules` …)을 먼저, 그다음 `managedFields`와 kubectl apply의 `last-applied-configuration` 주석을 뺀 `metadata`, 그다음 `status`를 줍니다.
+    - 그 주석이 있는 오브젝트의 마지막 줄은 `# differs from last-applied:`입니다. `kubectl apply`가 마지막으로 정한 필드 중 지금 값이 다르거나 없어진 것과, 그 뒤 거기에 더해진 항목(환경 변수, ConfigMap 키, 재시작 주석)을 `경로: 전 → 지금`으로 적습니다. API 서버가 채운 기본값처럼 apply가 정하지 않은 필드는 비교하지 않습니다. 다른 것이 없으면 `nothing`이라고 적습니다. 자격 증명은 `(changed, value masked)`이고, `ai.redaction.pii`를 켜면 개인정보가 든 값은 보여 주지 않습니다.
+    - YAML이 모델이 읽는 길이보다 길면 그 줄 위에서 자릅니다.
+    - 나머지 줄은 모두 kubectl이 찍은 줄입니다. Secret이 나오는 것, 목록, tool-server가 자른 답, 256 KiB가 넘는 오브젝트는 kubectl이 찍은 그대로입니다.
+  - 둘 다 채팅·알림 조사·MCP 서버에 똑같이 적용되고, 더 읽는 것은 없으며, 꺼져 있으면 모든 답이 전과 같습니다.
   - 범위 질의 결과(`prometheus_query`·`loki_query` 지표 질의)가 모델이 한 번에 읽는 길이(모델의 도구 결과 최대 길이, 정하지 않으면 6,000자)를 넘으면, 자르는 대신 값이 큰 시리즈 10개의 최저·최고·평균·마지막 값과 12점 개요로 줄여서 줍니다.
     그래프로 그린 결과도 같은 요약을 씁니다.
   - `gitops_status`는 Argo CD Application CR을 그 사람 권한으로 읽어 sync, health, 마지막 operation, 오류 조건, OutOfSync 리소스를 앱별로 정리합니다.
