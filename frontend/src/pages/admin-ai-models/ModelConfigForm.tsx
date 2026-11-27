@@ -382,7 +382,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
             onClick={handleSubmit}
             disabled={isSaving || !formName || !formModel || !!unavailableReason || !!baseUrlProblem}
             title={unavailableReason ?? undefined}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
           >
             {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {editingId ? tr('admin.aiModels.update', 'Update') : tr('admin.aiModels.create', 'Create')}
