@@ -326,7 +326,7 @@ export default function AdvancedSearch() {
           <p className="text-sm text-slate-400">
             {t('advancedSearch.loadingData', 'Loading {{count}} resource types...', { count: resourceTypes.length })}
           </p>
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-slate-400">
             {t('advancedSearch.loadingHint', 'This may take a moment for large clusters')}
           </p>
         </div>
@@ -354,7 +354,7 @@ export default function AdvancedSearch() {
         <div className="flex flex-col items-center gap-2 py-12 text-slate-500">
           <AlertCircle className="w-8 h-8" />
           <p className="text-sm">{t('advancedSearch.noResults', 'No resources match your query')}</p>
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-slate-400">
             {t('advancedSearch.noResultsHint', 'Check your expression syntax or try a different query')}
           </p>
         </div>
