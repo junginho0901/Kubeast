@@ -160,7 +160,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
                 .join(', ')
 
               return (
-                <div key={`listener-${listenerName}-${idx}`} className="rounded-sm border border-slate-800 p-3">
+                <div data-detail-card="" key={`listener-${listenerName}-${idx}`} className="rounded-sm border border-slate-800 p-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                     <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Name:</Tx></span> {listenerName}</div>
                     <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Hostname:</Tx></span> {text(listener?.hostname)}</div>
@@ -198,7 +198,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
                 })
                 .join(', ')
               return (
-                <div key={`route-summary-${idx}`} className="rounded-sm border border-slate-800 p-2">
+                <div data-detail-card="" key={`route-summary-${idx}`} className="rounded-sm border border-slate-800 p-2">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                     <div className="text-slate-200"><span className="text-slate-400"><Tx>Listener:</Tx></span> {listenerName}</div>
                     <div className="text-slate-200"><span className="text-slate-400"><Tx>Attached Routes:</Tx></span> {routeCount}</div>

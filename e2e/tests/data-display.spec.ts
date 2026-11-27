@@ -129,7 +129,7 @@ test.describe('data display matches the cluster', () => {
     const active = all.filter((s) => s === 'True').length
 
     await page.goto(`/workloads/hpas?cluster=${CLUSTER}`)
-    const card = (label: string) => page.locator('div.rounded-lg', { has: page.getByText(label, { exact: true }) }).locator('p').nth(1)
+    const card = (label: string) => page.locator('p').filter({ hasText: new RegExp(`^${label}$`) }).locator('xpath=following-sibling::p[1]')
     await expect(card('Total')).toHaveText(String(all.length), { timeout: 15_000 })
     await expect(card('Active')).toHaveText(String(active))
     await expect(card('Inactive')).toHaveText(String(all.length - active))

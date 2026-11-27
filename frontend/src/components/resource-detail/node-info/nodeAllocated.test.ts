@@ -63,7 +63,7 @@ describe('the Node drawer', () => {
   const section = (html: string, title: string) => {
     const at = html.indexOf(`>${title}</p>`)
     if (at < 0) return `no ${title} section`
-    const next = html.indexOf('<div class="rounded-lg border', at)
+    const next = html.indexOf('<div data-detail-section=""', at)
     return html.slice(at, next < 0 ? undefined : next)
   }
   const cells = (part: string) => [...part.matchAll(/<tr[^>]*>(.*?)<\/tr>/g)].map((r) => [...r[1].matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((c) => c[1])).filter((r) => r.length)

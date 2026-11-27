@@ -56,7 +56,7 @@ export default function ContainerCard({
   const kp = keyPrefix ?? namePrefix
 
   return (
-    <div className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
+    <div data-detail-card="" className="rounded-sm border border-slate-800 bg-slate-900/40 p-3 space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-ink wrap-break-word">{c.name || `${namePrefix}-${i + 1}`}</span>
         <div className="flex items-center gap-2">
@@ -114,7 +114,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Ports">
             <div className="flex flex-wrap gap-1">
               {toPorts(c.ports).map((port, idx) => (
-                <span key={`${port}-${idx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span data-detail-chip="" key={`${port}-${idx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                   {port}
                 </span>
               ))}
@@ -125,7 +125,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Requests">
             <div className="flex flex-wrap gap-1">
               {toEntryPairs(requests).map(([k, v]) => (
-                <span key={`req-${kp}-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span data-detail-chip="" key={`req-${kp}-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                   {k}={v}
                 </span>
               ))}
@@ -136,7 +136,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Limits">
             <div className="flex flex-wrap gap-1">
               {toEntryPairs(limits).map(([k, v]) => (
-                <span key={`lim-${kp}-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span data-detail-chip="" key={`lim-${kp}-${k}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                   {k}={v}
                 </span>
               ))}
@@ -174,7 +174,7 @@ export default function ContainerCard({
           <ContainerKvRow label="Mounts">
             <div className="flex flex-wrap gap-1">
               {toMounts(mounts).map((mount, idx) => (
-                <span key={`${mount}-${idx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
+                <span data-detail-chip="" key={`${mount}-${idx}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono">
                   {mount}
                 </span>
               ))}

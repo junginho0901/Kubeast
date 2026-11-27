@@ -120,7 +120,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
               const isLong = value && value.length > 200
 
               return (
-                <div key={key} className="rounded-sm border border-slate-800 bg-slate-900/40">
+                <div data-detail-card="" key={key} className="rounded-sm border border-slate-800 bg-slate-900/40">
                   <button
                     type="button"
                     onClick={() => toggleKey(key)}
@@ -161,7 +161,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
         <InfoSection title="Binary Data Keys ({{n}})" titleValues={{ n: binaryKeys.length }}>
           <div className="flex flex-wrap gap-1">
             {binaryKeys.map((key: string) => (
-              <span key={key} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300 font-mono">
+              <span data-detail-chip="" key={key} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300 font-mono">
                 {key}
               </span>
             ))}

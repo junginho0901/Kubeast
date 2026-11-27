@@ -94,25 +94,25 @@ async function readDrawer(page: Page): Promise<View> {
       rows: [...tb.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => words(td))),
     })
     const view: View = { badges: {}, counts: {}, sections: {} }
-    for (const b of root.querySelectorAll('span.rounded-full.border')) {
+    for (const b of root.querySelectorAll('[data-summary-badge]')) {
       const m = has(b, 'py-0.5') ? /^([^:]+): (.*)$/.exec((b as HTMLElement).innerText.replace(/\s+/g, ' ').trim()) : null
       if (m) view.badges[m[1]] = m[2]
     }
-    for (const sec of root.querySelectorAll('div.rounded-lg.border')) {
+    for (const sec of root.querySelectorAll('[data-detail-section]')) {
       const title = sec.firstElementChild?.firstElementChild
       if (!title || title.tagName !== 'P') continue
       const m = /^(.*) \((\d+)\)$/.exec(words(title))
       const name = m ? m[1] : words(title)
       if (m) view.counts[name] = Number(m[2])
       const inside = (els: Element[]) => (el: Element) => els.some((x) => x !== el && x.contains(el))
-      const grids = [...sec.querySelectorAll('div.grid')].filter((g) => g.children.length === 2 && [...g.children].every((c) => c.tagName === 'SPAN') && has(g.children[0], 'text-slate-400'))
+      const grids = [...sec.querySelectorAll('div.grid')].filter((g) => g.children.length === 2 && [...g.children].every((c) => c.tagName === 'SPAN') && g.hasAttribute('data-detail-row'))
       const inGrid = inside(grids)
-      const allCards = [...sec.querySelectorAll('div')].filter((d) => has(d, 'rounded-sm', 'border') && !inGrid(d))
+      const allCards = [...sec.querySelectorAll('div')].filter((d) => d.hasAttribute('data-detail-card') && !inGrid(d))
       const cards = allCards.filter((d) => !inside(allCards)(d))
       const inCard = inside(cards)
       const tables = [...sec.querySelectorAll('table')].filter((t) => !inGrid(t) && !inCard(t))
       const notes = [...sec.querySelectorAll('p')].filter((p) => p !== title && !inGrid(p) && !inCard(p))
-      const tags = [...sec.querySelectorAll('span.rounded-full.border')].filter((s) => has(s, 'py-1') && !inGrid(s) && !inCard(s))
+      const tags = [...sec.querySelectorAll('[data-detail-tag]')].filter((s) => has(s, 'py-1') && !inGrid(s) && !inCard(s))
       const taken = [title, ...grids, ...cards, ...tables, ...notes, ...tags]
       view.sections[name] = {
         rows: Object.fromEntries(grids.map((g) => [words(g.children[0]), words(g.children[1])])),

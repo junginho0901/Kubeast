@@ -77,7 +77,7 @@ async function openLogsTab(page: Page) {
   await page.goto(`/cluster-view?cluster=${CLUSTER}`)
   await expect(page.getByRole('heading', { name: /클러스터 뷰|Cluster view/i })).toBeVisible({ timeout: 15_000 })
   await page.getByPlaceholder(/Search pod name|Pod 이름/i).fill(POD)
-  await page.locator('div.card button', { hasText: POD }).first().click()
+  await page.getByTestId('cluster-view-node').locator('button').filter({ hasText: POD }).first().click()
   const area = page.locator('pre.whitespace-pre-wrap').first()
   await expect(area).toContainText('stream-line-5', { timeout: 20_000 })
   return area

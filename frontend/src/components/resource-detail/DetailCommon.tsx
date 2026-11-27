@@ -50,7 +50,7 @@ export function ObjectUnreadable({ kind, name, namespace, notFound = false }: { 
 export function InfoSection({ title, titleValues, children, actions }: { title: string; titleValues?: LabelValues; children: ReactNode; actions?: ReactNode }) {
   const ds = useDetailSection()
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
+    <div data-detail-section="" className="rounded-lg border border-slate-700 bg-slate-900/40 p-4">
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs text-slate-400">{ds(title, titleValues)}</p>
         {actions}
@@ -67,7 +67,7 @@ const isYesNo = (v: unknown): v is 'Yes' | 'No' => v === 'Yes' || v === 'No'
 export function InfoRow({ label, value, asIs }: { label: string; value: ReactNode; asIs?: boolean }) {
   const dl = useDetailLabel()
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-1 text-xs text-slate-200">
+    <div data-detail-row="" className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-1 text-xs text-slate-200">
       <span className="text-slate-400 shrink-0">{asIs ? label : dl(label)}</span>
       <span className="text-ink font-medium break-all">{isYesNo(value) ? dl(value) : typeof value === 'string' ? value.trim() || '-' : typeof value === 'number' ? value : value ?? '-'}</span>
     </div>
@@ -97,7 +97,7 @@ export function SummaryBadge({ label, value, color }: { label: string; value: st
     default: 'border-slate-600 text-slate-300',
   }
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${c[color || 'default']}`}>
+    <span data-summary-badge="" className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${c[color || 'default']}`}>
       {dl(label)}: {isYesNo(value) ? dl(value) : value}
     </span>
   )
@@ -120,7 +120,7 @@ export function KeyValueTags({ data, emptyText = 'None' }: { data?: Record<strin
   return (
     <div className="flex flex-wrap gap-2 text-xs text-slate-200">
       {entries.map(([key, value]) => (
-        <span key={`${key}=${value}`} className="relative inline-flex items-center rounded-full border border-slate-700 bg-slate-800/80 px-2 py-1 max-w-full group">
+        <span data-detail-tag="" key={`${key}=${value}`} className="relative inline-flex items-center rounded-full border border-slate-700 bg-slate-800/80 px-2 py-1 max-w-full group">
           <span className="font-mono text-slate-300 max-w-[160px] truncate">{key}</span>
           <span className="mx-1 text-slate-500">:</span>
           <span className="max-w-[260px] truncate">{value}</span>

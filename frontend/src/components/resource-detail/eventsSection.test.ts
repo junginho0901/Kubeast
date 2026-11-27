@@ -53,7 +53,7 @@ const render = (lng: string, el: ReactElement, seed: [unknown[], unknown][] = []
 const eventsPart = (html: string, title = 'Events') => {
   const at = html.indexOf(`>${title}</p>`)
   if (at < 0) return 'no Events section'
-  const next = html.indexOf('<div class="rounded-lg border', at)
+  const next = html.indexOf('<div data-detail-section=""', at)
   return html.slice(at, next < 0 ? undefined : next)
 }
 const rows = (part: string) => (part.split('<tbody')[1] ?? '').match(/<tr\b/g)?.length ?? 0

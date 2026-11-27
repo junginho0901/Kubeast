@@ -74,9 +74,10 @@ describe('the Pod drawer', () => {
       createElement(MemoryRouter, null, createElement(PageContextProvider, null, createElement(PodInfo, { name: 'p', namespace: 'ns' }))))))
   }
   const row = (html: string, label: string) => {
-    const at = html.indexOf(`>${label}</span>`)
+    const labelEnd = `>${label}</span>`
+    const at = html.indexOf(labelEnd)
     if (at < 0) return `no ${label} row`
-    return html.slice(at).match(/<span class="text-ink font-medium break-all">(.*?)<\/span>/)?.[1]
+    return html.slice(at + labelEnd.length).match(/^<span\b[^>]*>(.*?)<\/span>/)?.[1]
   }
   const tile = (html: string) => html.match(/>Status<\/div><div[^>]*>(.*?)<\/div>/)?.[1]?.replace(/<[^>]+>/g, '')
 

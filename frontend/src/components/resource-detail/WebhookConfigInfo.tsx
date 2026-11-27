@@ -103,7 +103,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
                 <p className="text-[11px] text-slate-400 mt-2 mb-1"><Tx>Match Conditions</Tx></p>
                 <div className="space-y-1">
                   {wh.match_conditions.map((mc: any, mi: number) => (
-                    <div key={mi} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5">
+                    <div data-detail-card="" key={mi} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5">
                       <p className="text-[11px] text-slate-300">{mc?.name || '-'}</p>
                       <p className="font-mono text-[11px] text-slate-200 break-all">{mc?.expression || '-'}</p>
                     </div>
@@ -128,7 +128,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
               <p className="text-[11px] text-slate-400 mb-1"><Tx>Resource Types (apiGroup/resource)</Tx></p>
               <div className="flex flex-wrap gap-1.5">
                 {pagedAffected.map((s) => (
-                  <span key={s} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200">{s}</span>
+                  <span data-detail-chip="" key={s} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200">{s}</span>
                 ))}
               </div>
               {affectedNav}
@@ -137,7 +137,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
               <p className="text-[11px] text-slate-400 mb-1"><Tx>Operations</Tx></p>
               <div className="flex flex-wrap gap-1.5">
                 {operationsList.map((op) => (
-                  <span key={op} className="rounded-sm border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-300">{op}</span>
+                  <span data-detail-chip="" key={op} className="rounded-sm border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-300">{op}</span>
                 ))}
               </div>
             </div>

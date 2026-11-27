@@ -217,20 +217,25 @@ type Walked = { title: string; notes: string[]; pages: { items: string[][]; page
 async function readSection(page: Page, title: string, what: Read) {
   return page.locator(DRAWER).last().evaluate((root, { title, what }) => {
     const txt = (el: Element) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()
-    const sec = [...root.querySelectorAll('div.rounded-lg.border')].find((s) => {
+    const sec = [...root.querySelectorAll('[data-detail-section]')].find((s) => {
       const t = s.firstElementChild?.firstElementChild
       return !!t && t.tagName === 'P' && (txt(t) === title || txt(t).startsWith(`${title} (`))
     })
     if (!sec) return null
     const titleEl = sec.firstElementChild!.firstElementChild!
+    const bindingCards = [...sec.querySelectorAll('div')].filter((c) => {
+      const marker = c.firstElementChild?.firstElementChild
+      return marker?.tagName === 'SPAN' && txt(marker) === 'via'
+    })
     let items: string[][] = []
     if (what === 'table') {
       const tb = sec.querySelector('table')
       items = tb ? [...tb.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map(txt)) : []
     } else if (what === 'links') {
-      items = [...(sec.querySelector('div.flex-wrap')?.children ?? [])].map((c) => [txt(c)])
+      const links = [...sec.children].slice(1).find((c) => c.children.length > 0 && [...c.children].every((el) => el.tagName === 'BUTTON'))
+      items = [...(links?.children ?? [])].map((c) => [txt(c)])
     } else if (what === 'cards') {
-      items = [...sec.querySelectorAll('div.rounded-sm.border.p-2')].map((c) => [c.firstElementChild ? txt(c.firstElementChild) : txt(c)])
+      items = bindingCards.map((c) => [c.firstElementChild ? txt(c.firstElementChild) : txt(c)])
     } else {
       const label = [...sec.querySelectorAll('p')].find((p) => txt(p) === what.chipsAfter)
       items = [...(label?.nextElementSibling?.children ?? [])].map((c) => [txt(c)])
@@ -240,7 +245,7 @@ async function readSection(page: Page, title: string, what: Read) {
     return {
       title: txt(titleEl),
       // text of its own: a label, a notice ("Showing first …"), not a card's or a cell's
-      notes: [...sec.querySelectorAll('p')].filter((p) => p !== titleEl && !p.closest('table') && !p.closest('div.rounded-sm.border')).map(txt),
+      notes: [...sec.querySelectorAll('p')].filter((p) => p !== titleEl && !p.closest('table') && !bindingCards.some((c) => c.contains(p))).map(txt),
       items,
       pager: pager ? txt(pager) : null,
       next: !!next && !next.disabled,
@@ -251,7 +256,7 @@ async function readSection(page: Page, title: string, what: Read) {
 async function clickNext(page: Page, title: string) {
   await page.locator(DRAWER).last().evaluate((root, title) => {
     const txt = (el: Element) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()
-    const sec = [...root.querySelectorAll('div.rounded-lg.border')].find((s) => {
+    const sec = [...root.querySelectorAll('[data-detail-section]')].find((s) => {
       const t = s.firstElementChild?.firstElementChild
       return !!t && t.tagName === 'P' && (txt(t) === title || txt(t).startsWith(`${title} (`))
     })
@@ -431,11 +436,11 @@ test.describe('number check — no drawer row out of reach', () => {
         await page.goto(`/?cluster=${CLUSTER}`)
         await page.locator('button').filter({ hasText: /Storage analysis/ }).first().click()
         // the window's own tab (the innermost box holding its title)
-        const storageWindow = page.locator('div.rounded-lg', { has: page.locator('h2', { hasText: /^Storage analysis$/ }) }).last()
+        const storageWindow = page.getByRole('heading', { name: 'Storage analysis', exact: true }).locator('xpath=ancestor::div[4]')
         await storageWindow.locator('button', { hasText: /^Topology$/ }).click()
         const shown = () => page.evaluate(() => {
           const txt = (el: Element) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()
-          const modal = [...document.querySelectorAll('h2')].find((h) => txt(h) === 'Storage analysis')?.closest('div.rounded-lg')
+          const modal = [...document.querySelectorAll('h2')].find((h) => txt(h) === 'Storage analysis')?.parentElement?.parentElement?.parentElement?.parentElement
           if (!modal) return null
           const ps = [...modal.querySelectorAll('p')].map(txt)
           return {

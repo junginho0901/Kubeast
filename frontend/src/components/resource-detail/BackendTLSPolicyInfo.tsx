@@ -136,7 +136,7 @@ export default function BackendTLSPolicyInfo({ name, namespace, rawJson }: Props
         <InfoSection title="Status">
           <div className="space-y-3">
             {ancestors.map((ancestor: Record<string, any>, idx: number) => (
-              <div key={`ancestor-${idx}`} className="rounded-sm border border-slate-800 p-3">
+              <div data-detail-card="" key={`ancestor-${idx}`} className="rounded-sm border border-slate-800 p-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
                   <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Controller:</Tx></span> {text(ancestor?.controllerName)}</div>
                   <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Ancestor:</Tx></span> {formatParentRef(ancestor?.ancestorRef || {})}</div>

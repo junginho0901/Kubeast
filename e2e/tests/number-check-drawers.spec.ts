@@ -150,8 +150,8 @@ async function readDrawer(page: Page): Promise<Drawer> {
       const pager = /\b\d+-\d+ \/ (\d+)\b/.exec((el as HTMLElement).innerText)
       addresses[label] = { shown: [...el.querySelectorAll('[data-testid="service-address"]')].map((s) => (s as HTMLElement).innerText.trim()), total: pager ? Number(pager[1]) : null }
     }
-    const evTitle = [...root.querySelectorAll('div.rounded-lg.border > div > p:first-child')].find((p) => (p as HTMLElement).innerText.trim() === 'Events')
-    const evSec = evTitle?.closest('div.rounded-lg.border')
+    const evTitle = [...root.querySelectorAll('[data-detail-section] > div > p:first-child')].find((p) => (p as HTMLElement).innerText.trim() === 'Events')
+    const evSec = evTitle?.closest('[data-detail-section]')
     const evTable = evSec?.querySelector('table')
     const evPager = evSec ? /\b\d+-\d+ \/ (\d+)\b/.exec((evSec as HTMLElement).innerText) : null
     const events = !evSec ? null : {
@@ -159,7 +159,7 @@ async function readDrawer(page: Page): Promise<Drawer> {
       total: evPager ? Number(evPager[1]) : null,
       text: evTable ? '' : (evSec as HTMLElement).innerText.replace(/^\s*Events\s*/, '').trim(),
     }
-    return { rows, pairs: labelled('span[class*="rounded-full"], span[data-summary-text]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables, events, addresses }
+    return { rows, pairs: labelled('[data-summary-badge], span[data-summary-text]'), phases: labelled('span[class*="rounded-sm"][class*="border"]'), counts, text, tables, events, addresses }
   })
 }
 const table = (d: Drawer, ...head: string[]) => d.tables.filter((t) => head.every((h, i) => t.head[i] === h))
@@ -733,8 +733,8 @@ test.describe('number check — drawers', () => {
         return [...want, ...others].filter((p) => re.test(p)).sort()
       }
       for (const q of asked) expect(taken(q), q).toEqual(want)
-      const section = page.locator(DRAWER).last().locator('div.rounded-lg', { has: page.locator('h3', { hasText: /^Backend Pod Resource Usage$/ }) }).last()
-      const card = (label: string) => section.locator('div.rounded-lg', { hasText: label })
+      const section = page.locator(DRAWER).last().getByRole('heading', { name: 'Backend Pod Resource Usage', exact: true }).locator('xpath=../..')
+      const card = (label: string) => section.getByText(label, { exact: true }).locator('xpath=..')
       await expect(card('Total CPU')).toContainText('12.0m', { timeout: 20_000 })
       await expect(card('Total Memory')).toContainText('5.0 MiB')
       await expect(card('Backing Pods').locator('div.text-lg')).toHaveText(`${want.length}`)

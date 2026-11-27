@@ -102,7 +102,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
           {validations.length === 0 ? <div className="text-xs text-slate-400">-</div> : (
             <div className="space-y-2">
               {validations.map((v, i) => (
-                <div key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5 space-y-1" data-testid="admission-policy-validation">
+                <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5 space-y-1" data-testid="admission-policy-validation">
                   <p className="font-mono text-[11px] text-slate-200 break-all">{v?.expression || '-'}</p>
                   {v?.message && <p className="text-[11px] text-slate-300"><Tx>Message</Tx>: {v.message}</p>}
                   {v?.messageExpression && <p className="text-[11px] text-slate-300"><Tx>Message Expression</Tx>: <span className="font-mono break-all">{v.messageExpression}</span></p>}
@@ -117,7 +117,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
           {mutations.length === 0 ? <div className="text-xs text-slate-400">-</div> : (
             <div className="space-y-2">
               {mutations.map((m, i) => (
-                <div key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5 space-y-1" data-testid="admission-policy-mutation">
+                <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5 space-y-1" data-testid="admission-policy-mutation">
                   <p className="text-[11px] text-slate-400"><Tx>Patch Type</Tx>: {m?.patchType || '-'}</p>
                   <p className="font-mono text-[11px] text-slate-200 break-all">{m?.applyConfiguration?.expression || m?.jsonPatch?.expression || '-'}</p>
                 </div>
@@ -137,7 +137,7 @@ export default function AdmissionPolicyInfo({ name, kind }: Props) {
         <InfoSection title="Type Checking">
           <div className="space-y-2">
             {warnings.map((w, i) => (
-              <div key={i} className="rounded-sm border border-amber-700/60 bg-amber-900/20 px-2 py-1.5">
+              <div data-detail-card="" key={i} className="rounded-sm border border-amber-700/60 bg-amber-900/20 px-2 py-1.5">
                 <p className="text-[11px] text-amber-300 font-mono">{w?.fieldRef || '-'}</p>
                 <p className="text-[11px] text-slate-200 break-all">{w?.warning || '-'}</p>
               </div>
@@ -207,7 +207,7 @@ function ExpressionList({ items }: { items: { name?: string; expression?: string
   return (
     <div className="space-y-1">
       {items.map((it, i) => (
-        <div key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5">
+        <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5">
           <p className="text-[11px] text-slate-300">{it.name || '-'}</p>
           <p className="font-mono text-[11px] text-slate-200 break-all">{it.expression || '-'}</p>
         </div>

@@ -113,7 +113,7 @@ test.describe('AIChat refactor — Context / hook 분리 회귀', () => {
       await expect(input).toBeDisabled({ timeout: 15_000 })
       await expect(input).toBeEnabled({ timeout: 30_000 })
 
-      const messages = page.locator('div.flex.gap-3.p-6')
+      const messages = page.getByTestId('chat-message')
       await expect(messages.first()).toBeVisible()
 
       // New chat 버튼 — i18n: "새 대화" / "New Chat"

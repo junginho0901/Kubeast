@@ -167,7 +167,7 @@ async function readScreen(page: Page): Promise<ScreenRead> {
     const rows = [...document.querySelectorAll('main tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => (td as HTMLElement).innerText.trim()))
     const cards: Record<string, string> = {}
     // a summary card: a bordered box of two lines, the label and a number ("-" for a list the cluster refused)
-    for (const b of document.querySelectorAll('main div.rounded-lg.border')) {
+    for (const b of document.querySelectorAll('main [data-list-summary-card]')) {
       const lines = [...b.children] as HTMLElement[]
       if (lines.length === 2 && /^(\d+|-)$/.test(lines[1].innerText.trim())) cards[lines[0].innerText.trim()] = lines[1].innerText.trim()
     }
@@ -221,18 +221,18 @@ const url = (p: string, extra = '') => `${p}?cluster=${CLUSTER}${extra}`
 type Section = { count?: string; rows: [string, string][]; chips: Record<string, string>; tables: { head: string[]; rows: string[][] }[] }
 async function readDrawer(page: Page): Promise<Record<string, Section>> {
   return page.locator(DRAWER).last().evaluate((root) => {
-    const chipsOf = (el: Element) => [...el.querySelectorAll('span.rounded-full')].map((c) => {
+    const chipsOf = (el: Element) => [...el.querySelectorAll('[data-detail-tag]')].map((c) => {
       const parts = [...c.children] as HTMLElement[]
       return [parts[0]?.textContent?.trim() ?? '', parts[2]?.textContent?.trim() ?? ''] as [string, string]
     })
     const out: Record<string, Section> = {}
-    for (const p of root.querySelectorAll('div.rounded-lg.border > div.flex > p.text-xs')) {
+    for (const p of root.querySelectorAll('[data-detail-section] > div:first-child > p')) {
       const sec = p.parentElement!.parentElement!
       const m = /^(.*?)(?: \((\d+|-)\))?$/.exec((p as HTMLElement).innerText.trim())!
       const rows: [string, string][] = []
       for (const g of sec.querySelectorAll('div.grid')) {
         const spans = [...g.children].filter((c) => c.tagName === 'SPAN') as HTMLElement[]
-        if (spans.length === 2 && spans[0].className.includes('text-slate-400')) rows.push([spans[0].innerText.trim(), spans[1].innerText.trim()])
+        if (spans.length === 2 && g.hasAttribute('data-detail-row')) rows.push([spans[0].innerText.trim(), spans[1].innerText.trim()])
       }
       const tables = [...sec.querySelectorAll('table')].map((tb) => ({
         head: [...tb.querySelectorAll('thead th')].map((th) => (th as HTMLElement).innerText.trim()),

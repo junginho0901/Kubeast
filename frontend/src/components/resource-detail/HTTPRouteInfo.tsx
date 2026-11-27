@@ -126,7 +126,7 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
         ) : (
           <div className="space-y-2 text-xs">
             {parentRefs.map((parentRef, idx) => (
-              <div key={`parent-ref-${idx}`} className="rounded-sm border border-slate-800 p-2 text-slate-200 wrap-break-word">
+              <div data-detail-card="" key={`parent-ref-${idx}`} className="rounded-sm border border-slate-800 p-2 text-slate-200 wrap-break-word">
                 {parentRef.name ? (
                   <><GroupRefLink group={parentRefGroup(parentRef)} kind={parentRef.kind || 'Gateway'} name={parentRef.name} namespace={parentRef.namespace || namespace} /> <span className="text-slate-400">{parentRef.sectionName ? `section=${parentRef.sectionName}` : ''}</span></>
                 ) : formatParentRef(parentRef)}
@@ -147,7 +147,7 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
               const filters = Array.isArray(rule?.filters) ? rule.filters : []
 
               return (
-                <div key={`rule-${idx}`} className="rounded-sm border border-slate-800 p-3">
+                <div data-detail-card="" key={`rule-${idx}`} className="rounded-sm border border-slate-800 p-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                     <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Rule Name:</Tx></span> {text(rule?.name)}</div>
                     <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Matches:</Tx></span> {matches.length}</div>
@@ -223,7 +223,7 @@ export default function HTTPRouteInfo({ name, namespace, rawJson }: Props) {
         ) : (
           <div className="space-y-3">
             {parents.map((parent, idx) => (
-              <div key={`parent-status-${idx}`} className="rounded-sm border border-slate-800 p-3">
+              <div data-detail-card="" key={`parent-status-${idx}`} className="rounded-sm border border-slate-800 p-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs mb-2">
                   <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Controller:</Tx></span> {text(parent?.controllerName)}</div>
                   <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Parent Ref:</Tx></span> {formatParentRef(parent?.parentRef || {})}</div>
