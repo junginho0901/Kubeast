@@ -294,7 +294,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div className="relative" ref={execContainerRef}>
               <button
                 onClick={() => { setIsExecContainerOpen(!isExecContainerOpen); setIsExecShellOpen(false) }}
-                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
+                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
               >
                 <span className="text-xs font-medium truncate">{execSelectContainer || containerNames[0]}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform motion-reduce:transition-none ${isExecContainerOpen ? 'rotate-180' : ''}`} />
@@ -318,7 +318,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div className="relative" ref={execShellRef}>
               <button
                 onClick={() => { setIsExecShellOpen(!isExecShellOpen); setIsExecContainerOpen(false) }}
-                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
+                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
               >
                 <span className="text-xs font-medium">{execCommand}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform motion-reduce:transition-none ${isExecShellOpen ? 'rotate-180' : ''}`} />

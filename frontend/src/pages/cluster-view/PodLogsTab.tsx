@@ -205,7 +205,7 @@ export function PodLogsTab({
           </label>
           <button
             onClick={() => setIsContainerDropdownOpen(!isContainerDropdownOpen)}
-            className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
+            className="w-full h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
           >
             <span className="text-sm min-w-0 truncate font-medium" title={selectedContainer}>
               {selectedContainer || tr('clusterView.logs.selectContainer', 'Select container')}
@@ -324,7 +324,7 @@ export function PodLogsTab({
           </label>
           <button
             onClick={() => setIsTailLinesDropdownOpen(!isTailLinesDropdownOpen)}
-            className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between min-w-[150px]"
+            className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between min-w-[150px]"
           >
             <span className="text-sm min-w-0 break-all font-medium">
               {tr('clusterView.logs.linesCount', '{{count}} lines', { count: downloadTailLines })}
