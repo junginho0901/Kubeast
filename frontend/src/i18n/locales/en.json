@@ -29,7 +29,7 @@
     "failed": "The key was not created.",
     "admin": {
       "title": "API keys",
-      "empty": "No API keys"
+      "empty": "No API keys."
     },
     "mcp": {
       "title": "Connect an AI agent (MCP)",
@@ -1579,7 +1579,7 @@
       "title": "Top nodes by resource usage",
       "loading": "Loading metrics...",
       "error": "Metrics unavailable",
-      "empty": "No metrics available",
+      "empty": "No metrics available.",
       "unavailable": "Metrics server not available for this cluster"
     },
     "table": {
@@ -2132,8 +2132,8 @@
       "errorTitle": "Failed to load pod metrics",
       "retrying": "Retrying automatically... (every 5 seconds)",
       "unavailableAll": "Pod metrics are not available",
-      "noPodsInNamespace": "No pods in {{namespace}} namespace",
-      "noneInGrant": "No pod metrics in the namespaces you can see",
+      "noPodsInNamespace": "No pods in {{namespace}} namespace.",
+      "noneInGrant": "No pod metrics in the namespaces you can see.",
       "noneInGrantHint": "Your access to this cluster is limited to the namespaces {{namespaces}}, and no pod in them has metrics now. Choose a namespace to see its pods.",
       "searchPlaceholder": "Search pods by name..."
     },
@@ -2277,7 +2277,7 @@
       "subtitle": "Requests and limits of each workload container against its usage; recommendation = CPU 95th percentile, memory peak + 15%.",
       "selectNamespaceTitle": "Select namespace",
       "selectNamespace": "Select namespace",
-      "noNamespaces": "No namespaces to display",
+      "noNamespaces": "No namespaces to display.",
       "runTitle": "Ask the AI to explain this table",
       "running": "Explaining...",
       "run": "Explain with AI",
@@ -2316,7 +2316,7 @@
       },
       "tableLoading": "Computing the table...",
       "tableError": "Failed to load the table",
-      "tableEmpty": "No running pods in this namespace",
+      "tableEmpty": "No running pods in this namespace.",
       "stopTitle": "Stop",
       "stop": "Stop",
       "copyTitle": "Copy result",
@@ -2394,7 +2394,7 @@
       "searchPlaceholder": "Search issues (name/namespace/kind/severity/message)...",
       "loading": "Collecting issues...",
       "error": "Failed to collect issues",
-      "none": "No issues detected",
+      "none": "No issues detected.",
       "noneHint": "Check your filters/search terms",
       "count": "{{count}}",
       "lastSeen": "last {{age}} ago",
@@ -2423,7 +2423,7 @@
     },
     "autoRefresh": "Auto refresh every 5 seconds",
     "topResources": {
-      "empty": "No resource usage data"
+      "empty": "No resource usage data."
     },
     "metrics": {
       "unavailable": "Metrics server not available for this cluster"
@@ -2486,14 +2486,14 @@
       "searchPlaceholder": "Search (name/namespace/status/StorageClass/volume/capacity)...",
       "searchPvsPlaceholder": "Search (name/status/capacity/StorageClass/reclaim policy/claim)...",
       "loading": "Loading storage data...",
-      "noPVC": "No PVCs to display",
+      "noPVC": "No PVCs to display.",
       "pvLabel": "PV",
-      "noPV": "No PVs to display",
+      "noPV": "No PVs to display.",
       "reclaimLabel": "Reclaim",
       "claimLabel": "Claim",
       "topologyTitle": "Storage Topology",
       "topologySummary": "Nodes: {{nodes}} · Edges: {{edges}}",
-      "noTopologyEdges": "No topology edges to display",
+      "noTopologyEdges": "No topology edges to display.",
       "topologyLoading": "Loading topology...",
       "topologyError": "Failed to load topology",
       "topologyUnavailable": "Topology data is unavailable"
@@ -2504,18 +2504,18 @@
       "totalFiltered": "{{shown}} of {{count}}",
       "searchPlaceholder": "Search...",
       "namespaceSummary": "Pods: {{pods}} | Services: {{services}} | Deployments: {{deployments}}",
-      "noNamespaces": "No namespaces",
-      "noPods": "No pods",
+      "noNamespaces": "No namespaces.",
+      "noPods": "No pods.",
       "typeLabel": "Type",
       "clusterIpLabel": "Cluster IP",
-      "noServices": "No services",
+      "noServices": "No services.",
       "replicasLabel": "Replicas",
-      "noDeployments": "No deployments",
-      "noPVCs": "No PVCs",
+      "noDeployments": "No deployments.",
+      "noPVCs": "No PVCs.",
       "versionLabel": "Version",
       "internalIpLabel": "Internal IP",
       "rolesLabel": "Roles",
-      "noNodes": "No nodes"
+      "noNodes": "No nodes."
     },
     "nodeModal": {
       "title": "Node details",
@@ -2615,7 +2615,7 @@
       "containerLabel": "Container",
       "selectContainer": "Select container",
       "containerSearchPlaceholder": "Search containers...",
-      "noContainers": "No containers",
+      "noContainers": "No containers.",
       "downloadLines": "Log download lines",
       "linesCount": "{{count}} lines",
       "linesCount_one": "{{count}} line",
@@ -2698,13 +2698,13 @@
     "searchResults": "Results",
     "countSuffix": "items",
     "searchResultsTotal": "(out of {{count}})",
-    "noSearchResults": "No pods found for \"{{query}}\"",
+    "noSearchResults": "No pods found for \"{{query}}\".",
     "nodePodsCount": "{{count}} Pods",
     "nodePodsCount_one": "{{count}} Pod",
     "restarts": "Restarts: {{count}}",
     "podDeleting": "Deleting...",
     "unscheduled": "Unscheduled",
-    "noPods": "No pods found",
+    "noPods": "No pods found.",
     "box": {
       "shown": "Showing {{shown}} of {{total}} Pods",
       "more": "+{{count}} show all on this Node",
@@ -2750,7 +2750,7 @@
       },
       "imageLabel": "Image",
       "restartsLabel": "Restarts",
-      "none": "No containers"
+      "none": "No containers."
     },
     "health": {
       "title": "Health"
@@ -3063,7 +3063,7 @@
       "saving": "Saving...",
       "close": "Close",
       "permissions": "Permissions",
-      "noPerms": "No permissions assigned"
+      "noPerms": "No permissions assigned."
     },
     "searchPlaceholder": "Search by name, email or team...",
     "selfAccount": "Your account"
@@ -3327,7 +3327,7 @@
     },
     "sources": "Sources",
     "issuesOnly": "Issues",
-    "noData": "No resources found",
+    "noData": "No resources found.",
     "emptyDesc1": "Visualize relationships between Kubernetes resources as a graph.",
     "emptyDesc2": "Deployment → ReplicaSet → Pod, Service → Pod, Ingress → Service,",
     "emptyDesc3": "PVC → PV → StorageClass, and more — see all relationships at a glance.",
@@ -3452,7 +3452,7 @@
     "loaded": "{{count}} items loaded",
     "loaded_one": "{{count}} item loaded",
     "refresh": "Refresh",
-    "noResults": "No resources match your query",
+    "noResults": "No resources match your query.",
     "noResultsHint": "Check your expression syntax or try a different query",
     "unreadable": "The expression could not be read: {{reason}}",
     "noResources": "Select resource types to search",
@@ -3820,7 +3820,7 @@
     "rollouts": "Rollouts",
     "aiSummary": "AI Summary",
     "summarizing": "Summarizing...",
-    "noEvents": "No events in this period",
+    "noEvents": "No events in this period.",
     "noEventsHint": "K8s events typically have a ~1 hour TTL. Older events may not be available.",
     "revision": "Revision",
     "changeCause": "Change Cause",

@@ -367,7 +367,7 @@ describe('what the Pods tab tells the floating chat in place of rows', () => {
     expect(html).toContain('data-testid="pod-metrics-none-in-namespace"')
     expect(card(html, en.monitoring.pods.totalPods)).toBe('0')
     expect(chat.current?.data).toEqual({ tab: 'pods', filters: { namespace: 'shop' }, total_count: 0 })
-    expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — No pods in shop namespace`)
+    expect(chat.current?.summary).toBe(`${en.monitoring.pods.title} — No pods in shop namespace.`)
     saysWhatTheTabShows(html)
   })
 
@@ -447,7 +447,7 @@ describe('what the Pods tab tells the floating chat in place of rows', () => {
 
   it('says it in the screen\'s language', () => {
     renderOn('shop', answered('shop', []), { lng: 'ko' })
-    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — shop Namespace에 Pod가 없습니다`)
+    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — shop Namespace에 Pod가 없습니다.`)
   })
 
   it('tells nothing before a namespace is chosen', () => {

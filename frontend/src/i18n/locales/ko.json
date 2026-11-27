@@ -29,7 +29,7 @@
     "failed": "키를 발급하지 못했습니다.",
     "admin": {
       "title": "API 키",
-      "empty": "API 키 없음"
+      "empty": "API 키가 없습니다."
     },
     "mcp": {
       "title": "AI 에이전트 연결 (MCP)",
@@ -2124,8 +2124,8 @@
       "errorTitle": "Pod 메트릭을 불러오는 중 오류가 발생했습니다",
       "retrying": "자동으로 재시도 중입니다... (5초마다 갱신)",
       "unavailableAll": "Pod 메트릭을 사용할 수 없습니다",
-      "noPodsInNamespace": "{{namespace}} Namespace에 Pod가 없습니다",
-      "noneInGrant": "볼 수 있는 Namespace에 Pod 메트릭이 없습니다",
+      "noPodsInNamespace": "{{namespace}} Namespace에 Pod가 없습니다.",
+      "noneInGrant": "볼 수 있는 Namespace에 Pod 메트릭이 없습니다.",
       "noneInGrantHint": "이 클러스터에서는 Namespace {{namespaces}}만 볼 수 있고, 지금 그 안의 Pod에는 메트릭이 없습니다. Namespace를 골라 Pod를 확인하세요.",
       "searchPlaceholder": "Pod 이름 검색..."
     },
@@ -2274,7 +2274,7 @@
       "subtitle": "워크로드 컨테이너별 requests/limits와 사용량을 비교합니다. 추천값은 CPU 95퍼센타일, 메모리 최댓값 +15%입니다.",
       "selectNamespaceTitle": "Namespace 선택",
       "selectNamespace": "Namespace 선택",
-      "noNamespaces": "표시할 Namespace가 없습니다",
+      "noNamespaces": "표시할 Namespace가 없습니다.",
       "runTitle": "이 표를 AI에게 설명해 달라고 요청",
       "running": "설명 중...",
       "run": "AI 설명",
@@ -2312,7 +2312,7 @@
       },
       "tableLoading": "표를 계산하는 중...",
       "tableError": "표를 불러오지 못했습니다",
-      "tableEmpty": "이 Namespace에 실행 중인 Pod가 없습니다",
+      "tableEmpty": "이 Namespace에 실행 중인 Pod가 없습니다.",
       "stopTitle": "중지",
       "stop": "중지",
       "copyTitle": "결과 복사",
@@ -2390,7 +2390,7 @@
       "searchPlaceholder": "이슈 검색(이름/Namespace/종류/심각도/메시지)...",
       "loading": "이슈 수집 중...",
       "error": "이슈를 수집하지 못했습니다",
-      "none": "이슈가 없습니다",
+      "none": "이슈가 없습니다.",
       "noneHint": "필터/검색어를 확인하세요.",
       "count": "{{count}}",
       "lastSeen": "마지막 {{age}} 전",
@@ -2419,7 +2419,7 @@
     },
     "autoRefresh": "5초마다 자동 갱신",
     "topResources": {
-      "empty": "리소스 사용량 데이터가 없습니다"
+      "empty": "리소스 사용량 데이터가 없습니다."
     },
     "metrics": {
       "unavailable": "이 클러스터에 메트릭 서버가 없습니다"
@@ -2482,14 +2482,14 @@
       "searchPlaceholder": "검색(이름/Namespace/상태/StorageClass/볼륨/용량)...",
       "searchPvsPlaceholder": "검색(이름/상태/용량/StorageClass/Reclaim Policy/Claim)...",
       "loading": "스토리지 데이터를 불러오는 중...",
-      "noPVC": "표시할 PVC가 없습니다",
+      "noPVC": "표시할 PVC가 없습니다.",
       "pvLabel": "PV",
-      "noPV": "표시할 PV가 없습니다",
+      "noPV": "표시할 PV가 없습니다.",
       "reclaimLabel": "회수 정책",
       "claimLabel": "Claim",
       "topologyTitle": "스토리지 토폴로지",
       "topologySummary": "Node: {{nodes}} · 연결선: {{edges}}",
-      "noTopologyEdges": "표시할 연결선이 없습니다",
+      "noTopologyEdges": "표시할 연결선이 없습니다.",
       "topologyLoading": "토폴로지 불러오는 중...",
       "topologyError": "토폴로지 로드 실패",
       "topologyUnavailable": "토폴로지 데이터를 사용할 수 없습니다"
@@ -2500,18 +2500,18 @@
       "totalFiltered": "{{count}}개 중 {{shown}}개",
       "searchPlaceholder": "검색...",
       "namespaceSummary": "Pod: {{pods}} | Service: {{services}} | Deployment: {{deployments}}",
-      "noNamespaces": "Namespace가 없습니다",
-      "noPods": "Pod가 없습니다",
+      "noNamespaces": "Namespace가 없습니다.",
+      "noPods": "Pod가 없습니다.",
       "typeLabel": "타입",
       "clusterIpLabel": "클러스터 IP",
-      "noServices": "Service가 없습니다",
+      "noServices": "Service가 없습니다.",
       "replicasLabel": "레플리카",
-      "noDeployments": "Deployment가 없습니다",
-      "noPVCs": "PVC가 없습니다",
+      "noDeployments": "Deployment가 없습니다.",
+      "noPVCs": "PVC가 없습니다.",
       "versionLabel": "버전",
       "internalIpLabel": "내부 IP",
       "rolesLabel": "역할",
-      "noNodes": "Node가 없습니다"
+      "noNodes": "Node가 없습니다."
     },
     "nodeModal": {
       "title": "Node 상세",
@@ -2614,7 +2614,7 @@
       "containerLabel": "컨테이너",
       "selectContainer": "컨테이너 선택",
       "containerSearchPlaceholder": "컨테이너 검색...",
-      "noContainers": "컨테이너가 없습니다",
+      "noContainers": "컨테이너가 없습니다.",
       "downloadLines": "로그 다운로드 줄 수",
       "linesCount": "{{count}}줄",
       "download": "다운로드",
@@ -2696,12 +2696,12 @@
     "searchResults": "검색 결과",
     "countSuffix": "개",
     "searchResultsTotal": "(전체 {{count}}개 중)",
-    "noSearchResults": "\"{{query}}\"에 대한 Pod를 찾을 수 없습니다",
+    "noSearchResults": "\"{{query}}\"에 대한 Pod를 찾을 수 없습니다.",
     "nodePodsCount": "{{count}}개 Pod",
     "restarts": "재시작: {{count}}",
     "podDeleting": "삭제 중...",
     "unscheduled": "스케줄되지 않음",
-    "noPods": "Pod가 없습니다",
+    "noPods": "Pod가 없습니다.",
     "box": {
       "shown": "Pod {{total}}개 중 {{shown}}개를 보여 줍니다.",
       "more": "+{{count}} 이 Node 전부 보기",
@@ -2747,7 +2747,7 @@
       },
       "imageLabel": "이미지",
       "restartsLabel": "재시작",
-      "none": "컨테이너가 없습니다"
+      "none": "컨테이너가 없습니다."
     },
     "health": {
       "title": "Health",
@@ -3459,7 +3459,7 @@
     },
     "sources": "소스",
     "issuesOnly": "이슈",
-    "noData": "리소스를 찾을 수 없습니다",
+    "noData": "리소스를 찾을 수 없습니다.",
     "emptyDesc1": "Kubernetes 리소스 간의 관계를 그래프로 시각화합니다.",
     "emptyDesc2": "Deployment → ReplicaSet → Pod, Service → Pod, Ingress → Service,",
     "emptyDesc3": "PVC → PV → StorageClass 등 다양한 관계를 한눈에 파악할 수 있습니다.",
@@ -3598,7 +3598,7 @@
     "loadingHint": "리소스 양이 많으면 시간이 다소 걸릴 수 있습니다.",
     "loaded": "{{count}}개 항목 로드됨",
     "refresh": "새로고침",
-    "noResults": "쿼리에 일치하는 리소스가 없습니다",
+    "noResults": "쿼리에 일치하는 리소스가 없습니다.",
     "noResultsHint": "표현식 구문을 확인하거나 다른 쿼리를 시도하세요.",
     "unreadable": "표현식을 읽지 못했습니다: {{reason}}",
     "noResources": "검색할 리소스 타입을 선택하세요.",
@@ -3972,7 +3972,7 @@
     "rollouts": "롤아웃",
     "aiSummary": "AI 요약",
     "summarizing": "요약 중...",
-    "noEvents": "이 기간에 이벤트가 없습니다",
+    "noEvents": "이 기간에 이벤트가 없습니다.",
     "noEventsHint": "K8s 이벤트는 기본적으로 약 1시간만 유지됩니다. 더 긴 시간 범위에서는 이벤트가 없을 수 있습니다.",
     "revision": "Revision",
     "changeCause": "변경 원인",
