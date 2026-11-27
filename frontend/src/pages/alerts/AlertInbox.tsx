@@ -145,6 +145,8 @@ export default function AlertInbox() {
   const { rows, limit: shownLimit } = inboxPage(data, rowsPerPage)
   const total = data?.total ?? 0
   const counts = data?.counts ?? { firing: 0, stale: 0, resolved: 0 }
+  // the tabs and the footer count an answer: before one, or after a read that brought none, they say -
+  const counted = data !== undefined
   const shown = data ? { ...data.filter, limit: shownLimit, page: data.page } : { ...filter, page }
   const totalPages = Math.max(1, Math.ceil(total / shown.limit))
   const severities = severityChoices(data?.severities, severity)
@@ -185,7 +187,7 @@ export default function AlertInbox() {
   } : null, [inbox, data, store, currentCluster, limitedUntil, storeFailed?.reason, storeFailed?.shownFrom])
 
   const statusLabel = (s: string) => tr(`alertInbox.status.${s}`, s)
-  const tab = (value: string, label: string, count?: number) => (
+  const tab = (value: string, label: string, count: number) => (
     <button
       key={value || 'all'}
       type="button"
@@ -193,7 +195,7 @@ export default function AlertInbox() {
       data-testid={`alert-tab-${value || 'all'}`}
       className={`h-10 rounded-lg border px-3 text-sm ${!silencesShown && status === value ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
     >
-      {label}{count !== undefined && <span className={`ml-2 text-xs ${!silencesShown && status === value ? 'text-white' : 'text-slate-400'}`}>{count}</span>}
+      {label}<span className={`ml-2 text-xs ${!silencesShown && status === value ? 'text-white' : 'text-slate-400'}`}>{counted ? count : '-'}</span>
     </button>
   )
 
@@ -390,7 +392,7 @@ export default function AlertInbox() {
             <AdaptiveTableFillerRows count={rowsPerPage - rows.length} columnCount={COLUMNS} />
           </table>
         </div>
-        <ListPager currentPage={shown.page} totalPages={totalPages} total={total} rowsPerPage={shown.limit} onPageChange={setPage} />
+        <ListPager currentPage={shown.page} totalPages={totalPages} total={total} counted={counted} rowsPerPage={shown.limit} onPageChange={setPage} />
       </div>
 
       {newSilence && silenceWith && <SilenceModal initial={{}} maxHours={silenceWith.maxHours} onClose={() => setNewSilence(false)} />}
