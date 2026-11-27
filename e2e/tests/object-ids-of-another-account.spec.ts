@@ -86,6 +86,8 @@ test.describe('object ids of another account', () => {
 
   test('a tool approval of A: B reads, approves and rejects it by its id, each answered 404, and it stays pending', async ({ request }) => {
     const { a, b } = await twoPeople(request)
+    const features = await (await request.get('/api/v1/cluster/features?cluster=self', { headers: bearer(a.token) })).json()
+    test.skip(features.ai?.enabled === false, 'AI is off on this installation: it keeps no tool approvals')
     const sid = await chatOf(request, a, `e2e-objids-approval-${stamp()}`)
     const id = withUndo(`e2e-objids-${stamp()}`, (i) => psql(`DELETE FROM tool_approvals WHERE id = ${quote(i)}`))
     psql(`INSERT INTO tool_approvals (id, session_id, user_id, user_email, cluster, tool, args, status, created_at, expires_at)
@@ -102,7 +104,7 @@ test.describe('object ids of another account', () => {
       await expectRefused('reject it', await request.post(`/api/v1/ai/tool-approvals/${id}/reject`, { headers: asB }), [404], ['e2e-objids-none', sid])
       await expectRefused('list the approvals of its chat', await request.get(`/api/v1/ai/tool-approvals?session_id=${sid}`, { headers: asB }), [403, 404], ['e2e-objids-none', id])
 
-      expect(psql(`SELECT status || '|' || (decided_at IS NULL) FROM tool_approvals WHERE id = ${quote(id)}`), 'still pending, never decided').toBe('pending|t')
+      expect(psql(`SELECT status, decided_at IS NULL FROM tool_approvals WHERE id = ${quote(id)}`), 'still pending, never decided').toBe('pending|t')
     } finally {
       psql(`DELETE FROM tool_approvals WHERE id = ${quote(id)}`)
       await request.delete(`/api/v1/sessions/${sid}`, { headers: bearer(a.token), failOnStatusCode: false })
