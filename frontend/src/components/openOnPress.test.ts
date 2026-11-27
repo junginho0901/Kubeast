@@ -85,32 +85,9 @@ describe('a list page with the helper', () => {
 })
 
 // Every table row of the console that does something on a click is reachable from the keyboard, but those listed
-// here, which this change did not reach (rows inside the drawer, and rows that select, expand or go to a page).
+// here, page rows not reached yet (rows that select, expand, go to a page or open a window).
 const sources = import.meta.glob(['/src/**/*.tsx', '!/src/**/*.test.*'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 const NOT_YET: Record<string, number> = {
-  '/src/components/resource-detail/ClusterRoleBindingInfo.tsx': 1,
-  '/src/components/resource-detail/ConfigMapInfo.tsx': 1,
-  '/src/components/resource-detail/CustomResourceInstanceInfo.tsx': 1,
-  '/src/components/resource-detail/DeviceClassInfo.tsx': 1,
-  '/src/components/resource-detail/LimitRangeInfo.tsx': 1,
-  '/src/components/resource-detail/PDBInfo.tsx': 1,
-  '/src/components/resource-detail/PriorityClassInfo.tsx': 1,
-  '/src/components/resource-detail/ResourceClaimInfo.tsx': 1,
-  '/src/components/resource-detail/ResourceClaimTemplateInfo.tsx': 1,
-  '/src/components/resource-detail/ResourceSliceInfo.tsx': 1,
-  '/src/components/resource-detail/RoleBindingInfo.tsx': 1,
-  '/src/components/resource-detail/RuntimeClassInfo.tsx': 1,
-  '/src/components/resource-detail/SecretInfo.tsx': 1,
-  '/src/components/resource-detail/ServiceAccountInfo.tsx': 1,
-  '/src/components/resource-detail/ServiceInfo.tsx': 1,
-  '/src/components/resource-detail/config-storage-info/PVCDetail.tsx': 1,
-  '/src/components/resource-detail/config-storage-info/PVDetail.tsx': 1,
-  '/src/components/resource-detail/config-storage-info/StorageClassDetail.tsx': 2,
-  '/src/components/resource-detail/config-storage-info/VolumeAttachmentDetail.tsx': 1,
-  '/src/components/resource-detail/network-info/EndpointSliceDetail.tsx': 1,
-  '/src/components/resource-detail/network-info/IngressClassDetail.tsx': 1,
-  '/src/components/resource-detail/network-info/NetworkPolicyDetail.tsx': 1,
-  '/src/components/resource-detail/workload-info/WorkloadOwnedResources.tsx': 1,
   '/src/pages/AdminAudit.tsx': 1,
   '/src/pages/AdminUsers.tsx': 1,
   '/src/pages/Cost.tsx': 1,

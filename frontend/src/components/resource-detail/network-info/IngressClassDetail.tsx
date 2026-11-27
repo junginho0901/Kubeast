@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
@@ -85,7 +86,7 @@ export default function IngressClassDetail({ name, rawJson }: Props) {
                   <tr
                     key={`${ing.namespace}/${ing.name}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                    onClick={() => openDetail({ kind: 'Ingress', name: ing.name, namespace: ing.namespace })}
+                    {...openOnPress(() => openDetail({ kind: 'Ingress', name: ing.name, namespace: ing.namespace }))}
                   >
                     <td className="py-1 pr-2 font-mono">{ing.namespace}</td>
                     <td className="py-1 pr-2 font-mono">{ing.name}</td>

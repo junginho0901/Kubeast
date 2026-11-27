@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { usePagination } from '../usePagination'
@@ -228,7 +229,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
                       <tr
                         key={`${p.namespace}/${p.name}`}
                         className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                        onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                        {...openOnPress(() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace }))}
                       >
                         <td className="py-1 pr-2 font-mono">{p.name}</td>
                         <td className="py-1 pr-2"><StatusBadge status={String(p.status ?? p.phase ?? '-')} /></td>

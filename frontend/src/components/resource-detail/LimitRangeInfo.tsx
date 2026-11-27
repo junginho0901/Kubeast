@@ -9,6 +9,7 @@ import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { usePagination } from './usePagination'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
@@ -170,7 +171,7 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
                   <tr
                     key={i}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                    onClick={() => openDetail({ kind: 'Pod', name: v.pod, namespace: v.namespace })}
+                    {...openOnPress(() => openDetail({ kind: 'Pod', name: v.pod, namespace: v.namespace }))}
                   >
                     <td className="py-1 pr-2 font-mono">{v.pod}</td>
                     <td className="py-1 pr-2 font-mono">{v.container}</td>

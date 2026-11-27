@@ -7,6 +7,7 @@ import { api } from '@/services/api'
 import type { ServiceAccountInfo } from '@/services/api'
 import { useKubeWatchList } from '@/services/useKubeWatchList'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { applyServiceAccountWatchEvent } from '@/pages/security/serviceaccounts/serviceAccountWatchNormalize'
 import { InfoSection, InfoRow, KeyValueTags, EventsSection, NoneText, StatusBadge, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
@@ -326,7 +327,7 @@ export default function SecretInfo({ name, namespace, rawJson }: Props) {
                     <tr
                       key={`${p.namespace}/${p.name}`}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                      onClick={() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                      {...openOnPress(() => openDetail({ kind: 'Pod', name: p.name, namespace: p.namespace }))}
                     >
                       <td className="py-1 pr-2 font-mono">{p.name}</td>
                       <td className="py-1 pr-2"><StatusBadge status={podTableStatus(p)} /></td>

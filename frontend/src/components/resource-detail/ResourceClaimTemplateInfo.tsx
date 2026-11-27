@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from './DetailCommon'
 import { fmtRel, fmtTs } from './detailFormat'
 import { usePagination } from './usePagination'
@@ -102,7 +103,7 @@ export default function ResourceClaimTemplateInfo({ name, namespace, rawJson }: 
                   <tr
                     key={`${c.name}/${c.pod}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                    onClick={() => openDetail({ kind: 'ResourceClaim', name: c.name, namespace: c.namespace })}
+                    {...openOnPress(() => openDetail({ kind: 'ResourceClaim', name: c.name, namespace: c.namespace }))}
                   >
                     <td className="py-1 pr-2 font-mono">{c.name}</td>
                     <td className="py-1 pr-2 font-mono">{c.pod}</td>

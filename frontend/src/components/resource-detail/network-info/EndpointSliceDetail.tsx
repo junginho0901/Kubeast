@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { EventsSection, InfoSection, InfoRow, KeyValueTags, Th, Tx } from '../DetailCommon'
 import { eventsForAI, fmtRel, fmtTs } from '../detailFormat'
@@ -174,7 +175,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                     <tr
                       key={s.name}
                       className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                      onClick={() => openDetail({ kind: 'EndpointSlice', name: s.name, namespace: s.namespace })}
+                      {...openOnPress(() => openDetail({ kind: 'EndpointSlice', name: s.name, namespace: s.namespace }))}
                     >
                       <td className="py-1 pr-2 font-mono">{s.name}</td>
                       <td className="py-1 pr-2">{s.address_type ?? '-'}</td>

@@ -6,6 +6,7 @@ import { usePagination } from './usePagination'
 import { draValueMap } from './draText'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { useResourceDetailOverlay } from '@/hooks/useResourceDetailOverlay'
 import { DescribeFailure, DescribeStale } from './DescribeFailure'
 
@@ -156,7 +157,7 @@ export default function ResourceSliceInfo({ name, rawJson }: Props) {
                   <tr
                     key={i}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                    onClick={() => openDetail({ kind: 'ResourceClaim', name: a.claim_name, namespace: a.claim_namespace })}
+                    {...openOnPress(() => openDetail({ kind: 'ResourceClaim', name: a.claim_name, namespace: a.claim_namespace }))}
                   >
                     <td className="py-1 pr-2 font-mono">{a.claim_namespace}/{a.claim_name}</td>
                     <td className="py-1 pr-2 font-mono">{a.device || '-'}</td>

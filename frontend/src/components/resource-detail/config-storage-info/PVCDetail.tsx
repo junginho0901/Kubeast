@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
+import { openOnPress } from '@/components/openOnPress'
 import { ConditionsTable, EventsSection, InfoSection, InfoRow, KeyValueTags, StatusBadge, Th, Tx } from '../DetailCommon'
 import { fmtRel, fmtTs } from '../detailFormat'
 import { ResourceLink } from '../ResourceLink'
@@ -204,11 +205,11 @@ export default function PVCDetail({ name, namespace, rawJson }: { name: string; 
                   <tr
                     key={`${pod.namespace ?? namespace}-${pod.name ?? '-'}-${idx}`}
                     className="text-slate-200 hover:bg-slate-800/40 cursor-pointer"
-                    onClick={() => {
+                    {...openOnPress(() => {
                       const podNamespace = pod.namespace || namespace
                       if (!pod.name || !podNamespace) return
                       openDetail({ kind: 'Pod', name: String(pod.name), namespace: String(podNamespace) })
-                    }}
+                    })}
                   >
                     <td className="py-2 pr-2">
                       <span className="block truncate font-mono" title={String(pod.name ?? '-')}>{String(pod.name ?? '-')}</span>
