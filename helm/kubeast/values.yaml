@@ -1176,7 +1176,7 @@ features:
       metricsMinutes: 15      # metrics this long either side of the start (1–360)
       logsMinutes: 5          # logs from this long before the start (0–1440)
       changesHours: 4         # changes from this long before the start (1–168)
-    model: ""                 # ModelConfig name; empty = the default model
+    model: ""                 # ModelConfig name; empty = the one chosen for alert investigations (docs/features.md), else the default model
     language: en              # report language (en, ko, …)
     consoleUrl: ""            # e.g. https://kubeast.example.com — links in the audit summary; empty = no link
     # The report ends with a block of its causes, each with the numbers of the

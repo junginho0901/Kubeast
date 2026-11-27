@@ -4408,7 +4408,34 @@
         "chat": "Chat",
         "floating": "Floating assistant",
         "summary": "History summaries",
-        "investigation": "Alert investigations"
+        "investigation": "Alert investigations",
+        "investigate_now": "Investigate now",
+        "optimization": "Optimization explanation"
+      },
+      "perUse": {
+        "title": "Which model answers",
+        "intro": "The chat runs on the active model, and the floating assistant and history summaries on an economy one when there is one. Choose a model for the rest here.",
+        "stronger": "Finding the cause of a hard problem goes better with a stronger model. It is slower and more expensive.",
+        "asBefore": {
+          "investigation": "Active model",
+          "investigate_now": "Same as alert investigations",
+          "optimization": "Active model"
+        },
+        "fromChart": "Set in the chart: {{name}}",
+        "kept": "\"{{name}}\" is chosen here and applies once the chart names no model.",
+        "takeAway": "Take away",
+        "answers": "Answers now: {{name}}",
+        "answersChart": "Answers now: the model of the chart's ai.* values",
+        "choiceDisabled": "\"{{name}}\" is disabled, so it does not answer.",
+        "problem": "Does not run now: {{reason}}",
+        "off": "Off on this install",
+        "budget": "Daily budget: {{tokens}} tokens (UTC). It counts tokens, not money, whichever model answers.",
+        "noBudget": "No daily budget.",
+        "readFailed": "Could not read which model answers: {{reason}}",
+        "confirmTitle": "Change the model",
+        "confirmChoose": "Use \"{{name}}\" for {{use}}? What it reads then goes to that model, at that model's price.",
+        "confirmClear": "Take away the choice for {{use}}? After that it runs on: {{name}}.",
+        "confirm": "Change"
       },
       "caCert": "CA certificate (PEM)",
       "caCertHint": "Trust a self-signed CA for HTTPS self-hosted endpoints. Leave empty to use system CAs.",

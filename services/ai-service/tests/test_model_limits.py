@@ -204,6 +204,9 @@ class FakeDB:
     async def get_model_config(self, config_id):
         return next((c for c in self.configs if c.id == config_id), None)
 
+    async def get_model_uses(self):
+        return {}
+
 
 def cfg(id, *, tier="default", default=False, enabled=True, updated=0, key_env="OPENAI_API_KEY"):
     return SimpleNamespace(id=id, name=f"m{id}", tier=tier, is_default=default, enabled=enabled, updated=updated,

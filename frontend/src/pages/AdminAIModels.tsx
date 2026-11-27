@@ -3,6 +3,7 @@ import { Bot, Loader2, Plus } from 'lucide-react'
 import { useModelForm } from './admin-ai-models/useModelForm'
 import ModelConfigForm from './admin-ai-models/ModelConfigForm'
 import ModelConfigCard from './admin-ai-models/ModelConfigCard'
+import ModelUses from './admin-ai-models/ModelUses'
 import { ActionFailure } from '@/components/ActionFailure'
 import { ModalFrame } from '@/components/ModalFrame'
 import { modalButton } from '@/components/modalStyles'
@@ -74,6 +75,9 @@ export default function AdminAIModels() {
           <ModelConfigForm form={form} inModal />
         </ModalFrame>
       )}
+
+      {/* ── which model answers which use ── */}
+      {!!configs?.length && <ModelUses configs={configs} />}
 
       {/* ── model config list ── */}
       {isLoading ? (

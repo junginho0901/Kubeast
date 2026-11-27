@@ -358,6 +358,7 @@
   "/api/v1/ai/model-configs": {"tool": "ai_models", "args": {}},
   "/api/v1/ai/model-configs/active": {"tool": "ai_models", "args": {}, "note": "The config the chat runs on: active names the row whose used_for holds chat, as the cards' Active badge reads it.", "reads": "/api/v1/ai/model-configs"},
   "/api/v1/ai/model-configs/providers": {"tool": "ai_models", "args": {}},
+  "/api/v1/ai/model-configs/uses": {"tool": "ai_models", "args": {}, "note": "What runs on each config now: used_for names the uses, a chosen one too. Choosing stays on the screen.", "reads": "/api/v1/ai/model-configs"},
   "/api/v1/ai/investigations": {"tool": "investigations", "args": {}},
   "/api/v1/ai/investigations/{inv_id}": {"tool": "investigations", "args": {"investigation_id": "y"}},
   "/api/v1/ai/suggest-optimization/stream": {"excluded": "The AI explanation on the Optimization screen, a model's answer as it streams, which spends tokens: not a read of data. The optimization tool reads the table it explains."},

@@ -6,7 +6,7 @@ Resolves the active model config from DB and caches the result for
 """
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 import logging
 import os
 import time
@@ -77,7 +77,15 @@ def _resolve_api_key(config: ModelConfig) -> Optional[str]:
     return None
 
 
-def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
+_ACTIVE = "active model config"  # what a refusal calls the config it is about
+
+
+def named(config: Optional[ModelConfig]) -> str:
+    """A config chosen by name, in a refusal; the active one without it."""
+    return f'model config "{config.name}"' if config is not None else _ACTIVE
+
+
+def _build_resolved(config: Optional[ModelConfig], what: str = _ACTIVE) -> ResolvedModelConfig:
     """Build a ResolvedModelConfig from a DB ModelConfig or env fallback."""
     if not config:
         # 환경변수 fallback (DB에 모델 설정이 없을 때)
@@ -102,12 +110,12 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
     try:
         model_config_policy.check_provider_fields(provider, (config.api_key_env, config.api_key_secret_key), config.base_url)
     except model_config_policy.PolicyError as e:
-        raise ModelConfigUnusable(f"active model config is not allowed: {e}")
+        raise ModelConfigUnusable(f"{what} is not allowed: {e}")
     # A provider error can repeat the key; masked by value from now on (redact.remember_secret).
     remember_secret(api_key)
     # 로컬/셀프호스트(Ollama 등)는 키 없이 동작. 클라우드 프로바이더만 키 필수.
     if not api_key and provider in _PROVIDERS_REQUIRING_KEY:
-        raise ModelConfigUnusable(f"API key is missing for active model config (provider={provider})")
+        raise ModelConfigUnusable(f"API key is missing for {what} (provider={provider})")
 
     base_url = (config.base_url or "").strip().rstrip("/") or None
     # The key goes wherever base_url points: re-check the destination at use
@@ -116,7 +124,7 @@ def _build_resolved(config: Optional[ModelConfig]) -> ResolvedModelConfig:
     try:
         model_config_policy.check_base_url(base_url)
     except model_config_policy.PolicyError as e:
-        raise model_config_policy.AddressRefused(f"active model config base_url is not allowed: {e}") from e
+        raise model_config_policy.AddressRefused(f"{what} base_url is not allowed: {e}") from e
     # Ollama serves the OpenAI-compatible API under /v1; the connection test
     # already appends it, so the runtime client must resolve the same URL.
     if provider == "ollama" and base_url and not base_url.endswith("/v1"):
@@ -149,7 +157,7 @@ async def resolve_model_config(config_id: Optional[int] = None) -> ResolvedModel
         config = await db.get_model_config(config_id)
         if config is None:
             raise ValueError("Model config not found")
-        return _build_resolved(config)
+        return _build_resolved(config, named(config))
 
     # ── cached path for active config ──
     now = time.monotonic()
@@ -198,6 +206,25 @@ async def resolve_economy_model_config() -> Optional[ResolvedModelConfig]:
     return resolved
 
 
+# use → (its chosen config, None without a choice; when it was read)
+_cached_uses: Dict[str, Tuple[Optional[ResolvedModelConfig], float]] = {}
+
+
+async def resolve_use_model_config(use: str) -> Optional[ResolvedModelConfig]:
+    """The config an administrator chose for this use (app/services/model_uses.py), cached like the active one; None
+    without a choice, so the caller goes on with the config it ran on before. A chosen config that cannot run raises as
+    resolve_model_config does, naming it: no other config answers in its place."""
+    cached = _cached_uses.get(use)
+    if cached is not None and (time.monotonic() - cached[1]) < _CACHE_TTL:
+        return cached[0]
+    from app.services import model_uses
+
+    config = (await model_uses.chosen(await get_db_service())).get(use)
+    resolved = None if config is None else _build_resolved(config, named(config))
+    _cached_uses[use] = (resolved, time.monotonic())
+    return resolved
+
+
 def invalidate_model_config_cache() -> None:
     """
     Call this after any ModelConfig CRUD operation to force the next
@@ -207,12 +234,16 @@ def invalidate_model_config_cache() -> None:
     _cached_resolved = None
     _cached_at = 0.0
     _cached_economy, _cached_economy_found, _cached_economy_at = None, False, 0.0
+    _cached_uses.clear()
 
 
 async def usage(db) -> Dict[int, list]:
     """What the server runs on each config now, by the rules it picks them with: the chat on the active config;
     the floating assistant and chat summaries on the economy config when it can be used, else the active one;
-    alert investigations, while they are on, on the config ALERT_INVESTIGATION_MODEL names, else the active one."""
+    alert investigations, while they are on, on the config ALERT_INVESTIGATION_MODEL names, else the one chosen for
+    them, else the active one. "Investigate now" and the Optimization screen are named only on a config chosen for them
+    (app/services/model_uses.py): without a choice they run with the webhook's investigations and with the chat."""
+    from app.services import model_uses
     from app.services.investigation import settings as inv_settings
     from app.services.investigation import store as inv_store
 
@@ -232,11 +263,15 @@ async def usage(db) -> Dict[int, list]:
     add(active, "chat")
     add(economy or active, "floating")
     add(economy or active, "summary")
+    choices = await model_uses.chosen(db)
     inv = inv_settings.load()
     if inv.enabled:
-        investigation = active
+        investigation = model_uses.for_investigation(choices, inv, manual=False) or active
         if inv.model:
             config_id = await inv_store.model_config_id(db, inv.model)
             investigation = await db.get_model_config(config_id) if config_id is not None else None
         add(investigation, "investigation")
+        if inv.manual:
+            add(choices.get(model_uses.INVESTIGATE_NOW), "investigate_now")
+    add(choices.get(model_uses.OPTIMIZATION), "optimization")
     return out

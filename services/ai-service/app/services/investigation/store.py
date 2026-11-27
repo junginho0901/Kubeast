@@ -125,8 +125,12 @@ async def tokens_since(db, since: datetime, *, manual: bool = False, held=None) 
 REFUSAL_PREFIX = "provider refused ("
 
 
-async def last_refusal(db, *, held=None) -> Optional[AlertInvestigation]:
-    """The newest failed run whose model provider refused it (runner.run_one's REFUSAL_PREFIX), or None."""
+async def last_refusal(db, *, manual: Optional[bool] = None, chart_model: str = "", held=None) -> Optional[AlertInvestigation]:
+    """The newest failed run whose model provider refused it (runner.run_one's REFUSAL_PREFIX), or None. With `manual` (the
+    runs people ask for, or the webhook's): the newest failed run of that kind alone while the two kinds run on configs of
+    their own (model_uses.kinds_apart; `chart_model`: features.alertInvestigation.model)."""
+    from app.services import model_uses
+
     async with _session(db, held) as s:
         q = (
             select(AlertInvestigation)
@@ -135,18 +139,23 @@ async def last_refusal(db, *, held=None) -> Optional[AlertInvestigation]:
             .limit(1)
         )
         row = (await s.execute(q)).scalars().first()
+        if row is not None and manual is not None and bool(row.requested_by) != manual and await model_uses.kinds_apart(s, chart_model):
+            own = AlertInvestigation.requested_by != "" if manual else AlertInvestigation.requested_by == ""
+            row = (await s.execute(q.where(own))).scalars().first()
         return row if row is not None and (row.error or "").startswith(REFUSAL_PREFIX) else None
 
 
 _REFUSAL = re.compile(r"^provider refused \((\w+)(?:, until (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ))?\)")
 
 
-async def pause_state(db, minutes: int, now: datetime, *, held=None) -> Optional[tuple[str, datetime, datetime]]:
+async def pause_state(db, minutes: int, now: datetime, *, manual: Optional[bool] = None, chart_model: str = "",
+                      held=None) -> Optional[tuple[str, datetime, datetime]]:
     """(kind, refused at, until) while no investigation runs, else None: the model provider refused the newest failed
-    run for credit or the key less than `minutes` ago, or for a usage window that has not lifted yet."""
+    run for credit or the key less than `minutes` ago, or for a usage window that has not lifted yet. With `manual`, while
+    no investigation of that kind does (last_refusal)."""
     if minutes <= 0:
         return None
-    row = await last_refusal(db, held=held)
+    row = await last_refusal(db, manual=manual, chart_model=chart_model, held=held)
     match = _REFUSAL.match(row.error or "") if row is not None else None
     if match is None or row.finished_at is None:
         return None
@@ -157,9 +166,9 @@ async def pause_state(db, minutes: int, now: datetime, *, held=None) -> Optional
     return kind, row.finished_at, until
 
 
-async def pause_reason(db, minutes: int, now: datetime, *, held=None) -> str:
-    """Why no investigation runs now (pause_state as the skip reason), or ""."""
-    state = await pause_state(db, minutes, now, held=held)
+async def pause_reason(db, minutes: int, now: datetime, *, manual: Optional[bool] = None, chart_model: str = "", held=None) -> str:
+    """Why no investigation (of that kind, with `manual`) runs now (pause_state as the skip reason), or ""."""
+    state = await pause_state(db, minutes, now, manual=manual, chart_model=chart_model, held=held)
     return skip_reasons.provider_paused(*state) if state else ""
 
 

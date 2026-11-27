@@ -23,6 +23,13 @@ def cfg(**kw):
     return InvestigationSettings(**base)
 
 
+class NothingChosen:
+    """A database with no model chosen for a use (app/services/model_uses.py)."""
+
+    async def get_model_uses(self):
+        return {}
+
+
 def am_message(*alerts, status="firing"):
     return webhook.AmWebhook(
         version="4", groupKey="{}:{alertname=\"X\"}", status=status, receiver="kubeast",
@@ -101,7 +108,7 @@ class FakeStore:
                 self.locked.append((cluster, fingerprint, starts_at))
                 yield self.lock_session
 
-        async def pause_reason(db, minutes, now, held=None):
+        async def pause_reason(db, minutes, now, held=None, **kind):
             self.held.append(("pause_reason", held))
             return self.pause if minutes else ""
 
@@ -1045,7 +1052,7 @@ async def test_worker_skips_a_queued_alert_while_paused(monkeypatch):
     async def nothing(*a, **k):
         return 0
 
-    async def paused(db, minutes, now):
+    async def paused(db, minutes, now, **kind):
         return "paused: the AI model provider refused (credit) at …"
 
     async def skip(db, inv_id, reason):
@@ -1122,7 +1129,7 @@ async def test_the_worker_logs_a_run_whose_end_could_not_be_stored_and_takes_the
     queued, ran = [row(id="inv-nul"), row(id="inv-next")], []
 
     async def get_db():
-        return object()
+        return NothingChosen()
 
     async def claim_next(db):
         if queued:
@@ -1133,7 +1140,7 @@ async def test_the_worker_logs_a_run_whose_end_could_not_be_stored_and_takes_the
     async def nothing(*a, **k):
         return 0
 
-    async def not_paused(db, minutes, now):
+    async def not_paused(db, minutes, now, **kind):
         return ""
 
     async def run_one(c, db, r):
@@ -1261,7 +1268,7 @@ async def test_worker_skips_an_asked_for_run_once_its_budget_is_spent(monkeypatc
     async def nothing(*a, **k):
         return 0
 
-    async def no_pause(db, minutes, now):
+    async def no_pause(db, minutes, now, **kind):
         return ""
 
     async def tokens(db, since, manual=False):
@@ -1377,7 +1384,7 @@ async def test_the_worker_requeues_the_row_it_runs_when_it_is_cancelled(monkeypa
         return "queued"
 
     async def db_service():
-        return object()
+        return NothingChosen()
 
     monkeypatch.setattr(runner, "get_db_service", db_service)
     monkeypatch.setattr(runner, "fail_stale", no_stale)
@@ -1419,7 +1426,7 @@ async def test_a_worker_told_to_stop_ends_the_run_it_holds_and_takes_no_other(mo
         return "queued"
 
     async def db_service():
-        return object()
+        return NothingChosen()
 
     monkeypatch.setattr(runner, "get_db_service", db_service)
     monkeypatch.setattr(runner, "fail_stale", no_stale)

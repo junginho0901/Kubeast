@@ -73,7 +73,7 @@ async def investigate_now_of(db, cfg: inv_settings.InvestigationSettings, payloa
         out["reason"] = "investigated" if investigation.status == "done" else "investigating"
     elif not cfg.manual:
         out["reason"] = "manual_off"
-    elif (pause := await store.pause_state(db, cfg.provider_pause_minutes, now)) is not None:
+    elif (pause := await store.pause_state(db, cfg.provider_pause_minutes, now, manual=True, chart_model=cfg.model)) is not None:
         out["reason"], out["until"] = "provider_paused", _iso(pause[2])
     elif budget and used >= budget:
         out["reason"], out["until"] = "manual_budget", _iso(store.next_day(now))

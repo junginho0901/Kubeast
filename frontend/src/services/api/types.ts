@@ -16,7 +16,26 @@ export interface ModelConfigCreate {
   tier?: 'default' | 'economy'        // economy: history summaries and the floating assistant
 }
 
-export type ModelUse = 'chat' | 'floating' | 'summary' | 'investigation'
+/** The uses an administrator may choose a model for; the others follow the active and the economy model. */
+export type ChosenUse = 'investigation' | 'investigate_now' | 'optimization'
+export type ModelUse = 'chat' | 'floating' | 'summary' | ChosenUse
+
+/** GET /ai/model-configs/uses: what answers a use now and why (ai-service app/services/model_uses.py). */
+export interface ModelUseState {
+  use: ChosenUse
+  /** this install runs it */
+  on: boolean
+  choice: { id: number; name: string; enabled: boolean } | null
+  /** null: the chart's ai.* values, or no model (problem says so) */
+  answers: { id: number; name: string } | null
+  by: 'choice' | 'chart' | 'investigation' | 'chat'
+  /** why it would not run, '' when it would */
+  problem: string
+  /** features.alertInvestigation.model, which decides for the alert investigations while it is set */
+  chart_model: string
+  /** tokens a UTC day for an investigation's kind (0: none), null for a use with no budget */
+  daily_token_budget: number | null
+}
 
 export interface ModelConfigResponse {
   id: number

@@ -180,7 +180,7 @@ async def gate_and_queue(db, cfg: inv_settings.InvestigationSettings, cluster: s
                 elif cfg.daily_token_budget and await store.tokens_since(db, store.day_start(now), held=lock) >= cfg.daily_token_budget:
                     skip_reason = skip_reasons.daily_token_budget(cfg.daily_token_budget)
                 else:
-                    skip_reason = await store.pause_reason(db, cfg.provider_pause_minutes, now, held=lock)
+                    skip_reason = await store.pause_reason(db, cfg.provider_pause_minutes, now, manual=False, chart_model=cfg.model, held=lock)
                 if skip_reason and cfg.dedupe_hours > 0:
                     # one skipped row per alert in the dedupe window, however many messages carry it
                     earlier = await store.find_recent_skipped(db, cluster, fingerprint, now - timedelta(hours=cfg.dedupe_hours), held=lock)
