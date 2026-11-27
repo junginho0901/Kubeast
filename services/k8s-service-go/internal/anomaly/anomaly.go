@@ -3,7 +3,8 @@
 // shapes and counts, requests, errors and latency of the services' server spans, the conditions of the nodes (not their
 // CPU). It parses the window, builds the PromQL and turns the reads into findings; the caller runs the reads as the
 // user. A check that could not run says why, so a missing source does not read as "normal", and a finding is new only
-// when the window before has data, so a window before that was never recorded does not read as "it was not there".
+// when the window before has data, so a window before that was never recorded does not read as "it was not there"; an
+// answer whose window before has no data for most of what it compared says so first (NoBaseline).
 package anomaly
 
 import (
@@ -406,6 +407,44 @@ type Result struct {
 	// CallOrder: how the call graph ordered the findings of the namespace's failing workloads, present only when it was
 	// asked (features.callGraph on and findings on two workloads or more).
 	CallOrder *CallOrderNote `json:"call_order,omitempty"`
+	// NoBaseline: present only when the window before has no data for most of the values the checks compared.
+	NoBaseline *NoBaseline `json:"no_baseline,omitempty"`
+}
+
+// NoBaseline says that the window before has no data for most of the values the checks compared, the normal ones too: a
+// namespace or pods newer than that window, or each pod replaced in the window. The findings are then what is there now
+// rather than what changed, those with no earlier data in the order of their size, after any that grew against the
+// window before (rankWithoutBaseline).
+type NoBaseline struct {
+	Compared      int    `json:"compared"`
+	NoEarlierData int    `json:"no_earlier_data"`
+	Note          string `json:"note"`
+}
+
+// NoBaselineNote is NoBaseline's note.
+const NoBaselineNote = "Most values compared have no data in the window before, so the findings show what is there now, not what changed. " +
+	"Read the namespace's events, recent changes and logs before following the first finding."
+
+// earlierData counts the values the checks compared with the window before (the findings with a value, normal ones too:
+// issues and node conditions compare nothing) and those of them with no data there.
+type earlierData struct{ compared, none int }
+
+func (e *earlierData) add(f Finding) {
+	if f.Now == nil {
+		return
+	}
+	e.compared++
+	if f.noEarlier {
+		e.none++
+	}
+}
+
+// note is NoBaseline when the window before has no data for more than half of the values compared, else nil.
+func (e earlierData) note() *NoBaseline {
+	if 2*e.none <= e.compared {
+		return nil
+	}
+	return &NoBaseline{Compared: e.compared, NoEarlierData: e.none, Note: NoBaselineNote}
 }
 
 // MaxCallOrderSuspects bounds the suspects call_order names.
@@ -486,6 +525,7 @@ func AssembleWith(namespace string, wl *Workload, w Window, results []CheckResul
 		byCheck[r.Check] = r
 	}
 	var found []Finding
+	var earlier earlierData
 	for _, check := range Checks {
 		r, ok := byCheck[check]
 		if !ok {
@@ -500,6 +540,8 @@ func AssembleWith(namespace string, wl *Workload, w Window, results []CheckResul
 			if f.Verdict == VerdictAnomalous {
 				found = append(found, f)
 				anomalous++
+			} else {
+				earlier.add(f)
 			}
 		}
 		if anomalous == 0 {
@@ -510,7 +552,14 @@ func AssembleWith(namespace string, wl *Workload, w Window, results []CheckResul
 		}
 	}
 	markBefore(found)
-	Rank(found)
+	for _, f := range found {
+		earlier.add(f)
+	}
+	if out.NoBaseline = earlier.note(); out.NoBaseline != nil {
+		rankWithoutBaseline(found)
+	} else {
+		Rank(found)
+	}
 	if order != nil {
 		note := order.Note
 		if len(order.Suspects) > 0 {
@@ -603,12 +652,32 @@ func (f Finding) tier() int {
 	return 2
 }
 
+// tierWithoutBaseline is tier in an answer whose window before has no data for most values (NoBaseline): what grew against
+// the window before comes right after what is new or critical now, before what has no earlier data, which is then most of
+// the answer and only says what is there now.
+func (f Finding) tierWithoutBaseline() int {
+	switch t := f.tier(); {
+	case t == 0:
+		return 0
+	case t == 2 && f.Ratio != nil:
+		return 1
+	case t == 1:
+		return 2
+	}
+	return 3
+}
+
 // Rank orders findings: what is new or critical now first, then what has no earlier data, then the larger ratio, then
 // the larger value, then the check order and the target, so the same reads give the same order.
-func Rank(findings []Finding) {
+func Rank(findings []Finding) { rank(findings, Finding.tier) }
+
+// rankWithoutBaseline is Rank by tierWithoutBaseline.
+func rankWithoutBaseline(findings []Finding) { rank(findings, Finding.tierWithoutBaseline) }
+
+func rank(findings []Finding, tier func(Finding) int) {
 	sort.SliceStable(findings, func(i, j int) bool {
 		a, b := findings[i], findings[j]
-		if ta, tb := a.tier(), b.tier(); ta != tb {
+		if ta, tb := tier(a), tier(b); ta != tb {
 			return ta < tb
 		}
 		if ra, rb := value(a.Ratio), value(b.Ratio); ra != rb {

@@ -381,8 +381,12 @@ func TestTheAnswersFieldsAreAsBefore(t *testing.T) {
 	w := Window{Start: now.Add(-time.Hour), End: now}
 	res := AssembleWith("shop", &Workload{Kind: "Deployment", Name: "web"}, w, []CheckResult{
 		{Check: CheckRestarts, Findings: []Finding{whole}, Partial: "p"}, {Check: CheckCPUThrottling, NotRun: "n"}}, 1, &CallOrder{})
-	if got := keys(res); got != "call_order,compared_with,findings,findings_total,namespace,normal,not_run,partial,store_queries,window,workload" {
+	// whole's one value has no earlier data, so the answer says it has no baseline (nobaseline_test.go)
+	if got := keys(res); got != "call_order,compared_with,findings,findings_total,namespace,no_baseline,normal,not_run,partial,store_queries,window,workload" {
 		t.Errorf("the answer: %s", got)
+	}
+	if got := keys(res.NoBaseline); got != "compared,no_earlier_data,note" {
+		t.Errorf("no_baseline: %s", got)
 	}
 	if got := keys(res.NotRun[0]) + " " + keys(res.Partial[0]); got != "check,reason check,reason" {
 		t.Errorf("not run and partial: %s", got)

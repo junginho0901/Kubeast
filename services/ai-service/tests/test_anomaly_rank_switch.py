@@ -27,8 +27,9 @@ def test_the_switch_is_off_otherwise(monkeypatch, value):
 
 
 # sha256 of the chat's system prompt with the switch on: the prompt of 81f6eda1e (04927b8a0fc8…) with what a finding's window
-# before says ("no earlier data") and the node check's name for what it reads in the tool's guide and signature lines
-ANOMALY_RANK_PROMPT = "774798c9b4fd7c5adbc7d7ac8dc4575f93289b27e30826a80bd264441ee1593e"
+# before says ("no earlier data") and the node check's name for what it reads in the tool's guide and signature lines (774798c9…),
+# and in the order rule what to read first when the answer has no_baseline (ANOMALY_NO_BASELINE)
+ANOMALY_RANK_PROMPT = "95b2aa82160e28a3ab7554c7928ce8485e1f6c3744ba0fbed4a4a6624af1fdb4"
 SWITCHES = ("AI_TIMELINE_CHANGES", "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED")
 
 
@@ -51,6 +52,23 @@ def test_off_the_prompt_names_no_anomaly_rank_and_on_it_is_the_prompt_to_the_byt
     assert "`timeline`에서 그동안 바뀐 것" in prompts.ANOMALY_RANK_RULE and "view" not in prompts.ANOMALY_RANK_RULE
     # resource_graph's calls on as well: the same words (step 3 says "where offered")
     assert _only(monkeypatch, "ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED") == on
+
+
+def test_an_answer_without_a_baseline_is_read_around_before_its_first_finding_only_with_the_switch(monkeypatch):
+    """anomaly_rank's no_baseline (k8s-service anomaly.NoBaseline, json "no_baseline"): with the switch on, both lines of the
+    order rule say once, right after the step that calls it, to read the namespace's events, recent changes and logs before
+    following the first finding; off, and with resource_graph's calls alone, the prompt does not name it."""
+    sentence = prompts.ANOMALY_NO_BASELINE
+    assert "`no_baseline`" in sentence and "이벤트·최근 바뀐 것(②)·로그부터 읽으세요" in sentence and "맨 위 발견을 쫓기 전에" in sentence
+    for rule in (prompts.ANOMALY_RANK_RULE, prompts.ANOMALY_RANK_RULE_WITH_CHANGES):
+        assert rule.count(sentence) == 1 and rule.index("`anomaly_rank`가 없으면 ②부터. " + sentence) < rule.index("순위는 단서이지")
+    for on in (("ANOMALY_RANK_ENABLED",), ("ANOMALY_RANK_ENABLED", "CALL_GRAPH_ENABLED"), ("ANOMALY_RANK_ENABLED", "AI_TIMELINE_CHANGES")):
+        assert "\n".join(_only(monkeypatch, *on)).count("no_baseline") == 1
+    for on in ((), ("CALL_GRAPH_ENABLED",), ("AI_TIMELINE_CHANGES",), ("CALL_GRAPH_ENABLED", "AI_TIMELINE_CHANGES")):
+        assert "no_baseline" not in "\n".join(_only(monkeypatch, *on))
+    assert "no_baseline" not in prompts.SYSTEM_MESSAGE
+    for rule in (prompts.CALL_GRAPH_RULE, prompts.CALL_GRAPH_RULE_WITH_CHANGES):
+        assert "no_baseline" not in rule
 
 
 def test_with_anomaly_rank_and_the_changes_view_on_one_order_rule_names_the_view(monkeypatch):

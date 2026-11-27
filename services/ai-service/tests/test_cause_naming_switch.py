@@ -30,8 +30,9 @@ COMBINATIONS = [on for n in range(len(OTHERS) + 1) for on in itertools.combinati
 PARTS = [p for p in itertools.product((False, True), repeat=3) if p[0] or p[1]]  # evidence, hypotheses, verdict
 
 # 981d53f65, before this switch: every set of the other chat switches and its prompt, every set of the rca block's parts and
-# its instruction, as one sha256 each.
-CHAT_BEFORE = "bcea6b1a6aa84a1706adfd68927a9f396fd7a08125c5094f0d028116373a64d8"
+# its instruction, as one sha256 each. The chat's sets with anomaly_rank on hold the order rule's sentence on no_baseline
+# (prompts.ANOMALY_NO_BASELINE; bcea6b1a… before it).
+CHAT_BEFORE = "3d5f14ce53163927c25e0e941727cd7ac9fd7d21f0de7cc4d9b6efea7496d994"
 RCA_BEFORE = "84809f765b2e6512dbb830aac3143e75ad3d4071efe80086f555ff32fa6ce714"
 # What it adds, so a longer text is seen here: every model call of a chat answer or of an investigation sends it.
 CHAT_ADDED = (2401, 3773)  # characters, bytes

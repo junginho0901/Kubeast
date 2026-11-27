@@ -1,6 +1,7 @@
 // The narrowing as a tool: k8s-service compares a namespace's window with the window of the same length before it and
 // ranks what differs (internal/anomaly), as the caller. The answer is kept near anomalyRankChars, half the model's default
 // result limit, so it leaves room for the reads it points to: examples go first, then the last findings, each cut said.
+// no_baseline, when the window before has no data for most values, comes right after the windows and is never cut.
 
 package main
 
@@ -16,7 +17,7 @@ import (
 const anomalyRankChars = 3000
 
 var (
-	anomalyFirstKeys = []string{"namespace", "workload", "window", "compared_with", "findings_total", "findings_note", "examples_note", "call_order", "not_run", "normal", "store_queries"}
+	anomalyFirstKeys = []string{"namespace", "workload", "window", "compared_with", "no_baseline", "findings_total", "findings_note", "examples_note", "call_order", "not_run", "normal", "store_queries"}
 	anomalyLastKeys  = []string{"findings"}
 )
 
