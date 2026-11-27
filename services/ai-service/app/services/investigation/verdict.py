@@ -60,10 +60,7 @@ COLLECTORS = ("kube-state-metrics", "node-exporter")
 SCRAPE_LABELS = frozenset({"pod", "service", "service_name", "app", "container"})
 
 # Reads that show no symptom: what an alert or its rule says and which names there are (and what changed, can_show).
-NO_SYMPTOM = frozenset({
-    "alerts_list", "alerts_inbox", "prometheus_rules", "prometheus_metrics", "prometheus_labels", "loki_labels",
-    "traces_tags", "k8s_find_resource", "k8s_explain", "k8s_get_available_api_resources", "can_i", "clusters_list",
-})
+NO_SYMPTOM = answers.NO_SYMPTOM
 
 # The read of what a pod's container wrote, which need not hold the pod's name.
 POD_LOG = "k8s_get_pod_logs"

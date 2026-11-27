@@ -7,6 +7,8 @@ evaluation asks for. Before the report is kept, the server holds each cause to t
 
 - each number names a call of this run that answered without an error (a refused repeat stands for the call it
   repeated);
+- one of those calls read more than an alert, a rule or names (answers.NO_SYMPTOM): what an alert or its rule says, or
+  a list of names, holds the name of what the alert is about, not what is wrong with it;
 - the cause's name appears in what one of those calls returned to the model (the results are not stored, so the run
   keeps that text in memory only while it lasts);
 - the cause does not start after the alert did.
@@ -24,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from app.services.investigation import rca
+from app.services.investigation import answers, rca
 from app.services.investigation.numbers import tag  # noqa: F401 - the numbers the causes name
 from app.services.investigation.rca import KINDS, FINAL_NOTE, split  # noqa: F401 - the shared block
 
@@ -45,8 +47,6 @@ class Read:
     same_as: Optional[int] = None
     # with the verdict on (investigation/answers.py): "unread" an answer that read nothing, "empty" one that holds nothing
     nothing: str = ""
-    # with pastReports.model on (investigation/past.py): the names its answer gives as objects'
-    names: frozenset[str] = frozenset()
 
     @property
     def shows(self) -> bool:
@@ -57,7 +57,9 @@ class Read:
 @dataclass
 class Problem:
     resource: str
-    reason: str                  # no_evidence | bad_calls | empty_answer (the verdict on) | name_missing | after_alert
+    # no_evidence | bad_calls | empty_answer (alerts, rules or names only; with the verdict on, nothing read) | name_missing
+    # | after_alert
+    reason: str
     values: dict[str, Any] = field(default_factory=dict)
     index: int = -1              # the cause's place in the block's causes, from 0
 
@@ -134,7 +136,7 @@ def check(block: dict, reads: list[Read], alert_start: Optional[datetime]) -> tu
         if not good:
             problems.append(Problem(resource, "bad_calls", {"calls": [n for n, _ in bad]}, index))
             continue
-        held = [(n, read) for n, read in good if read.shows]
+        held = [(n, read) for n, read in good if read.shows and read.tool not in answers.NO_SYMPTOM]
         if not held:
             problems.append(Problem(resource, "empty_answer", {"calls": [n for n, _ in good]}, index))
             continue
@@ -163,14 +165,14 @@ _REASONS = {
     "en": {
         "no_evidence": "no call is given for it",
         "bad_calls": "calls {calls} are not calls of this investigation that answered",
-        "empty_answer": "calls {calls} read nothing or their answer holds nothing",
+        "empty_answer": "calls {calls} read nothing, hold nothing, or read only alerts, rules or names",
         "name_missing": "{name} does not appear in what calls {calls} returned",
         "after_alert": "it starts at {at}, after the alert's start at {start}",
     },
     "ko": {
         "no_evidence": "근거로 댄 호출이 없음",
         "bad_calls": "{calls}번 호출은 이 조사에서 답을 받은 호출이 아님",
-        "empty_answer": "{calls}번 호출은 읽은 것이 없거나 답에 담긴 것이 없음",
+        "empty_answer": "{calls}번 호출은 읽은 것이 없거나, 답에 담긴 것이 없거나, 알림·규칙·이름만 읽음",
         "name_missing": "{calls}번 호출이 돌려준 결과에 {name}이(가) 나오지 않음",
         "after_alert": "시작 시각 {at}이(가) 알림 시작 {start}보다 늦음",
     },
