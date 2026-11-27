@@ -1,1 +1,32 @@
-{ "rules": [] }
+{
+  "rules": [
+    {
+      "spec": "aria-tree",
+      "view": "^/(workloads/(pods|deployments)|cluster/nodes|network/services|helm/releases|admin/users)$",
+      "finding": "^\\+ button \"(Name|Namespace|Ready|Up to date|Available|Status|Restarts|Roles|CPU|Memory|Version|Internal IP|External IP|Pod IP|Node|Type|Cluster IP|Ports|Revision|Chart|Chart version|Updated|Email|Team|Role|Age)\"$",
+      "why": "A sortable column header holds a SortButton (frontend/src/components/SortButton.tsx), a button named as its column that gives the header a Tab stop; a click anywhere in the header still sorts.",
+      "pr": "TBD v080/kbd-108-pages"
+    },
+    {
+      "spec": "aria-tree",
+      "view": "^drawer (Namespace kube-system|Deployment kube-system/coredns)$",
+      "finding": "^\\+ dialog \"(Namespace kube-system|Deployment coredns)\"$",
+      "why": "The resource drawer is a modal dialog, named by its kind and title (role=\"dialog\", aria-modal and aria-labelledby in frontend/src/components/ResourceDetailDrawer.tsx), so its tree starts with that dialog.",
+      "pr": "TBD v080/kbd-107"
+    },
+    {
+      "spec": "aria-tree",
+      "view": "^drawer Namespace kube-system$",
+      "finding": "^[-+] (heading \"kube-system\" \\[level=2\\]|button \"(Close|YAML|Delete Namespace)\"|button \"Info\" \\[pressed\\]|table|columnheader \"(Resource|Requests|Limits|Name|Status|Ready|Restarts|Node|Age)\"|textbox \"Filter\\.\\.\\.\"|button \"(Prev|Next)\"( \\[disabled\\])?)$",
+      "why": "The Namespace drawer's own lines, the same in both builds, sit one level in under that dialog, and the comparison keeps each line's depth: each reads as gone and new.",
+      "pr": "TBD v080/kbd-107"
+    },
+    {
+      "spec": "aria-tree",
+      "view": "^drawer Deployment kube-system/coredns$",
+      "finding": "^[-+] (heading \"coredns\" \\[level=2\\]|button \"(Close|YAML|Delete Deployment|Rollback|coredns|Check a connection|Show top talkers|Search logs)\"|button \"Info\" \\[pressed\\]|table|columnheader \"(Name|Replicas|Ready|Available|Status|Age|Type|Reason|Message|Last Transition|Last Seen|Count)\")$",
+      "why": "The Deployment drawer's own lines, the same in both builds, sit one level in under that dialog, and the comparison keeps each line's depth: each reads as gone and new.",
+      "pr": "TBD v080/kbd-107"
+    }
+  ]
+}
