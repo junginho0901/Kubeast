@@ -55,6 +55,7 @@ export default function AdminAIModels() {
       {isCreating && (
         <ModalFrame
           size="md"
+          body="scroll"
           title={tr('admin.aiModels.new', 'New Model')}
           onClose={resetForm}
           busy={form.isSaving}

@@ -240,8 +240,8 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
     const at = (name: string) => `/configuration/secrets?cluster=${CLUSTER}&namespace=${NS}&detail=${encodeURIComponent(`Secret/${NS}/${name}`)}`
     await page.goto(at(secretName))
     const drawer = page.locator('[data-testid="resource-drawer"]')
-    const row = drawer.locator('div.rounded-sm.border-slate-800').filter({ has: page.locator('span.font-mono', { hasText: /^password$/ }) })
-    const team = drawer.locator('span.rounded-full').filter({ has: page.locator('span.font-mono', { hasText: /^e2e-team$/ }) }).locator('span.truncate').nth(1)
+    const row = drawer.locator('[data-detail-card]').filter({ has: page.locator('span.font-mono', { hasText: /^password$/ }) })
+    const team = drawer.locator('[data-detail-tag]').filter({ has: page.locator('span.font-mono', { hasText: /^e2e-team$/ }) }).locator('span.truncate').nth(1)
     await expect(team).toHaveText('shop', { timeout: 30_000 })
     await row.getByTitle(/^(Show|보기)$/).click()
     await expect(row).toContainText(secretValue)

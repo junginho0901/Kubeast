@@ -18,7 +18,7 @@ test.describe('modal stacking — detail drawer over list modal', () => {
     // resource row → openDetail() mounts the ResourceDetailDrawer.
     const modal = page.locator('div.fixed.inset-0.bg-black\\/50').first()
     await expect(modal).toBeVisible({ timeout: 10000 })
-    const row = modal.locator('div.cursor-pointer.bg-slate-700').first()
+    const row = modal.locator('[data-open-row]').first()
     await row.waitFor({ timeout: 10000 })
     await row.click()
 

@@ -105,6 +105,17 @@ describe('YamlEditor keeps the focus when its buttons change', () => {
     expect(doc.activeElement).toBe(places.editor)
   })
 
+  it('Edit, Apply and Cancel are three buttons to React, so the pressed Edit leaves the page and its focus falls', () => {
+    const edit = findButton(render(false).tree, LABELS.edit)!
+    state.slot = 0
+    state.ref = 0
+    state.effects = []
+    const editing = render(true).tree
+    const keys = [edit, findButton(editing, LABELS.apply)!, findButton(editing, LABELS.cancel)!].map((b) => b.key)
+    expect(keys.every((k) => k !== null)).toBe(true)
+    expect(new Set(keys).size).toBe(3)
+  })
+
   it('a saved Apply sends it to Edit, back in the place of Apply', async () => {
     const { doc, places } = page()
     await findButton(render(true, async () => true).tree, LABELS.apply)!.props.onClick!()
