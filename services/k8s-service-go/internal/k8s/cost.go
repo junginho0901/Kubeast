@@ -16,6 +16,7 @@ import (
 
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/proxypath"
 	"github.com/junginho0901/kubeast/services/pkg/auth"
+	"golang.org/x/sync/singleflight"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -113,6 +114,7 @@ type costCache struct {
 	svc      *costServiceInfo
 	probed   bool
 	probedAt time.Time
+	search   singleflight.Group // searchOnce
 	alloc    map[string]costAllocEntry
 }
 
@@ -132,6 +134,20 @@ func (c *costCache) fresh() bool {
 		ttl = costHitTTL
 	}
 	return time.Since(c.probedAt) < ttl
+}
+
+// last is the Service last found, nil when the last discovery found none, and whether it still answers.
+func (c *costCache) last() (*costServiceInfo, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.svc, c.fresh()
+}
+
+// keep remembers what a discovery that has ended found.
+func (c *costCache) keep(svc *costServiceInfo) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.svc, c.probed, c.probedAt = svc, true, time.Now()
 }
 
 // CostRow is one allocation: a namespace, or a workload (controller) inside one.
@@ -604,31 +620,26 @@ func (s *Service) getCostService(ctx context.Context) *costServiceInfo {
 		return nil
 	}
 	c := b.cost
-	c.mu.RLock()
-	if c.fresh() {
-		cached := c.svc
-		c.mu.RUnlock()
-		return cached
+	svc, fresh := c.last()
+	// as getPromService
+	if fresh || ctx.Err() != nil || readsHeld(ctx, b.id) {
+		return svc
 	}
-	c.mu.RUnlock()
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.fresh() {
-		return c.svc
-	}
-	c.svc = s.discoverOpenCost(ctx)
-	c.probed, c.probedAt = true, time.Now()
-	return c.svc
+	searchOnce(ctx, &c.search, func(ctx context.Context) {
+		if _, fresh := c.last(); !fresh {
+			c.keep(s.discoverOpenCost(ctx))
+		}
+	})
+	svc, _ = c.last()
+	return svc
 }
 
+// discoverOpenCost runs on a search's ctx (searchOnce), which ends at discoveryTime.
 func (s *Service) discoverOpenCost(ctx context.Context) *costServiceInfo {
 	cs := s.discoveryClient(ctx)
 	if cs == nil {
 		return nil
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
-	defer cancel()
 
 	hits := make([]*costServiceInfo, len(costNamespaces))
 	var wg sync.WaitGroup
@@ -636,7 +647,7 @@ func (s *Service) discoverOpenCost(ctx context.Context) *costServiceInfo {
 		wg.Add(1)
 		go func(i int, ns string) {
 			defer wg.Done()
-			hits[i] = probeOpenCostNamespace(probeCtx, cs, ns)
+			hits[i] = probeOpenCostNamespace(ctx, cs, ns)
 		}(i, ns)
 	}
 	wg.Wait()

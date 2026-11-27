@@ -40,6 +40,7 @@ const costControllerSet = `{"code":200,"data":[{
 type costServer struct {
 	found      bool
 	healthz403 bool
+	gate       chan struct{} // while set, keeps every Service list waiting, as an API server slow to list
 	mu         sync.Mutex
 	lists      int
 	allocs     int
@@ -51,6 +52,19 @@ func (c *costServer) counts() (lists, allocs int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.lists, c.allocs
+}
+
+// hold keeps the Service lists waiting, and those that wait go on once it is off.
+func (c *costServer) hold(on bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch {
+	case on && c.gate == nil:
+		c.gate = make(chan struct{})
+	case !on && c.gate != nil:
+		close(c.gate)
+		c.gate = nil
+	}
 }
 
 func (c *costServer) lastQuery() url.Values {
@@ -69,7 +83,15 @@ func newCostServer(t *testing.T, found bool) (*Service, *costServer) {
 		case strings.HasSuffix(p, "/services"):
 			cs.mu.Lock()
 			cs.lists++
+			gate := cs.gate
 			cs.mu.Unlock()
+			if gate != nil {
+				select {
+				case <-gate:
+				case <-r.Context().Done():
+					return
+				}
+			}
 			if cs.found && p == "/api/v1/namespaces/opencost/services" {
 				_, _ = w.Write([]byte(`{"items":[{"metadata":{"name":"opencost-ui","namespace":"opencost"},"spec":{"ports":[{"port":9090}]}},{"metadata":{"name":"opencost","namespace":"opencost"},"spec":{"ports":[{"name":"api","port":9003}]}}]}`))
 				return
@@ -98,6 +120,7 @@ func newCostServer(t *testing.T, found bool) (*Service, *costServer) {
 		}
 	}))
 	t.Cleanup(srv.Close)
+	t.Cleanup(func() { cs.hold(false) })
 	cs.srv = srv
 	k, err := kubernetes.NewForConfig(&rest.Config{Host: srv.URL})
 	if err != nil {
@@ -273,6 +296,81 @@ func TestCostAllocation_NotFoundIsRememberedForAWhile(t *testing.T) {
 	if _, err := s.CostAllocation(ctx, "24h", "pod"); err == nil || errors.Is(err, ErrCostNotFound) {
 		t.Fatalf("aggregate pod: err = %v", err)
 	}
+}
+
+// A search of OpenCost outlives the caller who started it and is one for all who ask meanwhile, each on their own time;
+// a request whose reads of the cluster are held starts none, and one out of its own time is remembered as a miss.
+func TestCostDiscovery_OneSearchThatNoCallerCuts(t *testing.T) {
+	ask := func(ctx context.Context, s *Service) <-chan bool {
+		answer := make(chan bool, 1)
+		go func() { answer <- s.CostStatus(ctx)["available"] == true }()
+		return answer
+	}
+	lists := func(srv *costServer) int {
+		n, _ := srv.counts()
+		return n
+	}
+
+	t.Run("its caller left", func(t *testing.T) {
+		s, srv := newCostServer(t, true)
+		srv.hold(true)
+		ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+		defer cancel()
+		if searchAnswer(t, "the caller who left", ask(ctx, s)) {
+			t.Fatal("found while every list waits")
+		}
+		inLine, leave := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer leave()
+		if searchAnswer(t, "the caller in line", ask(inLine, s)) {
+			t.Fatal("found while every list waits")
+		}
+		srv.hold(false)
+		if !searchAnswer(t, "the next caller", ask(context.Background(), s)) {
+			t.Error("not found by the search that went on")
+		}
+		if n := lists(srv); n != len(costNamespaces) {
+			t.Errorf("service lists = %d, want one round (%d)", n, len(costNamespaces))
+		}
+	})
+
+	t.Run("its request's reads are held", func(t *testing.T) {
+		s, srv := newCostServer(t, true)
+		ctx, calls := WithClusterCalls(context.Background(), "", func() {})
+		calls.waitedOut.Store(true)
+		if searchAnswer(t, "the held request", ask(ctx, s)) || lists(srv) != 0 {
+			t.Errorf("a held request looked: %d lists", lists(srv))
+		}
+		if !searchAnswer(t, "the next caller", ask(context.Background(), s)) {
+			t.Error("the next caller did not look")
+		}
+	})
+
+	t.Run("its request had ended", func(t *testing.T) {
+		s, srv := newCostServer(t, true)
+		gone, leave := context.WithCancel(context.Background())
+		leave()
+		found := searchAnswer(t, "the ended request", ask(gone, s))
+		time.Sleep(50 * time.Millisecond) // a search left running would have listed by now
+		if found || lists(srv) != 0 {
+			t.Errorf("an ended request looked: %d lists", lists(srv))
+		}
+	})
+
+	t.Run("out of its own time", func(t *testing.T) {
+		was := discoveryTime
+		discoveryTime = 150 * time.Millisecond
+		t.Cleanup(func() { discoveryTime = was })
+		s, srv := newCostServer(t, true)
+		srv.hold(true)
+		if searchAnswer(t, "its caller", ask(context.Background(), s)) {
+			t.Fatal("found while every list waits")
+		}
+		srv.hold(false)
+		n := lists(srv)
+		if searchAnswer(t, "the next caller", ask(context.Background(), s)) || lists(srv) != n {
+			t.Errorf("asked again within the five minutes: %d more lists", lists(srv)-n)
+		}
+	})
 }
 
 func TestCostFeatureEnabled(t *testing.T) {

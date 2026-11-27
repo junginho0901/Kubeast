@@ -13,7 +13,7 @@ Kubeast **자신**의 상태를 Prometheus 텍스트 포맷으로 노출합니�
 
 | 이름 | 종류 | 라벨 | 뜻 |
 |---|---|---|---|
-| `kubeast_http_requests_total` | counter | `service`, `method`, `route`, `code` | 처리한 HTTP 요청 수. `route`에는 실제 경로가 아니라 라우터의 **패턴**(`/api/v1/namespaces/{namespace}/pods/{name}`)이 들어가므로 카디널리티가 고정됩니다. `/metrics`와 확인(probe) 경로는 세지 않습니다: `/health`·`/`·`/livez`·`/readyz`와 ai-service의 `/api/v1/ai/health`입니다. kubelet이 몇 초마다 묻는 경로라, 세면 `KubeastHighErrorRate`·`KubeastSlowRequests`의 분모를 채웁니다 |
+| `kubeast_http_requests_total` | counter | `service`, `method`, `route`, `code` | 처리한 HTTP 요청 수. `route`에는 실제 경로가 아니라 라우터의 **패턴**(`/api/v1/namespaces/{namespace}/pods/{name}`)이 들어가므로 카디널리티가 고정됩니다. `/metrics`와 확인(probe) 경로는 세지 않습니다: `/health`·`/`·`/livez`·`/readyz`와 ai-service의 `/api/v1/ai/health`입니다. kubelet이 몇 초마다 묻는 경로라, 세면 `KubeastHighErrorRate`·`KubeastSlowRequests`의 분모를 채웁니다. `code`는 서비스가 쓴 상태 코드이며, Go 서비스(auth, k8s, session, tool-server)에 예외가 하나 있습니다. 클라이언트가 이미 떠났고 요청이 시작된 지 5초가 안 됐을 때 쓴 500은 `499`로 셉니다. 게이트웨이 액세스 로그가 이때 적는 코드이며, 클라이언트가 떠나서 그 읽기도 함께 끊긴 것입니다(화면을 닫거나 새로 고침, 채팅을 멈춰 도구 호출도 함께 끝남, 게이트웨이 파드 종료). 499를 답으로 보내지는 않습니다. 그 5초 안에 사람이 새로 고치는 사이에 난 진짜 실패는 이것들과 구분할 수 없어 역시 `499`입니다. 기다리다 그만둔 클라이언트도 서비스에는 똑같이 보이므로(콘솔은 10초 이상, 게이트웨이는 60초 이상 기다린 뒤에 그만둡니다) 시작한 지 5초가 지나 쓴 500은 `500`으로 남고, 클라이언트가 있을 때 쓴 500도 그대로입니다. 다른 상태 코드는 모두 그대로 셉니다 |
 | `kubeast_http_request_duration_seconds` | histogram | 같음 | 요청 처리 시간(기본 버킷). ai-service의 스트리밍 응답은 헤더를 보낼 때까지의 시간입니다 |
 | `kubeast_http_requests_in_flight` | gauge | `service` | 처리 중인 요청 수 |
 | `kubeast_ai_model_requests_total` | counter | `service`, `outcome` | 기동 뒤 ai-service가 모델 제공자에 보낸 요청 수(채팅, 떠 있는 도우미, 알림 조사, 대화 요약, 연결 시험). `outcome`은 제공자가 답했으면 `ok`(나중에 끊긴 스트림도 `ok`), 아니면 받은 거절의 종류 `credit`, `rate`, `auth`, `unavailable`, `address`(Kubeast가 모델 주소를 거절해 보내지 않음), `other`입니다. 자리를 받지 못한 Claude Code 실행은 아무것도 보내지 않았으므로 세지 않습니다(`kubeast_claude_code_busy_total`). 제공자 · 모델 라벨은 없습니다 |
@@ -85,7 +85,7 @@ Operator 없이 Prometheus를 쓴다면 `kubernetes_sd_configs`(role `endpoints`
 | 이름 | 식 | 뜻 |
 |---|---|---|
 | `KubeastAuditStoreDown` | `min by (service) (kubeast_audit_store_up) == 0` 2분 | 감사 DB에 쓸 수 없어 감사 대상 동작을 거부하는 중 |
-| `KubeastHighErrorRate` | 5xx 비율 > `errorRatio`(0.05) 10분 | 콘솔 오류율. 데이터베이스 장애가 그보다 길면 로그인한 사람의 읽기만으로도 울립니다. 세션을 읽을 수 없는 요청은 503으로 답하기 때문입니다(0.7.7은 이 알림이 세지 않는 4xx인 401로 답했습니다). API 서버가 20초 안에 답을 시작하지 않는 클러스터 읽기도 k8s-service의 503이므로, 끊긴 클러스터 하나의 화면을 사람들이 계속 열어 두면 그것만으로 울 수 있습니다 |
+| `KubeastHighErrorRate` | 5xx 비율 > `errorRatio`(0.05) 10분 | 콘솔 오류율. 데이터베이스 장애가 그보다 길면 로그인한 사람의 읽기만으로도 울립니다. 세션을 읽을 수 없는 요청은 503으로 답하기 때문입니다(0.7.7은 이 알림이 세지 않는 4xx인 401로 답했습니다). API 서버가 20초 안에 답을 시작하지 않는 클러스터 읽기도 k8s-service의 503이므로, 끊긴 클러스터 하나의 화면을 사람들이 계속 열어 두면 그것만으로 울 수 있습니다. 클라이언트가 떠나서 끊긴 읽기(화면을 닫거나 새로 고침, 채팅을 멈춤)는 `499`(위)라 전체에는 들어가고 오류에는 들어가지 않으므로, 사람들이 5초 안에 새로 고치는 장애에서는 비율이 조금 낮게 나옵니다 |
 | `KubeastSlowRequests` | p95 > `p95Seconds`(2 s) 10분 | 콘솔 지연 |
 | `KubeastAuditSinkStalled` | `kubeast_audit_sink_pending > 0`이고 마지막 전송 성공 뒤 10분이 넘게 지남, 5분 | 감사 싱크 전송이 멈춤(auth-service 로그에 오류가 남고, 보내지 못한 행은 보존 작업이 지우지 않고 남겨 둠) |
 | `KubeastSessionRecordingUploadStalled` | `kubeast_session_recording_pending_bytes > 0`이고 마지막 업로드 뒤 10분이 넘게 지남, 5분 | 세션 녹화 업로드가 멈춤(출력은 k8s-service 스풀에 쌓이고, 세션은 막지 않음) |

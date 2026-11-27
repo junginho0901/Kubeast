@@ -37,7 +37,8 @@ func noAnswer() error {
 // readWait stops waiting for a read call's answer after clusterReadWait (waitsFor says which calls). It sits outside
 // answerNotice, so a call the API server had counts as unanswered and one that had not gone out as unreached, as a
 // deadline does. Once one of a request's reads of the cluster ran out its wait (ClusterCalls), the request sends that
-// cluster no other read: it would wait on the same silent API server.
+// cluster no other read: it would wait on the same silent API server. The reads of a search it started (searchOnce)
+// neither hold it nor are held.
 type readWait struct {
 	base       http.RoundTripper
 	id         cluster.ID
@@ -57,7 +58,7 @@ func (t readWait) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.base.RoundTrip(req)
 	}
 	calls, ok := req.Context().Value(clusterCallsKey{}).(*ClusterCalls)
-	if !ok || calls.id != t.id {
+	if !ok || calls.id != t.id || searching(req.Context()) {
 		calls = nil
 	}
 	if calls != nil && calls.waitedOut.Load() {
@@ -155,6 +156,12 @@ func apiPath(p, serverPath string) (group string, rest []string) {
 func queryTrue(s string) bool {
 	b, err := strconv.ParseBool(s)
 	return err == nil && b
+}
+
+// readsHeld says ctx's request sends cluster id no other read, as one of its reads ran out its wait.
+func readsHeld(ctx context.Context, id cluster.ID) bool {
+	calls, ok := ctx.Value(clusterCallsKey{}).(*ClusterCalls)
+	return ok && calls.id == id && calls.waitedOut.Load()
 }
 
 // noteNoAnswer marks ctx's request when err is a read of cluster id that ran out its wait, also one it waited on for

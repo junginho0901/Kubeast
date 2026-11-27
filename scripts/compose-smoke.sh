@@ -64,7 +64,7 @@ body=$(printf '{"email":"admin","password":"%s"}' "$password")
 token=$(curl -s -o /dev/null -D - -X POST "http://localhost:${PORT}/api/v1/auth/login" -H 'Content-Type: application/json' \
   --data-raw "$body" | awk -f "$ROOT/scripts/session-token.awk") || token=""
 [[ -n "$token" ]] || { echo "::error::admin sign-in failed: no session cookie in the answer"; show_logs; exit 1; }
-me=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" "http://localhost:${PORT}/api/v1/auth/me") || true
+me=$(curl -s -o /dev/null -w '%{http_code}' -H @<(printf 'Authorization: Bearer %s\n' "$token") "http://localhost:${PORT}/api/v1/auth/me") || true
 [[ "$me" == 200 ]] || { echo "::error::the sign-in cookie's token was refused: GET /api/v1/auth/me answered $me"; show_logs; exit 1; }
 echo "signed in"
 
