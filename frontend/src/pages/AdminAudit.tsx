@@ -253,7 +253,7 @@ export default function AdminAudit() {
     const isSuccess = result === 'success'
     return (
       <span
-        className={`inline-flex items-center whitespace-nowrap rounded-sm px-2 py-0.5 text-xs font-medium ${
+        className={`badge ${
           isSuccess
             ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
             : 'bg-red-500/15 text-red-300 border border-red-500/30'

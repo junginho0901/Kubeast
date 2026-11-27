@@ -142,7 +142,7 @@ export default function ReleaseTable({
                   <td className="py-3 px-4 text-xs font-mono">{r.revision}</td>
                   <td className="py-3 px-4">
                     <span
-                      className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${statusBadge(r.status)}`}
+                      className={`badge ${statusBadge(r.status)}`}
                     >
                       {r.status}
                     </span>
