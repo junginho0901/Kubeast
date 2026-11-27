@@ -62,6 +62,7 @@ const XCLUSTER = `qa-extra-${STAMP}`
 const MODEL = `qa-model-${STAMP}`
 const BULK_EMAIL = `qa-bulk-${STAMP}@example.com`
 const REG_EMAIL = `qa-register-${STAMP}@example.com`
+const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
 
 // ---------- temporary users (admin API with the admin page's session) ----------
 async function roleId(page: Page, name: string): Promise<number> {
@@ -180,7 +181,7 @@ def('deploy-delete', 'k8s-service:DELETE:/api/v1/namespaces/{namespace}/deployme
 
 def('cronjob-suspend', 'k8s-service:PATCH:/api/v1/namespaces/{namespace}/cronjobs/{name}/suspend', 'workloads/cronjobs', async (page) => {
   await openRow(page, 'qa-cron')
-  await clickButton(page, /^suspend$|일시 ?중지/i)
+  await clickButton(page, /^suspend$|일시 ?중지/i, page.locator(DRAWER).last()) // the CronJob list's Suspend column header is a button too
   await sleep(800)
   const d = dialog(page)
   if (await d.isVisible().catch(() => false)) await d.getByRole('button', { name: /suspend|confirm|확인/i }).last().click()
