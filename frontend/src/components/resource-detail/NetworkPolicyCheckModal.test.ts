@@ -7,6 +7,7 @@ import type { PodPage } from '@/services/api'
 import '@/i18n'
 import { PageContextProvider } from '@/components/PageContextProvider'
 import NetworkPolicyCheckModal from './NetworkPolicyCheckModal'
+import source from './NetworkPolicyCheckModal.tsx?raw'
 import { POD_TABLE_WATCH_MAX, podPickerWay } from './namespacePodTable'
 
 const seen = vi.hoisted(() => ({ queries: [] as any[] }))
@@ -67,5 +68,11 @@ describe('how the connection check offers the pods of a namespace', () => {
     const r = render(() => {})
     expect(r.namesAsked).toBe(false)
     expect(r.searchAsked).toBe(false)
+  })
+})
+
+describe('the check window', () => {
+  it("keeps its title's icon in the neutral icon tone", () => {
+    expect(source).toContain('icon={<ShieldCheck className="w-5 h-5 text-slate-400 mt-0.5" />}')
   })
 })
