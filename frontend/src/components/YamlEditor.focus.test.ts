@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import i18next from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TabFocus } from 'monaco-editor/editor/browser/config/tabFocus.js'
+import { EditorOptions } from 'monaco-editor/editor/common/config/editorOptions.js'
 import en from '@/i18n/locales/en.json'
 import ko from '@/i18n/locales/ko.json'
 import YamlEditor from './YamlEditor'
@@ -15,7 +17,7 @@ const SLOT = { editing: 1, applying: 2, focusNext: 8, tabMovesFocus: 9 }
 const REF = { editor: 0, edit: 1, apply: 2 }
 const state = vi.hoisted(() => ({
   slot: 0, ref: 0, initial: {} as Record<number, unknown>, sets: {} as Record<number, unknown[]>,
-  refs: [] as { current: unknown }[], effects: [] as (() => void)[],
+  refs: [] as { current: unknown }[], effects: [] as (() => void)[], onMount: null as unknown,
 }))
 vi.mock('react', async (original) => {
   const real = await original<typeof import('react')>()
@@ -29,7 +31,12 @@ vi.mock('react', async (original) => {
     useEffect: (effect: () => void) => { state.effects.push(effect) },
   }
 })
-vi.mock('@/components/monaco/CodeEditor', () => ({ default: () => null }))
+vi.mock('@/components/monaco/CodeEditor', () => ({
+  default: (props: { onMount?: unknown }) => {
+    state.onMount = props.onMount
+    return null
+  },
+}))
 
 const i18n = i18next.createInstance()
 beforeAll(async () => {
@@ -201,5 +208,100 @@ describe('YamlEditor says how to leave the editor by keyboard (WCAG 2.2 2.1.2)',
   it('says nothing while the editor is read-only, where Tab already leaves it', () => {
     vi.stubGlobal('navigator', { platform: 'Win32' })
     expect(hint(render(false).html)).toBeUndefined()
+  })
+})
+
+// Monaco's own Tab switch and editor option. Ctrl+M runs editor.action.toggleTabFocusMode, which flips the switch and
+// tells a screen reader (`ctrlM` flips it; the command's module needs a browser to load). The stand-in editor works its
+// `tabFocusMode` out as Monaco's editor does (editorConfiguration.js): the option's own compute with the switch in its
+// env, worked out again when the switch moves, and a change event only when that value moved.
+type Change = { hasChanged: (id: number) => boolean }
+function monacoEditor(option = false) {
+  const id = EditorOptions.tabFocusMode.id
+  const changes = new Set<(e: Change) => void>()
+  const ends = new Set<() => void>()
+  const compute = () => EditorOptions.tabFocusMode.compute({ tabFocusMode: option || TabFocus.getTabFocusMode() }, null, option)
+  let value = compute()
+  const recompute = () => {
+    const next = compute()
+    if (next === value) return
+    value = next
+    for (const listener of [...changes]) listener({ hasChanged: (changed) => changed === id })
+  }
+  const switched = TabFocus.onDidChangeTabFocus(recompute)
+  const editor = {
+    getOption: (asked: number) => (asked === id ? value : undefined),
+    onDidChangeConfiguration: (listener: (e: Change) => void) => {
+      changes.add(listener)
+      return { dispose: () => changes.delete(listener) }
+    },
+    onDidDispose: (listener: () => void) => {
+      ends.add(listener)
+      return { dispose: () => ends.delete(listener) }
+    },
+    updateOptions: (next: { tabFocusMode: boolean }) => {
+      option = next.tabFocusMode
+      recompute()
+    },
+    dispose: () => {
+      switched.dispose()
+      changes.clear()
+      for (const end of ends) end()
+    },
+  }
+  return { editor, monaco: { editor: { EditorOption: { tabFocusMode: id } } } }
+}
+
+describe('YamlEditor’s hint follows Monaco’s Tab switch, which the editor option does not report', () => {
+  const ctrlM = () => TabFocus.setTabFocusMode(!TabFocus.getTabFocusMode())
+  const shown = () => state.sets[SLOT.tabMovesFocus]
+  const open: { dispose: () => void }[] = []
+  function mount(option = false) {
+    state.slot = 0
+    state.ref = 0
+    state.effects = []
+    state.sets = {}
+    render(true)
+    const made = monacoEditor(option)
+    open.push(made.editor)
+    ;(state.onMount as (editor: unknown, monaco: unknown) => void)(made.editor, made.monaco)
+    return made.editor
+  }
+  beforeEach(() => {
+    state.initial = {}
+    state.refs = []
+    state.sets = {}
+    vi.stubGlobal('navigator', { platform: 'Win32' })
+  })
+  afterEach(() => {
+    for (const editor of open.splice(0)) editor.dispose()
+    TabFocus.setTabFocusMode(false)
+    vi.unstubAllGlobals()
+  })
+
+  it('Ctrl+M says Tab moves the focus, and a second press says it indents again', () => {
+    const editor = mount()
+    expect(shown()).toEqual([false])
+    ctrlM()
+    expect(editor.getOption(EditorOptions.tabFocusMode.id)).toBe(false)
+    expect(shown()).toEqual([false, true])
+    ctrlM()
+    expect(shown()).toEqual([false, true, false])
+  })
+
+  it('an editor opened while the switch is on, from another editor of the page, says so at once', () => {
+    ctrlM()
+    mount()
+    expect(shown()).toEqual([true])
+  })
+
+  it('the editor option counts too, and a closed editor hears the switch no more', () => {
+    const editor = mount()
+    editor.updateOptions({ tabFocusMode: true })
+    expect(shown()).toEqual([false, true])
+    editor.updateOptions({ tabFocusMode: false })
+    editor.dispose()
+    ctrlM()
+    expect(shown()).toEqual([false, true, false])
   })
 })
