@@ -246,6 +246,10 @@ const BEFORE_490 = '{__name__=~"DCGM_FI_DEV_GPU_UTIL|DCGM_FI_DEV_FB_USED|DCGM_FI
 const SINCE_490 = '{__name__=~"DCGM_FI_DEV_GPU_UTIL_RATIO|DCGM_FI_DEV_FB_USED_BYTES|DCGM_FI_DEV_FB_FREE_BYTES|DCGM_FI_DEV_MEMORY_TEMP_CELSIUS"}'
 const ALL_DCGM = '{__name__=~"DCGM_FI_DEV_GPU_UTIL|DCGM_FI_DEV_FB_USED|DCGM_FI_DEV_FB_FREE|DCGM_FI_DEV_MEMORY_TEMP|DCGM_FI_DEV_GPU_UTIL_RATIO|DCGM_FI_DEV_FB_USED_BYTES|DCGM_FI_DEV_FB_FREE_BYTES|DCGM_FI_DEV_MEMORY_TEMP_CELSIUS"}'
 
+// Each k8s-service pod keeps a Prometheus answer for 30 s (multicluster.queryCacheTTLSec): for that long after the series
+// change, a pod can give the answer from before, one pod and not the other
+const PROM_ANSWER_KEPT_MS = 35_000
+
 async function waitFor(what: string, ok: () => boolean | Promise<boolean>, ms = 150_000) {
   const deadline = Date.now() + ms
   for (;;) {
@@ -1073,20 +1077,42 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
         twoCards: Object.fromEntries(Object.entries(t.gpu_pods.find((p: Obj) => p.name === 'gpu-two-cards')?.gpu_usage ?? {}).map(([k, v]) => [k, n(v as number | null)])),
       }
     }
-    const before = await metrics()
-    expect(Object.keys(before.gpus).filter((u) => u.startsWith('GPU-e2e-num-')).length, 'the nine GPUs in the names before 4.9.0').toBe(9)
+    // The numbers of the names before 4.9.0 are taken once the API, the card and the tool give every series written here:
+    // the test before this one wrote fewer, and a pod can still give them (PROM_ANSWER_KEPT_MS)
+    const own = <R>(rows: Record<string, R>, pick: (r: R) => unknown[]) =>
+      Object.fromEntries(Object.entries(rows).filter(([u]) => u.startsWith('GPU-e2e-num-')).map(([u, r]) => [u, pick(r)]))
+    const written = (f: (g: G) => unknown[]) => Object.fromEntries([...PLAIN, ...EXPORTED].map((g) => [`GPU-e2e-num-${g.gpu}`, f(g)]))
+    let before = await metrics()
+    await expect.poll(async () => own((before = await metrics()).gpus, (r: Obj[]) => [r[3], r[4], r[5], r[8]]),
+      { timeout: PROM_ANSWER_KEPT_MS + 10_000, intervals: [3_000], message: 'the API: the nine GPUs in the names before 4.9.0, every series' })
+      .toEqual(written((g) => [g.util, g.used, g.free, g.temp]))
     await page.goto(url('/gpu/dashboard'))
-    await expect.poll(async () => (await realtimeShown(page)).count, { timeout: 30_000, message: 'the real-time card' }).toBe('9')
-    const shown = await realtimeShown(page)
-    const toolBefore = mcp ? await tool() : null
+    // the card reads again every 15 s
+    let shown = await realtimeShown(page)
+    await expect.poll(async () => own((shown = await realtimeShown(page)).gpus, (g) => [g.core, g.mem, g.temp]),
+      { timeout: PROM_ANSWER_KEPT_MS + 25_000, message: 'the real-time card: every series' })
+      .toEqual(written((g) => [`${g.util}%`, `${Math.round((g.used / (g.used + g.free)) * 100)}%`, g.temp > 0 ? `Temp: ${g.temp}°C` : null]))
+    let toolBefore = mcp ? await tool() : null
+    if (toolBefore) {
+      await expect.poll(async () => own((toolBefore = await tool()).gpus, (r: Obj[]) => r.slice(0, 3)),
+        { timeout: PROM_ANSWER_KEPT_MS + 10_000, intervals: [3_000], message: 'the AI tool: every series' })
+        .toEqual(written((g) => [g.util, g.used, g.temp || null]))
+    }
     const e2eSeries = (names: string) => names.replace('}', ',UUID=~"GPU-e2e-num-.*"}')
     try {
       writeMetrics('/www/metrics', exposition(PLAIN, 'hostname', '4.9.0'))
       writeMetrics('/www/exported/metrics', exposition(EXPORTED, 'hostname', '4.9.0'))
       await waitFor('the 4.9.0 series in Prometheus', () => promValue(`count(${e2eSeries(SINCE_490)})`) === 36 && promQuery(BEFORE_490).length === 0, 60_000)
+      // until then an answer can be one a pod kept from the names before 4.9.0, which agrees with `before` without reading
+      // a 4.9.0 name; the screen and the tool are read after the API
+      const fresh = Date.now() + PROM_ANSWER_KEPT_MS
 
       await test.step('the API', async () => {
-        await expect(async () => expect(await metrics()).toEqual(before)).toPass({ timeout: 60_000, intervals: [3_000] })
+        await expect(async () => {
+          const asked = Date.now()
+          expect(await metrics()).toEqual(before)
+          expect(asked, 'asked once no pod keeps an answer from the names before 4.9.0').toBeGreaterThanOrEqual(fresh)
+        }).toPass({ timeout: PROM_ANSWER_KEPT_MS + 60_000, intervals: [3_000] })
       })
       await test.step('GPU Dashboard', async () => {
         await page.goto(url('/gpu/dashboard'))
