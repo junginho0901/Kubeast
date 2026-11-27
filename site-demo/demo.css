@@ -1,4 +1,4 @@
-/* The released console's stylesheet and Tailwind sources (v0.7.9, extracted by build.sh), then the demo frame only. */
+/* The released console's stylesheet and Tailwind sources (v0.8.0, extracted by build.sh), then the demo frame only. */
 @import "./.release/frontend/src/index.css";
 @source "./.release/frontend/src";
 

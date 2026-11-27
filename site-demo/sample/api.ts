@@ -93,7 +93,7 @@ function writeRoute(method: string, route: string, params: URLSearchParams, body
 function readRoute(route: string, params: URLSearchParams): Reply {
   if (route === '/auth/me') return ok(me)
   if (route === '/auth/access-requests/config') return ok({ enabled: false, max_hours: 0, roles: [], help_text: '', help_url: '' })
-  if (route === '/ai/config') return ok({ model: lang() === 'ko' ? '예시 답변(모델 없음)' : 'Sample answers (no model)', app_name: 'Kubeast', version: 'v0.7.9' })
+  if (route === '/ai/config') return ok({ model: lang() === 'ko' ? '예시 답변(모델 없음)' : 'Sample answers (no model)', app_name: 'Kubeast', version: 'v0.8.0' })
   if (route === '/auth/oidc/config') return ok({ enabled: false })
   if (route === '/clusters') return ok({ items: [{ id: 'default', display_name: 'Commerce Production', mode: 'external', is_self_cluster: false, health_status: 'healthy', created_by: 'platform-operator', created_at: created, updated_at: created }] })
   if (route === '/system/deployment-mode') return ok({ mode: 'k8s' })
