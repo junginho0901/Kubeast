@@ -2,7 +2,9 @@
 # that Kubeast finds as monitoring/prometheus:9090, and a stand-in for NVIDIA's dcgm-exporter — busybox httpd serving
 # two files of DCGM series whose values e2e/tests/number-check-gpu.spec.ts writes (kubectl exec, `cat >` a file; the
 # seed below is what they hold until then). The labels are dcgm-exporter 4.8.4's (gpu, UUID, pci_bus_id, device,
-# modelName, hostname, and pod, namespace, container for a GPU a pod holds). Two jobs scrape it every 5 s:
+# modelName, hostname, and pod, namespace, container for a GPU a pod holds); the seed's /exported/metrics has 4.9.0's
+# metric names and units (a 0 to 1 ratio, bytes) and its DCGM_FI_SYSTEM_DRIVER_VERSION label. Two jobs scrape it
+# every 5 s:
 #   dcgm           /metrics           static target with no labels of its own: the series keep pod and namespace
 #   dcgm-exported  /exported/metrics  a target labelled as the exporter's own pod (as a ServiceMonitor's endpoints
 #                                     give one): honor_labels false renames the series' pod and namespace to
@@ -20,7 +22,7 @@ metadata:
   name: dcgm-seed
   namespace: monitoring
 data:
-  # four idle GPUs of the node
+  # four idle GPUs of the node: two in dcgm-exporter 4.8.4's names, two in 4.9.0's
   metrics: |
     # HELP DCGM_FI_DEV_GPU_UTIL GPU utilization (in %).
     # TYPE DCGM_FI_DEV_GPU_UTIL gauge
@@ -38,23 +40,28 @@ data:
     # TYPE DCGM_FI_DEV_MEMORY_TEMP gauge
     DCGM_FI_DEV_MEMORY_TEMP{gpu="0",UUID="GPU-e2e-seed-0",pci_bus_id="00000000:07:00.0",device="nvidia0",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 30
     DCGM_FI_DEV_MEMORY_TEMP{gpu="1",UUID="GPU-e2e-seed-1",pci_bus_id="00000000:0F:00.0",device="nvidia1",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 30
+  # dcgm-exporter 4.9.0's names and units (its etc/default-counters.csv), which read as the same numbers
   exported-metrics: |
-    # HELP DCGM_FI_DEV_GPU_UTIL GPU utilization (in %).
-    # TYPE DCGM_FI_DEV_GPU_UTIL gauge
-    DCGM_FI_DEV_GPU_UTIL{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
-    DCGM_FI_DEV_GPU_UTIL{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
-    # HELP DCGM_FI_DEV_FB_USED Framebuffer memory used (in MiB).
-    # TYPE DCGM_FI_DEV_FB_USED gauge
-    DCGM_FI_DEV_FB_USED{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
-    DCGM_FI_DEV_FB_USED{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 0
-    # HELP DCGM_FI_DEV_FB_FREE Framebuffer memory free (in MiB).
-    # TYPE DCGM_FI_DEV_FB_FREE gauge
-    DCGM_FI_DEV_FB_FREE{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 81050
-    DCGM_FI_DEV_FB_FREE{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 81050
-    # HELP DCGM_FI_DEV_MEMORY_TEMP Memory temperature (in C).
-    # TYPE DCGM_FI_DEV_MEMORY_TEMP gauge
-    DCGM_FI_DEV_MEMORY_TEMP{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 30
-    DCGM_FI_DEV_MEMORY_TEMP{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane"} 30
+    # HELP DCGM_FI_DEV_GPU_UTIL_RATIO GPU utilization as a ratio.
+    # TYPE DCGM_FI_DEV_GPU_UTIL_RATIO gauge
+    DCGM_FI_DEV_GPU_UTIL_RATIO{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 0
+    DCGM_FI_DEV_GPU_UTIL_RATIO{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 0
+    # HELP DCGM_FI_DEV_FB_CAPACITY_BYTES Total framebuffer capacity in bytes.
+    # TYPE DCGM_FI_DEV_FB_CAPACITY_BYTES gauge
+    DCGM_FI_DEV_FB_CAPACITY_BYTES{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 85899345920
+    DCGM_FI_DEV_FB_CAPACITY_BYTES{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 85899345920
+    # HELP DCGM_FI_DEV_FB_FREE_BYTES Free framebuffer memory in bytes.
+    # TYPE DCGM_FI_DEV_FB_FREE_BYTES gauge
+    DCGM_FI_DEV_FB_FREE_BYTES{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 84987084800
+    DCGM_FI_DEV_FB_FREE_BYTES{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 84987084800
+    # HELP DCGM_FI_DEV_FB_USED_BYTES Used framebuffer memory in bytes.
+    # TYPE DCGM_FI_DEV_FB_USED_BYTES gauge
+    DCGM_FI_DEV_FB_USED_BYTES{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 0
+    DCGM_FI_DEV_FB_USED_BYTES{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 0
+    # HELP DCGM_FI_DEV_MEMORY_TEMP_CELSIUS Memory temperature (in C).
+    # TYPE DCGM_FI_DEV_MEMORY_TEMP_CELSIUS gauge
+    DCGM_FI_DEV_MEMORY_TEMP_CELSIUS{gpu="2",UUID="GPU-e2e-seed-2",pci_bus_id="00000000:47:00.0",device="nvidia2",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 30
+    DCGM_FI_DEV_MEMORY_TEMP_CELSIUS{gpu="3",UUID="GPU-e2e-seed-3",pci_bus_id="00000000:4E:00.0",device="nvidia3",modelName="NVIDIA A100-SXM4-80GB",hostname="test2-control-plane",DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"} 30
 ---
 apiVersion: apps/v1
 kind: Deployment

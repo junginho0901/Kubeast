@@ -13,7 +13,8 @@ import { sessionToken } from './session-token'
 // labels, and a stand-in dcgm-exporter is scraped by a Prometheus in `monitoring`, deploy/kind/gpu-metrics.yaml).
 // GPUs in use are kubectl describe node's "Allocated resources" (the pods on a node that have not ended, init
 // containers at their peak, sidecars added), pods no node has taken are waiting apart; a pod's Status is kubectl's
-// STATUS and a node's too; the real-time numbers are what that Prometheus answers, a pod's GPUs read whether the
+// STATUS and a node's too; the real-time numbers are what that Prometheus answers, the same under dcgm-exporter 4.8.4's
+// metric names and 4.9.0's, a pod's GPUs read whether the
 // scrape kept the exporter's pod label or renamed it exported_pod, and a GPU's pod is named when it asks for GPUs or
 // holds a DRA claim (a pod of the DRA example driver's gpu.example.com). The GPU Pods charts list every status and
 // node: for that test and the floating chat's, three Node objects without a kubelet and pods whose init container
@@ -210,18 +211,28 @@ const EXPORTED: G[] = [
   { gpu: 6, pod: 'gpu-init', util: 20, used: 5000, free: 75000, temp: 45 },
   { gpu: 7, util: 0, used: 0, free: 80000, temp: 35 },
 ]
-function exposition(gpus: G[], host: 'hostname' | 'Hostname') {
+// names '4.9.0': dcgm-exporter 4.9.0's names and units (its etc/default-counters.csv) — utilization a 0 to 1 ratio,
+// memory in bytes, and the capacity Kubeast does not read — with its DCGM_FI_SYSTEM_DRIVER_VERSION label
+const MIB = 1048576
+function exposition(gpus: G[], host: 'hostname' | 'Hostname', names: '4.8.4' | '4.9.0' = '4.8.4') {
   const labels = (g: G) => [`gpu="${g.gpu}"`, `UUID="GPU-e2e-num-${g.gpu}"`, `pci_bus_id="00000000:${(16 + g.gpu).toString(16).toUpperCase()}:00.0"`,
     `device="nvidia${g.gpu}"`, 'modelName="NVIDIA A100-SXM4-80GB"', `${host}="${NODE}"`,
-    ...(g.pod ? [`pod="${g.pod}"`, `namespace="${NS}"`, `container="${g.container ?? 'app'}"`] : [])].join(',')
+    ...(g.pod ? [`pod="${g.pod}"`, `namespace="${NS}"`, `container="${g.container ?? 'app'}"`] : []),
+    ...(names === '4.9.0' ? ['DCGM_FI_SYSTEM_DRIVER_VERSION="580.95.05"'] : [])].join(',')
   const family = (name: string, help: string, v: (g: G) => number) =>
     [`# HELP ${name} ${help}`, `# TYPE ${name} gauge`, ...gpus.map((g) => `${name}{${labels(g)}} ${v(g)}`)].join('\n')
-  return [
+  return (names === '4.9.0' ? [
+    family('DCGM_FI_DEV_GPU_UTIL_RATIO', 'GPU utilization as a ratio.', (g) => g.util / 100),
+    family('DCGM_FI_DEV_FB_CAPACITY_BYTES', 'Total framebuffer capacity in bytes.', () => 81920 * MIB),
+    family('DCGM_FI_DEV_FB_FREE_BYTES', 'Free framebuffer memory in bytes.', (g) => g.free * MIB),
+    family('DCGM_FI_DEV_FB_USED_BYTES', 'Used framebuffer memory in bytes.', (g) => g.used * MIB),
+    family('DCGM_FI_DEV_MEMORY_TEMP_CELSIUS', 'Memory temperature (in C).', (g) => g.temp),
+  ] : [
     family('DCGM_FI_DEV_GPU_UTIL', 'GPU utilization (in %).', (g) => g.util),
     family('DCGM_FI_DEV_FB_USED', 'Framebuffer memory used (in MiB).', (g) => g.used),
     family('DCGM_FI_DEV_FB_FREE', 'Framebuffer memory free (in MiB).', (g) => g.free),
     family('DCGM_FI_DEV_MEMORY_TEMP', 'Memory temperature (in C).', (g) => g.temp),
-  ].join('\n') + '\n'
+  ]).join('\n') + '\n'
 }
 const writeMetrics = (file: string, body: string) =>
   kubectl(`-n monitoring exec -i deploy/dcgm-exporter -- sh -c 'cat > ${file}.tmp && mv ${file}.tmp ${file}'`, body)
@@ -230,7 +241,10 @@ const writeMetrics = (file: string, body: string) =>
 const coalesce = (expr: string) =>
   ['pod', 'namespace'].reduce((e, l) => `label_replace(label_replace(${e}, "p_${l}", "$1", "${l}", "(.+)"), "p_${l}", "$1", "exported_${l}", "(.+)")`,
     `label_replace(label_replace(${expr}, "p_host", "$1", "Hostname", "(.+)"), "p_host", "$1", "hostname", "(.+)")`)
-const ALL_DCGM = '{__name__=~"DCGM_FI_DEV_GPU_UTIL|DCGM_FI_DEV_FB_USED|DCGM_FI_DEV_FB_FREE|DCGM_FI_DEV_MEMORY_TEMP"}'
+// the four series Kubeast reads, under dcgm-exporter's names before 4.9.0 and its 4.9.0 names
+const BEFORE_490 = '{__name__=~"DCGM_FI_DEV_GPU_UTIL|DCGM_FI_DEV_FB_USED|DCGM_FI_DEV_FB_FREE|DCGM_FI_DEV_MEMORY_TEMP"}'
+const SINCE_490 = '{__name__=~"DCGM_FI_DEV_GPU_UTIL_RATIO|DCGM_FI_DEV_FB_USED_BYTES|DCGM_FI_DEV_FB_FREE_BYTES|DCGM_FI_DEV_MEMORY_TEMP_CELSIUS"}'
+const ALL_DCGM = '{__name__=~"DCGM_FI_DEV_GPU_UTIL|DCGM_FI_DEV_FB_USED|DCGM_FI_DEV_FB_FREE|DCGM_FI_DEV_MEMORY_TEMP|DCGM_FI_DEV_GPU_UTIL_RATIO|DCGM_FI_DEV_FB_USED_BYTES|DCGM_FI_DEV_FB_FREE_BYTES|DCGM_FI_DEV_MEMORY_TEMP_CELSIUS"}'
 
 async function waitFor(what: string, ok: () => boolean | Promise<boolean>, ms = 150_000) {
   const deadline = Date.now() + ms
@@ -708,6 +722,30 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
 
   // ── real-time metrics on the dashboard ───────────────────────────────────────────────────────────────────────────
 
+  // what the GPU Dashboard's Real-time GPU Metrics card shows
+  const realtimeShown = async (page: Page) => ({
+    ...(await page.evaluate(() => {
+      const text = (sel: string) => (document.querySelector(sel) as HTMLElement | null)?.innerText.trim() ?? null
+      return {
+        detected: text('[data-testid="gpu-realtime-detected"]'),
+        count: text('[data-testid="gpu-realtime-count"]'),
+        avgUtil: text('[data-testid="gpu-realtime-avg-util"]'),
+        avgMem: text('[data-testid="gpu-realtime-avg-mem"]'),
+        memUsed: text('[data-testid="gpu-realtime-mem-used"]'),
+        memTotal: text('[data-testid="gpu-realtime-mem-total"]'),
+      }
+    })),
+    // the hosts are a page at a time: every page's GPUs
+    gpus: Object.fromEntries(await readEveryPage(page, 'gpu-realtime-pager', () => page.locator('[data-testid="gpu-realtime-gpu"]').evaluateAll((els) => els.map((g) => {
+      const text = (sel: string) => (g.querySelector(sel) as HTMLElement | null)?.innerText.trim() ?? null
+      return [g.getAttribute('data-uuid') ?? '', {
+        host: g.closest('[data-testid="gpu-realtime-host"]')?.getAttribute('data-host'),
+        core: text('[data-testid="gpu-realtime-core"]'), mem: text('[data-testid="gpu-realtime-mem"]'),
+        temp: text('[data-testid="gpu-realtime-temp"]'), pod: text('[data-testid="gpu-realtime-pod"]'),
+      }] as const
+    })))),
+  })
+
   test('GPU Dashboard: the real-time GPU numbers are what Prometheus answers, a GPU\'s pod named only when it asks for GPUs or holds a DRA claim', async ({ page }) => {
     test.setTimeout(150_000)
     await prepare(page)
@@ -743,28 +781,7 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     expect({ asks: c.pods.some((p) => p.key === `${NS}/gpu-dra`), gpu8: want.gpus['GPU-e2e-num-8']?.pod }, 'GPU 8')
       .toEqual({ asks: false, gpu8: `Pod: ${NS}/gpu-dra` })
     await page.goto(url('/gpu/dashboard'))
-    await expect.poll(async () => ({
-      ...(await page.evaluate(() => {
-        const text = (sel: string) => (document.querySelector(sel) as HTMLElement | null)?.innerText.trim() ?? null
-        return {
-          detected: text('[data-testid="gpu-realtime-detected"]'),
-          count: text('[data-testid="gpu-realtime-count"]'),
-          avgUtil: text('[data-testid="gpu-realtime-avg-util"]'),
-          avgMem: text('[data-testid="gpu-realtime-avg-mem"]'),
-          memUsed: text('[data-testid="gpu-realtime-mem-used"]'),
-          memTotal: text('[data-testid="gpu-realtime-mem-total"]'),
-        }
-      })),
-      // the hosts are a page at a time: every page's GPUs
-      gpus: Object.fromEntries(await readEveryPage(page, 'gpu-realtime-pager', () => page.locator('[data-testid="gpu-realtime-gpu"]').evaluateAll((els) => els.map((g) => {
-        const text = (sel: string) => (g.querySelector(sel) as HTMLElement | null)?.innerText.trim() ?? null
-        return [g.getAttribute('data-uuid') ?? '', {
-          host: g.closest('[data-testid="gpu-realtime-host"]')?.getAttribute('data-host'),
-          core: text('[data-testid="gpu-realtime-core"]'), mem: text('[data-testid="gpu-realtime-mem"]'),
-          temp: text('[data-testid="gpu-realtime-temp"]'), pod: text('[data-testid="gpu-realtime-pod"]'),
-        }] as const
-      })))),
-    }), { timeout: 45_000, message: 'real-time GPU metrics' }).toEqual(want)
+    await expect.poll(() => realtimeShown(page), { timeout: 45_000, message: 'real-time GPU metrics' }).toEqual(want)
   })
 
   // ── the node drawer ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -1026,6 +1043,63 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
     } finally {
       writeMetrics('/www/metrics', exposition(PLAIN, 'hostname'))
       await waitFor('the full series back in Prometheus', () => promValue('count(DCGM_FI_DEV_GPU_UTIL{UUID=~"GPU-e2e-num-.*"})') === 9 && promValue('count(DCGM_FI_DEV_FB_FREE{UUID=~"GPU-e2e-num-.*"})') === 9, 60_000)
+    }
+  })
+
+  // dcgm-exporter 4.9.0 writes the series under DCGM 4.7's names, utilization a 0 to 1 ratio and memory in bytes: with
+  // both of the exporter's files in those names, the API, the GPU Dashboard and the AI tool read what the names before
+  // it gave (to a millionth: 0.07 * 100 is 7.000000000000001).
+  test('dcgm-exporter 4.9.0\'s metric names and units read as the numbers of the names before it', async ({ page, request }) => {
+    test.setTimeout(300_000)
+    await prepare(page)
+    const headers = await admin(request)
+    const n = (v: number | null | undefined) => (typeof v === 'number' ? Math.round(v * 1e6) / 1e6 : v)
+    const metrics = async () => {
+      const res = await request.get(`/api/v1/cluster/gpu/metrics?cluster=${CLUSTER}`, { headers })
+      expect(res.ok(), `gpu/metrics: ${res.status()}`).toBeTruthy()
+      const m = (await res.json()) as Obj
+      return {
+        totals: [m.gpu_count, n(m.avg_gpu_util), n(m.avg_memory_util), n(m.total_memory_used_mb), n(m.total_memory_free_mb), n(m.total_memory_mb)],
+        gpus: Object.fromEntries((m.gpus as Obj[]).map((g) => [g.uuid, [g.hostname, g.exported_namespace, g.exported_pod, n(g.gpu_util),
+          n(g.memory_used_mb), n(g.memory_free_mb), n(g.memory_total_mb), n(g.memory_util_percent), n(g.memory_temp)]])),
+      }
+    }
+    const mcp = await mcpOn(request, headers)
+    const tool = async () => {
+      const t = await gpuTool(request, headers.Authorization)
+      return {
+        utilization: Object.fromEntries(Object.entries(t.utilization).map(([k, v]) => [k, n(v as number | null)])),
+        gpus: Object.fromEntries((t.gpus as Obj[]).map((g) => [g.uuid, [n(g.gpu_util), n(g.memory_used_mb), n(g.memory_temp), g.pod]])),
+        twoCards: Object.fromEntries(Object.entries(t.gpu_pods.find((p: Obj) => p.name === 'gpu-two-cards')?.gpu_usage ?? {}).map(([k, v]) => [k, n(v as number | null)])),
+      }
+    }
+    const before = await metrics()
+    expect(Object.keys(before.gpus).filter((u) => u.startsWith('GPU-e2e-num-')).length, 'the nine GPUs in the names before 4.9.0').toBe(9)
+    await page.goto(url('/gpu/dashboard'))
+    await expect.poll(async () => (await realtimeShown(page)).count, { timeout: 30_000, message: 'the real-time card' }).toBe('9')
+    const shown = await realtimeShown(page)
+    const toolBefore = mcp ? await tool() : null
+    const e2eSeries = (names: string) => names.replace('}', ',UUID=~"GPU-e2e-num-.*"}')
+    try {
+      writeMetrics('/www/metrics', exposition(PLAIN, 'hostname', '4.9.0'))
+      writeMetrics('/www/exported/metrics', exposition(EXPORTED, 'hostname', '4.9.0'))
+      await waitFor('the 4.9.0 series in Prometheus', () => promValue(`count(${e2eSeries(SINCE_490)})`) === 36 && promQuery(BEFORE_490).length === 0, 60_000)
+
+      await test.step('the API', async () => {
+        await expect(async () => expect(await metrics()).toEqual(before)).toPass({ timeout: 60_000, intervals: [3_000] })
+      })
+      await test.step('GPU Dashboard', async () => {
+        await page.goto(url('/gpu/dashboard'))
+        await expect.poll(() => realtimeShown(page), { timeout: 45_000, message: 'real-time GPU metrics' }).toEqual(shown)
+      })
+      await test.step('the AI tool', async () => {
+        test.skip(!toolBefore, 'needs the MCP server (mcp.enabled in the dev values)')
+        await expect(async () => expect(await tool()).toEqual(toolBefore)).toPass({ timeout: 60_000, intervals: [3_000] })
+      })
+    } finally {
+      writeMetrics('/www/metrics', exposition(PLAIN, 'hostname'))
+      writeMetrics('/www/exported/metrics', exposition(EXPORTED, 'Hostname'))
+      await waitFor('the names before 4.9.0 back in Prometheus', () => promValue(`count(${e2eSeries(BEFORE_490)})`) === 36 && promQuery(SINCE_490).length === 0, 60_000)
     }
   })
 
