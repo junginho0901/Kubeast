@@ -318,6 +318,7 @@ export function ChatPanel({
           <X className="h-4 w-4" />
         </button>
       </header>
+      <p role="status" className="sr-only" data-testid="floating-chat-status">{status}</p>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={listRef} className="flex-1 overflow-y-auto" data-testid="floating-messages">
@@ -344,7 +345,6 @@ export function ChatPanel({
       {!atBottom && <JumpToLatest onClick={() => scrollToBottom()} />}
       </div>
 
-      <p role="status" className="sr-only" data-testid="floating-chat-status">{status}</p>
       <ActionFailure error={stopSaveFailure} action="save" testId="floating-stop-save-error" className="shrink-0 px-3 pt-2 text-xs" />
       {createSessionMutation.error && (
         <p role="alert" data-testid="floating-start-error" className="shrink-0 px-3 pt-2 text-xs text-red-400 break-words">
