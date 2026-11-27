@@ -94,14 +94,14 @@ export default function InvestigationReportModal({ id, load, onClose }: {
             <div className="grid gap-3 md:grid-cols-2">
               <dl className="min-w-0 border-l border-hairline pl-3 py-2 text-xs">
                 {Object.entries(data.labels).map(([k, v]) => (
-                  <div key={k} className="flex flex-wrap gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500 [overflow-wrap:anywhere]">{k}</dt><dd className="min-w-0 break-all font-mono text-slate-200">{v}</dd></div>
+                  <div key={k} className="flex flex-wrap gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500 [overflow-wrap:anywhere]">{k}</dt><dd className="min-w-0 break-all font-mono text-slate-200">{v || '-'}</dd></div>
                 ))}
               </dl>
               <dl className="min-w-0 border-l border-hairline pl-3 py-2 text-xs">
                 {Object.entries(data.annotations).map(([k, v]) => (
-                  <div key={k} className="flex flex-wrap gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500 [overflow-wrap:anywhere]">{k}</dt><dd className="min-w-0 [overflow-wrap:anywhere] text-slate-200">{v}</dd></div>
+                  <div key={k} className="flex flex-wrap gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500 [overflow-wrap:anywhere]">{k}</dt><dd className="min-w-0 [overflow-wrap:anywhere] text-slate-200">{v || '-'}</dd></div>
                 ))}
-                {Object.keys(data.annotations).length === 0 && <div className="text-slate-500">{tr('investigations.noAnnotations', 'No annotations')}</div>}
+                {Object.keys(data.annotations).length === 0 && <div className="text-slate-500">{tr('common.none', 'None')}</div>}
               </dl>
             </div>
             <div className="mt-2 flex flex-wrap gap-4 text-xs">
