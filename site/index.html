@@ -80,7 +80,7 @@
 </section>
 
 <section class="depth-section" id="inside" aria-labelledby="inside-title">
-  <div class="new-section-head"><div><h2 id="inside-title"><span lang="ko">클러스터를 읽는 AI</span><span lang="en">AI for your cluster</span></h2></div><p><span lang="ko">보고 있는 리소스를 조사하거나,<br>AI가 무엇을 확인했는지 따라갑니다.</span><span lang="en">Investigate the resource on screen,<br>or follow the evidence behind an AI answer.</span></p></div>
+  <div class="section-head"><h2 id="inside-title"><span lang="ko">클러스터를 읽는 AI</span><span lang="en">AI for your cluster</span></h2><p><span lang="ko">보고 있는 리소스를 조사하거나,<br>AI가 무엇을 확인했는지 따라갑니다.</span><span lang="en">Investigate the resource on screen,<br>or follow the evidence behind an AI answer.</span></p></div>
   <div class="depth-layout"><div class="workflow-copy"><div class="depth-choices" role="group" aria-label="Product capabilities">
     <button class="depth-choice" type="button" data-depth="context" aria-pressed="true"><b><span lang="ko">Pod 조사</span><span lang="en">Pod investigation</span></b><span lang="ko">클러스터·필터·상세 서랍의 맥락을 이어 갑니다.</span><span lang="en">Keep the cluster, filters and drawer in context.</span></button>
     <button class="depth-choice" type="button" data-depth="evidence" aria-pressed="false"><b><span lang="ko">로그·트레이스</span><span lang="en">Logs & traces</span></b><span lang="ko">사용한 도구와 실행 주체, 확인한 근거를 봅니다.</span><span lang="en">See the tools, the identity and the evidence.</span></button>
@@ -104,10 +104,10 @@
     </article>
     <article class="explain-panel investigation-panel"><div class="investigation-copy"><h3><span lang="ko">질문에서 확인까지</span><span lang="en">From a question to a verified result</span></h3><p><span lang="ko">상황을 묻고, 근거를 살펴보고, 다음 작업을 정합니다. 변경이 필요하면 내용을 확인하고 승인합니다. 결과도 같은 대화에서 이어집니다.</span><span lang="en">Ask a question, follow the evidence and review the next step. Approve a change when you are ready, then check the result in the same conversation.</span></p><button type="button" class="round-action" id="trace-next"><span lang="ko">다음 단계</span><span lang="en">Next step</span></button><button type="button" class="quiet-button" id="trace-reset"><span lang="ko">처음부터</span><span lang="en">Start over</span></button></div>
       <div class="trace-diagram"><div class="trace-stages">
-        <button type="button" data-trace="0" aria-pressed="true"><span class="stage-symbol">?</span><b>Ask</b><small>you + context</small></button><span class="trace-connector" aria-hidden="true"></span>
-        <button type="button" data-trace="1" aria-pressed="false"><span class="stage-symbol">⌕</span><b>Investigate</b><small>AI + tools</small></button><span class="trace-connector" aria-hidden="true"></span>
-        <button type="button" data-trace="2" aria-pressed="false"><span class="stage-symbol">≡</span><b>Review</b><small>evidence + plan</small></button><span class="trace-connector" aria-hidden="true"></span>
-        <button type="button" data-trace="3" aria-pressed="false"><span class="stage-symbol">✓</span><b>Approve</b><small>your decision</small></button><span class="trace-connector" aria-hidden="true"></span>
+        <button type="button" data-trace="0" aria-pressed="true"><span class="stage-symbol">?</span><b>Ask</b><small>you + context</small></button>
+        <button type="button" data-trace="1" aria-pressed="false"><span class="stage-symbol">⌕</span><b>Investigate</b><small>AI + tools</small></button>
+        <button type="button" data-trace="2" aria-pressed="false"><span class="stage-symbol">≡</span><b>Review</b><small>evidence + plan</small></button>
+        <button type="button" data-trace="3" aria-pressed="false"><span class="stage-symbol">✓</span><b>Approve</b><small>your decision</small></button>
         <button type="button" data-trace="4" aria-pressed="false"><span class="stage-symbol">↻</span><b>Verify</b><small>result + record</small></button>
       </div><div class="trace-log copy-stack" id="trace-log" aria-live="polite"></div></div>
     </article>
@@ -120,7 +120,7 @@
      metrics.md and supply-chain.md. Each entry of integrations.js says in `tested` whether it was run against the real
      product; the page does not show it. -->
 <section class="integrations-section" id="integrations" aria-labelledby="integrations-title" data-docs-tag="v0.7.9">
-  <div class="new-section-head"><div><h2 id="integrations-title"><span lang="ko">함께 쓰는 도구</span><span lang="en">Integrations</span></h2></div><p><span lang="ko">Kubeast와 함께 쓰는 도구입니다. <br>분류를 고르고, 로고를 눌러 Kubeast가 그 도구로 하는 일을 확인하세요.</span><span lang="en">The tools Kubeast works with. <br>Pick a category, then select a logo to see what Kubeast does with it.</span></p></div>
+  <div class="section-head"><h2 id="integrations-title"><span lang="ko">함께 쓰는 도구</span><span lang="en">Integrations</span></h2><p><span lang="ko">Kubeast와 함께 쓰는 도구입니다. <br>분류를 고르고, 로고를 눌러 Kubeast가 그 도구로 하는 일을 확인하세요.</span><span lang="en">The tools Kubeast works with. <br>Pick a category, then select a logo to see what Kubeast does with it.</span></p></div>
   <div class="int-box">
     <div class="int-tabs" role="group" aria-label="Categories · 분류"></div>
     <div class="int-wall" id="int-wall"></div>
@@ -131,7 +131,7 @@
 </section>
 
 <section class="arch-section" id="architecture" aria-labelledby="architecture-title">
-  <div class="new-section-head"><div><h2 id="architecture-title"><span lang="ko">Kubeast의 구성</span><span lang="en">How Kubeast works</span></h2></div><p><span lang="ko">요청이 들어오고 나가는 길과 데이터 저장. <br>구성 요소를 눌러 역할을 살펴보세요.</span><span lang="en">Know where requests come in, where they go and what is stored. <br>Select a component to explore its role.</span></p></div>
+  <div class="section-head"><h2 id="architecture-title"><span lang="ko">Kubeast의 구성</span><span lang="en">How Kubeast works</span></h2><p><span lang="ko">요청이 들어오고 나가는 길과 데이터 저장. <br>구성 요소를 눌러 역할을 살펴보세요.</span><span lang="en">Know where requests come in, where they go and what is stored. <br>Select a component to explore its role.</span></p></div>
   <div class="arch-layout"><div class="arch-diagram" role="group" aria-label="Kubeast architecture">
     <div class="arch-entry"><p class="arch-cap"><span lang="ko">들어오는 요청</span><span lang="en">Comes in from</span></p>
       <button type="button" class="arch-box" data-arch="frontend" aria-pressed="true"><b>Kubeast console</b><small><span lang="ko">브라우저</span><span lang="en">Browser</span>&nbsp;· React&nbsp;· TypeScript</small></button>
@@ -156,13 +156,12 @@
 
 <section class="features" id="features">
     <div class="section-head">
-      <p class="kicker"><span lang="en">What you can do</span><span lang="ko">기능</span></p>
       <h2><span lang="en">Watch it work</span><span lang="ko">직접 확인해 보세요.</span></h2>
-      <p class="sub" lang="en">No mockups. Every clip was recorded live on a test cluster. <span class="for-pointer">Hover to preview. Click to see it up close.</span><span class="for-touch">Scroll to play. Tap to see it up close.</span></p>
-      <p class="sub" lang="ko">꾸민 화면 없이, 테스트 클러스터에서 그대로 담았습니다. <span class="for-pointer">마우스를 올려 미리 보고, 클릭해 크게 보세요.</span><span class="for-touch">스크롤하면 재생되고, 탭하면 크게 펼쳐집니다.</span></p>
+      <p lang="en">No mockups. Every clip was recorded live on a test cluster. <span class="for-pointer">Hover to preview. Click to see it up close.</span><span class="for-touch">Scroll to play. Tap to see it up close.</span></p>
+      <p lang="ko">꾸민 화면 없이, 테스트 클러스터에서 그대로 담았습니다. <span class="for-pointer">마우스를 올려 미리 보고, 클릭해 크게 보세요.</span><span class="for-touch">스크롤하면 재생되고, 탭하면 크게 펼쳐집니다.</span></p>
     </div>
 
-    <div class="grid">
+    <div class="grid" id="clips">
       <article class="card" data-clip="ai-chat">
         <div class="thumb"><video muted playsinline preload="none" poster="media/ai-chat.jpg" data-src="media/ai-chat.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
@@ -219,48 +218,6 @@
         </div>
       </article>
 
-      <article class="card" data-clip="resource-drawer">
-        <div class="thumb"><video muted playsinline preload="none" poster="media/resource-drawer.jpg" data-src="media/resource-drawer.mp4"></video><span class="play" aria-hidden="true"></span></div>
-        <div class="card-body">
-          <h3><span lang="en">Every resource in a drawer</span><span lang="ko">모든 리소스를, 패널 하나에</span></h3>
-          <p lang="en">Status, usage and events in one place, and the YAML edited in place.</p>
-          <p lang="ko">상태와 사용량, 이벤트를 한곳에서 확인하고 YAML도 그 자리에서 바로 고치세요.</p>
-          <ol class="steps">
-            <li data-step="find"><span lang="en">Find the Deployment</span><span lang="ko">Deployment 찾기</span></li>
-            <li data-step="drawer"><span lang="en">Status, usage, events</span><span lang="ko">상태, 사용량, 이벤트 확인</span></li>
-            <li data-step="edit"><span lang="en">Edit the YAML: replicas 2 → 3</span><span lang="ko">YAML 수정: replicas 2 → 3</span></li>
-            <li data-step="applied"><span lang="en">Applied: three replicas</span><span lang="ko">적용 완료, 레플리카 3개</span></li>
-          </ol>
-        </div>
-      </article>
-
-      <article class="card" data-clip="logs">
-        <div class="thumb"><video muted playsinline preload="none" poster="media/logs.jpg" data-src="media/logs.mp4"></video><span class="play" aria-hidden="true"></span></div>
-        <div class="card-body">
-          <h3><span lang="en">Live logs</span><span lang="ko">실시간 로그</span></h3>
-          <p lang="en">Logs stream in from Cluster View. With Loki, search the logs of pods already gone.</p>
-          <p lang="ko">Cluster View에서 로그를 실시간으로 따라가세요. Loki를 연결하면 이미 사라진 파드의 로그까지 찾을 수 있습니다.</p>
-          <ol class="steps">
-            <li data-step="stream"><span lang="en">Requests as they arrive</span><span lang="ko">들어오는 요청을 실시간으로</span></li>
-            <li data-step="crash"><span lang="en">Why checkout-api stops</span><span lang="ko">checkout-api가 멈추는 이유 찾기</span></li>
-          </ol>
-        </div>
-      </article>
-
-      <article class="card" data-clip="terminal">
-        <div class="thumb"><video muted playsinline preload="none" poster="media/terminal.jpg" data-src="media/terminal.mp4"></video><span class="play" aria-hidden="true"></span></div>
-        <div class="card-body">
-          <h3><span lang="en">A terminal in the browser</span><span lang="ko">브라우저 속 터미널</span></h3>
-          <p lang="en">A shell in a pod without a kubeconfig on your laptop, for roles that may exec (Admin by default). With session recording on, each session can be replayed.</p>
-          <p lang="ko">노트북에 kubeconfig가 없어도 파드 셸이 열립니다(기본은 Admin 권한). 세션 녹화를 켜 두면 셸 세션을 다시 볼 수 있습니다.</p>
-          <ol class="steps">
-            <li data-step="exec"><span lang="en">Open a shell from the pod</span><span lang="ko">파드에서 셸 열기</span></li>
-            <li data-step="commands"><span lang="en">Run commands</span><span lang="ko">명령 실행</span></li>
-            <li data-step="replay"><span lang="en">Replay the recording</span><span lang="ko">녹화된 세션 다시 보기</span></li>
-          </ol>
-        </div>
-      </article>
-
       <article class="card" data-clip="helm">
         <div class="thumb"><video muted playsinline preload="none" poster="media/helm.jpg" data-src="media/helm.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
@@ -271,21 +228,6 @@
             <li data-step="history"><span lang="en">Release history</span><span lang="ko">릴리스 이력</span></li>
             <li data-step="diff"><span lang="en">Revision 1 against now</span><span lang="ko">리비전 1과 현재 비교</span></li>
             <li data-step="rollback"><span lang="en">Rollback preview, cancelled</span><span lang="ko">롤백 결과를 미리 보고 취소</span></li>
-          </ol>
-        </div>
-      </article>
-
-      <article class="card" data-clip="changes">
-        <div class="thumb"><video muted playsinline preload="none" poster="media/changes.jpg" data-src="media/changes.mp4"></video><span class="play" aria-hidden="true"></span></div>
-        <div class="card-body">
-          <h3><span lang="en">What changed, what connects</span><span lang="ko">무엇이 바뀌었고, 어떻게 이어져 있는지</span></h3>
-          <p lang="en">Change History lines up events and rollouts; Resource Graph draws how objects connect and, with Cilium Hubble, who actually talks to whom.</p>
-          <p lang="ko">Change History는 이벤트와 롤아웃을 시간순으로 정리하고, Resource Graph는 리소스가 어떻게 연결되는지, Cilium Hubble이 있으면 실제로 누가 누구와 통신하는지 그려 줍니다.</p>
-          <ol class="steps">
-            <li data-step="timeline"><span lang="en">Events and rollouts of a namespace</span><span lang="ko">Namespace의 이벤트와 롤아웃</span></li>
-            <li data-step="graph"><span lang="en">How its objects connect</span><span lang="ko">리소스 연결 관계</span></li>
-            <li data-step="traffic"><span lang="en">Who actually talks to whom, by port</span><span lang="ko">실제로 누가 누구와, 어느 포트로 통신하는지</span></li>
-            <li data-step="why"><span lang="en">Why a connection is dropped</span><span lang="ko">연결이 왜 막혔는지</span></li>
           </ol>
         </div>
       </article>
@@ -304,7 +246,65 @@
         </div>
       </article>
 
-      <article class="card" data-clip="masking">
+      <!-- The six above show first; app.js hides the six marked data-more behind the button under the list. -->
+      <article class="card" data-clip="resource-drawer" data-more>
+        <div class="thumb"><video muted playsinline preload="none" poster="media/resource-drawer.jpg" data-src="media/resource-drawer.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">Every resource in a drawer</span><span lang="ko">모든 리소스를, 패널 하나에</span></h3>
+          <p lang="en">Status, usage and events in one place, and the YAML edited in place.</p>
+          <p lang="ko">상태와 사용량, 이벤트를 한곳에서 확인하고 YAML도 그 자리에서 바로 고치세요.</p>
+          <ol class="steps">
+            <li data-step="find"><span lang="en">Find the Deployment</span><span lang="ko">Deployment 찾기</span></li>
+            <li data-step="drawer"><span lang="en">Status, usage, events</span><span lang="ko">상태, 사용량, 이벤트 확인</span></li>
+            <li data-step="edit"><span lang="en">Edit the YAML: replicas 2 → 3</span><span lang="ko">YAML 수정: replicas 2 → 3</span></li>
+            <li data-step="applied"><span lang="en">Applied: three replicas</span><span lang="ko">적용 완료, 레플리카 3개</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="logs" data-more>
+        <div class="thumb"><video muted playsinline preload="none" poster="media/logs.jpg" data-src="media/logs.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">Live logs</span><span lang="ko">실시간 로그</span></h3>
+          <p lang="en">Logs stream in from Cluster View. With Loki, search the logs of pods already gone.</p>
+          <p lang="ko">Cluster View에서 로그를 실시간으로 따라가세요. Loki를 연결하면 이미 사라진 파드의 로그까지 찾을 수 있습니다.</p>
+          <ol class="steps">
+            <li data-step="stream"><span lang="en">Requests as they arrive</span><span lang="ko">들어오는 요청을 실시간으로</span></li>
+            <li data-step="crash"><span lang="en">Why checkout-api stops</span><span lang="ko">checkout-api가 멈추는 이유 찾기</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="terminal" data-more>
+        <div class="thumb"><video muted playsinline preload="none" poster="media/terminal.jpg" data-src="media/terminal.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">A terminal in the browser</span><span lang="ko">브라우저 속 터미널</span></h3>
+          <p lang="en">A shell in a pod without a kubeconfig on your laptop, for roles that may exec (Admin by default). With session recording on, each session can be replayed.</p>
+          <p lang="ko">노트북에 kubeconfig가 없어도 파드 셸이 열립니다(기본은 Admin 권한). 세션 녹화를 켜 두면 셸 세션을 다시 볼 수 있습니다.</p>
+          <ol class="steps">
+            <li data-step="exec"><span lang="en">Open a shell from the pod</span><span lang="ko">파드에서 셸 열기</span></li>
+            <li data-step="commands"><span lang="en">Run commands</span><span lang="ko">명령 실행</span></li>
+            <li data-step="replay"><span lang="en">Replay the recording</span><span lang="ko">녹화된 세션 다시 보기</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="changes" data-more>
+        <div class="thumb"><video muted playsinline preload="none" poster="media/changes.jpg" data-src="media/changes.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">What changed, what connects</span><span lang="ko">무엇이 바뀌었고, 어떻게 이어져 있는지</span></h3>
+          <p lang="en">Change History lines up events and rollouts; Resource Graph draws how objects connect and, with Cilium Hubble, who actually talks to whom.</p>
+          <p lang="ko">Change History는 이벤트와 롤아웃을 시간순으로 정리하고, Resource Graph는 리소스가 어떻게 연결되는지, Cilium Hubble이 있으면 실제로 누가 누구와 통신하는지 그려 줍니다.</p>
+          <ol class="steps">
+            <li data-step="timeline"><span lang="en">Events and rollouts of a namespace</span><span lang="ko">Namespace의 이벤트와 롤아웃</span></li>
+            <li data-step="graph"><span lang="en">How its objects connect</span><span lang="ko">리소스 연결 관계</span></li>
+            <li data-step="traffic"><span lang="en">Who actually talks to whom, by port</span><span lang="ko">실제로 누가 누구와, 어느 포트로 통신하는지</span></li>
+            <li data-step="why"><span lang="en">Why a connection is dropped</span><span lang="ko">연결이 왜 막혔는지</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="masking" data-more>
         <div class="thumb"><video muted playsinline preload="none" poster="media/masking.jpg" data-src="media/masking.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
           <h3><span lang="en">Secrets stay out of the AI</span><span lang="ko">비밀번호는 AI에게도 비밀로</span></h3>
@@ -318,7 +318,7 @@
         </div>
       </article>
 
-      <article class="card" data-clip="security-audit">
+      <article class="card" data-clip="security-audit" data-more>
         <div class="thumb"><video muted playsinline preload="none" poster="media/security-audit.jpg" data-src="media/security-audit.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
           <h3><span lang="en">Security you can prove</span><span lang="ko">증명할 수 있는 보안</span></h3>
@@ -332,11 +332,12 @@
         </div>
       </article>
     </div>
+    <button type="button" class="btn btn-ghost more-clips" id="more-clips" aria-controls="clips" aria-expanded="true" hidden><span class="more-clips-open"><span lang="en">See 6 more recordings</span><span lang="ko">녹화 6개 더 보기</span></span><span class="more-clips-close"><span lang="en">Show fewer</span><span lang="ko">접기</span></span></button>
   </section>
 
   <section class="more">
     <div class="section-head">
-      <p class="kicker"><span lang="en">Also in the box</span><span lang="ko">이 밖에도</span></p>
+      <h2><span lang="en">Also in the box</span><span lang="ko">이 밖에도</span></h2>
     </div>
     <div class="tiles">
       <div class="tile"><b>MCP</b><span lang="en">Turn it on, and Claude Code or Cursor use the chat's read tools with an API key, under its owner's permissions</span><span lang="ko">켜 두면 Claude Code·Cursor가 API 키로, 키 주인의 권한 안에서 같은 읽기 도구를 씁니다</span></div>
@@ -352,7 +353,6 @@
 
   <section class="install" id="install">
     <div class="section-head">
-      <p class="kicker"><span lang="en">Install</span><span lang="ko">설치</span></p>
       <h2><span lang="en">Install with one command</span><span lang="ko">명령 한 줄로 설치합니다</span></h2>
     </div>
     <div class="terminal">
@@ -382,7 +382,7 @@
 
   <section class="faq" id="faq">
     <div class="section-head">
-      <p class="kicker"><span lang="en">Questions</span><span lang="ko">자주 묻는 질문</span></p>
+      <h2><span lang="en">Questions</span><span lang="ko">자주 묻는 질문</span></h2>
     </div>
     <details>
       <summary><span lang="en">Do I need an AI provider?</span><span lang="ko">AI 서비스가 꼭 필요한가요?</span></summary>

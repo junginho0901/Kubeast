@@ -151,7 +151,7 @@
   document.querySelectorAll('[data-trace],#trace-next,#trace-reset').forEach(b=>b.addEventListener('click',()=>{traceLoop();}));
 
   const reveals=new IntersectionObserver(items=>{for(const item of items){if(!item.isIntersecting)continue;reveals.unobserve(item.target);if(!reduced.matches&&!document.hidden)item.target.animate([{opacity:.3,transform:'translateY(18px)'},{opacity:1,transform:'translateY(0)'}],{duration:560,easing:'cubic-bezier(.2,.7,.2,1)'});}},{threshold:.08});
-  document.querySelectorAll('.new-section-head,.explain-panel,.arch-layout,.capability-strip,.features .card').forEach(node=>reveals.observe(node));
+  document.querySelectorAll('#inside>.section-head,#integrations>.section-head,#architecture>.section-head,.explain-panel,.arch-layout,.capability-strip,.features .card').forEach(node=>reveals.observe(node));
 
   // Settle at the right edge after the hero, then join the footer mark.
   const drift=document.querySelector('.brand-drift');let frame=0,current=null;

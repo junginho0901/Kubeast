@@ -154,10 +154,7 @@
     new IntersectionObserver((items,observer)=>{if(items.some(item=>item.isIntersecting)){observer.disconnect();show();}},{rootMargin:'400px 0px'}).observe(shell);
     new MutationObserver(()=>{if(!poster.hidden)showRecording(route);line.textContent=hint();if(started)speak();}).observe(root,{attributes:true,attributeFilter:['lang']});
   })();
-  const lightbox=document.getElementById('lightbox');let videoOpener=null;
-  function rememberOpener(event){const card=event.target.closest('.card');if(card)videoOpener=card;}
-  document.addEventListener('click',rememberOpener,true);
-  document.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')rememberOpener(event);},true);
+  const lightbox=document.getElementById('lightbox');
   document.addEventListener('keydown',event=>{
     if(lightbox.hidden||event.key!=='Tab')return;
     const items=Array.from(lightbox.querySelectorAll('button,video[controls],a[href]')).filter(node=>!node.disabled&&node.getClientRects().length);
@@ -165,7 +162,8 @@
     if(event.shiftKey&&(document.activeElement===first||!lightbox.contains(document.activeElement))){event.preventDefault();last.focus();}
     else if(!event.shiftKey&&(document.activeElement===last||!lightbox.contains(document.activeElement))){event.preventDefault();first.focus();}
   },true);
-  new MutationObserver(()=>{const open=!lightbox.hidden;document.querySelector('main').inert=open;document.querySelector('header.top').inert=open;document.querySelector('footer').inert=open;if(!open&&videoOpener)videoOpener.focus({preventScroll:true});}).observe(lightbox,{attributes:true,attributeFilter:['hidden']});
+  // Closing gives focus to the card of the clip the large view showed last (app.js keeps it in data-clip as previous and next move).
+  new MutationObserver(()=>{const open=!lightbox.hidden;document.querySelector('main').inert=open;document.querySelector('header.top').inert=open;document.querySelector('footer').inert=open;const card=!open&&document.querySelector('.card[data-clip="'+lightbox.dataset.clip+'"]');if(card)card.focus({preventScroll:true});}).observe(lightbox,{attributes:true,attributeFilter:['hidden']});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)document.querySelectorAll('video').forEach(video=>video.pause());});
   renderAll();
 })();
