@@ -156,7 +156,7 @@ export function ConditionsTable({ conditions }: { conditions: any[] }) {
   const withGeneration = conditions.some((c: any) => generationOf(c) != null)
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs table-fixed min-w-[640px]">
+      <table className="w-full text-xs table-fixed min-w-[640px]" data-list-bounded="conditions of one object, one per type">
         <thead className="text-slate-400">
           <tr>
             <Th className={`text-left py-2 ${withGeneration ? 'w-[21%]' : 'w-[26%]'}`}>Type</Th>

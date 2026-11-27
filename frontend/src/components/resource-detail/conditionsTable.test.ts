@@ -30,4 +30,10 @@ describe('ConditionsTable', () => {
     expect(head(out)).toContain('Observed Generation')
     expect(cells(out)[0][4]).toBe('0')
   })
+
+  it('draws every condition, the table marked as bounded by the one object, in each drawer that uses it', () => {
+    const out = html(Array.from({ length: 12 }, (_, i) => ({ type: `Type${i}`, status: 'True' })))
+    expect(cells(out)).toHaveLength(12)
+    expect(out).toContain('<table class="w-full text-xs table-fixed min-w-[640px]" data-list-bounded="conditions of one object, one per type">')
+  })
 })

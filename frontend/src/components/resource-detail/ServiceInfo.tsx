@@ -287,7 +287,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Summary" value={toPortDisplay(ports)} />
           {ports.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs table-fixed min-w-[640px]">
+              <table className="w-full text-xs table-fixed min-w-[640px]" data-list-bounded="ports of one Service">
                 <thead className="text-slate-400">
                   <tr>
                     <Th className="text-left py-2 w-[18%]">Name</Th>

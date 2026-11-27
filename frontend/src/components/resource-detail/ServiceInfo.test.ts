@@ -80,3 +80,20 @@ describe('the endpoints of a Service', () => {
     expect(out).not.toContain('service-endpoints-failed')
   })
 })
+
+const drawn = (describe: Record<string, unknown>) => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
+  qc.setQueryData(['service-describe', 'ns', 'web'], describe)
+  return renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client: qc },
+    createElement(ServiceInfo, { name: 'web', namespace: 'ns', rawJson: {} }))))
+}
+
+describe("a Service's ports and conditions", () => {
+  it('are drawn whole, each table marked as bounded by the one Service', () => {
+    const ports = Array.from({ length: 12 }, (_, i) => ({ name: `p${i}`, protocol: 'TCP', port: 8000 + i, target_port: `${9000 + i}` }))
+    const out = drawn({ ports, conditions: [{ type: 'Ready', status: 'True' }] })
+    expect(out.match(/<td class="py-2 pr-2 font-mono">80\d\d<\/td>/g)).toHaveLength(12)
+    expect(out).toContain('data-list-bounded="ports of one Service"')
+    expect(out).toContain('data-list-bounded="conditions of one object, one per type"')
+  })
+})
