@@ -37,6 +37,7 @@ The chart gives k8s-service 512 Mi. If many people will use a large cluster at o
 | Document | Contents |
 | --- | --- |
 | [Installation and first setup](docs/getting-started.md) | 3 install methods, uninstall, first access, connecting a cluster, turning on AI |
+| [Upgrading from 0.7.8 to 0.7.9](docs/upgrade-0.7.9.md) | What to check before, the values to change, what the upgrade does once, rolling back |
 | [Upgrading from 0.7.7 to 0.7.8](docs/upgrade-0.7.8.md) | What to check before, the values to change, what the upgrade does once, rolling back |
 | [Changelog](CHANGELOG.md) | What changed in each release, from 0.7.8 on |
 | [Features at a glance](docs/features.md) | AI assistant, multi-cluster with roles and permissions, resource management, Helm, GPU, observability, authentication and audit |

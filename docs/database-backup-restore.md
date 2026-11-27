@@ -8,6 +8,8 @@ configs, audit log). This page covers how the services connect to it over TLS,
 and how to back up and restore the in-cluster database the chart installs by
 default. The procedure below was rehearsed on kind: dump → uninstall + PVC
 delete → reinstall → restore → check login, row counts and registered clusters.
+That run used `pg_restore --clean --if-exists`; the commands below that empty
+the schema first were run on PostgreSQL 18 with dumps of 0.7.5 to 0.7.9.
 
 ## What lives where
 
@@ -71,19 +73,23 @@ Two independent layers; use both.
 
 ### From a logical dump (rehearsed)
 
-Works into a fresh install: the chart's migrations create the empty schema and
-the dump replaces it.
+The dump takes the place of what the database holds, in a fresh install or over
+the database it came from: the schema is emptied first.
 
 ```bash
 NS=<ns>
-# 1. stop everything that writes (the migration Job, if any, has already run)
+POD=$(kubectl -n $NS get pod -l app=postgres -o name | head -1)
+# 1. the backup is there and reads (this changes nothing); do not go on if it fails
+kubectl -n $NS exec -i $POD -c postgres -- pg_restore --list < kubeast-<stamp>.dump > /dev/null && echo "the backup reads"
+# 2. stop everything that writes (the migration Job, if any, has already run);
+#    with streams.enabled, k8s-service-stream too: add it to the list here and in 4
 for d in auth-service session-service k8s-service ai-service model-config-controller-go; do
   kubectl -n $NS scale deploy/$d --replicas=0
 done
-# 2. restore over the freshly migrated schema
-POD=$(kubectl -n $NS get pod -l app=postgres -o name | head -1)
-kubectl -n $NS exec -i $POD -c postgres -- pg_restore --clean --if-exists --no-owner -U kubeast -d kubeast < kubeast-<stamp>.dump
-# 3. start the services; auth-service sees goose_db_version at the required version and applies nothing
+# 3. empty the schema, then restore into it: what the database holds now is gone
+kubectl -n $NS exec -i $POD -c postgres -- psql -U kubeast -d kubeast -v ON_ERROR_STOP=1 -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+kubectl -n $NS exec -i $POD -c postgres -- pg_restore --exit-on-error --no-owner -U kubeast -d kubeast < kubeast-<stamp>.dump
+# 4. start the services; auth-service applies the migrations the dump does not hold
 for d in auth-service session-service k8s-service ai-service model-config-controller-go; do
   kubectl -n $NS scale deploy/$d --replicas=1
 done
@@ -97,9 +103,16 @@ Check that:
 - `GET /api/v1/clusters` lists the registrations;
 - the schema version table shows the same versions as before.
 
-If the dump is from an **older** Kubeast (lower `goose_db_version`), restore
-it and then restart auth-service once: it applies the missing migrations at
-boot (`MIGRATIONS_MODE=startup`) or the hook Job does on the next upgrade.
+If the dump is from an **older** Kubeast (lower `goose_db_version`), the same
+commands restore it, and auth-service applies the missing migrations at boot
+(`MIGRATIONS_MODE=startup`) or the hook Job does on the next upgrade.
+
+Empty the schema first. `pg_restore --clean --if-exists` alone drops only what
+the dump holds: over a database of a newer Kubeast, a table that the dump does
+not hold and that refers to one of its tables keeps that table from being
+replaced, and pg_restore reports the errors and goes on. A dump of 0.7.7 or
+earlier restored that way over a database of 0.7.8 or later does not replace
+`auth_users`, since `ended_sign_ins` refers to it.
 
 ### From a volume snapshot
 
@@ -140,7 +153,7 @@ EOF
 # 3. upgrade onto it with the new image: the new server initializes the empty volume
 helm upgrade kubeast <chart> -n $NS --reset-then-reuse-values \
   --set images.postgres=<new image> --set postgresql.persistence.existingClaim=kubeast-postgres-data-new
-# 4. restore as in "From a logical dump" above: stop the writers, pg_restore --clean, start them
+# 4. restore as in "From a logical dump" above: stop the writers, empty the schema, pg_restore, start them
 ```
 
 Do the same checks.

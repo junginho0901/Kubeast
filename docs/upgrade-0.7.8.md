@@ -364,7 +364,7 @@ helm rollback kubeast <revision> -n kubeast
 ```
 
 - **Database**: the 0.7.8 tables and columns stay, and 0.7.7 still starts. Its migrations find nothing to apply on a database that is ahead, and its services wait for schema 22 or later.
-- **Roles** (#865): the renames, the removed grants and the account levels moved to `Pending` stay, and so does the index that refuses a name making another role's group. Only restoring the dump from [1.10](#110-back-up-the-database) brings the old names and grants back, and it takes the whole database back to that moment.
+- **Roles** (#865): the renames, the removed grants and the account levels moved to `Pending` stay, and so does the index that refuses a name making another role's group. Only restoring the dump from [1.10](#110-back-up-the-database), into an emptied schema as in [From a logical dump](database-backup-restore.md#from-a-logical-dump-rehearsed), brings the old names and grants back, and it takes the whole database back to that moment.
 - **Role groups** (#865): 0.7.7 makes the old groups again (`운영팀` acts as `kubeast:role:---`), so a binding made for a new group does not apply under it.
 - **Sign-outs** (#849): 0.7.7's auth-service does not read the signed-out sign-ins, so a token whose sign-in was signed out is taken again until it expires (`auth.tokenTTLMinutes`, 15 minutes by default).
 - **Redis** (#866): 0.7.7's Redis comes back with one password (`REDIS_PASSWORD`, still in `kubeast-secrets`), and its k8s-service signs in with it. A 0.7.7 k8s-service pod that starts before that Redis answers keeps its cache in memory until it restarts. `kubeast-redis-users` stays (`helm.sh/resource-policy: keep`), and the next upgrade reads its passwords again.

@@ -4,7 +4,7 @@
 
 Kubeast는 오래 보존할 상태를 PostgreSQL 데이터베이스 하나에 저장합니다. 사용자, 역할, 등록한 클러스터, 채팅 세션과 메시지, 도구 승인, 모델 설정, 감사 로그가 여기에 들어갑니다.
 이 문서는 서비스가 TLS로 이 데이터베이스에 접속하는 방법과, 차트가 기본으로 설치하는 클러스터 안 데이터베이스를 백업하고 복원하는 방법을 설명합니다.
-아래 절차는 kind에서 덤프 → uninstall + PVC 삭제 → 재설치 → 복원 → 로그인, 행 수, 등록한 클러스터 확인 순서로 리허설했습니다.
+아래 절차는 kind에서 덤프 → uninstall + PVC 삭제 → 재설치 → 복원 → 로그인, 행 수, 등록한 클러스터 확인 순서로 리허설했습니다. 그 리허설은 `pg_restore --clean --if-exists`로 했고, 스키마를 먼저 비우는 아래 명령은 PostgreSQL 18에서 0.7.5~0.7.9의 덤프로 돌려 보았습니다.
 
 ## 무엇이 어디에 있나 (What lives where)
 
@@ -58,18 +58,22 @@ PgBouncer를 거친다면 session 풀링을 쓰거나 직접 연결하세요. k8
 
 ### 논리 덤프에서 복원 (리허설 완료)
 
-새로 설치한 Kubeast에 복원할 수 있습니다. 차트의 마이그레이션이 빈 스키마를 만들면 덤프가 그 스키마를 대체합니다.
+새로 설치한 Kubeast에도, 덤프를 뜬 데이터베이스에도 같은 방법으로 복원합니다. 스키마를 먼저 비우므로 덤프가 지금 들어 있는 것을 대신합니다.
 
 ```bash
 NS=<ns>
-# 1. 쓰기를 하는 것을 모두 멈춤 (마이그레이션 Job이 있다면 이미 끝났음)
+POD=$(kubectl -n $NS get pod -l app=postgres -o name | head -1)
+# 1. 백업 파일이 있고 읽히는지 먼저 확인 (아무것도 바꾸지 않음). 실패하면 더 진행하지 않음
+kubectl -n $NS exec -i $POD -c postgres -- pg_restore --list < kubeast-<stamp>.dump > /dev/null && echo "백업이 읽힘"
+# 2. 쓰기를 하는 것을 모두 멈춤 (마이그레이션 Job이 있다면 이미 끝났음).
+#    streams.enabled면 k8s-service-stream도 멈춤: 여기와 4번의 목록에 더함
 for d in auth-service session-service k8s-service ai-service model-config-controller-go; do
   kubectl -n $NS scale deploy/$d --replicas=0
 done
-# 2. 방금 마이그레이션한 스키마 위에 복원
-POD=$(kubectl -n $NS get pod -l app=postgres -o name | head -1)
-kubectl -n $NS exec -i $POD -c postgres -- pg_restore --clean --if-exists --no-owner -U kubeast -d kubeast < kubeast-<stamp>.dump
-# 3. 서비스 시작: auth-service는 goose_db_version이 필요한 버전인 것을 보고 아무것도 적용하지 않음
+# 3. 스키마를 비우고 그 안에 복원 (지금 데이터베이스에 든 것은 사라짐)
+kubectl -n $NS exec -i $POD -c postgres -- psql -U kubeast -d kubeast -v ON_ERROR_STOP=1 -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+kubectl -n $NS exec -i $POD -c postgres -- pg_restore --exit-on-error --no-owner -U kubeast -d kubeast < kubeast-<stamp>.dump
+# 4. 서비스 시작: auth-service가 덤프에 없는 마이그레이션을 적용함
 for d in auth-service session-service k8s-service ai-service model-config-controller-go; do
   kubectl -n $NS scale deploy/$d --replicas=1
 done
@@ -82,7 +86,9 @@ done
 - `GET /api/v1/clusters`가 등록한 클러스터를 돌려줍니다.
 - 스키마 버전 테이블의 버전이 이전과 같습니다.
 
-덤프가 **더 오래된** Kubeast에서 나왔다면(`goose_db_version`이 더 낮다면) 복원한 뒤 auth-service를 한 번 재시작하세요. 빠진 마이그레이션은 auth-service가 부팅할 때 적용하거나(`MIGRATIONS_MODE=startup`), 다음 upgrade 때 hook Job이 적용합니다.
+덤프가 **더 오래된** Kubeast에서 나왔다면(`goose_db_version`이 더 낮다면) 같은 명령으로 복원하면 되고, 빠진 마이그레이션은 auth-service가 부팅할 때 적용하거나(`MIGRATIONS_MODE=startup`) 다음 upgrade 때 hook Job이 적용합니다.
+
+스키마를 먼저 비우세요. `pg_restore --clean --if-exists`만 쓰면 덤프에 든 것만 지웁니다. 더 새로운 Kubeast의 데이터베이스 위라면, 덤프에 없는 테이블이 덤프에 있는 테이블을 가리킬 때 가리켜지는 테이블이 교체되지 않고, pg_restore는 오류를 알리고 계속합니다. 0.7.7 이하의 덤프를 이 방법으로 0.7.8 이상의 데이터베이스에 복원하면 `ended_sign_ins`가 `auth_users`를 가리키고 있어 `auth_users`가 교체되지 않습니다.
 
 ### 볼륨 스냅샷에서 복원
 
@@ -116,7 +122,7 @@ EOF
 # 3. 새 이미지로 그 claim에 upgrade: 새 서버가 빈 볼륨을 초기화함
 helm upgrade kubeast <chart> -n $NS --reset-then-reuse-values \
   --set images.postgres=<new image> --set postgresql.persistence.existingClaim=kubeast-postgres-data-new
-# 4. 위 "논리 덤프에서 복원"처럼 복원: 쓰는 서비스를 멈추고, pg_restore --clean, 다시 시작
+# 4. 위 "논리 덤프에서 복원"처럼 복원: 쓰는 서비스를 멈추고, 스키마를 비우고, pg_restore, 다시 시작
 ```
 
 확인도 위와 같이 하세요.

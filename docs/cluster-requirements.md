@@ -524,6 +524,7 @@ The narrowing's log checks (`anomaly_rank`):
   - For a store shared by several clusters, each alert needs a **cluster label** so that only that cluster's alerts are selected.
     The default label is `cluster`, set with Prometheus `external_labels` or Grafana alert rule labels (value = `features.alertStore.clusters`).
   - Check: `curl -G <url>/api/v2/alerts --data-urlencode 'filter=cluster="<value>"'`.
+- **One trace store and one alert store for the install**: `features.traceStore.url` and `features.alertStore.url` are one address each, shared by every registered cluster; unlike the log store, a cluster cannot point at a store of its own in Admin → Clusters → Edit. A cluster whose spans or alerts go to another store gets no AI trace or alert reads until they reach this one store with that cluster's value and the cluster is listed in `clusters`.
 - **Silence writing** (`features.alertStore.silences: true`, when used): when someone with `resource.alert.silence` creates a silence on the Alerts screen, Kubeast sends `POST /api/v2/silences`. Ending one sends `DELETE /api/v2/silence/<id>`.
   This works with Alertmanager API v2, the Grafana data source proxy and Grafana alerting's compatible API.
   - So those credentials need permission to write silences. For Grafana, that is a service account of Editor or above. Viewer gets 403, and the screen shows "the alert store refused the write".

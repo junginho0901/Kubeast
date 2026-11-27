@@ -102,7 +102,11 @@ autoscaling:
 돌고 있는 릴리스에서 autoscaling을 켜면 Deployment에서 `spec.replicas`가 빠집니다.
 그러면 HPA가 처음 맞출 때(기본 15초마다)까지 Kubernetes가 대수를 기본값 1로 두어, 파드 하나만 남고 나머지가 멈추기 시작합니다.
 한가한 때 켜거나, Kubernetes HPA 문서의 "Migrating Deployments and StatefulSets to horizontal autoscaling"을 먼저 따르세요.
-끄면 `replicas.<서비스>` 값으로 돌아갑니다.
+끄면 `replicas.<서비스>` 값으로 돌아갑니다. 다만 Deployment가 HPA가 맞춘 대수를 그대로 지니는 경우가 있습니다.
+HPA가 맞춘 대수가 `replicas.<서비스>`와 다르고(기본값인 `minReplicas` 2와 `replicas` 1이면 늘 다릅니다) Helm 4가 server-side로 적용하는 릴리스(Helm 4는 기본으로 server-side로 설치하고, 그 뒤 업그레이드와 롤백도 그 방식을 이어 갑니다)일 때입니다. 이때 `spec.replicas`는 kube-controller-manager가 쥔 채 남습니다.
+autoscaling을 끄는 `helm upgrade`나 `helm rollback`, 또는 그다음 명령이 그 필드의 충돌로 멈춥니다(`conflict with "kube-controller-manager" with subresource "scale" using apps/v1: .spec.replicas`).
+그 명령 한 번만 `--force-conflicts`를 붙여 실행하세요.
+업그레이드라면 `replicas.<서비스>`를 지금 파드 수(`kubectl -n <네임스페이스> get deploy`)로 맞춰도 통과합니다. 다만 그 뒤 `replicas.<서비스>`를 다시 바꾸면 같은 충돌로 멈춥니다.
 
 `kubectl -n <네임스페이스> get hpa`로 확인합니다.
 
