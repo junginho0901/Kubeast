@@ -309,7 +309,7 @@ export default function AdminAudit() {
               <span className="text-slate-500"> ({tr('adminAudit.integrity.unsealed', '미봉인 {{n}}', { n: integrity.unsealed_rows })})</span>
             )}
           </span>
-          <span className="text-slate-600">·</span>
+          <span className="text-slate-600" aria-hidden="true">·</span>
           <span className="text-slate-300" data-testid="audit-integrity-anchor-state" title={tr('adminAudit.integrity.anchorTitle', 'An anchor is a copy of the chain head written outside the database (the sink), so the chain can be checked against it')}>
             {integrity.last_anchor
               ? tr('adminAudit.integrity.lastAnchor', '마지막 앵커 {{when}} (#{{seq}} → {{sink}})', {
