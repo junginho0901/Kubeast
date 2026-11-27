@@ -182,7 +182,7 @@ export function IssuesModal({
                 type="checkbox"
                 checked={includeRestartHistory}
                 onChange={(e) => setIncludeRestartHistory(e.target.checked)}
-                className="h-4 w-4 rounded-sm border-slate-600 bg-slate-700 text-primary-500 focus:ring-primary-500"
+                className="h-4 w-4 rounded-sm border-slate-600 bg-slate-700 accent-primary-500 focus:ring-primary-500"
               />
             </label>
           </div>
