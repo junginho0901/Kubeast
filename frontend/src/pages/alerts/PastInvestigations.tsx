@@ -41,6 +41,8 @@ export function PastInvestigations({ items, onOpen }: { items: PastInvestigation
                 {p.causes_total > p.causes.length && (
                   <span className="block text-slate-400">{tr('alertInbox.past.more', '+{{n}} more', { n: p.causes_total - p.causes.length })}</span>
                 )}
+                {/* a result the server read that names no cause; with no result the outcome's - says it */}
+                {p.outcome && p.causes_total === 0 && <span className="block text-slate-500" data-testid="alert-past-no-causes">{tr('common.none', 'None')}</span>}
               </span>
               <button type="button" onClick={() => onOpen(p.id)} className="btn-row inline-flex shrink-0 items-center gap-1" data-testid="alert-past-report">
                 <FileSearch className="w-3.5 h-3.5" /> {tr('investigations.open', 'Report')}

@@ -53,6 +53,15 @@ describe("the alert window's past investigations", () => {
     expect(html).toContain('confirmed by no person')
   })
 
+  it('says None for a result that names no cause, and adds nothing to one with no result or with causes', async () => {
+    const rows = (await render(ITEMS)).split('<li ').slice(1)
+    expect(rows[0]).not.toContain('alert-past-no-causes')
+    expect(rows[1]).toContain('data-testid="alert-past-no-causes">None<')
+    expect(rows[2]).not.toContain('alert-past-no-causes')
+    expect(rows[2]).toContain('<span class="shrink-0 text-slate-500">-</span>')
+    expect(await render([ITEMS[1]], 'ko')).toContain(`data-testid="alert-past-no-causes">${ko.common.none}<`)
+  })
+
   it('keeps a masked value its placeholder and draws the model\'s text as text', async () => {
     const html = await render(ITEMS)
     expect(html).toContain('Pod/shop/&lt;EMAIL_1&gt;')
