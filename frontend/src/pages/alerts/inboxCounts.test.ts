@@ -7,8 +7,7 @@ import { QueryClient, QueryClientProvider, type QueryKey } from '@tanstack/react
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 
-// The Alerts tabs and the list footer say what an answer counted: - before the first one and after a read that
-// brought none, never a 0 nobody counted; an answer of no alerts counts 0.
+// The Alerts tabs and the list footer say what an answer counted, and - with no answer, never a 0 nobody counted.
 
 const read = vi.hoisted(() => ({ keys: [] as QueryKey[] }))
 vi.mock('@tanstack/react-query', async (importOriginal) => {
