@@ -70,7 +70,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
             <button
               onClick={() => { cordonMut.reset(); uncordonMut.reset(); if (nodeDescribe.unschedulable) uncordonMut.mutate(name); else cordonMut.mutate(name) }}
               disabled={isSchedulingMut || isDrainMut}
-              className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 disabled:opacity-60"
+              className="btn-row disabled:opacity-60"
             >
               {isSchedulingMut ? (nodeDescribe.unschedulable ? tr('nodes.actions.uncordoning', 'Uncordoning...') : tr('nodes.actions.cordoning', 'Cordoning...'))
                 : (nodeDescribe.unschedulable ? tr('nodes.actions.uncordon', 'Uncordon') : tr('nodes.actions.cordon', 'Cordon'))}
@@ -80,7 +80,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
             <button
               onClick={() => { setDrainDialogOpen(true); setDrainError(null) }}
               disabled={isDrainMut || isSchedulingMut}
-              className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 disabled:opacity-60"
+              className="btn-row disabled:opacity-60"
             >
               {isDrainMut ? tr('nodes.actions.draining', 'Draining...') : tr('nodes.actions.drain', 'Drain')}
             </button>
@@ -90,7 +90,7 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
               onClick={() => setShowNodeShell(true)}
               disabled={!isLinuxNode}
               title={isLinuxNode ? undefined : dl('Linux only')}
-              className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-slate-800 text-ink hover:border-slate-500 disabled:opacity-60"
+              className="btn-row disabled:opacity-60"
             >
               {tr('nodes.actions.debug', 'Debug')}
             </button>
@@ -132,12 +132,12 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
       {/* Drain Confirm Dialog */}
       {drainDialogOpen && (
         <ModalOverlay onClose={() => setDrainDialogOpen(false)}>
-          <div className="bg-slate-800 rounded-lg w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-semibold text-ink mb-4">{tr('nodes.drain.title', 'Drain node')}</h2>
-            <p className="text-slate-300">{tr('nodes.drain.confirm', 'Are you sure you want to drain node {{name}}?', { name })}</p>
-            <p className="text-slate-400 mt-3">{tr('nodes.drain.warning', 'Draining will evict pods from this node.')}</p>
+          <div className="bg-slate-800 border border-hairline rounded-xl w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold text-ink mb-3">{tr('nodes.drain.title', 'Drain node')}</h2>
+            <p className="text-sm text-slate-300 break-words">{tr('nodes.drain.confirm', 'Are you sure you want to drain node {{name}}?', { name })}</p>
+            <p className="text-sm text-slate-400 mt-3 break-words">{tr('nodes.drain.warning', 'Draining will evict pods from this node.')}</p>
             {drainError && <div className="mt-4 text-sm text-red-400">{drainError}</div>}
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
               <button className="btn btn-secondary" onClick={() => setDrainDialogOpen(false)}><Tx>Cancel</Tx></button>
               <button
                 className="btn bg-red-600 hover:bg-red-700 text-white disabled:opacity-60"

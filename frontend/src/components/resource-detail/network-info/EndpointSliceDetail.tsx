@@ -16,7 +16,7 @@ interface Props {
 
 // an endpoint condition as Yes/No text (Unknown when the slice leaves it out), not a coloured chip
 function ConditionValue({ label, value }: { label: string; value: unknown }) {
-  return <span data-detail-chip="" className="text-slate-300">{label}: <Tx>{value == null ? 'Unknown' : value === true ? 'Yes' : 'No'}</Tx></span>
+  return <span className="text-slate-300">{label}: <Tx>{value == null ? 'Unknown' : value === true ? 'Yes' : 'No'}</Tx></span>
 }
 
 // an endpoint's zone or node hints: names from a list row, [{ name }] from the object opened by link
@@ -116,7 +116,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                 const forZones = hintNames(ep?.hints?.for_zones, ep?.hints?.forZones)
                 const forNodes = hintNames(ep?.hints?.for_nodes, ep?.hints?.forNodes)
                 return (
-                  <div data-detail-card="" key={(endpointsPage - 1) * 10 + i} className="rounded-sm border border-slate-800 p-3 space-y-2" data-testid="endpointslice-endpoint">
+                  <div key={(endpointsPage - 1) * 10 + i} data-detail-card="" className="border-b border-hairline py-3 space-y-2" data-testid="endpointslice-endpoint">
                     <div className="text-xs text-slate-200 break-all">
                       <span className="text-slate-400"><Tx>Addresses:</Tx></span> {addresses.length > 0 ? addresses.join(', ') : '-'}
                     </div>
@@ -139,7 +139,7 @@ export default function EndpointSliceDetail({ name, namespace, rawJson }: Props)
                         <span className="font-mono">{forNodes.join(', ')}</span>
                       </div>
                     )}
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
                       <ConditionValue label="Ready" value={ep?.conditions?.ready} />
                       <ConditionValue label="Serving" value={ep?.conditions?.serving} />
                       <ConditionValue label="Terminating" value={ep?.conditions?.terminating} />

@@ -36,7 +36,7 @@ export default function NodePodsList({
           value={podFilter}
           onChange={e => setPodFilter(e.target.value)}
           placeholder={dl('Filter...')}
-          className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-xs text-slate-200 placeholder:text-slate-500 w-36"
+          className="h-8 bg-slate-800 border border-control rounded-lg px-2 text-xs text-slate-200 placeholder:text-slate-500 w-36"
         />
       }
     >
@@ -69,11 +69,11 @@ export default function NodePodsList({
           </tbody>
         </table>
       </div>
-      <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800 mt-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 pt-1 border-t border-slate-800 mt-2">
         <span>{filteredPods.length === 0 ? <Tx>None</Tx> : `${(podPage - 1) * pageSize + 1}-${Math.min(podPage * pageSize, filteredPods.length)} / ${filteredPods.length}`}</span>
         <div className="flex gap-2">
-          <button onClick={() => setPodPage(p => Math.max(1, p - 1))} disabled={podPage === 1} className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"><Tx>Prev</Tx></button>
-          <button onClick={() => setPodPage(p => Math.min(totalPages, p + 1))} disabled={podPage >= totalPages} className="px-2 py-1 rounded-sm border border-slate-700 disabled:opacity-40"><Tx>Next</Tx></button>
+          <button onClick={() => setPodPage(p => Math.max(1, p - 1))} disabled={podPage === 1} className="px-2 py-1 rounded-lg border border-control disabled:opacity-40"><Tx>Prev</Tx></button>
+          <button onClick={() => setPodPage(p => Math.min(totalPages, p + 1))} disabled={podPage >= totalPages} className="px-2 py-1 rounded-lg border border-control disabled:opacity-40"><Tx>Next</Tx></button>
         </div>
       </div>
     </InfoSection>

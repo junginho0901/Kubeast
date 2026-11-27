@@ -85,7 +85,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
     return (
       <span className="inline-flex flex-wrap gap-1 ml-1">
         {Object.entries(matchLabels).map(([k, v]) => (
-          <span data-detail-chip="" key={`${k}=${v}`} className="inline-flex rounded-sm border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-slate-200">
+          <span key={`${k}=${v}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-1.5 py-0.5 text-xs font-mono text-slate-200">
             ns:{k}={v}
           </span>
         ))}
@@ -127,7 +127,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
         <InfoSection title="Ingress Rules">
           <div className="space-y-2 text-xs">
             {ingress.map((rule: any, i: number) => (
-              <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 p-2">
+              <div key={i} data-detail-card="" className="border-b border-hairline py-2 break-words">
                 {rule.ports?.length > 0 && <div className="text-slate-400" data-testid="netpol-rule-ports">Ports: {renderPorts(rule.ports)}</div>}
                 <div className="text-slate-200" data-testid="netpol-rule-peers">From: {renderPeers(rule.from, true)}</div>
               </div>
@@ -142,7 +142,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
             {egress.map((rule: any, i: number) => {
               const peers: any[] = rule.to || []
               return (
-                <div data-detail-card="" key={i} className="rounded-sm border border-slate-800 p-2">
+                <div key={i} data-detail-card="" className="border-b border-hairline py-2 break-words">
                   {rule.ports?.length > 0 && <div className="text-slate-400" data-testid="netpol-rule-ports">Ports: {renderPorts(rule.ports)}</div>}
                   <div className="text-slate-200" data-testid="netpol-rule-peers">To: {renderPeers(rule.to, false)}</div>
                   {peers.some((p) => p?.namespaceSelector?.matchLabels) && (
@@ -209,7 +209,7 @@ export default function NetworkPolicyDetail({ name, namespace, rawJson }: Props)
         <InfoSection title="Finalizers">
           <div className="flex flex-wrap gap-1.5">
             {finalizers.map((f, i) => (
-              <span data-detail-chip="" key={`${f}-${i}`} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-200">{f}</span>
+              <span key={`${f}-${i}`} data-detail-chip="" className="inline-flex max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 text-xs text-slate-200">{f}</span>
             ))}
           </div>
         </InfoSection>
