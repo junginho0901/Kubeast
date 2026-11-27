@@ -331,7 +331,7 @@ export default function AlertInbox() {
                     data-testid={`alert-row-${r.id}`}
                   >
                     <td className="py-3 px-4">
-                      <span className={`inline-block whitespace-nowrap rounded-sm border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`} data-testid="alert-status">
+                      <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`} data-testid="alert-status">
                         {statusLabel(r.status)}
                       </span>
                       {live && live !== 'firing' && (
@@ -366,7 +366,7 @@ export default function AlertInbox() {
                     <td className="col-optional py-3 px-4 text-right text-xs">{r.received_count}</td>
                     <td className="col-optional py-3 px-4 text-xs">
                       {r.investigation ? (
-                        <span className={`inline-block whitespace-nowrap rounded-sm border px-1.5 py-0.5 ${investigationClass[r.investigation.status] ?? ''}`} title={skip?.text}>
+                        <span className={`inline-block whitespace-nowrap rounded-full border px-1.5 py-0.5 ${investigationClass[r.investigation.status] ?? ''}`} title={skip?.text}>
                           {tr(`investigations.status.${r.investigation.status}`, r.investigation.status)}
                         </span>
                       ) : '-'}
@@ -404,9 +404,9 @@ function Marks({ item, tr }: { item: Pick<AlertInboxItem, 'acknowledged' | 'assi
   if (!item.acknowledged && !item.assignee && !item.done) return <>-</>
   return (
     <span className="flex flex-wrap gap-1">
-      {item.done && <span className="rounded-sm border border-emerald-800/60 bg-emerald-900/30 px-1.5 py-0.5 text-emerald-300">{tr('alertInbox.mark.done', 'Done')}</span>}
-      {item.acknowledged && !item.done && <span className="rounded-sm border border-slate-600 px-1.5 py-0.5 text-slate-300">{tr('alertInbox.mark.acknowledged', 'Acknowledged')}</span>}
-      {item.assignee && <span className="max-w-full truncate rounded-sm border border-slate-600 px-1.5 py-0.5 text-slate-300" title={item.assignee}>{item.assignee}</span>}
+      {item.done && <span className="rounded-full border border-emerald-800/60 bg-emerald-900/30 px-1.5 py-0.5 text-emerald-300">{tr('alertInbox.mark.done', 'Done')}</span>}
+      {item.acknowledged && !item.done && <span className="rounded-full border border-slate-600 px-1.5 py-0.5 text-slate-300">{tr('alertInbox.mark.acknowledged', 'Acknowledged')}</span>}
+      {item.assignee && <span className="max-w-full truncate rounded-full border border-slate-600 px-1.5 py-0.5 text-slate-300" title={item.assignee}>{item.assignee}</span>}
     </span>
   )
 }
@@ -511,7 +511,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
         {data && (
           <div className="space-y-5">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-400" data-testid="alert-detail-meta">
-              <span>{tr('alertInbox.col.status', 'Status')}: <span className={`rounded-sm border px-1.5 py-0.5 ${statusClass[data.status] ?? ''}`}>{tr(`alertInbox.status.${data.status}`, data.status)}</span></span>
+              <span>{tr('alertInbox.col.status', 'Status')}: <span className={`rounded-full border px-1.5 py-0.5 ${statusClass[data.status] ?? ''}`}>{tr(`alertInbox.status.${data.status}`, data.status)}</span></span>
               {liveLine && (
                 <span>
                   {tr('alertInbox.liveLabel', 'Alertmanager now')}:{' '}
@@ -603,7 +603,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
               {(data.investigation || now.show) && <div className="flex h-8 flex-nowrap items-center gap-3 text-sm">
                 {data.investigation && (
                   <>
-                    <span className={`inline-block min-w-[4.5rem] shrink-0 rounded-sm border px-1.5 py-0.5 text-center text-xs ${investigationClass[data.investigation.status] ?? ''}`} data-testid="alert-investigation-status">
+                    <span className={`inline-block min-w-[4.5rem] shrink-0 rounded-full border px-1.5 py-0.5 text-center text-xs ${investigationClass[data.investigation.status] ?? ''}`} data-testid="alert-investigation-status">
                       {tr(`investigations.status.${data.investigation.status}`, data.investigation.status)}
                     </span>
                     <button
