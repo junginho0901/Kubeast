@@ -122,6 +122,9 @@ auth:
 
 - App registration → Web redirect URI = the callback above, issue a client secret. `issuerUrl: https://login.microsoftonline.com/<tenant-id>/v2.0`.
 - The group claim (Token configuration → groups claim) defaults to **group object IDs**, so write the IDs in `clusterGroupMapping` and `roleMapping`.
+- A token holds up to 200 groups. For a person in more, Entra ID leaves the groups out and sends `_claim_names` and `_claim_sources` in their place (groups overage). Kubeast then refuses the sign-in with `oidc_groups_overage` (§6), whatever `syncRoles` says: without the groups, a first sign-in would get `defaultRole` and a stored account would keep the role and cluster grants its groups gave it before. Kubeast does not read the groups from Microsoft Graph. Where people are in many groups, use one of these:
+  - Send only the groups assigned to the application: in the groups claim, choose **Groups assigned to the application** (`groupMembershipClaims: ApplicationGroup` in the manifest), and assign the groups you map to the enterprise application. Nested groups are not counted.
+  - Use app roles instead of groups: define app roles on the app registration, assign them to users or groups, and set `auth.oidc.claims.groups: roles`. `roleMapping` and `clusterGroupMapping` then take the app roles' values.
 
 ### Okta
 
@@ -149,5 +152,6 @@ For the cluster-side bindings, see [cluster-requirements §1](cluster-requiremen
 | `oidc_email_unverified` | `email_verified=false` | Email verification at the provider |
 | `oidc_domain` | Outside `allowedDomains` | The value |
 | `oidc_email_invalid` | A first sign-in whose name cannot be a Kubernetes user: it holds a colon (`system:`, `eks:`, `kubeast:` and the like are kept for the cluster's own users), a space or a control character. An account that already exists is not refused | `claims.email` |
+| `oidc_groups_overage` | The ID token names the group claim (`claims.groups`) in `_claim_names` instead of carrying it, as Entra ID does for a person in more than 200 groups, so the person's groups are unknown. No account is made or changed, and a session the person already holds stays until it ends. The server log line and the failure row (`after.claim`) name the claim | Entra ID: groups assigned to the application, or app roles with `claims.groups: roles` (§4) |
 | `oidc_role_missing` | No role holds the exact name `roleMapping` (for the person's group) or `defaultRole` gives: the setting misspells it, or an upgrade renamed the role (0.7.8, [Features](features.md) "Role names"). The server log line and the failure row (`after.role`, `after.setting`) name both | The value, against Admin → Roles. auth-service warns at start of each such name with its setting |
 | `oidc_provision` | Creating the account or applying the role failed | DB |

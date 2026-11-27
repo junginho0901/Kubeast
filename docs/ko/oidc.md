@@ -123,6 +123,9 @@ auth:
 
 - 앱 등록 → Web redirect URI = 위 callback, client secret 발급. `issuerUrl: https://login.microsoftonline.com/<tenant-id>/v2.0`.
 - 그룹 클레임(Token configuration → groups claim)은 기본으로 **그룹 객체 ID**를 담으므로 `clusterGroupMapping`·`roleMapping`에 ID를 적으세요.
+- 토큰에는 그룹이 200개까지 들어갑니다. 그보다 많은 그룹에 든 사람이면 Entra ID는 그룹을 빼고 그 자리에 `_claim_names`와 `_claim_sources`를 보냅니다(groups overage). 이때 Kubeast는 `syncRoles` 값과 상관없이 로그인을 `oidc_groups_overage`로 거부합니다(§6). 그룹 없이 진행하면 첫 로그인은 `defaultRole`을 받고, 이미 있는 계정은 전에 그룹이 준 역할과 클러스터 권한을 그대로 갖기 때문입니다. Kubeast는 Microsoft Graph에서 그룹을 읽지 않습니다. 그룹이 많은 조직은 다음 중 하나를 쓰세요.
+  - 애플리케이션에 할당된 그룹만 보내기: groups claim에서 **Groups assigned to the application**(매니페스트의 `groupMembershipClaims: ApplicationGroup`)을 고르고, 매핑할 그룹을 엔터프라이즈 애플리케이션에 할당합니다. 중첩 그룹은 세지 않습니다.
+  - 그룹 대신 앱 역할 쓰기: 앱 등록에 앱 역할을 만들어 사용자나 그룹에 할당하고 `auth.oidc.claims.groups: roles`로 둡니다. 그러면 `roleMapping`·`clusterGroupMapping`에는 앱 역할의 값을 적습니다.
 
 ### Okta
 
@@ -150,5 +153,6 @@ auth:
 | `oidc_email_unverified` | `email_verified=false` | 공급자의 메일 확인 |
 | `oidc_domain` | `allowedDomains` 밖 | 값 |
 | `oidc_email_invalid` | 첫 로그인의 이름이 쿠버네티스 사용자 이름이 될 수 없음: 콜론(`system:`, `eks:`, `kubeast:` 등은 클러스터 자체 사용자의 몫입니다)·공백·제어 문자가 있습니다. 이미 있는 계정은 거절하지 않습니다 | `claims.email` |
+| `oidc_groups_overage` | ID 토큰이 그룹 클레임(`claims.groups`)을 담지 않고 `_claim_names`에 이름만 적음. Entra ID는 200개보다 많은 그룹에 든 사람에게 이렇게 보내므로 그 사람의 그룹을 알 수 없습니다. 계정을 만들거나 바꾸지 않고, 그 사람이 이미 가진 세션은 끝날 때까지 그대로입니다. 서버 로그와 실패 행(`after.claim`)에 그 클레임 이름이 남습니다 | Entra ID: 애플리케이션에 할당된 그룹, 또는 `claims.groups: roles`로 앱 역할(§4) |
 | `oidc_role_missing` | `roleMapping`(그 사람의 그룹)이나 `defaultRole`이 주는 이름 그대로인 역할이 없음: 설정의 오타이거나 업그레이드로 역할 이름이 바뀜(0.7.8, [기능](features.md)의 "역할 이름"). 서버 로그와 실패 행(`after.role`, `after.setting`)에 둘 다 남습니다 | 그 값을 Admin → Roles와 비교. auth-service는 시작할 때 그런 이름마다 설정과 함께 경고를 남깁니다 |
 | `oidc_provision` | 계정 생성 또는 역할 반영 실패 | DB |

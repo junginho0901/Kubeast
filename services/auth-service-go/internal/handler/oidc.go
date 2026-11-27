@@ -157,6 +157,9 @@ type oidcClaims struct {
 	Name          string
 	Groups        []string
 	HasGroups     bool // the groups claim was present (empty list still counts)
+	// GroupsElsewhere: _claim_names names the groups claim (a distributed claim, OpenID Connect Core 5.6.2), as Entra
+	// ID sends in place of the groups of a person in more than 200, so the token does not say which groups they are.
+	GroupsElsewhere bool
 }
 
 func extractClaims(raw map[string]any, cfg config.OIDCConfig) oidcClaims {
@@ -185,7 +188,17 @@ func extractClaims(raw map[string]any, cfg config.OIDCConfig) oidcClaims {
 			}
 		}
 	}
+	if names, ok := raw["_claim_names"].(map[string]any); ok && cfg.GroupsClaim != "" {
+		_, c.GroupsElsewhere = names[cfg.GroupsClaim]
+	}
 	return c
+}
+
+// groupsOverage is the error of a sign-in whose ID token says the groups claim is elsewhere (GroupsElsewhere): the
+// role and the cluster grants would be worked out without the person's groups, so the sign-in is refused.
+func groupsOverage(claim string) error {
+	return fmt.Errorf("the ID token names claim %q in _claim_names instead of carrying it (Entra ID does so for a person in more than 200 groups), so the person's groups are unknown: "+
+		"have the provider send only the groups assigned to the application, or app roles with auth.oidc.claims.groups set to roles", claim)
 }
 
 // nameTakenByPasswordAccount says whether a provider's name that is no address matches an account made with a password
@@ -467,6 +480,12 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if taken {
 		h.oidcFail(w, r, "oidc_account_conflict", claims.Email, errors.New("a name that is no address matches a password account"))
+		return
+	}
+	// Without the groups a first sign-in would get defaultRole and a stored account would keep the role and grants its
+	// earlier groups gave it, so the sign-in ends here: no account is made or changed and no session is set.
+	if claims.GroupsElsewhere {
+		h.oidcFailWith(w, r, "oidc_groups_overage", claims.Email, groupsOverage(h.cfg.OIDC.GroupsClaim), map[string]any{"claim": h.cfg.OIDC.GroupsClaim})
 		return
 	}
 	groupsLookup := h.addGoogleGroups(r.Context(), &claims)

@@ -21,6 +21,7 @@ const SSO_ERROR_KEYS: Record<string, [string, string]> = {
   oidc_domain: ['login.errors.ssoDomain', 'This email domain is not allowed to sign in.'],
   oidc_email_unverified: ['login.errors.ssoEmailUnverified', 'The identity provider has not verified this email address.'],
   oidc_email_invalid: ['login.errors.ssoEmailInvalid', 'This name cannot be used for an account: it may not contain a colon, a space or a control character.'],
+  oidc_groups_overage: ['login.errors.ssoGroupsOverage', 'The identity provider did not put your groups in the sign-in token, as it does for a member of very many groups. Ask an administrator: the server log says what to change.'],
   oidc_no_email: ['login.errors.ssoNoEmail', 'The identity provider did not return an email address.'],
   oidc_role_missing: ['login.errors.ssoRoleMissing', 'The role this sign-in gives (auth.oidc.roleMapping or auth.oidc.defaultRole) does not exist. Ask an administrator: the server log names the role.'],
   token_too_large: ['login.errors.tokenTooLarge', 'Your roles differ across too many clusters to fit in a sign-in token. Ask an administrator to align them.'],
