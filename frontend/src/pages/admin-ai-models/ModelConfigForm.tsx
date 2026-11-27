@@ -62,7 +62,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
     unavailable[o.value] ? { ...o, muted: true, hint: tr('admin.aiModels.providerNotSetUp', 'Not set up') } : o)
 
   return (
-    <div className={inModal ? 'space-y-4' : 'rounded-xl border border-primary-500/30 bg-slate-900/80 p-5 space-y-4 mt-2 shadow-lg shadow-primary-500/5'}>
+    <div className={inModal ? 'space-y-4' : 'rounded-xl border border-hairline bg-slate-800 p-5 space-y-4 mt-2'}>
       {!inModal && <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
           {editingId ? (
@@ -77,7 +77,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
             </>
           )}
         </h2>
-        <button onClick={resetForm} className="text-slate-500 hover:text-slate-300 transition" aria-label={tr('common.close', 'Close')}>
+        <button onClick={resetForm} className="text-slate-500 hover:text-slate-300 transition hit-area-40" aria-label={tr('common.close', 'Close')}>
           <X className="h-4 w-4" />
         </button>
       </div>}
@@ -92,7 +92,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
             maxLength={NAME_MAX}
             onChange={(e) => setFormName(e.target.value)}
             placeholder={tr('admin.aiModels.namePlaceholder', 'e.g. my-gpt4')}
-            className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+            className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
           />
         </div>
 
@@ -119,7 +119,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
                     setFormModel(listDefault(formProvider, currentModelOptions.map((o) => o.value)))
                   }
                 }}
-                className="text-[10px] text-slate-500 hover:text-primary-400 transition"
+                className="text-xs text-slate-400 hover:text-primary-400 transition"
               >
                 {formCustomModel ? tr('admin.aiModels.selectFromList', '← Select from list') : tr('admin.aiModels.customModel', 'Custom model name →')}
               </button>
@@ -134,7 +134,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
                 placeholder={tr('admin.aiModels.selectModel', 'Select model')}
                 testId="model-select"
               />
-              <p className="mt-1 text-[10px] text-slate-500" data-testid="model-list-source" title={modelList.error}>
+              <p className="mt-1 text-xs text-slate-500" data-testid="model-list-source" title={modelList.error}>
                 {modelList.noList
                   ? tr('admin.aiModels.modelsNoList', 'Built-in list — Claude Code has no model list')
                   : modelList.loading
@@ -153,7 +153,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               onChange={(e) => setFormModel(e.target.value)}
               placeholder={currentProviderDef.modelPlaceholder ?? tr('admin.aiModels.modelPlaceholder', 'e.g. gpt-6-luna')}
               data-testid="model-input"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
           )}
           {/* typed by hand, or a list with no candidates: why the provider's list is not here still shows */}
@@ -163,7 +163,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
             </p>
           )}
           {currentProviderDef.modelHintKey && (
-            <p className="mt-1 text-[10px] text-slate-500" data-testid="model-hint">{t(currentProviderDef.modelHintKey)}</p>
+            <p className="mt-1 text-xs text-slate-500" data-testid="model-hint">{t(currentProviderDef.modelHintKey)}</p>
           )}
         </div>
 
@@ -179,11 +179,11 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               onChange={(e) => setFormBaseUrl(e.target.value)}
               placeholder={currentProviderDef.baseUrlPlaceholder || 'https://api.example.com/v1'}
               data-testid="model-base-url"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
             <UrlFieldProblem problem={baseUrlProblem} testId="model-base-url-problem" />
             {currentProviderDef.baseUrlHintKey && (
-              <p className="mt-1 text-[10px] text-slate-500" data-testid="base-url-hint">{t(currentProviderDef.baseUrlHintKey)}</p>
+              <p className="mt-1 text-xs text-slate-500" data-testid="base-url-hint">{t(currentProviderDef.baseUrlHintKey)}</p>
             )}
           </div>
         )}
@@ -198,9 +198,9 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               onChange={(e) => setFormApiKeyEnv(e.target.value)}
               placeholder={currentProviderDef.defaultApiKeyEnv || 'OPENAI_API_KEY'}
               spellCheck={false}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+              className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 font-mono text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
             />
-            <p className="mt-1 text-[10px] text-slate-500">
+            <p className="mt-1 text-xs text-slate-500">
               {tr('admin.aiModels.apiKeyEnvHint', 'Name of the environment variable in ai-service that holds the key (Helm values ai.*ApiKey or ai.apiKeysSecret). Keys are never stored in the database.')}
             </p>
           </div>
@@ -235,9 +235,9 @@ export default function ModelConfigForm({ form, inModal }: Props) {
             disabled={formProvider === 'claude-code'}
             placeholder="4096"
             data-testid="max-tokens-input"
-            className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
+            className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
           />
-          <p className="mt-1 text-[10px] text-slate-500">
+          <p className="mt-1 text-xs text-slate-500">
             {formProvider === 'claude-code'
               ? tr('admin.aiModels.maxTokensSubscription', 'Claude Code sets the answer length for the subscription; this is not used.')
               : tr('admin.aiModels.maxTokensHint', 'Empty: 4,096 for chat answers, 2,048 for each alert investigation step. A reasoning model counts its reasoning in it.')}
@@ -252,14 +252,14 @@ export default function ModelConfigForm({ form, inModal }: Props) {
             onChange={(e) => setFormToolResultChars(e.target.value)}
             placeholder="6000"
             data-testid="tool-result-chars-input"
-            className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+            className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
           />
-          <p className="mt-1 text-[10px] text-slate-500">
+          <p className="mt-1 text-xs text-slate-500">
             {tr('admin.aiModels.toolResultCharsHint', 'Empty: 6,000. A longer tool result is cut to this before the model reads it (1,000 to 200,000).')}
           </p>
         </div>
         {formLimitsError && (
-          <p className="text-[10px] text-red-400 flex items-center gap-1 sm:col-span-2" data-testid="limits-error">
+          <p className="text-xs text-red-400 flex items-center gap-1 sm:col-span-2" data-testid="limits-error">
             <AlertCircle className="h-3 w-3" /> {tr(`admin.aiModels.limitsError.${formLimitsError}`, formLimitsError)}
           </p>
         )}
@@ -269,7 +269,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
       {(currentProviderDef.needsApiKey === false ||
         currentProviderDef.id === 'custom' ||
         currentProviderDef.needsBaseUrl) && (
-        <details className="rounded-lg border border-slate-700/60 bg-slate-950/40 px-3 py-2" open={!!(formOptions || formCaCert)}>
+        <details className="border-t border-hairline pt-3" open={!!(formOptions || formCaCert)}>
           <summary className="cursor-pointer text-xs font-semibold text-slate-400 select-none">
             {tr('admin.aiModels.advanced', 'Advanced (local / self-hosted)')}
           </summary>
@@ -285,14 +285,14 @@ export default function ModelConfigForm({ form, inModal }: Props) {
                 rows={4}
                 spellCheck={false}
                 placeholder={'{\n  "temperature": 0.7,\n  "top_p": 0.9,\n  "num_ctx": 8192\n}'}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+                className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
               />
-              <p className="mt-1 text-[10px] text-slate-500">
+              <p className="mt-1 text-xs text-slate-500">
                 {tr('admin.aiModels.optionsHint',
                   'Standard params (temperature, top_p, seed, max_tokens) are sent to all providers. Provider-specific keys (e.g. num_ctx) are best-effort and may be ignored over OpenAI-compatible endpoints.')}
               </p>
               {formOptionsError && (
-                <p className="mt-1 text-[10px] text-red-400 flex items-center gap-1">
+                <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
                   <AlertCircle className="h-3 w-3" /> {formOptionsError}
                 </p>
               )}
@@ -308,9 +308,9 @@ export default function ModelConfigForm({ form, inModal }: Props) {
                 rows={3}
                 spellCheck={false}
                 placeholder={'-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+                className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 font-mono text-xs text-slate-200 placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
               />
-              <p className="mt-1 text-[10px] text-slate-500">
+              <p className="mt-1 text-xs text-slate-500">
                 {tr('admin.aiModels.caCertHint',
                   'Trust a self-signed CA for HTTPS self-hosted endpoints. Leave empty to use system CAs.')}
               </p>
@@ -330,7 +330,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
         testId="tier-select"
       />
 
-      <div className="flex items-center gap-6 text-xs">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
         <label className="flex items-center gap-1.5 text-slate-300 cursor-pointer">
           <input
             type="checkbox"
@@ -353,14 +353,14 @@ export default function ModelConfigForm({ form, inModal }: Props) {
       </div>
 
       {/* actions row */}
-      <div className="flex items-center gap-3 pt-2">
+      <div className="flex flex-wrap items-center gap-3 pt-2">
         <button
           onClick={handleTest}
           disabled={testing || !formModel || !!unavailableReason || !!baseUrlProblem}
           title={unavailableReason ?? undefined}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-600 disabled:opacity-50"
+          className="btn-row inline-flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50"
         >
-          {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-yellow-400" />}
+          {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-slate-400" />}
           {tr('admin.aiModels.test', 'Test')}
         </button>
 

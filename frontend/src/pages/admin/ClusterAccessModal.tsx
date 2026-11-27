@@ -108,15 +108,15 @@ export default function ClusterAccessModal({
 
   return (
     <ModalOverlay onClose={() => pending || onClose()}>
-      <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-800 p-6 shadow-2xl">
+      <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl border border-hairline bg-slate-800 p-5 shadow-xl">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-primary-400" />
+            <ShieldCheck className="w-5 h-5 text-slate-400 shrink-0" />
             <div>
-              <h3 className="text-lg font-bold text-ink">
+              <h3 className="text-lg font-semibold text-ink">
                 {tr('cluster.access.title', 'Cluster access')}
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 break-all">
                 {cluster.display_name}
                 {cluster.is_self_cluster && (
                   <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-sm bg-slate-700 text-slate-300">self</span>
@@ -124,7 +124,7 @@ export default function ClusterAccessModal({
               </p>
             </div>
           </div>
-          <button type="button" onClick={() => pending || onClose()} className="text-slate-400 hover:text-ink" aria-label={tr('common.close', 'Close')}>
+          <button type="button" onClick={() => pending || onClose()} className="text-slate-400 hover:text-ink hit-area-40" aria-label={tr('common.close', 'Close')}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -146,7 +146,7 @@ export default function ClusterAccessModal({
               placeholder={tr('cluster.access.search', 'Search by name or email…')}
               aria-label={tr('cluster.access.search', 'Search by name or email…')}
               data-testid="cluster-access-search"
-              className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:border-primary-500"
+              className="h-10 w-full pl-9 pr-3 bg-slate-900/40 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
             />
           </div>
         )}
@@ -170,10 +170,10 @@ export default function ClusterAccessModal({
               {(page, nav) => (
               <>
               {page.map((g) => (
-              <div key={g.user_id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2">
-                <div className="min-w-0">
-                  <div className="text-sm text-ink truncate">{g.name || g.email}</div>
-                  <div className="text-xs text-slate-400 truncate">
+              <div key={g.user_id} className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline py-3">
+                <div className="min-w-40 flex-1">
+                  <div className="text-sm text-ink break-all">{g.name || g.email}</div>
+                  <div className="text-xs text-slate-400 break-all">
                     {g.email}
                     {g.expires_at && (
                       <span className="ml-2 text-amber-300" data-testid={`cluster-access-until-${g.user_id}`}>
@@ -182,7 +182,7 @@ export default function ClusterAccessModal({
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                   <NamespaceScopeInput
                     testId={`cluster-access-namespaces-${g.user_id}`}
                     value={g.namespaces}
@@ -241,13 +241,13 @@ export default function ClusterAccessModal({
         )}
 
         {/* Add a user */}
-        <div className="mt-4 flex items-center gap-2 border-t border-slate-700/60 pt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-hairline pt-4">
           <CustomDropdown
             testId="cluster-access-add-user"
             value={addUserId}
             onChange={setAddUserId}
             disabled={pending || addable.length === 0}
-            className="flex-1 min-w-0"
+            className="flex-1 min-w-40"
             placeholder={
               addable.length === 0 && !usersRefusal
                 ? tr('cluster.access.allAdded', 'All users already granted')
@@ -285,7 +285,7 @@ export default function ClusterAccessModal({
             data-testid="cluster-access-add-btn"
             onClick={onAdd}
             disabled={pending || !addUserId}
-            className="flex items-center gap-1 rounded-lg bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+            className="flex items-center gap-1 rounded-lg bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
           >
             {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
             {tr('cluster.access.add', 'Add')}

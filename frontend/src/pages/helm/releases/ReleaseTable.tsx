@@ -163,18 +163,18 @@ export default function ReleaseTable({
 function EmptyState() {
   const { t } = useTranslation()
   return (
-    <div className="w-full flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-700 bg-slate-800/20 py-16 text-center">
+    <div className="w-full flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-hairline bg-slate-800/20 px-5 py-16 text-center">
       <Package className="w-10 h-10 text-slate-500" />
       <div className="text-lg font-semibold text-ink">{t('helmReleases.empty.title')}</div>
       <div className="max-w-md text-sm text-slate-400">
         {t('helmReleases.empty.description')}
       </div>
-      <div className="flex gap-2 mt-2">
+      <div className="flex flex-wrap justify-center gap-2 mt-2">
         <a
           href={HELM_DOCS_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+          className="btn btn-secondary h-9 inline-flex items-center gap-1.5 text-sm"
         >
           {t('helmReleases.empty.docs')}
           <ExternalLink className="w-3 h-3" />
@@ -183,7 +183,7 @@ function EmptyState() {
           href={HELM_INSTALL_GUIDE_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+          className="btn btn-secondary h-9 inline-flex items-center gap-1.5 text-sm"
         >
           {t('helmReleases.empty.installGuide')}
           <ExternalLink className="w-3 h-3" />

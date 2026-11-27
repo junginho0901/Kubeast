@@ -69,15 +69,15 @@ function CustomDropdown<T extends string | number>({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`w-full ${minWidth} h-10 px-2 bg-slate-900 hover:bg-slate-800 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
+        className={`w-full ${minWidth} h-10 px-2 bg-slate-900 hover:bg-slate-800 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between text-sm`}
       >
         <span className="font-medium truncate">{selected?.label ?? '-'}</span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-slate-400 transition-transform shrink-0 ${open ? 'rotate-180' : ''}`}
+          className={`w-3.5 h-3.5 text-slate-400 transition-transform motion-reduce:transition-none shrink-0 ${open ? 'rotate-180' : ''}`}
         />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-600 rounded-sm shadow-xl z-50 max-h-[300px] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-control rounded-lg shadow-xl z-50 max-h-[300px] overflow-y-auto">
           {options.map((opt) => (
             <button
               key={String(opt.value)}
@@ -276,7 +276,7 @@ export default function AdminAudit() {
             {tr('adminAudit.subtitle', '모든 쓰기 작업과 민감 열람 내역')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={exportCsv}
             disabled={!!downloading}
@@ -423,7 +423,7 @@ export default function AdminAudit() {
             <input
               type="text"
               placeholder="k8s.pod.delete"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-ink"
+              className="mt-1 h-10 rounded-lg bg-slate-900 border border-control px-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
               value={draft.action ?? ''}
               onChange={(e) => setDraft({ ...draft, action: e.target.value || undefined })}
             />
@@ -434,7 +434,7 @@ export default function AdminAudit() {
             <input
               type="text"
               placeholder="user@example.com"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-ink"
+              className="mt-1 h-10 rounded-lg bg-slate-900 border border-control px-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
               value={draft.actor_email ?? ''}
               onChange={(e) => setDraft({ ...draft, actor_email: e.target.value || undefined })}
             />
@@ -462,7 +462,7 @@ export default function AdminAudit() {
             {tr('adminAudit.filter.namespace', 'Namespace')}
             <input
               type="text"
-              className="mt-1 h-10 rounded-sm bg-slate-900 border border-slate-600 px-2 text-sm text-ink"
+              className="mt-1 h-10 rounded-lg bg-slate-900 border border-control px-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
               value={draft.namespace ?? ''}
               onChange={(e) => setDraft({ ...draft, namespace: e.target.value || undefined })}
             />
@@ -479,17 +479,17 @@ export default function AdminAudit() {
           </label>
         </div>
 
-        <div className="flex gap-2 mt-3">
+        <div className="flex flex-wrap gap-2 mt-3">
           <button
             onClick={applyFilter}
             disabled={!rangeOk}
-            className="inline-flex items-center gap-1 rounded-sm bg-primary-600 hover:bg-primary-500 px-3 py-1.5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1 rounded-lg bg-primary-600 hover:bg-primary-700 px-3 py-1.5 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Search className="w-4 h-4" /> {tr('adminAudit.apply', '조회')}
           </button>
           <button
             onClick={resetFilter}
-            className="rounded-sm bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-ink"
+            className="rounded-lg bg-slate-700 hover:bg-slate-600 px-3 py-1.5 text-sm text-ink"
           >
             {tr('adminAudit.reset', '초기화')}
           </button>
@@ -632,9 +632,9 @@ function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTime, onP
                   <dt className="text-slate-500">IP</dt>
                   <dd>{entry.RequestIP || '-'}</dd>
                   <dt className="text-slate-500">User-Agent</dt>
-                  <dd className="truncate">{entry.UserAgent || '-'}</dd>
+                  <dd className="min-w-0 break-all">{entry.UserAgent || '-'}</dd>
                   <dt className="text-slate-500">Request-ID</dt>
-                  <dd className="font-mono">{entry.RequestID || '-'}</dd>
+                  <dd className="min-w-0 break-all font-mono">{entry.RequestID || '-'}</dd>
                   <dt className="text-slate-500">Path</dt>
                   <dd className="font-mono break-all">{entry.Path || '-'}</dd>
                   <dt className="text-slate-500">{tr('adminAudit.filter.cluster', 'Cluster')}</dt>
@@ -647,7 +647,7 @@ function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTime, onP
                 {entry.Error && (
                   <div className="mb-2">
                     <div className="text-red-400 mb-1">{tr('adminAudit.detail.error', 'Error')}</div>
-                    <div className="rounded-sm bg-red-950/50 border border-red-800 p-2 text-red-200 font-mono">
+                    <div className="rounded-lg bg-red-950/50 border border-red-800 p-2 break-all text-red-200 font-mono">
                       {entry.Error}
                     </div>
                   </div>
@@ -655,7 +655,7 @@ function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTime, onP
                 {entry.Before !== undefined && entry.Before !== null && (
                   <div className="mb-2">
                     <div className="text-slate-400 mb-1">{tr('adminAudit.detail.before', 'Before')}</div>
-                    <pre className="rounded-sm bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
+                    <pre className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
                       {JSON.stringify(entry.Before, null, 2)}
                     </pre>
                   </div>
@@ -663,7 +663,7 @@ function AuditRow({ entry, rowRef, expanded, onToggle, resultBadge, fmtTime, onP
                 {entry.After !== undefined && entry.After !== null && (
                   <div>
                     <div className="text-slate-400 mb-1">{tr('adminAudit.detail.after', 'After')}</div>
-                    <pre className="rounded-sm bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
+                    <pre className="rounded-lg bg-slate-950 border border-slate-700 p-2 text-slate-200 overflow-auto max-h-48">
                       {JSON.stringify(entry.After, null, 2)}
                     </pre>
                   </div>

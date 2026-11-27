@@ -22,7 +22,7 @@ export function CreatedNotice({ fallback = false, pathname: path }: { fallback?:
   const names = (list: CreatedObject[]) => list.slice(0, SHOWN).map(createdText).join(', ')
     + (list.length > SHOWN ? ` ${t('yamlCreate.createdMore', { defaultValue: 'and {{count}} more', count: list.length - SHOWN })}` : '')
   return (
-    <div role="status" data-testid="yaml-created" className={`shrink-0 flex items-start gap-3 text-sm text-emerald-300${fallback ? ' mb-4' : ''}`}>
+    <div role="status" data-testid="yaml-created" className={`shrink-0 flex items-start gap-3 text-sm text-notice-text-succeeded${fallback ? ' mb-4' : ''}`}>
       <div className="min-w-0">
         {here.objects.length > 0 && (
           <p className="break-words" title={here.objects.map(createdText).join('\n')}>
@@ -35,7 +35,7 @@ export function CreatedNotice({ fallback = false, pathname: path }: { fallback?:
           </p>
         )}
       </div>
-      <button type="button" className="btn-row shrink-0" onClick={clearCreated} data-testid="yaml-created-close">
+      <button type="button" className="btn-row shrink-0 hit-area-40" onClick={clearCreated} data-testid="yaml-created-close">
         {t('common.close', { defaultValue: 'Close' })}
       </button>
     </div>

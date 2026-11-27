@@ -811,7 +811,7 @@ async function readScreen(page: Page): Promise<ScreenRead> {
     const rows = [...document.querySelectorAll('main tbody tr')].map((tr) => [...tr.querySelectorAll('td')].map((td) => (td as HTMLElement).innerText.trim()))
     const cards: Record<string, number> = {}
     // Summary grid cells have a small label followed by a large number.
-    for (const box of document.querySelectorAll('main div.rounded-lg.border, main .grid.shrink-0 > div:has(> .text-xs:first-child):has(> .text-lg:last-child)')) {
+    for (const box of document.querySelectorAll('main .grid.shrink-0 > div:has(> .text-xs:first-child):has(> .text-lg:last-child)')) {
       const lines = [...box.children] as HTMLElement[]
       if (lines.length === 2 && /^\d+$/.test(lines[1].innerText.trim())) cards[lines[0].innerText.trim()] = Number(lines[1].innerText.trim())
     }

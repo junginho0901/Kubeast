@@ -310,7 +310,7 @@ export function ChatPanel({
         <button
           type="button"
           onClick={onClose}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-ink"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-ink hit-area-40"
           aria-label={t('floatingChat.closeAriaLabel', { defaultValue: 'Close' })}
         >
           <X className="h-4 w-4" />

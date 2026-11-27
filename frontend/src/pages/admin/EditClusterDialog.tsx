@@ -27,7 +27,7 @@ interface Props {
 
 type AuthType = 'keep' | 'none' | 'bearer' | 'basic'
 
-const inputClass = 'mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-hidden'
+const inputClass = 'mt-1 w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-ink focus:border-primary-500 focus:outline-hidden focus:ring-2 focus:ring-primary-500'
 const labelClass = 'block text-xs font-semibold text-slate-400'
 
 // namespace/service:port[/path] — the server checks the same (services/pkg/cluster ParsePrometheusService).
@@ -220,7 +220,7 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
               onChange={(e) => setKubeconfig(e.target.value)}
               placeholder={tr('cluster.edit.kubeconfigHint', 'Leave blank to keep the current kubeconfig. Paste a new one to rotate credentials.')}
               rows={7}
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 font-mono text-xs text-ink focus:border-primary-500 focus:outline-hidden"
+              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 font-mono text-xs text-ink focus:border-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
             />
             <p className="mt-1 text-[11px] text-slate-500">
               {tr('cluster.edit.sameClusterNote', 'A new kubeconfig must point to the same cluster — RBAC grants and chat history are preserved.')}
@@ -295,13 +295,13 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
               </div>
             </div>
           )}
-          <div className="mt-3 flex items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
               data-testid="edit-prometheus-check"
               onClick={check}
               disabled={checking}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm bg-slate-700 px-3 text-xs text-ink hover:bg-slate-600 disabled:opacity-50"
+              className="btn-row inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-xs disabled:opacity-50"
             >
               {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
               {checking ? tr('cluster.edit.prometheus.checking', 'Checking...') : tr('cluster.edit.prometheus.check', 'Check connection')}
@@ -363,13 +363,13 @@ export default function EditClusterDialog({ cluster, onClose, onSaved }: Props) 
               </div>
             </div>
           )}
-          <div className="mt-3 flex items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
               data-testid="edit-logsearch-check"
               onClick={checkLogSearch}
               disabled={lsChecking}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm bg-slate-700 px-3 text-xs text-ink hover:bg-slate-600 disabled:opacity-50"
+              className="btn-row inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-xs disabled:opacity-50"
             >
               {lsChecking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
               {lsChecking ? tr('cluster.edit.prometheus.checking', 'Checking...') : tr('cluster.edit.logSearch.check', 'Check connection')}

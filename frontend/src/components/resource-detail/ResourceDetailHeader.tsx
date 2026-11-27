@@ -65,13 +65,13 @@ export function ResourceDetailHeader({
           {canGoBack && (
             <button
               onClick={onGoBack}
-              className="text-slate-400 hover:text-ink p-1 rounded-lg hover:bg-slate-700 transition-colors"
+              className="text-slate-400 hover:text-ink p-1 rounded-lg hover:bg-slate-700 transition-colors hit-area-40"
               title={t('common.back', { defaultValue: 'Back' })}
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
           )}
-          <button onClick={onClose} className="text-slate-400 hover:text-ink p-1 rounded-lg hover:bg-slate-700" aria-label={t('common.close', { defaultValue: 'Close' })}>
+          <button onClick={onClose} className="text-slate-400 hover:text-ink p-1 rounded-lg hover:bg-slate-700 hit-area-40" aria-label={t('common.close', { defaultValue: 'Close' })}>
             <X className="w-4 h-4" />
           </button>
         </div>

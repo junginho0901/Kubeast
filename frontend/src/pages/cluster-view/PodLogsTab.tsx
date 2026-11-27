@@ -211,7 +211,7 @@ export function PodLogsTab({
               {selectedContainer || tr('clusterView.logs.selectContainer', 'Select container')}
             </span>
             <ChevronDown
-              className={`w-4 h-4 text-slate-400 transition-transform ${
+              className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${
                 isContainerDropdownOpen ? 'rotate-180' : ''
               }`}
             />
@@ -229,7 +229,7 @@ export function PodLogsTab({
                     value={containerSearchQuery}
                     onChange={(e) => onContainerSearchChange(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full h-8 pl-8 pr-8 bg-slate-600 text-ink rounded-lg text-sm border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
+                    className="w-full h-8 pl-8 pr-8 bg-slate-600 text-ink rounded-lg text-sm border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors"
                   />
                   {containerSearchQuery && (
                     <button
@@ -330,7 +330,7 @@ export function PodLogsTab({
               {tr('clusterView.logs.linesCount', '{{count}} lines', { count: downloadTailLines })}
             </span>
             <ChevronDown
-              className={`w-4 h-4 text-slate-400 transition-transform ${
+              className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${
                 isTailLinesDropdownOpen ? 'rotate-180' : ''
               }`}
             />
@@ -367,7 +367,7 @@ export function PodLogsTab({
           <button
             onClick={handleDownloadLogs}
             disabled={isDownloading}
-            className="h-10 px-4 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg border border-primary-500 focus:outline-hidden focus:border-primary-400 transition-colors flex items-center gap-2"
+            className="h-10 px-4 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg border border-primary-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-400 transition-colors flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             {isDownloading
@@ -375,7 +375,7 @@ export function PodLogsTab({
               : tr('clusterView.logs.download', 'Download')}
           </button>
           {downloadFailed && (
-            <span className="text-xs text-red-400 break-words" role="alert" data-testid="pod-logs-download-error">{tr('clusterView.logs.downloadError', 'Logs not downloaded: {{reason}}', { reason: downloadFailed })}</span>
+            <span className="text-xs text-notice-text-failed break-words" role="alert" data-testid="pod-logs-download-error">{tr('clusterView.logs.downloadError', 'Logs not downloaded: {{reason}}', { reason: downloadFailed })}</span>
           )}
         </div>
       </div>

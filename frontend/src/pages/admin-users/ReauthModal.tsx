@@ -21,7 +21,7 @@ export function ReauthModal({ open, tr }: Props) {
   return (
     <ModalOverlay>
       <div
-        className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
+        className="w-full max-w-md rounded-xl border border-hairline bg-slate-800 p-5 shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-label={tr('adminUsers.reauth.ariaLabel', 'Re-authentication required')}
@@ -44,7 +44,7 @@ export function ReauthModal({ open, tr }: Props) {
               queryClient.clear()
               navigate('/login', { replace: true })
             }}
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
+            className="btn btn-primary text-sm"
           >
             {tr('adminUsers.reauth.confirm', 'OK')}
           </button>

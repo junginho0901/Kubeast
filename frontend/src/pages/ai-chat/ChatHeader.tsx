@@ -23,15 +23,15 @@ export function ChatHeader() {
   const reason = error ? t('aiChat.modelReadFailed', { defaultValue: 'Could not read the AI model: {{reason}}', reason: failureText(error) }) : null
 
   return (
-    <div className="px-6 border-b border-slate-700 bg-slate-800 min-h-[100px] flex items-center">
-      <div className="flex-1">
-        <div className="flex items-center gap-3">
+    <div className="px-6 py-4 border-b border-hairline bg-slate-800 min-h-[100px] shrink-0 flex items-center">
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-semibold text-ink flex items-center gap-3">
             <MessageSquare className="w-6 h-6 text-slate-300" />
             {t('aiChat.title')}
           </h1>
           {aiConfig && !error && (
-            <span className="px-2.5 py-1 text-xs font-medium bg-primary-500/20 text-primary-400 rounded-full border border-primary-500/30">
+            <span className="max-w-full break-all px-2.5 py-1 text-xs font-medium bg-slate-700/50 text-slate-300 rounded-full border border-hairline">
               {(aiConfig as { model: string }).model}
             </span>
           )}
@@ -40,7 +40,7 @@ export function ChatHeader() {
           {t('aiChat.subtitle')}
         </p>
         {reason && (
-          <p role="alert" data-testid="ai-config-failed" title={reason} className="mt-1 text-sm text-red-400 break-words line-clamp-2">
+          <p role="alert" data-testid="ai-config-failed" title={reason} className="mt-1 text-sm text-notice-text-failed break-words line-clamp-2">
             {reason}
           </p>
         )}

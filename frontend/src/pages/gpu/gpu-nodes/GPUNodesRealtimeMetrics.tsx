@@ -35,7 +35,7 @@ export default function GPUNodesRealtimeMetrics({ gpusByHost, metricsFailure = n
   return (
     <div className="card shrink-0">
       <div className="flex items-center gap-2 mb-4">
-        <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+        <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none" />
         <h2 className="text-lg font-semibold text-ink">
           {tr('gpuNodes.realtimeMetrics', 'Real-time GPU Utilization')}
         </h2>

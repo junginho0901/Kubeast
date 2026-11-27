@@ -254,7 +254,7 @@ export default function PolicyReports() {
       aria-selected={tab === value}
       data-testid={`policy-reports-tab-${value}`}
       onClick={() => setTab(value)}
-      className={`h-8 px-3 text-sm rounded-md transition-colors ${tab === value ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-ink hover:bg-slate-800'}`}
+      className={`h-8 px-3 text-sm rounded-md transition-colors ${tab === value ? 'bg-slate-700 text-ink ring-1 ring-inset ring-primary-500/50' : 'text-slate-400 hover:text-ink hover:bg-slate-800'}`}
     >
       {label}
     </button>
@@ -283,7 +283,7 @@ export default function PolicyReports() {
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('policyReports.title', 'Policy Reports')}</h1>
-          <p className="mt-2 text-slate-400">
+          <p className="mt-1 text-sm text-slate-400">
             {tr('policyReports.subtitle', "What the cluster's policy engine (Kyverno, Trivy Operator, …) recorded in PolicyReports: results by policy and by namespace, and the rows behind them. Read-only.")}
           </p>
         </div>
@@ -302,13 +302,13 @@ export default function PolicyReports() {
       <RefreshFailure failure={refreshFailure} />
 
       {notInstalled ? (
-        <div className="card p-6" data-testid="policy-reports-not-installed">
+        <div className="card p-5" data-testid="policy-reports-not-installed">
           <p className="text-slate-200">
             {tr('policyReports.notInstalled', 'PolicyReport (wgpolicyk8s.io) is not installed on this cluster. Install a policy engine that writes policy reports, such as Kyverno with Audit policies, and this page fills in.')}
           </p>
         </div>
       ) : status.isLoading ? (
-        <div className="card p-6 text-slate-400">
+        <div className="card p-5 text-slate-400">
           <span className="inline-flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" />
             {tr('policyReports.checking', 'Looking for policy reports in this cluster...')}
@@ -317,7 +317,7 @@ export default function PolicyReports() {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <div className="flex items-center gap-1 rounded-lg bg-slate-800/60 p-1" role="tablist">
+            <div className="flex flex-wrap items-center gap-1 rounded-lg bg-slate-800/60 p-1" role="tablist">
               {tabButton('policies', tr('policyReports.tabs.policies', 'By policy'))}
               {tabButton('namespaces', tr('policyReports.tabs.namespaces', 'By namespace'))}
               {tabButton('results', tr('policyReports.tabs.results', 'Results'))}
@@ -391,7 +391,7 @@ export default function PolicyReports() {
               ['skip', tr('policyReports.result.skip', 'Skip'), summary?.totals.skip, 'text-slate-400'],
             ] as [string, string, number | undefined, string][]).map(([key, label, value, color]) => (
               <div key={key} className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-                <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{label}</p>
+                <p className="text-xs leading-4 break-words text-slate-400">{label}</p>
                 <p className={`text-lg font-semibold mt-1 ${color}`} data-testid={`policy-reports-stat-${key}`}>{summary ? value : '-'}</p>
               </div>
             ))}
@@ -495,7 +495,7 @@ export default function PolicyReports() {
                   {isError && (
                     <TableEmptyRow colSpan={columnCount} resource="policyreports">
                       <span data-testid="policy-reports-load-error">{tr('policyReports.loadError', 'Could not load the policy reports')}</span>
-                      {errorDetail && <span className="block mt-1 text-xs text-slate-500">{errorDetail}</span>}
+                      {errorDetail && <span className="block mt-1 text-xs text-slate-500 break-words">{errorDetail}</span>}
                     </TableEmptyRow>
                   )}
                   {rowCount === 0 && !isLoading && !isError && (

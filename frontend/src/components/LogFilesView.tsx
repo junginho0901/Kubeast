@@ -246,7 +246,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
                   : 'bg-slate-800 border-control text-ink hover:bg-slate-700'
               }`}
             >
-              <Radio className={`${sm ? 'w-3 h-3' : 'w-4 h-4'} ${follow ? 'animate-pulse' : ''}`} />
+              <Radio className={`${sm ? 'w-3 h-3' : 'w-4 h-4'} ${follow ? 'animate-pulse motion-reduce:animate-none' : ''}`} />
               {t('clusterView.logFiles.follow', 'Follow')}
             </button>
             <button
@@ -271,7 +271,7 @@ export function LogFilesView({ namespace, pod, container, size = 'md', leading }
         {!follow && content.data?.truncated ? ` ${t('clusterView.logFiles.truncated', 'The output is large; only its end is shown.')}` : ''}
         {streamNote ? ` ${streamNote}` : ''}
         {follow && reconnecting ? (
-          <span data-testid="logfile-reconnecting">{` ${t('clusterView.logFiles.reconnecting', 'The connection dropped; reconnecting and going on after the last line shown...')}`}</span>
+          <span data-testid="logfile-reconnecting" className="text-notice-text-reconnecting">{` ${t('clusterView.logFiles.reconnecting', 'The connection dropped; reconnecting and going on after the last line shown...')}`}</span>
         ) : null}
       </p>
       <div

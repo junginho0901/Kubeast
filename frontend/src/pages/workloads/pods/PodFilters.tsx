@@ -61,7 +61,7 @@ export function PodFilters({
             {selectedNamespace === 'all' ? allNamespacesLabel : selectedNamespace}
           </span>
           <ChevronDown
-            className={`w-4 h-4 text-slate-400 transition-transform ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`}
+            className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${isNamespaceDropdownOpen ? 'rotate-180' : ''}`}
           />
         </button>
         {isNamespaceDropdownOpen && (

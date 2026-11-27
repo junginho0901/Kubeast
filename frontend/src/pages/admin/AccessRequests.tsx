@@ -126,8 +126,8 @@ export default function AccessRequests() {
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       <div className="shrink-0">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="w-6 h-6 text-primary-400" />
-          <h1 className="text-3xl font-semibold text-ink">{tr('accessRequests.title', 'Access requests')}</h1>
+          <ShieldCheck className="w-6 h-6 text-slate-400" />
+          <h1 className="text-[28px] leading-9 font-medium text-ink">{tr('accessRequests.title', 'Access requests')}</h1>
         </div>
         <p className="text-slate-400 mt-2">
           {tr(
@@ -153,7 +153,7 @@ export default function AccessRequests() {
           >
             {k === 'pending' ? tr('accessRequests.tabs.pending', 'Pending') : tr('accessRequests.tabs.history', 'History')}
             {k === 'pending' && pendingCount > 0 && (
-              <span className="ml-2 rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-black">{pendingCount}</span>
+              <span className="ml-2 rounded-full bg-badge-surface-pending px-1.5 text-[10px] font-semibold text-badge-text-pending">{pendingCount}</span>
             )}
           </button>
         ))}

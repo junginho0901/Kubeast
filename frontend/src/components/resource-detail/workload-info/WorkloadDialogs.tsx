@@ -60,7 +60,7 @@ export default function WorkloadDialogs({
           }`}
         >
           <span className="break-words">{triggerToast.message}</span>
-          <button type="button" onClick={dismissToast} aria-label={tr('common.close', 'Close')} className="shrink-0 opacity-80 hover:opacity-100">✕</button>
+          <button type="button" onClick={dismissToast} aria-label={tr('common.close', 'Close')} className="shrink-0 opacity-80 hover:opacity-100 hit-area-40">✕</button>
         </div>
       )}
 

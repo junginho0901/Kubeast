@@ -31,7 +31,7 @@ export default function UserApiKeys({ userID, canEdit, tr }: Props) {
   return (
     <div data-testid="admin-user-api-keys">
       <h3 className="text-xs font-semibold text-slate-400 mb-2">{tr('apiKeys.admin.title', 'API keys')}</h3>
-      <div className="rounded-xl border border-slate-700/50 bg-slate-950/30 p-3 space-y-1.5">
+      <div className="border-t border-hairline pt-3 space-y-3">
         {keys.length === 0 ? (
           keysError
             ? <p role="alert" data-testid="admin-api-keys-read-error" className="text-xs text-red-400 break-words">{tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(keysError) })}</p>
@@ -41,11 +41,11 @@ export default function UserApiKeys({ userID, canEdit, tr }: Props) {
             <div key={k.id}>
             <div className="flex items-center justify-between gap-3 text-sm" data-testid={`admin-api-key-${k.id}`}>
               <div className="min-w-0">
-                <div className="text-slate-200 truncate">
+                <div className="text-slate-200 break-all">
                   <span className="font-medium">{k.name}</span>
                   <span className="ml-2 font-mono text-xs text-slate-400">{k.key_prefix}…</span>
                 </div>
-                <div className="text-xs text-slate-400 truncate">
+                <div className="text-xs text-slate-400 break-words">
                   {formatScope(k, tr('apiKeys.allClusters', 'All clusters you can reach'))} · {k.role_ceiling} ·{' '}
                   {tr('apiKeys.expiresAt', 'expires {{time}}', { time: formatWhen(k.expires_at) })}
                 </div>
@@ -57,7 +57,7 @@ export default function UserApiKeys({ userID, canEdit, tr }: Props) {
                     data-testid={`admin-api-key-revoke-confirm-${k.id}`}
                     disabled={revoke.isPending}
                     onClick={() => revoke.mutate(k.id)}
-                    className="shrink-0 rounded-lg bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-500 disabled:opacity-50"
+                    className="shrink-0 rounded-lg bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {tr('apiKeys.confirmRevoke', 'Revoke now')}
                   </button>

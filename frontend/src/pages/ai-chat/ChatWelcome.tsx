@@ -46,24 +46,24 @@ interface Props {
 
 export function ChatWelcome({ emptyTitle, emptySubtitle, questions, onSelectQuestion }: Props) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-4 py-10 sm:px-6 lg:px-10">
+    <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 sm:px-6 lg:px-10">
       <div className="w-full max-w-4xl flex flex-col items-center">
-        <div className="mb-6">
+        <div className="mb-4">
           <WelcomeParticles />
         </div>
-        <h2 className="text-2xl sm:text-3xl font-semibold text-ink mb-2 text-center">
+        <h2 className="text-2xl sm:text-[28px] font-medium text-ink mb-2 text-center">
           {emptyTitle}
         </h2>
-        <p className="text-slate-400 mb-8 text-center text-sm sm:text-base">
+        <p className="text-slate-400 mb-6 text-center text-sm sm:text-base">
           {emptySubtitle}
         </p>
 
-        <div className="grid grid-cols-2 gap-3 w-full px-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-2xl">
           {questions.map((question, idx) => (
             <button
               key={idx}
               onClick={() => onSelectQuestion(question)}
-              className="p-4 text-left bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition-colors"
+              className="px-4 py-3 text-left text-sm bg-slate-800 border border-slate-700 hover:border-slate-500 hover:bg-slate-700/50 text-slate-300 rounded-lg transition-colors"
             >
               {question}
             </button>

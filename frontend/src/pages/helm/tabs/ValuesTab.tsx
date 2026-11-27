@@ -50,13 +50,13 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
             <button
               type="button"
               onClick={beginEdit}
-              className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+              className="btn btn-secondary h-9 px-3 text-sm inline-flex items-center gap-1.5"
             >
               {t('helmReleaseDetail.upgrade.edit')}
             </button>
           </div>
         )}
-        <div className="rounded-lg bg-slate-900 border border-slate-700 overflow-hidden">
+        <div className="rounded-lg bg-slate-900 border border-hairline overflow-hidden">
           <Editor
             height="60vh"
             defaultLanguage="yaml"
@@ -82,14 +82,14 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
         {/* Action row sits in the same slot as the read-mode [Edit]
             button so the editor starts at an identical vertical
             position in both modes — swapping does not jump the page. */}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={() => {
               setEditing(false)
               setDraft('')
             }}
-            className="inline-flex items-center gap-1.5 rounded-sm border border-slate-600 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700"
+            className="btn btn-secondary h-9 px-3 text-sm inline-flex items-center gap-1.5"
           >
             {t('helmReleaseDetail.upgrade.cancel')}
           </button>
@@ -112,13 +112,13 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
                 setPreviewing(false)
               }
             }}
-            className="inline-flex items-center gap-1.5 rounded-sm bg-primary-600 hover:bg-primary-700 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+            className="btn btn-primary h-9 px-3 text-sm inline-flex items-center gap-1.5 disabled:opacity-40"
           >
             {previewing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {t('helmReleaseDetail.upgrade.preview')}
           </button>
         </div>
-        <div className="rounded-lg bg-slate-950 border border-slate-700 overflow-hidden">
+        <div className="rounded-lg bg-slate-900 border border-hairline overflow-hidden">
           {/* keyed so the read-only editor above is not reused for editing: Monaco keeps
               readOnly from the previous options unless it is set here explicitly. The text
               starts from the draft and the editor keeps it: a value passed back on each render
@@ -143,7 +143,7 @@ export default function ValuesTab({ namespace, name }: { namespace: string; name
           />
         </div>
         {!has('resource.secret.reveal') && current.includes('<REDACTED:') && (
-          <p className="text-[11px] text-slate-500" data-testid="helm-values-masked-note">{t('helmReleaseDetail.upgrade.maskedNote')}</p>
+          <p className="text-xs text-slate-500" data-testid="helm-values-masked-note">{t('helmReleaseDetail.upgrade.maskedNote')}</p>
         )}
       </div>
 

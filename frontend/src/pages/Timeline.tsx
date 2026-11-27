@@ -159,16 +159,16 @@ export default function Timeline() {
     <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
       {/* Header */}
       <div className="shrink-0">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-ink">
+        <h1 className="text-xl font-medium text-ink">
           {t('timeline.title', 'Change History Timeline')}
         </h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        <p className="text-sm text-slate-400 mt-1">
           {t('timeline.subtitle', 'View K8s events and resource changes in chronological order.')}
         </p>
       </div>
 
       {/* Filter Bar */}
-      <div className="shrink-0 flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+      <div className="shrink-0 flex flex-wrap items-center gap-3 bg-slate-800 border border-slate-700 rounded-lg p-3">
         {/* Namespace */}
         <CustomDropdown
           testId="timeline-namespace"
@@ -183,15 +183,15 @@ export default function Timeline() {
         />
 
         {/* Time Range */}
-        <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-md p-0.5">
+        <div className="flex items-center gap-1 bg-slate-700/50 rounded-md p-0.5">
           {TIME_RANGES.map((tr) => (
             <button
               key={tr.value}
               onClick={() => setHours(tr.value)}
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 hours === tr.value
-                  ? 'bg-primary-600 text-white shadow-xs'
-                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-ink'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-slate-300 hover:text-ink'
               }`}
             >
               {t(`timeline.${tr.label}`, tr.label)}
@@ -200,15 +200,15 @@ export default function Timeline() {
         </div>
 
         {/* Event Type Filter */}
-        <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-md p-0.5">
+        <div className="flex items-center gap-1 bg-slate-700/50 rounded-md p-0.5">
           {(['all', 'Normal', 'Warning'] as EventFilter[]).map((f) => (
             <button
               key={f}
               onClick={() => setEventFilter(f)}
               className={`px-2.5 py-1 text-xs font-medium rounded-sm transition-colors ${
                 eventFilter === f
-                  ? 'bg-primary-600 text-white shadow-xs'
-                  : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-ink'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-slate-300 hover:text-ink'
               }`}
             >
               {t(`timeline.${f.toLowerCase()}`, f)}
@@ -288,15 +288,15 @@ export default function Timeline() {
         </p>
       )}
       <RefreshFailure failure={timeline && !isForbiddenError(error) ? failureOf(error, errorUpdatedAt) : null} />
-      <div ref={listRef} className="flex-1 min-h-0 flex flex-col bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+      <div ref={listRef} className="flex-1 min-h-0 flex flex-col bg-slate-800 border border-slate-700 rounded-xl">
         <div ref={listBodyRef} className="flex-1 min-h-0 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
+            <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
           </div>
         ) : isForbiddenError(error) ? (
           <div className="text-center py-16">
-            <p className="text-sm text-gray-500 dark:text-gray-400" data-testid="timeline-forbidden">
+            <p className="text-sm text-slate-400" data-testid="timeline-forbidden">
               {t('common.forbiddenEmpty', { resource: forbiddenResourceFromUrl('/cluster/timeline'), defaultValue: 'You do not have permission to view {{resource}} in this cluster.' })}
             </p>
           </div>
@@ -311,8 +311,8 @@ export default function Timeline() {
           </div>
         ) : visibleItems.length === 0 ? (
           <div className="text-center py-16">
-            <Clock className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <Clock className="w-10 h-10 text-slate-500 mx-auto mb-3" />
+            <p className="text-sm text-slate-400">
               {t('timeline.noEvents', 'No events in this period')}
             </p>
             <p className="text-xs text-slate-400 mt-1">
@@ -322,9 +322,9 @@ export default function Timeline() {
         ) : (
           <div className="relative">
             {/* Vertical line */}
-            <div className="absolute left-[140px] top-0 bottom-0 w-px bg-gray-200 dark:bg-gray-700 hidden md:block" />
+            <div className="absolute left-[140px] top-0 bottom-0 w-px bg-slate-700 hidden md:block" />
 
-            <div className="divide-y divide-gray-100 dark:divide-gray-700/50">
+            <div className="divide-y divide-slate-700/50">
               {visibleItems.map((item, idx) => {
                 const prevItem = idx > 0 ? visibleItems[idx - 1] : null
                 const showDateSep = !prevItem || getDateKey(item.timestamp) !== getDateKey(prevItem.timestamp)
@@ -332,8 +332,8 @@ export default function Timeline() {
                 return (
                   <div key={idx}>
                     {showDateSep && (
-                      <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/80">
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                      <div className="px-4 py-2 bg-slate-900/40">
+                        <span className="text-xs font-medium text-slate-400">
                           {getDateKey(item.timestamp)}
                         </span>
                       </div>
@@ -372,14 +372,14 @@ export default function Timeline() {
 
 function SummaryCard({ label, value, color }: { label: string; value: number | string; color: 'blue' | 'green' | 'yellow' }) {
   const colors = {
-    blue: 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border-primary-200 dark:border-primary-800',
-    green: 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
-    yellow: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
+    blue: 'text-ink',
+    green: 'text-green-400',
+    yellow: 'text-yellow-400',
   }
   return (
-    <div className={`border rounded-lg p-3 ${colors[color]}`}>
-      <p className="text-xs opacity-80">{label}</p>
-      <p className="text-2xl font-bold mt-0.5">{value}</p>
+    <div className={`border border-slate-700 bg-slate-800 rounded-xl p-3 ${colors[color]}`}>
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="text-2xl font-medium mt-0.5 tabular-nums">{value}</p>
     </div>
   )
 }
@@ -397,7 +397,7 @@ function EventRow({
 }) {
   const isWarning = event.type === 'Warning'
   return (
-    <div className="flex items-start gap-3 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group">
+    <div className="flex items-start gap-3 px-4 py-2.5 hover:bg-slate-700/30 transition-colors group">
       {/* Time */}
       <div className="w-[120px] shrink-0 text-right hidden md:block">
         <span
@@ -420,11 +420,11 @@ function EventRow({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-gray-900 dark:text-ink">
+          <span className="text-sm font-medium text-ink">
             {event.reason}
           </span>
           {event.count > 1 && (
-            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-sm">
+            <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium bg-slate-700 text-slate-300 rounded-sm">
               {t('timeline.repeated', '{{count}} times').replace('{{count}}', String(event.count))}
             </span>
           )}
@@ -432,13 +432,13 @@ function EventRow({
             {fmtRelative(event.timestamp)}
           </span>
         </div>
-        <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 wrap-break-word">
+        <p className="text-xs text-slate-400 mt-0.5 wrap-break-word">
           {event.message}
         </p>
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex flex-wrap items-center gap-2 mt-1">
           <button
             onClick={() => onResourceClick(event.resource.kind, event.resource.name, event.resource.namespace, event.resource.api_version)}
-            className="text-[11px] text-primary-600 dark:text-primary-400 hover:underline"
+            className="max-w-full break-all text-left text-xs text-primary-400 hover:underline"
           >
             {showNamespace && event.resource.namespace ? `${event.resource.namespace} · ` : ''}{event.resource.kind}/{event.resource.name}
           </button>
@@ -465,7 +465,7 @@ function RolloutRow({
   t: any
 }) {
   return (
-    <div className="flex items-start gap-3 px-4 py-2.5 bg-primary-50/50 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors">
+    <div className="flex items-start gap-3 px-4 py-2.5 bg-slate-900/20 hover:bg-slate-700/30 transition-colors">
       {/* Time */}
       <div className="w-[120px] shrink-0 text-right hidden md:block">
         <span
@@ -484,7 +484,7 @@ function RolloutRow({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-primary-800 dark:text-primary-300">
+          <span className="text-sm font-medium text-ink">
             {t('timeline.revision', 'Revision')} #{rollout.revision}
           </span>
           <span className="text-xs text-slate-400 md:hidden">
@@ -494,16 +494,16 @@ function RolloutRow({
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
           <button
             onClick={() => onResourceClick(rollout.kind, rollout.name, rollout.namespace)}
-            className="text-[11px] text-primary-600 dark:text-primary-400 hover:underline"
+            className="max-w-full break-all text-left text-xs text-primary-400 hover:underline"
           >
             {showNamespace && rollout.namespace ? `${rollout.namespace} · ` : ''}{rollout.kind}/{rollout.name}
           </button>
-          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+          <span className="max-w-full break-all text-xs text-slate-400">
             {rollout.images.join(', ')}
           </span>
         </div>
         {rollout.change_cause && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <p className="break-words text-xs text-slate-400 mt-0.5">
             {t('timeline.changeCause', 'Change Cause')}: {rollout.change_cause}
           </p>
         )}

@@ -519,7 +519,7 @@ export default function Layout() {
                     {group.tag && <span className="ml-2"><BetaTag label={group.tag} /></span>}
                   </button>
                   <div
-                    className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${
+                    className={`grid transition-[grid-template-rows,opacity] motion-reduce:transition-none duration-200 ease-out ${
                       openGroups[group.id] ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
                     }`}
                   >
@@ -550,7 +550,7 @@ export default function Layout() {
                             {item.tag && <BetaTag label={item.tag} />}
                             {item.badge ? (
                               <span
-                                className="ml-auto rounded-full bg-amber-500/90 px-1.5 text-[10px] font-semibold text-black"
+                                className="ml-auto rounded-full bg-badge-surface-pending px-1.5 text-[10px] font-semibold text-badge-text-pending"
                                 data-testid={item.testId ? `${item.testId}-badge` : undefined}
                               >
                                 {item.badge}
@@ -595,17 +595,17 @@ export default function Layout() {
                 </>
               ) : clusterStatus === 'checking' ? (
                 <>
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse motion-reduce:animate-none"></div>
                   <span>{t('layout.clusterChecking')}</span>
                 </>
               ) : clusterStatus === 'connected' ? (
                 <>
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse motion-reduce:animate-none"></div>
                   <span>{t('layout.clusterConnected')}</span>
                 </>
               ) : (
                 <>
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse motion-reduce:animate-none"></div>
                   <span>{t('layout.clusterDisconnected')}</span>
                 </>
               )}

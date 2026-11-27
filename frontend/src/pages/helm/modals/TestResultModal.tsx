@@ -56,10 +56,10 @@ export default function TestResultModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-2xl mx-auto"
+        className="bg-slate-800 border border-hairline rounded-xl shadow-2xl p-5 w-full max-w-2xl max-h-[calc(100vh-2rem)] overflow-y-auto mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-ink mb-1">
+        <h3 className="text-lg font-semibold text-ink mb-1 break-words">
           {t('helmReleaseDetail.test.title', { name })}
         </h3>
         <p className="text-sm text-slate-400 mb-4">
@@ -72,13 +72,13 @@ export default function TestResultModal({
             <span className="text-sm">{t('helmReleaseDetail.test.running')}</span>
           </div>
         ) : result?.success && result.hooks.length === 0 ? (
-          <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300">
+          <div className="rounded-lg border border-hairline bg-slate-900/40 px-3 py-4 text-sm text-slate-300">
             {t('helmReleaseDetail.test.noHooks')}
           </div>
         ) : result ? (
           <div className="space-y-2">
             <div
-              className={`rounded-sm px-3 py-2 text-sm ${
+              className={`rounded-lg px-3 py-2 text-sm ${
                 result.success
                   ? 'bg-emerald-500/15 text-emerald-200 border border-emerald-500/30'
                   : 'bg-red-500/15 text-red-200 border border-red-500/30'
@@ -90,7 +90,7 @@ export default function TestResultModal({
               {result.error && <div data-testid="helm-test-error" className="mt-1 text-xs break-words">{result.error}</div>}
             </div>
             {result.hooks.length > 0 && (
-              <ul className="rounded-sm border border-slate-700 divide-y divide-slate-800 text-sm">
+              <ul className="divide-y divide-hairline text-sm">
                 {result.hooks.map((h) => (
                   <li key={h.name} className="flex items-center gap-3 px-3 py-2">
                     {h.failed ? (
@@ -98,15 +98,15 @@ export default function TestResultModal({
                     ) : (
                       <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
                     )}
-                    <span className="text-ink truncate">{h.name}</span>
-                    <span className="text-xs text-slate-400 ml-auto">{h.phase}</span>
+                    <span className="text-ink min-w-0 break-all">{h.name}</span>
+                    <span className="text-xs text-slate-400 ml-auto shrink-0">{h.phase}</span>
                   </li>
                 ))}
               </ul>
             )}
           </div>
         ) : error ? (
-          <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 break-words">
             {error}
           </div>
         ) : null}
@@ -116,7 +116,7 @@ export default function TestResultModal({
             type="button"
             onClick={onClose}
             disabled={running}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-ink border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+            className="btn btn-secondary h-9 text-sm disabled:opacity-50"
           >
             {t('helmReleaseDetail.test.close')}
           </button>

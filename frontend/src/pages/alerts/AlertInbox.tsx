@@ -250,7 +250,7 @@ export default function AlertInbox() {
           placeholder={tr('alertInbox.searchPlaceholder', 'Search by alert name, namespace, label, annotation or assignee...')}
           maxLength={200}
           data-testid="alert-inbox-search"
-          className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="h-12 w-full pl-10 pr-4 bg-slate-900 border border-control rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 
@@ -496,7 +496,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
         onClose={onClose}
         busy={save.isPending || start.isPending}
         testId="alert-detail"
-        footer={<button type="button" onClick={onClose} className="btn btn-secondary">{tr('common.close', 'Close')}</button>}
+        footer={<button type="button" onClick={onClose} className="btn btn-secondary hit-area-40">{tr('common.close', 'Close')}</button>}
       >
         {isLoading && <div className="py-6 text-center text-slate-500">{tr('common.loading', 'Loading…')}</div>}
         {error && (
@@ -528,7 +528,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
               </div>
             )}
             {(data.annotations.summary || data.annotations.description) && (
-              <div className="space-y-1 text-sm text-slate-200">
+              <div className="space-y-1 break-words text-sm text-slate-200">
                 {data.annotations.summary && <p className="font-medium">{data.annotations.summary}</p>}
                 {data.annotations.description && <p className="text-slate-300 whitespace-pre-wrap">{data.annotations.description}</p>}
               </div>
@@ -574,10 +574,10 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={2000}
                 rows={3}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-ink"
+                className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
                 data-testid="alert-note"
               />
-              <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                 <span>{data.note_by ? tr('alertInbox.noteBy', 'Last written by {{who}} · {{when}}', { who: data.note_by, when: formatTime(data.note_at) }) : ''}</span>
                 <button type="button" disabled={save.isPending || note === null || note.trim() === data.note} onClick={() => save.mutate({ alert: id, marks: { note: noteValue } })} className="btn btn-primary" data-testid="alert-note-save">
                   {tr('alertInbox.action.saveNote', 'Save note')}
@@ -606,7 +606,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
                       type="button"
                       onClick={() => setReportOpen(true)}
                       disabled={data.investigation.status === 'queued' || data.investigation.status === 'running'}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-500 disabled:opacity-40"
+                      className="btn-row shrink-0 disabled:opacity-40"
                       data-testid="alert-report"
                     >
                       <FileSearch className="w-3.5 h-3.5" /> {tr('investigations.open', 'Report')}
@@ -620,7 +620,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
                       onClick={() => start.mutate(id)}
                       disabled={!now.enabled || start.isPending}
                       title={now.enabled ? undefined : now.note}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-500 disabled:opacity-40"
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-700 disabled:opacity-40"
                       data-testid="alert-investigate-now"
                     >
                       {start.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />} {tr('alertInbox.investigateNow.button', 'Investigate now')}
@@ -650,14 +650,14 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
             <section>
               <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.section.labels', 'Labels and annotations')}</h3>
               <div className="grid gap-3 md:grid-cols-2">
-                <dl className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs" data-testid="alert-labels">
+                <dl className="border-t border-hairline py-2 text-xs" data-testid="alert-labels">
                   {Object.entries(data.labels).map(([k, v]) => (
-                    <div key={k} className="flex gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500">{k}</dt><dd className="break-all font-mono text-slate-200">{v}</dd></div>
+                    <div key={k} className="flex gap-2 py-0.5"><dt className="w-[110px] shrink-0 break-all text-slate-500">{k}</dt><dd className="min-w-0 break-all font-mono text-slate-200">{v}</dd></div>
                   ))}
                 </dl>
-                <dl className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs">
+                <dl className="border-t border-hairline py-2 text-xs">
                   {Object.entries(data.annotations).map(([k, v]) => (
-                    <div key={k} className="flex gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500">{k}</dt><dd className="break-words text-slate-200">{v}</dd></div>
+                    <div key={k} className="flex gap-2 py-0.5"><dt className="w-[110px] shrink-0 break-all text-slate-500">{k}</dt><dd className="min-w-0 break-words text-slate-200">{v}</dd></div>
                   ))}
                   {Object.keys(data.annotations).length === 0 && <div className="text-slate-500">{tr('investigations.noAnnotations', 'No annotations')}</div>}
                 </dl>

@@ -20,19 +20,19 @@ export function Glance({ node, position }: Props) {
 
   return (
     <div
-      className="fixed z-200 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl p-3 min-w-[220px] max-w-[300px] pointer-events-none"
+      className="fixed z-200 bg-slate-800 border border-hairline rounded-xl shadow-xl p-4 min-w-[220px] max-w-[300px] pointer-events-none"
       style={{ left: position.x + 16, top: position.y - 10 }}
     >
       <div className="flex items-center gap-2 mb-2">
         <span className="text-base">{kindIcon[node.kind] || '📄'}</span>
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] text-slate-400">{node.group ? t('resourceGraph.group.title', { defaultValue: '{{kind}} group', kind: node.kind }) : node.kind}</div>
-          <div className="text-xs font-semibold text-ink truncate">{node.group && node.kind === 'Pod' ? node.ownerName : node.name}</div>
+          <div className="text-xs text-slate-400">{node.group ? t('resourceGraph.group.title', { defaultValue: '{{kind}} group', kind: node.kind }) : node.kind}</div>
+          <div className="text-sm font-semibold text-ink break-all">{node.group && node.kind === 'Pod' ? node.ownerName : node.name}</div>
         </div>
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: borderColor, boxShadow: `0 0 6px ${borderColor}` }} />
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: borderColor }} />
       </div>
 
-      <div className="space-y-1 text-[10px]">
+      <div className="space-y-1.5 text-xs break-all">
         <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.status', 'Status')}</span><span className="text-ink">{node.status}</span></div>
         {node.ready && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.ready', 'Ready')}</span><span className="text-ink">{node.ready}</span></div>}
         {node.namespace && <div className="flex justify-between"><span className="text-slate-400">{t('resourceGraph.glance.namespace', 'Namespace')}</span><span className="text-ink">{node.namespace}</span></div>}

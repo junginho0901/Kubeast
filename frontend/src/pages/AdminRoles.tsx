@@ -235,7 +235,7 @@ export default function AdminRoles() {
       {isLoading ? (
         <div className="text-slate-400 text-sm">{tr('adminRoles.loading', 'Loading...')}</div>
       ) : (
-        <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-2xl border border-slate-700 bg-slate-800/50 overflow-hidden">
+        <div ref={containerRef} className="flex-1 min-h-0 flex flex-col rounded-xl border border-slate-700 bg-slate-800 overflow-hidden">
           <div ref={bodyRef} className="overflow-x-auto flex-1 min-h-0">
           <table className="w-full text-sm" data-testid="roles-table">
             <thead ref={theadRef} className="bg-slate-800 text-slate-400">
@@ -358,18 +358,18 @@ export default function AdminRoles() {
       {usersRole && (
         <ModalOverlay onClose={() => setUsersRole(null)}>
           <div
-            className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl max-h-[80vh] flex flex-col"
+            className="w-full max-w-2xl rounded-xl border border-hairline bg-slate-800 p-5 shadow-xl max-h-[80vh] flex flex-col"
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-5">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-500/10 border border-primary-500/20">
-                  <Users className="h-5 w-5 text-primary-400" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700">
+                  <Users className="h-5 w-5 text-slate-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-ink">{usersRole.name}</h2>
+                  <h2 className="text-lg font-semibold text-ink break-all">{usersRole.name}</h2>
                   <p className="text-sm text-slate-400">
                     {tr('adminRoles.usersWithRole', 'Users with this global (account-level) role')}
                     <span className="ml-2 text-slate-500">({roleMembers.length})</span>
@@ -385,14 +385,14 @@ export default function AdminRoles() {
               <button
                 type="button"
                 onClick={() => setUsersRole(null)}
-                className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800"
+                className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800 hit-area-40"
                 aria-label={tr('common.close', 'Close')}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto rounded-xl border border-slate-700/50">
+            <div className="flex-1 min-h-0 overflow-auto rounded-lg border border-hairline">
               {roleMembers.length === 0 ? (
                 <div className="p-8 text-center text-sm text-slate-500">
                   {tr('adminRoles.noUsers', 'No users assigned to this role.')}
@@ -439,8 +439,8 @@ export default function AdminRoles() {
           body="fill"
           testId="role-dialog"
           icon={
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-500/10 border border-primary-500/20">
-              <Shield className="h-5 w-5 text-primary-400" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700">
+              <Shield className="h-5 w-5 text-slate-400" />
             </div>
           }
           title={editingRole ? tr('adminRoles.editTitle', 'Edit Role') : tr('adminRoles.createTitle', 'Create Role')}
@@ -477,7 +477,7 @@ export default function AdminRoles() {
                   maxLength={NAME_MAX}
                   onChange={(e) => setFormName(e.target.value)}
                   disabled={editingRole?.is_system}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
+                  className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                   placeholder={tr('adminRoles.form.namePh', 'e.g. InfraManager')}
                 />
                 {nameTaken && (
@@ -493,7 +493,7 @@ export default function AdminRoles() {
                 <input
                   value={formDesc}
                   onChange={(e) => setFormDesc(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+                  className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                   placeholder={tr('adminRoles.form.descPh', 'e.g. Infrastructure team lead')}
                 />
               </div>
@@ -537,16 +537,16 @@ export default function AdminRoles() {
             )}
 
             {/* Permission grid */}
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
               {permCatalog.map((cat) => (
-                <div key={cat.category} className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
+                <div key={cat.category} className="border-t border-hairline pt-4">
                   <h3 className="text-sm font-semibold text-slate-200 mb-3">{tr(`adminRoles.catalog.category.${i18nKey(cat.category)}`, cat.category)}</h3>
                   {cat.category === 'Menu' && (
                     <p data-testid="role-menu-note" className="-mt-2 mb-3 text-[11px] text-slate-500">
                       {tr('adminRoles.menuNote', "Hides the group in the sidebar. Its screens and the AI's reads stay open: the permissions below and the cluster decide those.")}
                     </p>
                   )}
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
                     {cat.permissions.map((p) => (
                       <label
                         key={p.key}
@@ -560,7 +560,7 @@ export default function AdminRoles() {
                           className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 disabled:opacity-50"
                         />
                         <div className="flex-1 min-w-0">
-                          <span className="text-xs font-mono text-slate-300 group-hover:text-ink transition-colors">
+                          <span className="text-xs font-mono text-slate-300 group-hover:text-ink transition-colors break-all">
                             {p.key}
                           </span>
                           <span className="ml-2 text-[11px] text-slate-500">{tr(`adminRoles.catalog.permission.${i18nKey(p.key)}`, p.description)}</span>

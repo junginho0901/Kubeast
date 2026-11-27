@@ -29,10 +29,10 @@ export function TrafficPanel({ line, result, onClose, onWhy, onOpen }: {
     </span>
   )
   return (
-    <div className="absolute top-3 right-3 bottom-3 z-20 w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-slate-600 bg-slate-800/95 p-3 text-xs shadow-2xl backdrop-blur-xs" data-testid="traffic-panel">
+    <div className="absolute top-3 right-3 bottom-3 z-20 w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-xl border border-hairline bg-slate-800 p-4 text-sm shadow-xl break-words" data-testid="traffic-panel">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="font-semibold text-slate-200">{tr('resourceGraph.traffic.panelTitle', 'Traffic')}</div>
-        <button type="button" onClick={onClose} className="text-slate-400 hover:text-ink" aria-label={tr('common.close', 'Close')} data-testid="traffic-panel-close">
+        <div className="text-lg font-semibold text-ink">{tr('resourceGraph.traffic.panelTitle', 'Traffic')}</div>
+        <button type="button" onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-ink hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-primary-400 hit-area-40" aria-label={tr('common.close', 'Close')} data-testid="traffic-panel-close">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -71,7 +71,7 @@ export function TrafficPanel({ line, result, onClose, onWhy, onOpen }: {
           </button>
         )}
         {[line.from, line.to].filter(openableEnd).map((e) => (
-          <button key={`${e.kind}/${e.namespace}/${e.name}`} type="button" onClick={() => onOpen(e)} className="h-7 px-2.5 rounded-lg border border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600" data-testid="traffic-panel-open">
+          <button key={`${e.kind}/${e.namespace}/${e.name}`} type="button" onClick={() => onOpen(e)} className="btn-row max-w-full whitespace-normal text-left break-all" data-testid="traffic-panel-open">
             {tr('resourceGraph.traffic.open', 'Open {{name}}', { name: e.name })}
           </button>
         ))}
@@ -79,9 +79,9 @@ export function TrafficPanel({ line, result, onClose, onWhy, onOpen }: {
       {relay && (line.connections?.length ?? 0) > 0 && (
         <div>
           <div className="text-slate-500 mb-1">{tr('resourceGraph.traffic.connections', 'Latest connections')}</div>
-          <ul className="space-y-1" data-testid="traffic-panel-connections">
+          <ul className="divide-y divide-hairline text-xs" data-testid="traffic-panel-connections">
             {line.connections!.map((g, i) => (
-              <li key={i} className="rounded-sm border border-slate-700 bg-slate-900/60 px-2 py-1">
+              <li key={i} className="py-2">
                 <div className="font-mono text-slate-200 break-all">{endLabel(g.source, '')} → {endLabel(g.destination, '')}{g.destination.port ? `:${g.destination.port}` : ''}</div>
                 <div className="text-slate-400">
                   <span className={g.verdict === 'DROPPED' ? 'text-red-300' : 'text-emerald-300'}>{g.verdict}</span>
@@ -92,7 +92,7 @@ export function TrafficPanel({ line, result, onClose, onWhy, onOpen }: {
           </ul>
         </div>
       )}
-      <p className="mt-3 text-slate-500">
+      <p className="mt-3 text-xs text-slate-500">
         {!relay
           ? tr('resourceGraph.traffic.aboutMetrics', "From the Hubble metrics in the cluster's Prometheus: TCP connections opened (SYN) and dropped packets. UDP traffic such as DNS is not counted.")
           : result.provider === 'calico'

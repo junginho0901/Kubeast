@@ -118,7 +118,7 @@ export function IssuesModal({
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-slate-700 rounded-lg transition-colors hit-area-40"
               aria-label={tr('common.close', 'Close')}
             >
               <X className="w-5 h-5 text-slate-400" />
@@ -194,7 +194,7 @@ export function IssuesModal({
               placeholder={tr('dashboard.issues.searchPlaceholder', 'Search issues (name/namespace/kind/severity/message)...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button

@@ -81,7 +81,7 @@ export default function CustomDropdown({
         data-testid={testId}
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`w-full ${TRIGGER_SIZE[size]} bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between disabled:opacity-50 disabled:cursor-not-allowed`}
+        className={`w-full ${TRIGGER_SIZE[size]} bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className="flex items-center gap-2 font-medium truncate">
           {selected?.icon && <span className="text-base shrink-0">{selected.icon}</span>}
@@ -91,7 +91,7 @@ export default function CustomDropdown({
           )}
         </span>
         <ChevronDown
-          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
+          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform motion-reduce:transition-none ${
             isOpen ? 'rotate-180' : ''
           }`}
         />

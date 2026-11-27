@@ -221,14 +221,14 @@ export default function AccessReview() {
       <div className="page-head items-start gap-4 shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <ClipboardCheck className="w-6 h-6 text-primary-400" />
+            <ClipboardCheck className="w-6 h-6 text-slate-400" />
             <h1 className="text-3xl font-semibold text-ink">{tr('accessReview.title', 'Access review')}</h1>
           </div>
           <p className="text-slate-400 text-sm mt-1">
             {tr('accessReview.subtitle', 'Who can do what right now: accounts, per-cluster grants, API keys, temporary grants since the last review, roles. Review, export, sign off.')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* signing off stores the report as it stands now, not a stored one being viewed */}
           {!viewId && (
             <button
@@ -260,7 +260,7 @@ export default function AccessReview() {
             {tr('accessReview.snapshot.viewing', 'Viewing the report as signed off on {{when}} by {{who}}.', { when: formatWhen(viewed.reviewed_at), who: viewed.reviewed_by_email })}
             {viewed.note && <span className="text-primary-200/80"> · {viewed.note}</span>}
           </span>
-          <button onClick={() => setViewId(null)} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-ink flex items-center gap-1">
+          <button onClick={() => setViewId(null)} className="rounded-sm bg-slate-700 hover:bg-slate-600 px-2 py-1 text-xs text-ink flex items-center gap-1 hit-area-40">
             <X className="w-3 h-3" /> {tr('accessReview.snapshot.back', 'Back to now')}
           </button>
         </div>
@@ -326,7 +326,7 @@ export default function AccessReview() {
             key={s}
             onClick={() => setTab(s)}
             data-testid={`access-review-tab-${s}`}
-            className={`rounded-sm px-3 py-1.5 text-sm ${tab === s ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
+            className={`rounded-lg px-3 py-1.5 text-sm ${tab === s ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
           >
             {sectionLabel(s)}{' '}
             {report ? (
@@ -341,7 +341,7 @@ export default function AccessReview() {
         <button
           onClick={() => setTab('history')}
           data-testid="access-review-tab-history"
-          className={`rounded-sm px-3 py-1.5 text-sm flex items-center gap-1 ${tab === 'history' ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
+          className={`rounded-lg px-3 py-1.5 text-sm flex items-center gap-1 ${tab === 'history' ? 'bg-primary-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
         >
           <History className="w-4 h-4" /> {tr('accessReview.section.history', 'Past reviews')}
         </button>
@@ -352,7 +352,7 @@ export default function AccessReview() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={tr('accessReview.search', 'Search...')}
-              className="ml-auto h-10 px-3 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm"
+              className="ml-auto h-10 px-3 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 text-sm"
             />
             <button
               onClick={() => download(tab)}
@@ -493,7 +493,7 @@ export default function AccessReview() {
             autoFocus
             placeholder={tr('accessReview.signoff.notePlaceholder', 'Findings and actions taken (optional)')}
             data-testid="access-review-signoff-note"
-            className="w-full px-3 py-2 bg-slate-700 text-ink rounded-sm border border-slate-600 focus:outline-hidden focus:border-primary-500 text-sm"
+            className="w-full px-3 py-2 bg-slate-900 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 text-sm"
           />
         </ModalFrame>
       )}

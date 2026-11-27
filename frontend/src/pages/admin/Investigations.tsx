@@ -97,11 +97,11 @@ export default function Investigations() {
   } : null, [data, total, shownFilter, shownPage, rows])
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] gap-6">
-      <div className="flex items-start justify-between gap-3 shrink-0">
+    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+      <div className="page-head items-start gap-3 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary-600/20 rounded-lg">
-            <Siren className="w-6 h-6 text-primary-400" />
+          <div className="p-2 bg-slate-700/50 rounded-lg">
+            <Siren className="w-6 h-6 text-slate-400" />
           </div>
           <div>
             <h1 className="text-3xl font-semibold text-ink">{tr('investigations.title', 'Investigations')}</h1>
@@ -147,14 +147,14 @@ export default function Investigations() {
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing) applyCluster()
               }}
               placeholder={tr('investigations.filter.clusterPlaceholder', 'cluster ID')}
-              className="w-48 h-10 rounded-lg border border-slate-700 bg-slate-950/60 px-3 text-sm text-ink"
+              className="w-48 h-10 rounded-lg border border-control bg-slate-900 px-3 text-sm text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500"
               data-testid="investigations-cluster-filter"
             />
           </div>
           <button
             type="button"
             onClick={applyCluster}
-            className="h-10 rounded-lg bg-primary-600 px-3 text-sm font-medium text-white hover:bg-primary-500"
+            className="h-10 rounded-lg bg-primary-600 px-3 text-sm font-medium text-white hover:bg-primary-700"
             data-testid="investigations-search"
           >
             {tr('investigations.filter.apply', 'Search')}
@@ -209,7 +209,7 @@ export default function Investigations() {
                         onClick={() => open(r.id)}
                         disabled={r.status === 'queued' || r.status === 'running'}
                         data-testid={`investigation-open-${r.id}`}
-                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-primary-600 px-2 py-1 text-xs text-white hover:bg-primary-500 disabled:opacity-40"
+                        className="btn-row disabled:opacity-40"
                       >
                         <FileSearch className="w-3.5 h-3.5" /> {tr('investigations.open', 'Report')}
                       </button>

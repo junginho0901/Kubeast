@@ -388,7 +388,7 @@ export default function ResourceDetailDrawer() {
         }}
       />
       <div
-        className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-hairline flex flex-col shadow-2xl"
+        className="fixed inset-y-0 right-0 w-full max-w-[740px] bg-slate-900 border-l border-hairline flex flex-col shadow-2xl chat-scroll-surface"
         style={{ zIndex: zIndex + 1 }}
       >
         <ResourceDetailHeader

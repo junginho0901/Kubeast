@@ -13,7 +13,7 @@ import DiffView from './DiffView'
 export function NoManifestDiff({ canReveal }: { canReveal: boolean }) {
   const { t } = useTranslation()
   return (
-    <div className="rounded-sm border border-slate-600 bg-slate-800/40 px-3 py-4 text-sm text-slate-300" data-testid="helm-rollback-no-diff">
+    <div className="rounded-lg border border-hairline bg-slate-900/40 px-3 py-4 text-sm text-slate-300 break-words" data-testid="helm-rollback-no-diff">
       {t(canReveal ? 'helmReleaseDetail.rollback.noChange' : 'helmReleaseDetail.rollback.noChangeMasked')}
     </div>
   )
@@ -89,13 +89,13 @@ export default function RollbackModal({
   return (
     <ModalOverlay onClose={applying ? () => undefined : onClose}>
       <div
-        className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-3xl mx-auto"
+        className="bg-slate-800 border border-hairline rounded-xl shadow-2xl p-5 w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-y-auto mx-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-semibold text-ink mb-1">
           {t('helmReleaseDetail.rollback.title', { rev: targetRevision })}
         </h3>
-        <p className="text-sm text-slate-400 mb-4">
+        <p className="text-sm text-slate-400 mb-4 break-words">
           {t('helmReleaseDetail.rollback.subtitle', { namespace, name })}
         </p>
 
@@ -104,7 +104,7 @@ export default function RollbackModal({
             <Loader2 className="w-5 h-5 animate-spin" />
           </div>
         ) : error ? (
-          <div className="rounded-sm border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 break-words">
             {error}
           </div>
         ) : noChange ? (
@@ -113,12 +113,12 @@ export default function RollbackModal({
           <DiffView diff={diff} />
         )}
 
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex flex-wrap justify-end gap-2 mt-4">
           <button
             type="button"
             onClick={onClose}
             disabled={applying}
-            className="px-4 py-2 text-sm text-slate-300 hover:text-ink border border-slate-600 rounded-lg hover:bg-slate-800 disabled:opacity-50"
+            className="btn btn-secondary h-9 text-sm disabled:opacity-50"
           >
             {t('helmReleaseDetail.rollback.cancel')}
           </button>
@@ -126,7 +126,7 @@ export default function RollbackModal({
             type="button"
             onClick={() => applyMutation.mutate()}
             disabled={loading || applying || !!error}
-            className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-2"
+            className="btn h-9 text-sm bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 inline-flex items-center gap-2"
           >
             {applying && <Loader2 className="w-4 h-4 animate-spin" />}
             {applying

@@ -409,7 +409,7 @@ export default function ResourceGraph() {
       <div className="flex-1 relative" style={{ minHeight: 0 }}>
         {!hasSelection ? (
           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
-            <div className="max-w-lg text-center">
+            <div className="w-full max-w-lg px-5 py-6 text-center">
               <div className="text-6xl mb-6 opacity-30">🔗</div>
               <h2 className="text-xl font-semibold text-ink mb-3">{t('resourceGraph.title', 'Resource Graph')}</h2>
               <p className="text-sm text-slate-400 mb-6 leading-relaxed">
@@ -417,18 +417,18 @@ export default function ResourceGraph() {
                 {t('resourceGraph.emptyDesc2')}<br />
                 {t('resourceGraph.emptyDesc3')}
               </p>
-              <div className="grid grid-cols-3 gap-3 mb-8 text-[11px]">
-                <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8 text-xs">
+                <div className="p-3 border-t border-hairline">
                   <div className="text-lg mb-1">📊</div>
                   <div className="text-slate-300 font-medium">{t('resourceGraph.featureGroupingTitle')}</div>
                   <div className="text-slate-500 mt-1 whitespace-pre-line">{t('resourceGraph.featureGroupingDesc')}</div>
                 </div>
-                <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                <div className="p-3 border-t border-hairline">
                   <div className="text-lg mb-1">🔍</div>
                   <div className="text-slate-300 font-medium">{t('resourceGraph.featureFilteringTitle')}</div>
                   <div className="text-slate-500 mt-1 whitespace-pre-line">{t('resourceGraph.featureFilteringDesc')}</div>
                 </div>
-                <div className="bg-slate-800 rounded-lg p-3 border border-slate-700">
+                <div className="p-3 border-t border-hairline">
                   <div className="text-lg mb-1">👆</div>
                   <div className="text-slate-300 font-medium">{t('resourceGraph.featureInteractionTitle')}</div>
                   <div className="text-slate-500 mt-1 whitespace-pre-line">{t('resourceGraph.featureInteractionDesc')}</div>
@@ -452,7 +452,7 @@ export default function ResourceGraph() {
             <button
               type="button"
               onClick={() => void refetchGraph()}
-              className="mt-3 rounded-sm border border-slate-600 px-2 py-0.5 text-xs text-slate-200 hover:border-slate-400"
+              className="btn btn-secondary mt-3 text-sm"
             >
               {t('common.retry', { defaultValue: 'Retry' })}
             </button>
@@ -504,14 +504,14 @@ export default function ResourceGraph() {
             >
               <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--color-slate-700)" />
               {/* bottom centre: the legend holds the bottom-left corner and the traffic panel the right edge */}
-              <Controls position="bottom-center" orientation="horizontal" className="bg-slate-800! border-slate-700! rounded-lg! [&>button]:bg-slate-700! [&>button]:border-slate-600! [&>button]:text-ink! [&>button:hover]:bg-slate-600!" />
+              <Controls position="bottom-center" orientation="horizontal" className="bg-slate-800! border-control! rounded-lg! [&>button]:bg-slate-800! [&>button]:border-hairline! [&>button]:text-ink! [&>button:hover]:bg-slate-700!" />
               <MiniMap
                 nodeColor={node => {
                   const raw = node.data?.raw as ResourceGraphNode | undefined
                   return raw ? nodeColor(raw) : 'var(--color-slate-500)'
                 }}
                 maskColor="color-mix(in srgb, var(--color-slate-900) 70%, transparent)"
-                style={{ background: 'var(--color-slate-800)', border: '1px solid var(--color-slate-700)', borderRadius: '8px' }}
+                style={{ background: 'var(--color-slate-800)', border: '1px solid var(--color-hairline)', borderRadius: '8px' }}
               />
             </ReactFlow>
           </div>
@@ -562,7 +562,7 @@ export default function ResourceGraph() {
             has nothing to decode and the panel overlapped its cards at 1024px),
             and collapsible to a single line */}
         {(graphData?.nodes?.length ?? 0) > 0 && (
-        <div className="absolute bottom-4 left-4 bg-slate-800/90 border border-slate-700 rounded-lg p-3 text-xs space-y-1.5 z-10 backdrop-blur-xs">
+        <div className="absolute bottom-4 left-4 bg-slate-800 border border-hairline rounded-xl p-3 text-xs space-y-1.5 z-10 shadow-sm max-h-[calc(100%-32px)] overflow-y-auto">
           <button
             type="button"
             onClick={() => setLegendOpen((v) => !v)}
@@ -585,7 +585,7 @@ export default function ResourceGraph() {
             )
           })}
           {legendOpen && traffic && (
-          <div className="border-t border-slate-700 pt-1.5 mt-1.5 space-y-1" data-testid="traffic-legend">
+          <div className="border-t border-hairline pt-1.5 mt-1.5 space-y-1" data-testid="traffic-legend">
             {(['allowed', 'mixed', 'dropped'] as const).map((st) => (
               <div key={st} className="flex items-center gap-2">
                 <svg width="24" height="8" className="shrink-0">
@@ -607,7 +607,7 @@ export default function ResourceGraph() {
           </div>
           )}
           {legendOpen && (
-          <div className="border-t border-slate-700 pt-1.5 mt-1.5 space-y-1">
+          <div className="border-t border-hairline pt-1.5 mt-1.5 space-y-1">
             {podCounts.groups > 0 && (
               <div className="flex items-center gap-2" data-testid="legend-group">
                 <span className="flex w-3 flex-wrap gap-px">{[0, 1, 2, 3].map((i) => <span key={i} className="block h-[3px] w-[5px] bg-green-500" />)}</span>
@@ -668,7 +668,7 @@ function TrafficStatus({ error, result, selfLoops }: { error?: string; result?: 
   }
   if (lines.length === 0) return null
   return (
-    <div className="absolute top-3 left-3 z-10 max-w-md rounded-lg border border-slate-700 bg-slate-800/90 px-3 py-2 text-xs space-y-0.5 backdrop-blur-xs" data-testid="traffic-status">
+    <div className="absolute top-3 left-3 z-10 max-w-[min(28rem,calc(100%-24px))] rounded-lg border border-hairline bg-slate-800 px-3 py-2 text-xs space-y-0.5 break-words shadow-sm" data-testid="traffic-status">
       {lines.map((l) => <p key={l.key} className={l.warn ? 'text-amber-300' : 'text-slate-300'} data-testid={`traffic-status-${l.key}`}>{l.text}</p>)}
     </div>
   )

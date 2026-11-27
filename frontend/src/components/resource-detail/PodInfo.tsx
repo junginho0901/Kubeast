@@ -299,7 +299,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
               >
                 <span className="text-xs font-medium truncate">{execSelectContainer || containerNames[0]}</span>
-                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecContainerOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform motion-reduce:transition-none ${isExecContainerOpen ? 'rotate-180' : ''}`} />
               </button>
               {isExecContainerOpen && (
                 <div className="absolute top-full left-0 mt-1 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[200px] overflow-y-auto">
@@ -323,7 +323,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
                 className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
               >
                 <span className="text-xs font-medium">{execCommand}</span>
-                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isExecShellOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform motion-reduce:transition-none ${isExecShellOpen ? 'rotate-180' : ''}`} />
               </button>
               {isExecShellOpen && (
                 <div className="absolute top-full left-0 mt-1 w-full bg-slate-700 border border-slate-600 rounded-lg shadow-xl z-50">

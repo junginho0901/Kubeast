@@ -51,14 +51,14 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
 
   const showDrainStatus = drainStatus !== 'idle' || !!drainId || !!drainError
   const drainMeta = drainStatus === 'success'
-    ? { icon: CheckCircle2, label: tr('nodes.drain.status.success', 'Completed'), tone: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' }
+    ? { icon: CheckCircle2, label: tr('nodes.drain.status.success', 'Completed'), tone: 'text-drain-status-completed', bg: 'bg-drain-surface-completed/10', border: 'border-drain-border-completed/20' }
     : drainStatus === 'error'
-    ? { icon: AlertTriangle, label: tr('nodes.drain.status.error', 'Failed'), tone: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' }
+    ? { icon: AlertTriangle, label: tr('nodes.drain.status.error', 'Failed'), tone: 'text-drain-status-failed', bg: 'bg-drain-surface-failed/10', border: 'border-drain-border-failed/20' }
     : drainStatus === 'interrupted'
-    ? { icon: AlertTriangle, label: tr('nodes.drain.status.interrupted', 'Interrupted'), tone: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/20' }
+    ? { icon: AlertTriangle, label: tr('nodes.drain.status.interrupted', 'Interrupted'), tone: 'text-drain-status-interrupted', bg: 'bg-drain-surface-warning/10', border: 'border-drain-border-warning/20' }
     : drainStatus === 'draining'
-    ? { icon: Loader2, label: tr('nodes.drain.status.draining', 'Draining'), tone: 'text-primary-300', bg: 'bg-primary-500/10', border: 'border-primary-500/20' }
-    : { icon: Clock, label: tr('nodes.drain.status.pending', 'Queued'), tone: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/20' }
+    ? { icon: Loader2, label: tr('nodes.drain.status.draining', 'Draining'), tone: 'text-drain-status-active', bg: 'bg-drain-surface-active/10', border: 'border-drain-border-active/20' }
+    : { icon: Clock, label: tr('nodes.drain.status.pending', 'Queued'), tone: 'text-drain-status-queued', bg: 'bg-drain-surface-warning/10', border: 'border-drain-border-warning/20' }
   const drainEndedShort = drainStatus === 'interrupted' || drainStatus === 'error'
 
   return (
@@ -110,9 +110,9 @@ export default function NodeActions({ name, tr, data }: NodeActionsProps) {
               <div className="mt-1 text-xs text-slate-300">{tr('nodes.drain.status.pods', '{{done}} of {{total}} pods evicted', drainPods)}</div>
             )}
             {drainStatus === 'interrupted' && (
-              <div className="mt-1 text-xs text-amber-200">{tr('nodes.drain.status.interruptedMessage', 'The server running this drain stopped before it finished. Pods may still be on the node.')}</div>
+              <div className="mt-1 text-xs text-notice-text-warning-detail">{tr('nodes.drain.status.interruptedMessage', 'The server running this drain stopped before it finished. Pods may still be on the node.')}</div>
             )}
-            {drainError && <div className="mt-1 text-xs text-red-300">{drainError}</div>}
+            {drainError && <div className="mt-1 text-xs text-notice-text-failed-detail">{drainError}</div>}
             {drainEndedShort && drainCordoned && (
               <div data-testid="node-drain-cordoned" className="mt-1 text-xs text-slate-300">
                 {drainCordoned.length > 0

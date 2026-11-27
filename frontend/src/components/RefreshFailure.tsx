@@ -25,7 +25,7 @@ export function RefreshFailure({ failure, className = '' }: { failure: RefreshFa
     <>
       <CreatedNotice />
       {failure && (
-        <p role="alert" data-testid="refresh-failed" title={utcTitle(failure.at) ?? undefined} className={`shrink-0 text-sm text-red-400 break-words ${className}`}>
+        <p role="alert" data-testid="refresh-failed" title={utcTitle(failure.at) ?? undefined} className={`shrink-0 text-sm text-notice-text-failed break-words ${className}`}>
           {text}
         </p>
       )}

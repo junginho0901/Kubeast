@@ -67,15 +67,15 @@ export function UserDetailModal({
   return (
     <ModalOverlay onClose={closeDetail}>
       <div
-        className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl max-h-[85vh] flex flex-col"
+        className="w-full max-w-2xl rounded-xl border border-hairline bg-slate-800 p-5 shadow-xl max-h-[85vh] flex flex-col"
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-500/10 border border-primary-500/20">
-              <span className="text-sm font-semibold text-primary-300">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-5 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-700">
+              <span className="text-sm font-semibold text-slate-300">
                 {u.name.slice(0, 1).toUpperCase()}
               </span>
             </div>
@@ -83,7 +83,7 @@ export function UserDetailModal({
               <h2 className="text-lg font-semibold text-ink">
                 {tr('adminUsers.detail.title', 'User details')}
               </h2>
-              <p className="text-sm text-slate-400">{u.email ?? '-'}</p>
+              <p className="text-sm text-slate-400 break-all">{u.email ?? '-'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export function UserDetailModal({
             <button
               type="button"
               onClick={closeDetail}
-              className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800"
+              className="rounded-sm p-1.5 text-slate-400 hover:text-ink hover:bg-slate-800 hit-area-40"
               aria-label={tr('common.close', 'Close')}
             >
               <X className="w-5 h-5" />
@@ -108,7 +108,7 @@ export function UserDetailModal({
           </div>
         </div>
   
-        <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">
@@ -119,17 +119,17 @@ export function UserDetailModal({
                   value={detailDraft.name}
                   maxLength={USER_NAME_MAX}
                   onChange={(e) => setDetailDraft((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-600"
+                  className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-ink focus:outline-hidden focus:ring-2 focus:ring-primary-600"
                 />
               ) : (
-                <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">{u.name}</div>
+                <div className="py-2 text-sm text-slate-200 break-all">{u.name}</div>
               )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">
                 {tr('adminUsers.form.email', 'Email')}
               </label>
-              <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-300">{u.email ?? '-'}</div>
+              <div className="py-2 text-sm text-slate-300 break-all">{u.email ?? '-'}</div>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">
@@ -143,7 +143,7 @@ export function UserDetailModal({
                   onChange={(v) => setDetailDraft((p) => ({ ...p, team: v }))}
                 />
               ) : (
-                <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">{u.team || '-'}</div>
+                <div className="py-2 text-sm text-slate-200 break-all">{u.team || '-'}</div>
               )}
             </div>
             <div className="col-span-2">
@@ -162,7 +162,7 @@ export function UserDetailModal({
                     .map((r) => ({ value: String(r.id), label: r.name }))}
                 />
               ) : (
-                <div className="rounded-lg border border-slate-700/50 bg-slate-950/30 px-3 py-2 text-sm text-slate-200">
+                <div className="py-2 text-sm text-slate-200 break-all">
                   {u.role?.name ?? '-'}
                 </div>
               )}
@@ -173,7 +173,7 @@ export function UserDetailModal({
             <h3 className="text-xs font-semibold text-slate-400 mb-2">
               {tr('adminUsers.detail.permissions', 'Permissions')}
             </h3>
-            <div className="rounded-xl border border-slate-700/50 bg-slate-950/30 p-3">
+            <div className="border-t border-hairline pt-3">
               {permissions.length === 0 ? (
                 <p className="text-xs text-slate-500">{tr('adminUsers.detail.noPerms', 'No permissions assigned')}</p>
               ) : (
@@ -210,7 +210,7 @@ export function UserDetailModal({
           </div>
         )}
   
-        <div className="mt-5 flex items-center justify-end gap-3">
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-3 shrink-0">
           {detailEditing ? (
             <>
               <button

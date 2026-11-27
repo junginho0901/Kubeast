@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 // The warning and notice bands are read in all three colour modes from the tokens of index.css over Tailwind's
 // palette, with no browser: axe-core over the screens (screen-consistency.spec.ts) never sees them, since each shows
 // only in a state no screen is opened in (a refusal, a stopped live list, a past sign-off, a cut list). In light the
-// hue shades 200-400 and 800-950 turn over and 50-100 stay, so a band written in a 100 on its 900 tint read 1.03:1
+// hue shades 200-400 and 800-950 turn over and 50-100 stay, so a band written in a 100 on its 900 tint read 1.02:1
 // there. Text is held to WCAG 2.2's 4.5:1 (an icon would need 3:1; the bands' icons are held to 4.5 too).
 
 const SRC = join(process.cwd(), 'src')
@@ -141,7 +141,8 @@ function contrast(text: string, ground: string[], vars: Map<string, string>): nu
 // ---- the source: an element, the colour classes of its tags ----
 
 const HUES = 'red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose'
-const COLOUR = String.raw`(?:ink|white|black|primary-bright|(?:slate|gray|primary|${HUES})-(?:50|[1-9]00|950))(?:/\d{1,3})?`
+// a notice or badge role (index.css @theme inline) is read as the mode's step it names
+const COLOUR = String.raw`(?:ink|white|black|primary-bright|(?:slate|gray|primary|${HUES})-(?:50|[1-9]00|950)|(?:notice|badge)(?:-[a-z]+)+)(?:/\d{1,3})?`
 // a class with no variant before it (hover:, dark:), as the element shows at rest
 const classesOf = (tag: string, kind: 'text' | 'bg') =>
   [...tag.matchAll(new RegExp(String.raw`(?<![\w:/-])${kind}-(${COLOUR})(?![\w-])`, 'g'))].map((m) => m[1])
@@ -196,9 +197,9 @@ const PLACES: Place[] = [
   { file: 'pages/admin/ClusterHygiene.tsx', at: 'data-testid="hygiene-collectors"', on: PAGE },
   { file: 'pages/admin/ClusterHygiene.tsx', at: 'data-testid="hygiene-truncated"', on: PAGE },
   { file: 'pages/ResourceGraph.tsx', at: 'data-testid="resource-graph-forbidden"', on: PAGE },
-  { file: 'components/Layout.tsx', at: 'bg-amber-500/90', on: COUNT },
-  { file: 'pages/admin/AccessRequests.tsx', at: 'bg-amber-500/90', on: COUNT },
-  { file: 'pages/AdminUsers.tsx', at: 'bg-amber-500/90', on: COUNT },
+  { file: 'components/Layout.tsx', at: 'bg-badge-surface-pending', on: COUNT },
+  { file: 'pages/admin/AccessRequests.tsx', at: 'bg-badge-surface-pending', on: COUNT },
+  { file: 'pages/AdminUsers.tsx', at: 'bg-badge-surface-pending', on: COUNT },
   { file: 'components/LogSearchView.tsx', at: '<mark ', on: [['slate-900'], ['slate-950']] },
   // the class that is the current one among the conflicting PriorityClasses, inside its amber box
   { file: 'components/resource-detail/PriorityClassInfo.tsx', at: 'bg-amber-800/30', on: [['slate-800', 'amber-900/20'], ['slate-900', 'amber-900/20']] },
@@ -225,9 +226,9 @@ function pairsOf(place: Place): { text: string; ground: string[] }[] {
 }
 
 describe('colour mode contrast of the notice bands', () => {
-  it('reads the band a light 100 on its 900 tint was as it showed (1.03:1 in light)', () => {
+  it('reads the band a light 100 on its 900 tint was as it showed (1.02:1 in light)', () => {
     const band = ['slate-900', 'amber-900/20']
-    expect(MODES.map((mode) => contrast('amber-100', band, colourVars(mode)))).toEqual([16.81, 15.09, 1.03])
+    expect(MODES.map((mode) => contrast('amber-100', band, colourVars(mode)))).toEqual([15.57, 15.09, 1.02])
   })
 
   it.each(PLACES.map((p): [string, Place] => [`${p.file} ${p.at}`, p]))('%s keeps its text at 4.5:1 in every mode', (_name, place) => {
@@ -242,10 +243,11 @@ describe('colour mode contrast of the notice bands', () => {
     expect(under).toEqual([])
   })
 
-  it('the sign-in pages read the colours of the default mode in every mode', () => {
-    const navy = colourVars('default')
+  it('the sign-in pages read the brand palette in every mode', () => {
+    // The sign-in pages keep the complete brand palette over every console mode, including borders and controls.
+    const brand = colourVars('default', true)
     for (const mode of MODES) {
-      const differ = [...colourVars(mode, true)].filter(([k, v]) => navy.get(k) !== v).map(([k]) => k)
+      const differ = [...colourVars(mode, true)].filter(([k, v]) => brand.get(k) !== v).map(([k]) => k)
       expect({ mode, differ }).toEqual({ mode, differ: [] })
     }
   })

@@ -15,7 +15,7 @@ export function MonitoringSearch({ value, onChange, placeholder, testId, classNa
         value={value}
         onChange={(e) => onChange(e.target.value)}
         data-testid={testId}
-        className="h-12 w-full pl-10 pr-4 bg-slate-700 border border-slate-600 rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        className="h-12 w-full pl-10 pr-4 bg-slate-900 border border-control rounded-lg text-sm text-ink placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-primary-500 focus:border-transparent"
       />
     </div>
   )
@@ -57,11 +57,11 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
           data-testid="monitoring-namespace"
           aria-label={`${t('monitoring.namespace.label')}: ${label}`}
           title={t('monitoring.namespace.label')}
-          className="h-12 w-full px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
+          className="h-12 w-full px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 justify-between"
         >
           <span className="text-sm font-medium truncate min-w-0">{label}</span>
           <ChevronDown
-            className={`w-4 h-4 text-slate-400 transition-transform ${
+            className={`w-4 h-4 text-slate-400 transition-transform motion-reduce:transition-none ${
               isOpen ? 'rotate-180' : ''
             }`}
           />
@@ -111,7 +111,7 @@ export function NamespaceFilter({ namespaces, value, onChange }: NamespaceFilter
                   {value === ns.name && (
                     <CheckCircle className="w-4 h-4 text-primary-400 shrink-0" />
                   )}
-                  <span className={value === ns.name ? 'font-medium' : ''}>
+                  <span className={`min-w-0 break-all ${value === ns.name ? 'font-medium' : ''}`}>
                     {ns.name}
                   </span>
                 </button>
