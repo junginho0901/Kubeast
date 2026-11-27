@@ -230,6 +230,11 @@
     "generatedAt": "Report as of {{when}}; requests since {{since}}.",
     "tabCountExpired": "({{count}} · {{expired}} expired)",
     "requestsCut": "The newest {{shown}} of {{total}} requests since {{since}} are listed here and in the CSV.",
+    "rolePermissions": {
+      "count": "{{count}} permissions",
+      "count_one": "{{count}} permission",
+      "description": "Permissions in this role: {{count}}."
+    },
     "section": {
       "users": "Accounts",
       "cluster_roles": "Cluster roles",
