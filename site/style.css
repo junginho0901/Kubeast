@@ -536,6 +536,15 @@ footer nav a:hover { color: var(--text); }
   .term-bar { gap: 8px; padding: 10px; }
   .tab { padding: 4px 9px; }
 }
+/* A phone's first screen: the headline and Get started first, the particle logo after them. */
+@media (max-width: 600px) {
+  .hero-art { order: 0; }
+}
+/* A short phone (an SE): a smaller headline and lead, so Get started is in the first screen too. */
+@media (max-width: 600px) and (max-height: 700px) {
+  .hero h1 { font-size: 2.1rem; }
+  .lead { font-size: 1rem; margin-bottom: 24px; }
+}
 @media (max-width: 380px) {
   .gh-label { display: none; }
   .top nav .btn-sm { padding: 7px 10px; }
