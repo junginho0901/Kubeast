@@ -138,7 +138,7 @@ export default function HelmReleasesPage() {
     return [
       [t('helmReleases.stats.total'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
       [t('helmReleases.stats.deployed'), n(stats.deployed), 'border-slate-700 bg-slate-900/50', 'text-emerald-300'],
-      [t('helmReleases.stats.failed'), n(stats.failed), 'border-slate-700 bg-slate-900/50', 'text-rose-300'],
+      [t('helmReleases.stats.failed'), n(stats.failed), 'border-slate-700 bg-slate-900/50', 'text-summary-text-failed'],
       [t('helmReleases.stats.pending'), n(stats.pending), 'border-slate-700 bg-slate-900/50', 'text-amber-300'],
       [t('helmReleases.stats.superseded'), n(stats.superseded), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ]

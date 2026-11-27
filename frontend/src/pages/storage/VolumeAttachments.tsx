@@ -105,7 +105,7 @@ export default function VolumeAttachments() {
       [tr('volumeattachments.stats.total', 'Total'), cards.total, 'border-slate-700/70', 'text-slate-400'],
       [tr('volumeattachments.stats.attached', 'Attached'), cards.attached, 'border-slate-700/70', 'text-emerald-300'],
       [tr('volumeattachments.stats.detached', 'Detached'), cards.detached, 'border-slate-700/70', 'text-amber-300'],
-      [tr('volumeattachments.stats.errors', 'Errors'), cards.errors, 'border-slate-700/70', 'text-rose-300'],
+      [tr('volumeattachments.stats.errors', 'Errors'), cards.errors, 'border-slate-700/70', 'text-summary-text-error'],
     ],
     [cards.attached, cards.detached, cards.errors, cards.total, tr],
   )

@@ -90,7 +90,7 @@ export function useGPUNodesData({ searchQuery, sortKey, sortDir, currentPage }: 
       return [
         [tr('gpuNodes.stats.total', 'Total Nodes'), n(stats.total), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
         [tr('gpuNodes.stats.ready', 'Ready'), n(stats.ready), 'border-slate-700 bg-slate-900/50', 'text-emerald-300'],
-        [tr('gpuNodes.stats.notReady', 'Not Ready'), n(stats.notReady), 'border-slate-700 bg-slate-900/50', 'text-rose-300'],
+        [tr('gpuNodes.stats.notReady', 'Not Ready'), n(stats.notReady), 'border-slate-700 bg-slate-900/50', 'text-summary-text-unready'],
         [tr('gpuNodes.stats.capacity', 'GPU Capacity'), n(stats.totalCapacity), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
         [tr('gpuNodes.stats.allocatable', 'Allocatable'), n(stats.totalAllocatable), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
         [tr('gpuNodes.stats.used', 'Used'), n(stats.totalUsed), 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
