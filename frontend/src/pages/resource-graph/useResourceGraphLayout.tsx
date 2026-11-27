@@ -255,7 +255,8 @@ export function useResourceGraphLayout({
           label: e.count && e.count > 1 ? `${word} · ${e.count}` : word,
           // React Flow's own name is "Edge from <id> to <id>" in English
           ariaLabel: i18next.t('resourceGraph.edgeAria', { defaultValue: '{{source}} → {{target}} ({{relation}})', source: e.source, target: e.target, relation: word }),
-          labelStyle: { fill: style.stroke, fontSize: 10 },
+          // the mode's text colour, not the line's: the line colours are for the dark grounds and fall under 4.5:1 in light
+          labelStyle: { fill: 'var(--color-slate-300)', fontSize: 10 },
           labelBgStyle: { fill: 'var(--color-slate-900)', fillOpacity: 0.8 },
           labelBgPadding: [4, 2] as [number, number],
           labelBgBorderRadius: 4,
