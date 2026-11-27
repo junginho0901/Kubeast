@@ -633,6 +633,8 @@ def _format_service_connectivity_display(raw_text: str) -> Optional[str]:
         port_text = ",".join(_fmt_port(p) for p in ports) if ports else ""
 
     endpoints = data.get("endpoints") or {}
+    # tool-server answers null for what it could not read: no count to show, but why
+    unread = "ready" in endpoints and endpoints["ready"] is None
     ready = int(endpoints.get("ready") or 0)
     total = endpoints.get("total")
     if total is None:
@@ -644,10 +646,11 @@ def _format_service_connectivity_display(raw_text: str) -> Optional[str]:
         str(data.get("service", "")),
         str(data.get("type", "")),
         port_text,
-        f"{ready}/{total}",
+        "-" if unread else f"{ready}/{total}",
         str(data.get("status", "")),
     ]]
-    return _with_reason(_format_table(headers, rows), _empty_reason(data))
+    reasons = [text for text in (data.get("endpoints_error"), data.get("error")) if isinstance(text, str) and text] if unread else []
+    return _with_reason(_format_table(headers, rows), reasons[0] if reasons else _empty_reason(data))
 
 def _format_api_resources_display(raw_text: str) -> Optional[str]:
     try:

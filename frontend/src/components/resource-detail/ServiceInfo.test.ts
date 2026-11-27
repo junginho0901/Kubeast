@@ -54,3 +54,29 @@ describe('the LoadBalancer row of a Service', () => {
     expect(render([{ ip: null, hostname: null }])).toBe('-')
   })
 })
+
+// Endpoints the describe answer could not read are the reason, not 0 Ready and no addresses.
+describe('the endpoints of a Service', () => {
+  const html = (describe: Record<string, unknown>) => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } })
+    qc.setQueryData(['service-describe', 'ns', 'web'], describe)
+    return renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(QueryClientProvider, { client: qc },
+      createElement(ServiceInfo, { name: 'web', namespace: 'ns', rawJson: {} }))))
+  }
+  const why = 'endpointslices.discovery.k8s.io is forbidden: User &quot;u&quot; cannot list resource'
+
+  it('say why they could not be read', () => {
+    const out = html({ endpoints_error: 'endpointslices.discovery.k8s.io is forbidden: User "u" cannot list resource' })
+    expect(out).toContain('data-testid="service-endpoints-failed"')
+    expect(out).toContain(why)
+    expect(out).not.toContain('service-ready-addresses')
+    expect(out).not.toContain('service-not-ready-addresses')
+  })
+
+  it('are counted when they were read', () => {
+    const out = html({ endpoint_summary: { ready_count: 2, not_ready_count: 1, ready_addresses: ['10.0.0.1', '10.0.0.2'], not_ready_addresses: ['10.0.0.3'] }, endpoint_slices: [] })
+    expect(out).toContain('data-testid="service-ready-addresses"')
+    expect(out).toContain('10.0.0.3')
+    expect(out).not.toContain('service-endpoints-failed')
+  })
+})

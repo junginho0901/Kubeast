@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -375,6 +376,13 @@ func namespaceOrAll(namespace string) string {
 
 const issuesNotReadNote = "The lists in not_read could not be read: what they hold is not counted, not zero. counts and total are of the other lists only, so an empty answer does not say that nothing is failing."
 
+// refusedElsewhere says whether an unread list's row names the namespaces it was refused in (a limited grant's) and
+// namespace is none of them.
+func refusedElsewhere(row map[string]interface{}, namespace string) bool {
+	names, _ := row["namespaces"].([]interface{})
+	return namespace != "" && len(names) > 0 && !slices.Contains(names, interface{}(namespace))
+}
+
 // handleIssues returns the dashboard's issue check — pods, workloads, nodes,
 // PVCs and Warning events in one pass — narrowed to a namespace, the caller's
 // granted namespaces, or a severity.
@@ -427,10 +435,10 @@ func handleIssues(ctx context.Context, args map[string]interface{}, headers http
 		sev, _ := issue["severity"].(string)
 		// A list that could not be read holds no object and says the answer is partial, as on the screen: a row where the
 		// answer is not narrowed, else its name in not_read. The nodes are no part of a namespace's answer, read or not, nor
-		// of a grant's that is limited to namespaces, which never lists them.
+		// of a grant's that is limited to namespaces, which never lists them; nor is a list refused in other namespaces only.
 		unread := issue["kind"] == "Collector"
 		if unread && (namespace != "" || (severity != "" && sev != severity)) {
-			if list, _ := issue["name"].(string); list != "nodes" || (namespace == "" && len(scope) == 0) {
+			if list, _ := issue["name"].(string); (list != "nodes" || (namespace == "" && len(scope) == 0)) && !refusedElsewhere(issue, namespace) {
 				notRead[list], _ = issue["message"].(string)
 			}
 			continue

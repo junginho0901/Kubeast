@@ -2,8 +2,10 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -63,19 +65,70 @@ func sideBySide(n int, do func(i int)) {
 	wg.Wait()
 }
 
+// refusedNamespaces are the namespaces of a limited grant that a read across them left out because the cluster refused
+// them, in the grant's order, for an answer that says so (noteRefusedNamespaces).
+type refusedNamespaces struct {
+	mu    sync.Mutex
+	names []string
+	why   error // the first one's
+}
+
+type refusedNamespacesKey struct{}
+
+// noteRefusedNamespaces is ctx with notes of its own: what the reads made with it leave out is in them.
+func noteRefusedNamespaces(ctx context.Context) (context.Context, *refusedNamespaces) {
+	notes := &refusedNamespaces{}
+	return context.WithValue(ctx, refusedNamespacesKey{}, notes), notes
+}
+
+// noteRefusedTo adds a namespace left out to ctx's notes, where it has any.
+func noteRefusedTo(ctx context.Context) func(namespace string, why error) {
+	notes, ok := ctx.Value(refusedNamespacesKey{}).(*refusedNamespaces)
+	if !ok {
+		return func(string, error) {}
+	}
+	return func(namespace string, why error) {
+		notes.mu.Lock()
+		defer notes.mu.Unlock()
+		if notes.why == nil {
+			notes.why = why
+		}
+		notes.names = append(notes.names, namespace)
+	}
+}
+
+func (n *refusedNamespaces) refused() ([]string, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return slices.Clone(n.names), n.why
+}
+
+// refusedNamesListed: the most names the text of what was left out lists.
+const refusedNamesListed = 5
+
+// notReadIn is what an answer says of the namespaces a read left out: their names and the first one's reason.
+func notReadIn(names []string, why string) string {
+	listed := strings.Join(names[:min(len(names), refusedNamesListed)], ", ")
+	if more := len(names) - refusedNamesListed; more > 0 {
+		listed += fmt.Sprintf(" and %d more", more)
+	}
+	return fmt.Sprintf("not read in %s: %s", listed, why)
+}
+
 // listAcrossNamespaces runs list once with "" (every namespace) for an
 // unscoped caller, or once per namespace of a scoped caller and merges the
 // results in the scope's order. A namespace the cluster refuses or does not
 // have is skipped — the grant names it, the cluster is not bound there (yet) —
-// so the rest still shows; when none could be read and one was refused, that
-// refusal is returned (an empty list would read as "the cluster has none").
-// Any other error is returned.
+// so the rest still shows, and the refused ones are in ctx's notes for an
+// answer that names them (noteRefusedNamespaces); when none could be read and
+// one was refused, that refusal is returned (an empty list would read as "the
+// cluster has none"). Any other error is returned.
 func (s *Service) listAcrossNamespaces(ctx context.Context, list func(namespace string) ([]map[string]interface{}, error)) ([]map[string]interface{}, error) {
 	scope := scopeFromCtx(ctx)
 	if len(scope) == 0 {
 		return list("")
 	}
-	return fanOutNamespaces(scope, list)
+	return fanOutNamespaces(scope, list, noteRefusedTo(ctx))
 }
 
 // FanOutNamespaces is fanOutNamespaces for the packages beside this one.
@@ -92,11 +145,14 @@ func eachCallerNamespace(ctx context.Context, namespace string, read func(namesp
 		return read(namespace)
 	}
 	var refused error
+	var left []string
+	var why []error
 	readOne := false
 	for _, ns := range scope {
 		if err := read(ns); err != nil {
 			if apierrors.IsForbidden(err) {
 				refused = err
+				left, why = append(left, ns), append(why, err)
 				continue
 			}
 			if apierrors.IsNotFound(err) {
@@ -109,13 +165,18 @@ func eachCallerNamespace(ctx context.Context, namespace string, read func(namesp
 	if !readOne {
 		return refused
 	}
+	note := noteRefusedTo(ctx)
+	for i, ns := range left {
+		note(ns, why[i])
+	}
 	return nil
 }
 
 // fanOutNamespaces runs list once per namespace of scope, in parallel, and
 // merges the results in the scope's order, skipping a namespace the cluster
 // refuses or does not have unless none could be read (listAcrossNamespaces).
-func fanOutNamespaces[T any](scope []string, list func(namespace string) ([]T, error)) ([]T, error) {
+// left is told each refused one that was skipped, in the scope's order.
+func fanOutNamespaces[T any](scope []string, list func(namespace string) ([]T, error), left ...func(namespace string, why error)) ([]T, error) {
 	results := make([][]T, len(scope))
 	read := make([]bool, len(scope))
 	refused := make([]error, len(scope))
@@ -150,7 +211,12 @@ func fanOutNamespaces[T any](scope []string, list func(namespace string) ([]T, e
 		}
 	}
 	out := make([]T, 0)
-	for _, items := range results {
+	for i, items := range results {
+		for _, tell := range left {
+			if refused[i] != nil {
+				tell(scope[i], refused[i])
+			}
+		}
 		out = append(out, items...)
 	}
 	return out, nil

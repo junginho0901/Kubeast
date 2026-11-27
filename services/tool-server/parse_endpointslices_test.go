@@ -9,14 +9,17 @@ func TestParseEndpointSlices(t *testing.T) {
 	  {"endpoints":[{"addresses":["10.0.0.1"],"conditions":{"ready":true}},{"addresses":["10.0.0.2","10.0.0.3"],"conditions":{"ready":false}}]},
 	  {"endpoints":[{"addresses":["10.0.0.4"],"conditions":{}}]}
 	]}`
-	ready, notReady := parseEndpointSlices(out)
-	if ready != 2 || notReady != 2 {
-		t.Fatalf("ready=%d notReady=%d", ready, notReady)
+	ready, notReady, err := parseEndpointSlices(out)
+	if ready != 2 || notReady != 2 || err != nil {
+		t.Fatalf("ready=%d notReady=%d %v", ready, notReady, err)
 	}
-	if r, n := parseEndpointSlices(`{"items":[]}`); r != 0 || n != 0 {
-		t.Fatalf("empty list: %d %d", r, n)
+	if r, n, err := parseEndpointSlices(`{"items":[]}`); r != 0 || n != 0 || err != nil {
+		t.Fatalf("empty list: %d %d %v", r, n, err)
 	}
-	if r, n := parseEndpointSlices("not json"); r != 0 || n != 0 {
-		t.Fatalf("bad json: %d %d", r, n)
+	// no list, or one the output cap cut: not a count of none
+	for _, bad := range []string{"not json", "", out[:40] + "\n… [output cut]"} {
+		if r, n, err := parseEndpointSlices(bad); r != 0 || n != 0 || err == nil {
+			t.Fatalf("%q: %d %d %v", bad, r, n, err)
+		}
 	}
 }

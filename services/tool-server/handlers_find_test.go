@@ -372,6 +372,147 @@ func TestFindResource_OnNamespacesThatCannotBeReadAreANote(t *testing.T) {
 	}
 }
 
+// grantOf is a context whose grant on cluster c is limited to the namespaces.
+func grantOf(namespaces ...string) context.Context {
+	return auth.WithPayload(withClusterID(context.Background(), "c"), auth.TokenPayload{Namespaces: map[string][]string{"c": namespaces}})
+}
+
+// deploymentsIn answers each namespace of a grant its own Deployment web-<namespace>, or what refused says of it.
+func deploymentsIn(refused map[string]string) func([]string) (string, error) {
+	return func(args []string) (string, error) {
+		v := verb(args)
+		if v[1] != "deployments" {
+			return "", nil
+		}
+		if text := refused[v[3]]; text != "" {
+			return kubectlErr(text)
+		}
+		return fmt.Sprintf("%s   web-%s   map[app:web]\n", v[3], v[3]), nil
+	}
+}
+
+func findNotes(t *testing.T, out string) string {
+	t.Helper()
+	notes, err := json.Marshal(decode(t, out)["notes"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(notes)
+}
+
+// A namespace of a grant the cluster refuses is named in notes as not read; the kind is looked for in the others.
+func TestFindResource_ARefusedNamespaceOfAGrantLosesNoOther(t *testing.T) {
+	const forbidden = `Error from server (Forbidden): deployments.apps is forbidden: User "a" cannot list resource "deployments" in the namespace `
+	a := args{"query": "web", "kinds": []interface{}{"deployments"}}
+	for _, details := range []string{"", "true"} {
+		for _, c := range []struct {
+			name    string
+			refused map[string]string
+			matches []string
+			notes   string
+		}{
+			{"none refused", nil, []string{"deployments/web-a", "deployments/web-b", "deployments/web-c"}, `[]`},
+			{"the first", map[string]string{"a": forbidden + "a"}, []string{"deployments/web-b", "deployments/web-c"},
+				`["deployments: a: ` + strings.ReplaceAll(forbidden, `"`, `\"`) + `a"]`},
+			{"the last", map[string]string{"c": forbidden + "c"}, []string{"deployments/web-a", "deployments/web-b"},
+				`["deployments: c: ` + strings.ReplaceAll(forbidden, `"`, `\"`) + `c"]`},
+			{"two of them", map[string]string{"a": forbidden + "a", "c": forbidden + "c"}, []string{"deployments/web-b"},
+				`["deployments: a, c: ` + strings.ReplaceAll(forbidden, `"`, `\"`) + `a"]`},
+			{"all of them", map[string]string{"a": forbidden + "a", "b": forbidden + "b", "c": forbidden + "c"}, nil,
+				`["deployments: a, b, c: ` + strings.ReplaceAll(forbidden, `"`, `\"`) + `a"]`},
+		} {
+			out, argv := findWith(t, details, grantOf("a", "b", "c"), a, deploymentsIn(c.refused))
+			if got := matchNames(t, out); !reflect.DeepEqual(got, c.matches) {
+				t.Errorf("%s (%q): matches %v, want %v", c.name, details, got, c.matches)
+			}
+			if got := findNotes(t, out); got != c.notes {
+				t.Errorf("%s (%q): notes %s, want %s", c.name, details, got, c.notes)
+			}
+			if n := len(argv); n != 3 && len(c.matches) > 0 {
+				t.Errorf("%s (%q): %d runs, want one of each namespace: %v", c.name, details, n, argv)
+			}
+		}
+	}
+
+	// more than the note lists are counted
+	names := make([]string, 9)
+	refused := map[string]string{}
+	for i := range names {
+		names[i] = fmt.Sprintf("team-%d", i)
+		refused[names[i]] = forbidden + names[i]
+	}
+	delete(refused, "team-8")
+	out, _ := findWith(t, "", grantOf(names...), a, deploymentsIn(refused))
+	if got := findNotes(t, out); !strings.Contains(got, `"deployments: team-0, team-1, team-2, team-3, team-4 and 3 more: `) {
+		t.Errorf("notes: %s", got)
+	}
+	if got := matchNames(t, out); !reflect.DeepEqual(got, []string{"deployments/web-team-8"}) {
+		t.Errorf("matches: %v", got)
+	}
+}
+
+// Another failure than a refusal ends the kind as before, so a cluster that does not answer is not asked once for every
+// namespace; the ones it was not looked for in are named.
+func TestFindResource_AFailureOfAGrantsNamespaceNamesTheOnesNotSearched(t *testing.T) {
+	const down = "Unable to connect to the server: dial tcp 10.0.0.1:443: i/o timeout"
+	a := args{"query": "web", "kinds": []interface{}{"deployments"}}
+	for _, c := range []struct {
+		name  string
+		grant []string
+		down  string
+		runs  int
+		notes string
+	}{
+		{"the first", []string{"a", "b", "c"}, "a", 1, `["deployments: a: ` + down + `; not searched after it: b, c"]`},
+		{"the second", []string{"a", "b", "c"}, "b", 2, `["deployments: b: ` + down + `; not searched after it: c"]`},
+		{"the last", []string{"a", "b", "c"}, "c", 3, `["deployments: c: ` + down + `"]`},
+		{"the only one", []string{"a"}, "a", 1, `["deployments: ` + down + `"]`},
+	} {
+		out, argv := findWith(t, "", grantOf(c.grant...), a, deploymentsIn(map[string]string{c.down: down}))
+		if got := findNotes(t, out); got != c.notes || len(argv) != c.runs {
+			t.Errorf("%s: %d runs, notes %s\nwant %d runs, %s", c.name, len(argv), got, c.runs, c.notes)
+		}
+	}
+	// refused in one, not answered in another
+	out, _ := findWith(t, "", grantOf("a", "b", "c"), a, deploymentsIn(map[string]string{"a": "Error from server (Forbidden): no", "b": down}))
+	if got := findNotes(t, out); got != `["deployments: a: Error from server (Forbidden): no","deployments: b: `+down+`; not searched after it: c"]` {
+		t.Errorf("notes: %s", got)
+	}
+	// a kind without namespaces is asked for once: every namespace answers it the same
+	const nodes = `Error from server (Forbidden): nodes is forbidden: User "a" cannot list resource "nodes" in API group "" at the cluster scope`
+	out, argv := findWith(t, "", grantOf("a", "b"), args{"query": "web", "kinds": []interface{}{"nodes"}}, func([]string) (string, error) { return kubectlErr(nodes) })
+	if got := findNotes(t, out); got != `["nodes: `+strings.ReplaceAll(nodes, `"`, `\"`)+`"]` || len(argv) != 1 {
+		t.Errorf("%d runs, notes %s", len(argv), got)
+	}
+	// and so is one the cluster does not serve
+	out, argv = findWith(t, "", grantOf("a", "b"), args{"query": "web", "kinds": []interface{}{"foo"}}, func([]string) (string, error) {
+		return kubectlErr(`error: the server doesn't have a resource type "foo"`)
+	})
+	if got := findNotes(t, out); got != `["kind \"foo\" is not served by this cluster"]` || len(argv) != 1 {
+		t.Errorf("%d runs, notes %s", len(argv), got)
+	}
+}
+
+// One place to look in: the note is the reason alone, as it was.
+func TestFindResource_OnePlaceToLookInIsNotedAsItWas(t *testing.T) {
+	const forbidden = `Error from server (Forbidden): deployments.apps is forbidden`
+	for _, c := range []struct {
+		name string
+		ctx  context.Context
+		args args
+	}{
+		{"the cluster", context.Background(), args{"query": "web", "kinds": []interface{}{"deployments"}}},
+		{"a namespace", context.Background(), args{"query": "web", "kinds": []interface{}{"deployments"}, "namespace": "a"}},
+		{"a namespace of a grant", grantOf("a", "b"), args{"query": "web", "kinds": []interface{}{"deployments"}, "namespace": "a"}},
+		{"a grant of one", grantOf("a"), args{"query": "web", "kinds": []interface{}{"deployments"}}},
+	} {
+		out, argv := findWith(t, "", c.ctx, c.args, func([]string) (string, error) { return kubectlErr(forbidden) })
+		if got := findNotes(t, out); got != `["deployments: `+forbidden+`"]` || len(argv) != 1 {
+			t.Errorf("%s: %d runs, notes %s", c.name, len(argv), got)
+		}
+	}
+}
+
 // The namespaces of a grant read by name are bounded by the answer's limit whatever is found: refused and gone ones count.
 func TestFindResource_OnTheNamespacesReadOfAGrantAreBounded(t *testing.T) {
 	names := make([]string, 200)

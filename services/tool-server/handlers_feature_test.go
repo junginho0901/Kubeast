@@ -400,6 +400,43 @@ func TestIssues_ALimitedGrantsAnswerDoesNotMissTheNodes(t *testing.T) {
 	}
 }
 
+// A list a limited grant's namespace refused (k8s-service names the namespaces on the row) is not read in that namespace's
+// answer and in one of several, and is no part of another namespace's.
+func TestIssues_AListRefusedInANamespaceOfAGrantIsNotReadThere(t *testing.T) {
+	const message = `not read in pay: list all deployments: deployments.apps is forbidden`
+	const refusedInPay = `{"id":"Collector/deployments","kind":"Collector","message":"` + message + `","name":"deployments","namespaces":["pay"],"reason":"ListFailed","severity":"info"}`
+	grant := ctxFor("c1", "pay", "shop")
+	notRead := map[string]interface{}{"deployments": message}
+
+	// the namespace it was refused in
+	m := decode(t, issuesOf(t, grant, args{"namespace": "pay"}, refusedInPay))
+	if !reflect.DeepEqual(m["not_read"], notRead) || m["total"] != 0.0 || m["hint"] != nil {
+		t.Errorf("its namespace: %v", m)
+	}
+	// another namespace of the grant: every list of it was read
+	out := issuesOf(t, grant, args{"namespace": "shop"}, refusedInPay, failingWeb)
+	if out != issuesOf(t, grant, args{"namespace": "shop"}, failingWeb) {
+		t.Errorf("another namespace: %s", out)
+	}
+	if out = issuesOf(t, grant, args{"namespace": "shop"}, refusedInPay); out != issuesOf(t, grant, args{"namespace": "shop"}) || !strings.Contains(out, "Nothing is failing") {
+		t.Errorf("another namespace, quiet: %s", out)
+	}
+	// both at once, narrowed by severity: named; not narrowed: a row
+	m = decode(t, issuesOf(t, grant, args{"severity": "critical"}, refusedInPay))
+	if !reflect.DeepEqual(m["not_read"], notRead) || m["hint"] != nil {
+		t.Errorf("a severity: %v", m)
+	}
+	m = decode(t, issuesOf(t, grant, args{}, refusedInPay))
+	if rows := m["issues"].([]interface{}); m["not_read"] != nil || len(rows) != 1 || rows[0].(map[string]interface{})["message"] != message {
+		t.Errorf("not narrowed: %v", m)
+	}
+	// a row whose namespaces are no list of names is a list that was not read at all
+	odd := strings.Replace(refusedInPay, `["pay"]`, `"pay"`, 1)
+	if m = decode(t, issuesOf(t, grant, args{"namespace": "shop"}, odd)); !reflect.DeepEqual(m["not_read"], notRead) {
+		t.Errorf("no names: %v", m)
+	}
+}
+
 func TestFeatureFailure_Mapping(t *testing.T) {
 	if out, ok, _ := featureFailure("x", "alt", 404, []byte(`{"detail":"x is not configured for this cluster"}`)); !ok || decode(t, out)["status"] != "unavailable" {
 		t.Fatal("404 not configured → unavailable")

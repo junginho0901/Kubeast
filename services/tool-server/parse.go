@@ -65,11 +65,12 @@ func parseServiceInfo(output string) (serviceInfo, []map[string]interface{}) {
 }
 
 // parseEndpointSlices counts a Service's addresses by the ready condition
-// (unset reads as ready, as the API defines it).
-func parseEndpointSlices(output string) (int, int) {
+// (unset reads as ready, as the API defines it); an output that is no list of
+// slices counts none of them.
+func parseEndpointSlices(output string) (int, int, error) {
 	var list endpointSliceList
 	if err := json.Unmarshal([]byte(output), &list); err != nil {
-		return 0, 0
+		return 0, 0, fmt.Errorf("unreadable EndpointSlices: %w", err)
 	}
 	ready := 0
 	notReady := 0
@@ -82,7 +83,7 @@ func parseEndpointSlices(output string) (int, int) {
 			}
 		}
 	}
-	return ready, notReady
+	return ready, notReady, nil
 }
 
 func findMatchingPort(ports []map[string]interface{}, requested string) map[string]interface{} {

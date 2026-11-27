@@ -94,6 +94,7 @@ type changeSink struct {
 	total   int
 	counts  map[string]int
 	notRead map[string]string
+	partly  map[string]string
 	notes   map[string]string
 	skipped map[string]string
 
@@ -102,7 +103,7 @@ type changeSink struct {
 }
 
 func newChangeSink(since, until time.Time, most int) *changeSink {
-	return &changeSink{since: since, until: until, max: most, counts: map[string]int{}, notRead: map[string]string{}, notes: map[string]string{}, skipped: map[string]string{}}
+	return &changeSink{since: since, until: until, max: most, counts: map[string]int{}, notRead: map[string]string{}, partly: map[string]string{}, notes: map[string]string{}, skipped: map[string]string{}}
 }
 
 func (c *changeSink) in(t time.Time) bool {
@@ -126,6 +127,17 @@ func (c *changeSink) failed(source string, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.notRead[source] = response.Public(err)
+}
+
+// missed names the namespaces of a limited grant that refused a source whose others were read and counted.
+func (c *changeSink) missed(source string, refused *refusedNamespaces) {
+	names, why := refused.refused()
+	if len(names) == 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.partly[source] = notReadIn(names, response.Public(why))
 }
 
 // skip says why a source was not read, which is not a zero either.
@@ -208,6 +220,9 @@ func (c *changeSink) result() *TimelineChangesResult {
 	if len(c.notRead) > 0 {
 		summary["not_read"] = c.notRead
 	}
+	if len(c.partly) > 0 {
+		summary["not_read_in"] = c.partly
+	}
 	if len(c.notes) > 0 {
 		summary["notes"] = c.notes
 	}
@@ -272,7 +287,8 @@ type changeSource struct {
 
 // readTimelineChanges reads the sources one after another, so one read has one list at a time with the cluster and holds
 // at most one of bigReadSlots (eachPage takes it before a second page). A source that could not be read is in
-// summary.not_read with why; when every namespaced source that was read was refused, that refusal is the answer.
+// summary.not_read with why, one that some namespaces of a limited grant refused in summary.not_read_in with which;
+// when every namespaced source that was read was refused, that refusal is the answer.
 // Without a namespace, a caller not limited to namespaces walks the cluster's pods only when it may list pods across
 // the cluster; otherwise the restarts are skipped and summary.skipped says so. The further sources (more) come after the
 // namespaced ones, in a namespace named only.
@@ -300,13 +316,16 @@ func (s *Service) readTimelineChanges(ctx context.Context, namespace string, sin
 			}
 		}
 		tried++
-		if err := eachCallerNamespace(ctx, namespace, src.read); err != nil {
+		srcCtx, left := noteRefusedNamespaces(ctx)
+		if err := eachCallerNamespace(srcCtx, namespace, src.read); err != nil {
 			refused++
 			if first == nil {
 				first = err
 			}
 			sink.failed(src.source, err)
+			continue
 		}
+		sink.missed(src.source, left)
 	}
 	if tried > 0 && refused == tried {
 		return nil, first
@@ -856,9 +875,14 @@ func (s *Service) argoChanges(ctx context.Context, namespace string, sink *chang
 			}
 		})
 	}
-	err := eachCallerNamespace(ctx, "", read)
+	srcCtx, left := noteRefusedNamespaces(ctx)
+	err := eachCallerNamespace(srcCtx, "", read)
 	switch {
 	case err == nil:
+		// read in every namespace of a grant whichever was asked: a named one's answer is of what that one holds
+		if namespace == "" {
+			sink.missed("argocd", left)
+		}
 	case apierrors.IsNotFound(err):
 		sink.note("argocd", "Argo CD Applications are not served in this cluster (no applications.argoproj.io)")
 	default:

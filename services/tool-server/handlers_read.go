@@ -438,6 +438,11 @@ func handleGetPodMetrics(ctx context.Context, args map[string]interface{}, heade
 	return marshalJSON(metrics)
 }
 
+// endpointsNotRead are the counts of a Service whose endpoints could not be read.
+func endpointsNotRead() map[string]interface{} {
+	return map[string]interface{}{"ready": nil, "not_ready": nil, "total": nil}
+}
+
 func handleCheckServiceConnectivity(ctx context.Context, args map[string]interface{}, headers http.Header) (string, error) {
 	serviceName := argString(args, "service_name", "")
 	if serviceName == "" {
@@ -458,28 +463,32 @@ func handleCheckServiceConnectivity(ctx context.Context, args map[string]interfa
 
 	svcOutput, err := runKubectl(ctx, headers, "get", "svc", serviceName, "-n", namespace, "-o", "json")
 	if err != nil {
+		f, known := classifyKubectlFailure(err)
+		// what was not read is null: it is not counted, not zero
 		result := map[string]interface{}{
 			"namespace":  namespace,
 			"service":    serviceName,
 			"type":       "",
-			"ports":      []map[string]interface{}{},
+			"ports":      nil,
 			"port_check": map[string]interface{}{},
-			"endpoints": map[string]interface{}{
-				"ready":     0,
-				"not_ready": 0,
-				"total":     0,
-			},
-			"status": "NotFound",
-			"error":  err.Error(),
+			"endpoints":  endpointsNotRead(),
+			"status":     "Unknown",
+			"error":      err.Error(),
 		}
 		if requestedPort != "" {
 			result["port_check"] = map[string]interface{}{"requested": requestedPort}
 		}
-		if f, ok := classifyKubectlFailure(err); ok && f.Status == "not_found" {
+		switch {
+		case known && f.Status == "not_found":
+			result["status"] = "NotFound"
+			result["ports"] = []map[string]interface{}{}
+			result["endpoints"] = map[string]interface{}{"ready": 0, "not_ready": 0, "total": 0}
 			result["namespace_exists"] = namespaceExists(ctx, headers, namespace)
 			candidates, scope, _ := listNames(ctx, headers, "services", scopedNamespaces(ctx), "")
 			result["similar"] = similarNames(serviceName, candidates)
 			result["searched"] = scope
+		case known && f.Status == "forbidden":
+			result["status"] = "Forbidden"
 		}
 		return marshalJSON(result)
 	}
@@ -489,7 +498,7 @@ func handleCheckServiceConnectivity(ctx context.Context, args map[string]interfa
 	readyCount := 0
 	notReadyCount := 0
 	if err == nil {
-		readyCount, notReadyCount = parseEndpointSlices(slicesOutput)
+		readyCount, notReadyCount, err = parseEndpointSlices(slicesOutput)
 	}
 
 	portCheck := map[string]interface{}{}
@@ -520,7 +529,9 @@ func handleCheckServiceConnectivity(ctx context.Context, args map[string]interfa
 	}
 	switch {
 	case err != nil:
-		addDetails(result, "", "", fmt.Sprintf(endpointsUnreadReason, strings.TrimPrefix(err.Error(), "kubectl failed: ")))
+		result["endpoints"] = endpointsNotRead()
+		result["endpoints_error"] = strings.TrimPrefix(err.Error(), "kubectl failed: ")
+		result["status"] = "Unknown"
 	case readyCount+notReadyCount == 0:
 		addDetails(result, "", "", endpointsNoneReason)
 	}

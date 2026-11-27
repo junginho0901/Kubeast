@@ -254,11 +254,11 @@ func handleTimeline(ctx context.Context, args map[string]interface{}, headers ht
 		}
 		result["narrowed"] = block
 	}
-	if len(kept) == 0 && noRollouts && inRange != nil {
+	if partly := notReadIn(result, summary); len(kept) == 0 && noRollouts && inRange != nil && !partly {
 		result["hint"] = "Nothing in this window. Kubernetes events typically have a ~1 hour TTL, so an older window can be empty though things happened."
 	}
 	return marshalOrdered(result,
-		[]string{"namespace", "object", "event_type", "window_note", "default_window", "summary", "events_note", "narrowed", "rollouts_total", "rollouts_note", "hint"},
+		[]string{"namespace", "object", "event_type", "window_note", "default_window", "summary", "events_note", "not_read_in_note", "narrowed", "rollouts_total", "rollouts_note", "hint"},
 		[]string{"rollout_history", "events"})
 }
 
@@ -349,11 +349,22 @@ func handleTimelineChanges(ctx context.Context, args map[string]interface{}, hea
 	if len(skipped) > 0 {
 		result["skipped_note"] = "The sources in summary.skipped were not read, for the reason given: their changes are not counted, not zero."
 	}
-	if total == 0 && len(notRead) == 0 && len(skipped) == 0 {
+	partly := notReadIn(result, summary)
+	if total == 0 && len(notRead) == 0 && len(skipped) == 0 && !partly {
 		result["hint"] = "Nothing changed in this window as far as the objects keep it. Each ConfigMap, Secret, HPA and container keeps only its last change; older ones are in events, which live about an hour."
 		if more {
 			result["hint"] = "Nothing changed in this window as far as the objects keep it. Each ConfigMap, Secret, NetworkPolicy, Service, HPA, replica count and container keeps only its last change; older ones are in events, which live about an hour."
 		}
 	}
-	return marshalOrdered(result, []string{"view", "namespace", "summary", "changes_note", "not_read_note", "skipped_note", "hint"}, []string{"changes"})
+	return marshalOrdered(result, []string{"view", "namespace", "summary", "changes_note", "not_read_note", "not_read_in_note", "skipped_note", "hint"}, []string{"changes"})
+}
+
+// notReadIn says in an answer that some namespaces of a limited grant refused a part of it, when its summary names them.
+func notReadIn(result, summary map[string]interface{}) bool {
+	partly, _ := summary["not_read_in"].(map[string]interface{})
+	if len(partly) == 0 {
+		return false
+	}
+	result["not_read_in_note"] = "summary.not_read_in names what some namespaces refused: it is of the other namespaces only, and what those hold is not counted, not zero."
+	return true
 }

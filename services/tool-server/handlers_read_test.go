@@ -120,10 +120,6 @@ func emptyReads() []emptyRead {
 		{name: "a Service without an endpoint", handler: handleCheckServiceConnectivity, args: args{"service_name": "web", "namespace": "shop"},
 			kubectl: serviceWith(func() (string, error) { return `{"items":[]}`, nil }), off: noEndpoint,
 			on: []string{"selector", `"status":"NotReady"`}, not: []string{"could not be read"}},
-		{name: "a Service whose endpoints were not read", handler: handleCheckServiceConnectivity, args: args{"service_name": "web", "namespace": "shop"},
-			kubectl: serviceWith(func() (string, error) {
-				return kubectlErr(`Error from server (Forbidden): endpointslices.discovery.k8s.io is forbidden`)
-			}), off: noEndpoint, on: []string{"could not be read", "not a count", "is forbidden"}},
 	}
 }
 

@@ -42,20 +42,36 @@ func (s *Service) GetNamespaceTimeline(ctx context.Context, namespace string, ho
 	var eventsErr, rolloutsErr error
 
 	wg.Add(2)
+	eventsCtx, eventsLeft := noteRefusedNamespaces(ctx)
+	rolloutsCtx, rolloutsLeft := noteRefusedNamespaces(ctx)
 	go func() {
 		defer wg.Done()
-		events, counts, eventsErr = s.getTimelineEvents(ctx, namespace, "", "", cutoff, limit, eventType)
+		events, counts, eventsErr = s.getTimelineEvents(eventsCtx, namespace, "", "", cutoff, limit, eventType)
 	}()
 	go func() {
 		defer wg.Done()
-		rollouts, rolloutsErr = s.getNamespaceRolloutHistory(ctx, namespace, cutoff)
+		rollouts, rolloutsErr = s.getNamespaceRolloutHistory(rolloutsCtx, namespace, cutoff)
 	}()
 	wg.Wait()
 
 	if eventsErr != nil {
 		return nil, eventsErr
 	}
-	return buildTimelineResult(events, counts, rollouts, rolloutsErr, cutoff, eventType), nil
+	res := buildTimelineResult(events, counts, rollouts, rolloutsErr, cutoff, eventType)
+	// what some namespaces of a limited grant refused is in neither the counts nor the lists
+	partly := map[string]string{}
+	for _, part := range []struct {
+		name string
+		left *refusedNamespaces
+	}{{"events", eventsLeft}, {"rollouts", rolloutsLeft}} {
+		if names, why := part.left.refused(); len(names) > 0 {
+			partly[part.name] = notReadIn(names, why.Error())
+		}
+	}
+	if len(partly) > 0 {
+		res.Summary["not_read_in"] = partly
+	}
+	return res, nil
 }
 
 // GetResourceTimeline returns events and rollout history for a specific resource.
@@ -202,7 +218,7 @@ func (s *Service) getNamespaceRolloutHistory(ctx context.Context, namespace stri
 	if scope := scopeFromCtx(ctx); namespace == "" && len(scope) > 0 {
 		result, err := fanOutNamespaces(scope, func(ns string) ([]map[string]interface{}, error) {
 			return s.rolloutHistoryIn(ctx, ns, cutoff)
-		})
+		}, noteRefusedTo(ctx))
 		if err != nil {
 			return nil, err
 		}
