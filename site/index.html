@@ -17,6 +17,10 @@
 <meta name="theme-color" content="#050b1a">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="concept.css">
+<link rel="stylesheet" href="refinement.css">
+<link rel="stylesheet" href="panels.css">
+<link rel="stylesheet" href="integrations.css">
 <script>
   (function () {
     var lang = new URLSearchParams(location.search).get('lang')
@@ -28,11 +32,14 @@
 </script>
 </head>
 <body>
+<a class="skip-link" href="#try"><span lang="ko">체험 영역으로 이동</span><span lang="en">Skip to the interactive demo</span></a>
 <div class="backdrop" aria-hidden="true"></div>
+<div class="brand-drift" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M17 13 L27.5 23.5 L36.5 23.5 L47 13 L50 34 L32 53 L14 34 Z"/><path class="brand-cut" d="M20.5 32.5 L28 34.5 L23 37.5 Z M43.5 32.5 L36 34.5 L41 37.5 Z M28 43 L36 43 L32 47.5 Z"/></svg></div>
 
 <header class="top" id="top">
   <a class="brand" href="#hero"><img src="icon.svg" alt="" width="30" height="30"><span>Kubeast</span></a>
   <nav>
+    <a href="#try"><span lang="en">Try it</span><span lang="ko">직접 체험</span></a>
     <a href="#features"><span lang="en">Features</span><span lang="ko">기능</span></a>
     <a href="#install"><span lang="en">Install</span><span lang="ko">설치</span></a>
     <a href="#faq"><span lang="en">FAQ</span><span lang="ko">자주 묻는 질문</span></a>
@@ -44,26 +51,110 @@
 <main>
   <section class="hero" id="hero">
     <div class="hero-text">
-      <p class="eyebrow"><span class="dot"></span><span lang="en">Open source · MIT · v0.7.8</span><span lang="ko">오픈소스 · MIT · v0.7.8</span></p>
-      <h1>
-        <span lang="en">The Kubernetes console with an AI that <em>reads your clusters</em></span>
-        <span lang="ko"><em>클러스터를 읽는 AI</em>,<br>Kubernetes<br>콘솔 안에.</span>
+      <p class="eyebrow"><span class="dot"></span><span lang="en">Open source · MIT · v0.7.9</span><span lang="ko">오픈소스 · MIT · v0.7.9</span></p>
+      <h1 id="hero-title">
+        <span lang="en">The Kubernetes<span class="tm">®</span> console with an AI that <em>reads your clusters</em></span>
+        <span lang="ko"><em>클러스터를 읽는 AI</em>,<br>Kubernetes<span class="tm">®</span><br>콘솔 안에.</span>
       </h1>
-      <p class="lead" lang="en">One web console for many clusters. Browse and edit resources, follow logs, open a shell, roll back a Helm release — and ask an assistant that answers from the cluster with your own permissions.</p>
-      <p class="lead" lang="ko">여러 클러스터를, 하나의 웹 콘솔에서. 리소스 확인과 수정, 실시간 로그, 셸, Helm 롤백까지. 궁금한 건 AI에게 물어보세요. 내 권한 그대로 클러스터를 읽고 답합니다.</p>
+      <p class="lead" lang="en">One web console for many clusters. Browse and edit resources, follow logs, open a shell, roll back a Helm<span class="tm">®</span> release — and ask an assistant that answers from the cluster with your own permissions.</p>
+      <p class="lead" lang="ko">여러 클러스터를, 하나의 웹 콘솔에서. 리소스 확인과 수정, 실시간 로그, 셸, Helm<span class="tm">®</span> 롤백까지. 궁금한 건 AI에게 물어보세요. 내 권한 그대로 클러스터를 읽고 답합니다.</p>
       <div class="actions">
         <a class="btn btn-primary" href="#install"><span lang="en">Get started</span><span lang="ko">시작하기</span><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11.3 4.3a1 1 0 011.4 0l5 5a1 1 0 010 1.4l-5 5a1 1 0 01-1.4-1.4L14.6 11H3a1 1 0 110-2h11.6l-3.3-3.3a1 1 0 010-1.4z"/></svg></a>
         <a class="btn btn-ghost" href="#features"><span lang="en">See it work</span><span lang="ko">영상으로 보기</span></a>
       </div>
       <div class="snippet">
-        <code>helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8</code>
-        <button type="button" class="copy" data-copy="helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 --namespace kubeast --create-namespace" aria-label="Copy"><span lang="en">Copy</span><span lang="ko">복사</span></button>
+        <code>helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9</code>
+        <button type="button" class="copy" data-copy="helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 --namespace kubeast --create-namespace" aria-label="Copy"><span lang="en">Copy</span><span lang="ko">복사</span></button>
       </div>
     </div>
-    <div class="hero-art" id="particles"></div>
+    <div class="hero-art" id="particles" role="img" aria-label="Kubeast particle logo"></div>
   </section>
 
-  <section class="features" id="features">
+<section class="try-section" id="try" aria-label="Kubeast demo">
+  <div class="demo-shell" id="demo-shell">
+    <div class="demo-toolbar"><div class="demo-label"><img src="icon.svg" alt="" width="24" height="24"><b>Kubeast</b></div><div class="demo-controls" id="demo-controls" role="group" aria-label="Demo screens"><button type="button" data-demo-route="chat" aria-pressed="true">AI Chat</button><button type="button" data-demo-route="overview" aria-pressed="false">Overview</button><button type="button" data-demo-route="cluster" aria-pressed="false">Cluster View</button><button type="button" data-demo-route="pods" aria-pressed="false">Pods</button><button type="button" data-demo-route="monitoring" aria-pressed="false">Monitoring</button><button type="button" data-demo-route="cost" aria-pressed="false">Cost</button><button type="button" data-demo-route="helm" aria-pressed="false">Helm</button><button type="button" data-demo-route="audit" aria-pressed="false">Audit</button></div></div>
+    <div class="demo-viewport" id="demo-viewport"><div class="demo-canvas"><iframe id="product-demo" data-src="demo/" title="Kubeast — eight screens with sample data" referrerpolicy="no-referrer"></iframe></div></div>
+    <figure class="demo-poster" id="demo-poster" hidden><video muted playsinline loop preload="none"></video><div class="demo-poster-text" hidden></div><figcaption><p></p><span class="demo-pc-note"><span lang="ko">PC에서 전체 체험</span><span lang="en">Try all eight screens on a computer</span></span></figcaption></figure>
+    <p class="demo-state" id="demo-state" aria-live="polite"></p>
+  </div>
+</section>
+
+<section class="depth-section" id="inside" aria-labelledby="inside-title">
+  <div class="new-section-head"><div><h2 id="inside-title"><span lang="ko">클러스터를 읽는 AI</span><span lang="en">AI for your cluster</span></h2></div><p><span lang="ko">보고 있는 리소스를 조사하거나,<br>AI가 무엇을 확인했는지 따라갑니다.</span><span lang="en">Investigate the resource on screen,<br>or follow the evidence behind an AI answer.</span></p></div>
+  <div class="depth-layout"><div class="workflow-copy"><div class="depth-choices" role="group" aria-label="Product capabilities">
+    <button class="depth-choice" type="button" data-depth="context" aria-pressed="true"><b><span lang="ko">Pod 조사</span><span lang="en">Pod investigation</span></b><span lang="ko">클러스터·필터·상세 서랍의 맥락을 이어 갑니다.</span><span lang="en">Keep the cluster, filters and drawer in context.</span></button>
+    <button class="depth-choice" type="button" data-depth="evidence" aria-pressed="false"><b><span lang="ko">로그·트레이스</span><span lang="en">Logs & traces</span></b><span lang="ko">사용한 도구와 실행 주체, 확인한 근거를 봅니다.</span><span lang="en">See the tools, the identity and the evidence.</span></button>
+    <button class="depth-choice" type="button" data-depth="change" aria-pressed="false"><b><span lang="ko">비용 분석</span><span lang="en">Cost analysis</span></b><span lang="ko">OpenCost 비용과 요청 대비 사용량을 함께 봅니다.</span><span lang="en">Compare OpenCost costs with requests and usage.</span></button>
+    <button class="depth-choice" type="button" data-depth="choice" aria-pressed="false"><b><span lang="ko">Helm 검토</span><span lang="en">Helm review</span></b><span lang="ko">릴리스 이력과 리비전 차이를 읽습니다.</span><span lang="en">Read release history and revision differences.</span></button>
+    <button class="depth-choice" type="button" data-depth="alerts" aria-pressed="false"><b><span lang="ko">알림 조사</span><span lang="en">Alert investigation</span></b><span lang="ko">발생한 알림에서 근거와 다음 확인 사항으로 이어갑니다.</span><span lang="en">Follow an alert to its evidence and next steps.</span></button>
+    <button class="depth-choice" type="button" data-depth="audit" aria-pressed="false"><b><span lang="ko">감사 추적</span><span lang="en">Audit trail</span></b><span lang="ko">누가 무엇을 했는지 대상과 결과를 함께 확인합니다.</span><span lang="en">Follow who did what, to which target and with what result.</span></button>
+  </div><div id="depth-copy" class="copy-stack workflow-description" aria-live="polite"></div></div><div class="depth-detail copy-stack" id="depth-detail"></div></div>
+</section>
+
+
+<section class="explain-section" id="how" aria-label="Kubeast features">
+  <div class="explain-grid">
+    <article class="explain-panel permission-panel"><h3><span lang="ko">사용자 권한을 따르는 AI</span><span lang="en">Permission-scoped AI</span></h3><p><span lang="ko">같은 요청도 역할에 따라 결과가 다릅니다. AI는 질문한 사람의 권한으로 클러스터를 읽고, 변경은 어느 역할이든 승인 카드를 거칩니다.</span><span lang="en">The same request ends differently for each role. The AI reads the cluster as the person asking, and every change it makes waits on an approval card.</span></p>
+      <div class="permission-switch" role="group" aria-label="Roles"><button type="button" data-permission="read" aria-pressed="true">Read</button><button type="button" data-permission="write" aria-pressed="false">Write</button><button type="button" data-permission="admin" aria-pressed="false">Admin</button></div>
+      <div class="permission-diagram role-matrix" aria-hidden="true"><div class="diagram-person"><b><span lang="ko">사용자</span><span lang="en">User</span></b><small id="permission-person-role">Read</small></div><span class="diagram-wire"></span><div class="permission-gate"><span>RBAC</span><b id="permission-label">Read</b></div><span class="diagram-wire"></span><div class="permission-targets" id="permission-targets"></div></div>
+      <ul class="sr-only" id="permission-list"></ul>
+      <p class="permission-approval"><span lang="ko">AI의 변경은 역할과 관계없이 승인 카드에서 승인해야 실행되고, 승인할 때 권한을 다시 확인합니다.</span><span lang="en">Whatever the role, an AI change runs only once you approve its card, and your access is checked again at that moment.</span></p>
+      <p class="permission-proof"><small><span lang="ko">조회한 답의 도구 결과 아래 표시</span><span lang="en">Shown under a read tool’s result</span></small><code id="permission-proof"></code></p>
+      <div class="diagram-caption copy-stack" id="permission-caption" aria-live="polite"></div>
+    </article>
+    <article class="explain-panel investigation-panel"><div class="investigation-copy"><h3><span lang="ko">질문에서 확인까지</span><span lang="en">From a question to a verified result</span></h3><p><span lang="ko">상황을 묻고, 근거를 살펴보고, 다음 작업을 정합니다. 변경이 필요하면 내용을 확인하고 승인합니다. 결과도 같은 대화에서 이어집니다.</span><span lang="en">Ask a question, follow the evidence and review the next step. Approve a change when you are ready, then check the result in the same conversation.</span></p><button type="button" class="round-action" id="trace-next"><span lang="ko">다음 단계</span><span lang="en">Next step</span></button><button type="button" class="quiet-button" id="trace-reset"><span lang="ko">처음부터</span><span lang="en">Start over</span></button></div>
+      <div class="trace-diagram"><div class="trace-stages">
+        <button type="button" data-trace="0" aria-pressed="true"><span class="stage-symbol">?</span><b>Ask</b><small>you + context</small></button><span class="trace-connector" aria-hidden="true"></span>
+        <button type="button" data-trace="1" aria-pressed="false"><span class="stage-symbol">⌕</span><b>Investigate</b><small>AI + tools</small></button><span class="trace-connector" aria-hidden="true"></span>
+        <button type="button" data-trace="2" aria-pressed="false"><span class="stage-symbol">≡</span><b>Review</b><small>evidence + plan</small></button><span class="trace-connector" aria-hidden="true"></span>
+        <button type="button" data-trace="3" aria-pressed="false"><span class="stage-symbol">✓</span><b>Approve</b><small>your decision</small></button><span class="trace-connector" aria-hidden="true"></span>
+        <button type="button" data-trace="4" aria-pressed="false"><span class="stage-symbol">↻</span><b>Verify</b><small>result + record</small></button>
+      </div><div class="trace-log copy-stack" id="trace-log" aria-live="polite"></div></div>
+    </article>
+  </div>
+</section>
+
+<!-- Integrations in one box (integrations.css; integrations.js holds the list and draws the box). What each note says
+     is what the docs of the tag in data-docs-tag say: oidc.md, getting-started.md, ai-alerts.md, cluster-requirements.md,
+     operations.md, features.md, security-audit.md, database-backup-restore.md, configuration.md, high-availability.md,
+     metrics.md and supply-chain.md. Each entry of integrations.js says in `tested` whether it was run against the real
+     product; the page does not show it. -->
+<section class="integrations-section" id="integrations" aria-labelledby="integrations-title" data-docs-tag="v0.7.9">
+  <div class="new-section-head"><div><h2 id="integrations-title"><span lang="ko">함께 쓰는 도구</span><span lang="en">Integrations</span></h2></div><p><span lang="ko">Kubeast와 함께 쓰는 도구입니다. <br>분류를 고르고, 로고를 눌러 Kubeast가 그 도구로 하는 일을 확인하세요.</span><span lang="en">The tools Kubeast works with. <br>Pick a category, then select a logo to see what Kubeast does with it.</span></p></div>
+  <div class="int-box">
+    <div class="int-tabs" role="group" aria-label="Categories · 분류"></div>
+    <div class="int-wall" id="int-wall"></div>
+    <div class="int-detail" id="int-detail" aria-live="polite" hidden></div>
+    <div class="int-lines"></div>
+    <noscript><p><span lang="en">The list of integrations needs JavaScript; the docs name every one.</span><span lang="ko">도구 목록은 JavaScript가 있어야 보입니다. 문서에 모두 나와 있습니다.</span></p></noscript>
+  </div>
+</section>
+
+<section class="arch-section" id="architecture" aria-labelledby="architecture-title">
+  <div class="new-section-head"><div><h2 id="architecture-title"><span lang="ko">Kubeast의 구성</span><span lang="en">How Kubeast works</span></h2></div><p><span lang="ko">요청이 들어오고 나가는 길과 데이터 저장. <br>구성 요소를 눌러 역할을 살펴보세요.</span><span lang="en">Know where requests come in, where they go and what is stored. <br>Select a component to explore its role.</span></p></div>
+  <div class="arch-layout"><div class="arch-diagram" role="group" aria-label="Kubeast architecture">
+    <div class="arch-entry"><p class="arch-cap"><span lang="ko">들어오는 요청</span><span lang="en">Comes in from</span></p>
+      <button type="button" class="arch-box" data-arch="frontend" aria-pressed="true"><b>Kubeast console</b><small><span lang="ko">브라우저</span><span lang="en">Browser</span>&nbsp;· React&nbsp;· TypeScript</small></button>
+      <button type="button" class="arch-box arch-opt" data-arch="mcp" aria-pressed="false"><b><span lang="ko">AI 에이전트</span><span lang="en">AI agents</span></b><small>Claude&nbsp;Code&nbsp;· Cursor&nbsp;· MCP</small><em class="arch-tag"><span lang="ko">선택 · 기본 꺼짐</span><span lang="en">Optional · off by default</span></em></button>
+      <button type="button" class="arch-box arch-opt" data-arch="alerts" aria-pressed="false"><b><span lang="ko">알림 웹훅</span><span lang="en">Alert webhooks</span></b><small>Alertmanager&nbsp;· Grafana<span class="tm">®</span></small><em class="arch-tag"><span lang="ko">선택 · 기본 꺼짐</span><span lang="en">Optional · off by default</span></em></button></div>
+    <div class="arch-core"><p class="arch-cap">Kubeast</p>
+      <button type="button" class="arch-box arch-gate" data-arch="gateway" aria-pressed="false"><b>Gateway</b><small>HTTP&nbsp;· SSE&nbsp;· WebSocket</small></button>
+      <div class="arch-services"><button type="button" class="arch-group" data-arch="auth" aria-pressed="false">Auth</button><button type="button" class="arch-group" data-arch="ai" aria-pressed="false">AI + tools</button><button type="button" class="arch-group" data-arch="k8s" aria-pressed="false">Kubernetes</button><button type="button" class="arch-group" data-arch="session" aria-pressed="false">Sessions</button></div></div>
+    <p class="arch-role"><span lang="ko">사용자 역할로</span><span lang="en">as the user’s role</span></p>
+    <div class="arch-reach"><p class="arch-cap"><span lang="ko">연결하는 곳</span><span lang="en">Reaches out to</span></p>
+      <button type="button" class="arch-box" data-arch="models" aria-pressed="false"><b><span lang="ko">모델 제공자</span><span lang="en">Model providers</span></b><small>OpenAI&nbsp;· Anthropic&nbsp;· Gemini&nbsp;· <span lang="ko">OpenAI 호환(Ollama&nbsp;등)</span><span lang="en">OpenAI-compatible (Ollama&nbsp;…)</span></small></button>
+      <div class="arch-cluster"><a class="tool-home-logo" href="https://kubernetes.io/" target="_blank" rel="noopener"><img src="official-icons/kubernetes.png" width="26" height="26" alt=""><span class="sr-only"><span lang="en">kubernetes.io (opens in a new tab)</span><span lang="ko">kubernetes.io (새 탭에서 열림)</span></span></a><button type="button" class="arch-box" data-arch="clusters" aria-pressed="false"><b><span lang="ko">등록한 클러스터</span><span lang="en">Registered clusters</span></b><small>Kubernetes API</small></button></div>
+      <button type="button" class="arch-box arch-opt" data-arch="observability" aria-pressed="false"><b><span lang="ko">관측 도구</span><span lang="en">Observability tools</span></b><small>Prometheus&nbsp;· Loki&nbsp;· Tempo&nbsp;· OpenCost&nbsp;· Kyverno&nbsp;· Hubble</small><em class="arch-tag"><span lang="ko">선택</span><span lang="en">Optional</span></em></button></div>
+    <div class="arch-store"><p class="arch-cap"><span lang="ko">저장하는 곳</span><span lang="en">Where data is kept</span></p>
+      <button type="button" class="arch-box" data-arch="postgres" aria-pressed="false"><b>PostgreSQL</b><small><span lang="ko">사용자&nbsp;· 역할&nbsp;· 대화&nbsp;· 감사&nbsp;기록</span><span lang="en">Users&nbsp;· roles&nbsp;· chats&nbsp;· audit&nbsp;records</span></small></button>
+      <button type="button" class="arch-box arch-opt" data-arch="sinks" aria-pressed="false"><b><span lang="ko">감사 기록 사본</span><span lang="en">Audit copies</span></b><small><span lang="ko">S3&nbsp;· 웹훅&nbsp;· 이메일&nbsp;· 파일</span><span lang="en">S3&nbsp;· webhook&nbsp;· email&nbsp;· file</span></small><em class="arch-tag"><span lang="ko">선택 · 기본 꺼짐</span><span lang="en">Optional · off by default</span></em></button>
+      <button type="button" class="arch-box" data-arch="secrets" aria-pressed="false"><b>Kubernetes Secret</b><small><span lang="ko">클러스터 kubeconfig&nbsp;· API&nbsp;키</span><span lang="en">Cluster kubeconfigs&nbsp;· API&nbsp;keys</span></small></button>
+      <button type="button" class="arch-box" data-arch="cache" aria-pressed="false"><b>Valkey</b><small><span lang="ko">캐시&nbsp;· 끄면 메모리</span><span lang="en">Cache&nbsp;· or in&nbsp;memory</span></small></button></div>
+  </div><div class="arch-notes copy-stack" id="arch-notes" aria-live="polite"></div></div>
+  <div class="capability-strip"><article><h3><span lang="ko">여러 클러스터, 같은 작업 흐름</span><span lang="en">One workflow across clusters</span></h3><p><span lang="ko">클러스터별 권한과 Namespace 범위를 지키며 리소스를 살펴봅니다. 로그, 터미널, Helm 릴리스도 선택한 클러스터에서 이어 갑니다.</span><span lang="en">Browse within each cluster’s permissions and namespace scope. Continue into logs, terminals and Helm releases on the selected cluster.</span></p></article><article><h3><span lang="ko">비용·정책·관측을 함께</span><span lang="en">Cost, policy and observability</span></h3><p><span lang="ko">OpenCost 비용, Kyverno 정책 보고서, Prometheus 지표를 리소스와 함께 봅니다. Loki 로그를 연결하고, Tempo 트레이스는 AI가 읽으며, 로그 줄에서 Jaeger로 가는 링크도 붙일 수 있습니다.</span><span lang="en">Read OpenCost allocations, Kyverno reports and Prometheus metrics alongside resources. Connect Loki logs, let the AI read Tempo traces, and link log lines to Jaeger.</span></p><small><span lang="ko">해당 도구의 설치와 클러스터 연결 설정이 필요합니다.</span><span lang="en">Requires the corresponding tools and cluster connections.</span></small></article><article><h3><span lang="ko">특수한 리소스까지</span><span lang="en">Beyond everyday workloads</span></h3><p><span lang="ko">GPU와 DRA 자원, Gateway API, 네트워크 흐름도 같은 콘솔에서 살펴봅니다. 기본 워크로드와 별도의 도구 사이를 오가는 수고를 줄입니다.</span><span lang="en">Explore GPU and DRA resources, Gateway API and network flows in the same console as everyday workloads.</span></p><small><span lang="ko">GPU 드라이버·해당 CRD·흐름 제공자 등 기능별 조건이 있습니다.</span><span lang="en">Requires the relevant GPU drivers, CRDs or flow providers.</span></small></article></div>
+</section>
+
+<section class="features" id="features">
     <div class="section-head">
       <p class="kicker"><span lang="en">What you can do</span><span lang="ko">기능</span></p>
       <h2><span lang="en">Watch it work</span><span lang="ko">직접 확인해 보세요.</span></h2>
@@ -103,9 +194,9 @@
       <article class="card" data-clip="alert-investigation">
         <div class="thumb"><video muted playsinline preload="none" poster="media/alert-investigation.jpg" data-src="media/alert-investigation.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
-          <h3><span lang="en">Alerts come investigated</span><span lang="ko">알림이 오면, 조사는 이미 끝나 있습니다</span></h3>
-          <p lang="en">Alertmanager or Grafana sends an alert; a read-only investigation runs under its own identity.</p>
-          <p lang="ko">Alertmanager나 Grafana에서 알림이 오면, AI가 읽기 전용 권한으로 먼저 조사합니다.</p>
+          <h3><span lang="en">Alerts, looked into first</span><span lang="ko">알림이 오면, AI가 먼저 조사합니다</span></h3>
+          <p lang="en">Turn on alert investigation, and an alert from Alertmanager or Grafana<span class="tm">®</span> gets a read-only investigation under its own identity, with a report of what was checked.</p>
+          <p lang="ko">알림 조사를 켜 두면, Alertmanager나 Grafana<span class="tm">®</span>에서 온 알림을 AI가 읽기 전용 권한으로 먼저 조사하고 확인한 내용을 보고서로 남깁니다.</p>
           <ol class="steps">
             <li data-step="inbox"><span lang="en">The alert lands in the inbox</span><span lang="ko">받은편지함에 도착한 알림</span></li>
             <li data-step="alert"><span lang="en">Open it: labels, handling, status</span><span lang="ko">라벨, 처리 상태, 조사 진행까지 한눈에</span></li>
@@ -160,8 +251,8 @@
         <div class="thumb"><video muted playsinline preload="none" poster="media/terminal.jpg" data-src="media/terminal.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
           <h3><span lang="en">A terminal in the browser</span><span lang="ko">브라우저 속 터미널</span></h3>
-          <p lang="en">A shell in a pod without a kubeconfig on your laptop, recorded and replayable.</p>
-          <p lang="ko">노트북에 kubeconfig가 없어도 파드 셸이 열립니다. 모든 세션은 녹화되어 언제든 다시 볼 수 있습니다.</p>
+          <p lang="en">A shell in a pod without a kubeconfig on your laptop, for roles that may exec (Admin by default). With session recording on, each session can be replayed.</p>
+          <p lang="ko">노트북에 kubeconfig가 없어도 파드 셸이 열립니다(기본은 Admin 권한). 세션 녹화를 켜 두면 셸 세션을 다시 볼 수 있습니다.</p>
           <ol class="steps">
             <li data-step="exec"><span lang="en">Open a shell from the pod</span><span lang="ko">파드에서 셸 열기</span></li>
             <li data-step="commands"><span lang="en">Run commands</span><span lang="ko">명령 실행</span></li>
@@ -203,8 +294,8 @@
         <div class="thumb"><video muted playsinline preload="none" poster="media/access-audit.jpg" data-src="media/access-audit.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
           <h3><span lang="en">Temporary access, full audit</span><span lang="ko">필요할 때만 권한을. 기록은 빠짐없이</span></h3>
-          <p lang="en">Ask for more access for an hour; an approver grants it and it ends on its own. Every step is audited.</p>
-          <p lang="ko">필요한 권한을 한 시간만 요청하세요. 승인되면 바로 쓰고, 시간이 지나면 자동으로 회수됩니다. 모든 과정은 감사 로그에 남습니다.</p>
+          <p lang="en">With access requests on, ask for a higher role on a cluster for a set time (up to 8 hours by default). An admin other than you approves, and the role goes back by itself. Every step is audited.</p>
+          <p lang="ko">접근 요청을 켜 두면, 클러스터의 더 높은 역할을 정한 시간만(기본 최대 8시간) 요청합니다. 요청자가 아닌 관리자가 승인하고, 시간이 지나면 이전 역할로 돌아갑니다. 모든 과정은 감사 로그에 남습니다.</p>
           <ol class="steps">
             <li data-step="request"><span lang="en">A Read user asks for Write</span><span lang="ko">Read 사용자가 Write 권한을 요청</span></li>
             <li data-step="approve"><span lang="en">An admin approves</span><span lang="ko">관리자가 승인</span></li>
@@ -231,10 +322,10 @@
         <div class="thumb"><video muted playsinline preload="none" poster="media/security-audit.jpg" data-src="media/security-audit.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
           <h3><span lang="en">Security you can prove</span><span lang="ko">증명할 수 있는 보안</span></h3>
-          <p lang="en">Verify that no audit record was changed or removed, review who holds what access, and find risky settings in the workloads.</p>
-          <p lang="ko">감사 기록이 하나도 바뀌거나 지워지지 않았는지 검증하고, 누가 어떤 권한을 가졌는지 검토하고, 위험한 설정을 찾아냅니다.</p>
+          <p lang="en">Check the audit log's hash chain for changed or deleted rows, against an S3 copy if you anchor one. Review who holds what access, and find risky settings in the workloads.</p>
+          <p lang="ko">감사 기록의 해시 체인으로 바뀌거나 지워진 행을 찾고, S3 앵커를 두면 데이터베이스 밖 사본과도 대조합니다. 누가 어떤 권한을 가졌는지 검토하고, 위험한 설정을 찾아냅니다.</p>
           <ol class="steps">
-            <li data-step="verify"><span lang="en">Verify the audit log is intact</span><span lang="ko">감사 로그 무결성 검증</span></li>
+            <li data-step="verify"><span lang="en">Verify the audit chain</span><span lang="ko">감사 로그 해시 체인 검증</span></li>
             <li data-step="review"><span lang="en">Who can do what, right now</span><span lang="ko">지금 누가 무엇을 할 수 있는지</span></li>
             <li data-step="hygiene"><span lang="en">Risky settings, found for you</span><span lang="ko">위험한 설정을 대신 찾아 줍니다</span></li>
           </ol>
@@ -248,13 +339,13 @@
       <p class="kicker"><span lang="en">Also in the box</span><span lang="ko">이 밖에도</span></p>
     </div>
     <div class="tiles">
-      <div class="tile"><b>MCP</b><span lang="en">Claude Code or Cursor use the same read tools as the signed-in user</span><span lang="ko">Claude Code와 Cursor도 같은 읽기 도구를, 로그인한 사람의 권한으로</span></div>
+      <div class="tile"><b>MCP</b><span lang="en">Turn it on, and Claude Code or Cursor use the chat's read tools with an API key, under its owner's permissions</span><span lang="ko">켜 두면 Claude Code·Cursor가 API 키로, 키 주인의 권한 안에서 같은 읽기 도구를 씁니다</span></div>
       <div class="tile"><b>SSO</b><span lang="en">Keycloak, Google, Entra ID, Okta over OIDC</span><span lang="ko">Keycloak, Google, Entra ID, Okta 계정으로 로그인</span></div>
       <div class="tile"><b>GPU &amp; DRA</b><span lang="en">GPU nodes, usage and DRA resources</span><span lang="ko">GPU 노드와 사용률, DRA 리소스까지</span></div>
       <div class="tile"><b>Policy Reports</b><span lang="en">Kyverno and Trivy Operator results</span><span lang="ko">Kyverno와 Trivy Operator 결과를 한곳에서</span></div>
       <div class="tile"><b>Cost</b><span lang="en">OpenCost per namespace and workload</span><span lang="ko">OpenCost로 보는 Namespace·워크로드별 비용</span></div>
-      <div class="tile"><b>Argo CD guard</b><span lang="en">Warn or block edits to managed objects</span><span lang="ko">Argo CD가 관리하는 리소스는 수정 전에 경고하거나 막습니다</span></div>
-      <div class="tile"><b>Logs &amp; traces</b><span lang="en">Loki, Tempo and Jaeger, read by the console and the AI</span><span lang="ko">Loki·Tempo·Jaeger를 콘솔과 AI가 함께 읽습니다</span></div>
+      <div class="tile"><b>Argo CD guard</b><span lang="en">Once turned on, warn or block edits to objects Argo CD manages</span><span lang="ko">켜 두면 Argo CD가 관리하는 리소스는 수정 전에 경고하거나 막습니다</span></div>
+      <div class="tile"><b>Logs &amp; traces</b><span lang="en">Loki logs in the console and the AI, Tempo traces for the AI, trace links to Jaeger</span><span lang="ko">Loki 로그는 콘솔과 AI가, Tempo 트레이스는 AI가 읽고, Jaeger로는 링크를 엽니다</span></div>
       <div class="tile"><b>English · 한국어</b><span lang="en">The console in both languages</span><span lang="ko">콘솔 전체를 두 언어로</span></div>
     </div>
   </section>
@@ -262,7 +353,7 @@
   <section class="install" id="install">
     <div class="section-head">
       <p class="kicker"><span lang="en">Install</span><span lang="ko">설치</span></p>
-      <h2><span lang="en">Running in two minutes</span><span lang="ko">2분이면 충분합니다</span></h2>
+      <h2><span lang="en">Install with one command</span><span lang="ko">명령 한 줄로 설치합니다</span></h2>
     </div>
     <div class="terminal">
       <div class="term-bar">
@@ -274,18 +365,18 @@
         </div>
         <button type="button" class="copy" data-copy-tab aria-label="Copy"><span lang="en">Copy</span><span lang="ko">복사</span></button>
       </div>
-      <pre class="tab-panel active" data-panel="helm"><code><span class="prompt">$</span> helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.8 \
+      <pre class="tab-panel active" data-panel="helm"><code><span class="prompt">$</span> helm install kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.7.9 \
     --namespace kubeast --create-namespace</code></pre>
-      <pre class="tab-panel" data-panel="script"><code><span class="prompt">$</span> curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.8/install.sh
+      <pre class="tab-panel" data-panel="script"><code><span class="prompt">$</span> curl -fsSLo install.sh https://raw.githubusercontent.com/junginho0901/Kubeast/v0.7.9/install.sh
 <span class="prompt">$</span> less install.sh   <span class="comment"># read it first</span>
 <span class="prompt">$</span> bash install.sh</code></pre>
-      <pre class="tab-panel" data-panel="docker"><code><span class="prompt">$</span> git clone --branch v0.7.8 --depth 1 https://github.com/junginho0901/Kubeast.git
+      <pre class="tab-panel" data-panel="docker"><code><span class="prompt">$</span> git clone --branch v0.7.9 --depth 1 https://github.com/junginho0901/Kubeast.git
 <span class="prompt">$</span> cd Kubeast
 <span class="prompt">$</span> ./install-docker.sh   <span class="comment"># then connect a cluster on the Setup page</span></code></pre>
     </div>
     <p class="install-note">
-      <span lang="en">The admin password, more clusters, turning on AI and connecting a cluster to Docker: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/getting-started.md">Getting started →</a></span>
-      <span lang="ko">관리자 비밀번호, 클러스터 추가, AI 설정, Docker에 클러스터 연결까지: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/ko/getting-started.md">시작 가이드 →</a></span>
+      <span lang="en">The admin password, more clusters, turning on AI and connecting a cluster to Docker: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/v0.7.9/docs/getting-started.md">Getting started →</a></span>
+      <span lang="ko">관리자 비밀번호, 클러스터 추가, AI 설정, Docker에 클러스터 연결까지: <a class="doc" data-doc="getting-started.md" href="https://github.com/junginho0901/Kubeast/blob/v0.7.9/docs/ko/getting-started.md">시작 가이드 →</a></span>
     </p>
   </section>
 
@@ -299,15 +390,15 @@
     </details>
     <details>
       <summary><span lang="en">What can the AI change?</span><span lang="ko">AI는 무엇까지 바꿀 수 있나요?</span></summary>
-      <div class="answer"><p lang="en">Only what the person asking may change, and only after they approve that exact action. Alert investigations are read-only. Every tool call is in the audit log.</p><p lang="ko">질문한 사람이 바꿀 수 있는 것만, 그 작업을 직접 승인한 뒤에만 바꿉니다. 알림 조사는 읽기만 하고, AI의 모든 도구 호출은 감사 로그에 남습니다.</p></div>
+      <div class="answer"><p lang="en">In the chat, only what the person asking may change, and only after they approve that exact action on its card. Alert investigations only read. MCP write tools, off by default, run without a card for keys with a Write ceiling, within the key owner's permissions. Every tool call is in the audit log.</p><p lang="ko">채팅에서는 질문한 사람이 바꿀 수 있는 것만, 그 작업을 승인 카드에서 직접 승인한 뒤에만 바꿉니다. 알림 조사는 읽기만 합니다. MCP 쓰기 도구(기본 꺼짐)는 Write 상한 키에 한해 카드 없이, 키 주인의 권한 안에서 실행됩니다. 모든 도구 호출은 감사 로그에 남습니다.</p></div>
     </details>
     <details>
       <summary><span lang="en">Do passwords or keys reach the AI provider?</span><span lang="ko">AI에게 비밀번호나 키가 넘어가나요?</span></summary>
-      <div class="answer"><p lang="en">No. What the tools read is masked before it is sent: values under names like password, token or api_key, credentials in URLs, bearer tokens and cloud keys, and every value of a Secret. Each tool call's audit row records what was masked. Emails and phone numbers can be masked too (<code>ai.redaction.pii</code>).</p><p lang="ko">아니요. 도구가 읽은 내용은 보내기 전에 가려집니다. password·token·api_key 같은 이름의 값, 주소 속 계정 정보, Bearer 토큰과 클라우드 키, 그리고 Secret의 모든 값이 대상입니다. 무엇을 가렸는지는 도구 호출마다 감사 로그에 남습니다. 이메일·전화번호도 가릴 수 있습니다(<code>ai.redaction.pii</code>).</p></div>
+      <div class="answer"><p lang="en">Kubeast masks them first. What the tools read is masked before it is sent: values under names like password, token or api_key, credentials in URLs, bearer tokens, cloud and model keys, and every value of a Secret. Masking finds values by their name and shape, so a password in free text with neither can go through. Each tool call's audit row counts what was masked. Emails and phone numbers can be masked too (<code>ai.redaction.pii</code>).</p><p lang="ko">보내기 전에 가립니다. 도구가 읽은 내용 중 password·token·api_key 같은 이름의 값, 주소 속 계정 정보, Bearer 토큰, 클라우드·모델 키, 그리고 Secret의 모든 값이 대상입니다. 이름과 형태로 찾기 때문에, 둘 다 없는 평문 속 비밀번호는 걸러지지 않을 수 있습니다. 무엇을 가렸는지는 도구 호출마다 감사 로그에 남습니다. 이메일·전화번호도 가릴 수 있습니다(<code>ai.redaction.pii</code>).</p></div>
     </details>
     <details>
       <summary><span lang="en">How does it reach my clusters?</span><span lang="ko">클러스터는 어떻게 연결하나요?</span></summary>
-      <div class="answer"><p lang="en">The cluster it runs in is connected from the start; others are added with a kubeconfig. Requests go to each cluster as the signed-in user, so the cluster's own RBAC still decides. Kubeast installs nothing on the clusters it manages.</p><p lang="ko">Kubeast가 설치된 클러스터는 처음부터 연결되어 있고, 다른 클러스터는 kubeconfig로 추가합니다. 모든 요청은 로그인한 사용자 이름으로 전달되므로, 권한 판단은 클러스터의 RBAC가 그대로 맡습니다. 관리하는 클러스터에는 아무것도 설치하지 않습니다.</p></div>
+      <div class="answer"><p lang="en">On first sign-in, the setup page connects the cluster Kubeast runs in (In-cluster); others are added with a kubeconfig, EKS through IAM. Requests go to each cluster as the signed-in user, so the cluster's own RBAC still decides: each cluster needs the RBAC bindings the chart renders for this. Kubeast runs no agent on the clusters it manages.</p><p lang="ko">처음 로그인하면 설정 화면에서 Kubeast가 설치된 클러스터를 연결하고(In-cluster), 다른 클러스터는 kubeconfig로 추가합니다(EKS는 IAM). 모든 요청은 로그인한 사용자 이름으로 전달되므로 권한 판단은 클러스터의 RBAC가 그대로 맡습니다. 이를 위해 각 클러스터에 차트가 만들어 주는 RBAC 바인딩을 적용합니다. 관리하는 클러스터에 에이전트는 설치하지 않습니다.</p></div>
     </details>
     <details>
       <summary><span lang="en">Where is the data kept?</span><span lang="ko">데이터는 어디에 저장되나요?</span></summary>
@@ -315,7 +406,7 @@
     </details>
     <details>
       <summary><span lang="en">How much does it need?</span><span lang="ko">자원은 얼마나 필요한가요?</span></summary>
-      <div class="answer"><p lang="en">A minimal install without AI fits on a small node; measured numbers per install size are in <a class="doc" data-doc="architecture.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/architecture.md">Architecture</a>.</p><p lang="ko">AI를 뺀 최소 설치라면 작은 노드 하나로 충분합니다. 설치 구성별 실측값은 <a class="doc" data-doc="architecture.md" href="https://github.com/junginho0901/Kubeast/blob/main/docs/ko/architecture.md">아키텍처 문서</a>에서 확인하세요.</p></div>
+      <div class="answer"><p lang="en">A minimal install without AI fits on a small node; measured numbers per install size are in <a class="doc" data-doc="architecture.md" href="https://github.com/junginho0901/Kubeast/blob/v0.7.9/docs/architecture.md">Architecture</a>.</p><p lang="ko">AI를 뺀 최소 설치라면 작은 노드 하나로 충분합니다. 설치 구성별 실측값은 <a class="doc" data-doc="architecture.md" href="https://github.com/junginho0901/Kubeast/blob/v0.7.9/docs/ko/architecture.md">아키텍처 문서</a>에서 확인하세요.</p></div>
     </details>
     <details>
       <summary><span lang="en">Is it free?</span><span lang="ko">무료인가요?</span></summary>
@@ -325,13 +416,44 @@
 </main>
 
 <footer>
-  <div class="foot-brand"><img src="icon.svg" alt="" width="22" height="22"> Kubeast</div>
+  <div class="foot-brand"><img id="footer-mark" src="icon.svg" alt="" width="22" height="22"> Kubeast</div>
   <nav>
     <a href="https://github.com/junginho0901/Kubeast">GitHub</a>
-    <a class="doc" data-doc="" href="https://github.com/junginho0901/Kubeast/tree/main/docs"><span lang="en">Docs</span><span lang="ko">문서</span></a>
+    <a class="doc" data-doc="" href="https://github.com/junginho0901/Kubeast/tree/v0.7.9/docs"><span lang="en">Docs</span><span lang="ko">문서</span></a>
     <a href="https://github.com/junginho0901/Kubeast/releases">Releases</a>
     <span>MIT License</span>
   </nav>
+  <p class="foot-legal" lang="en">Kubernetes®, Prometheus®, Helm®, Argo®, Kyverno®, OpenCost®, Cilium® and OpenTelemetry® are registered trademarks, and Jaeger™ and Keycloak™ are trademarks, of The Linux Foundation. Model Context Protocol® is a registered trademark of LF Projects, LLC.
+    Grafana®, Loki® and Tempo® are registered trademarks of Grafana Labs.
+    Grafana Mimir is a trademark of Grafana Labs.
+    OpenAI and the OpenAI logo are trademarks of OpenAI.
+    Claude, Claude Code and Anthropic are trademarks of Anthropic.
+    Google, Gemini and Google Cloud Storage are trademarks of Google LLC.
+    Microsoft, Microsoft Entra ID, Azure OpenAI and Microsoft Teams are trademarks of the Microsoft group of companies, and Retina and its logo belong to Microsoft Corporation.
+    Amazon Web Services, AWS, Amazon EKS, Amazon S3, Elastic Load Balancing, Amazon RDS and Amazon CloudWatch are trademarks of Amazon.com, Inc. or its affiliates.
+    Postgres, PostgreSQL and the Slonik Logo are trademarks or registered trademarks of the PostgreSQL Community Association of Canada.
+    NVIDIA and the NVIDIA logo are trademarks of NVIDIA Corporation.
+    Ollama is a trademark of Ollama Inc.
+    Calico is a trademark of Tigera, Inc.
+    Cursor is a trademark of Anysphere, Inc.
+    The other names and logos under Integrations belong to their owners: Okta, Inc., Slack Technologies, LLC, Discord Inc., Telegram Messenger Inc., PagerDuty, Inc., Docker, Inc., Cloudflare, Inc., MinIO, Inc., Victoria Metrics Inc., Aqua Security Software Ltd., BerriAI (LiteLLM), Groq LLC, Hangzhou DeepSeek Artificial Intelligence Co., Ltd., Mistral AI, Together Computer, Inc., Fireworks AI, Inc., Advanced Micro Devices, Inc., Intel Corporation, the PgBouncer project, the Prometheus Operator project, and The Linux Foundation and its projects (Thanos, Istio, Envoy Gateway, Sigstore, SLSA, SPDX, Valkey).
+    Kubeast is not affiliated with, endorsed or sponsored by The Linux Foundation, the Cloud Native Computing Foundation, LF Projects, LLC, Grafana Labs, OpenAI, Anthropic, Google LLC, Microsoft Corporation, Amazon.com, Inc., NVIDIA Corporation, Ollama Inc., Tigera, Inc., Anysphere, Inc., the owners named above or these projects.</p>
+  <p class="foot-legal" lang="ko">Kubernetes®, Prometheus®, Helm®, Argo®, Kyverno®, OpenCost®, Cilium®, OpenTelemetry®는 The Linux Foundation의 등록 상표이고, Jaeger™, Keycloak™은 The Linux Foundation의 상표입니다. Model Context Protocol®은 LF Projects, LLC의 등록 상표입니다.
+    Grafana®, Loki®, Tempo®는 Grafana Labs의 등록 상표입니다.
+    Grafana Mimir는 Grafana Labs의 상표입니다.
+    OpenAI와 OpenAI 로고는 OpenAI의 상표입니다.
+    Claude, Claude Code, Anthropic은 Anthropic의 상표입니다.
+    Google, Gemini, Google Cloud Storage는 Google LLC의 상표입니다.
+    Microsoft, Microsoft Entra ID, Azure OpenAI, Microsoft Teams는 Microsoft 그룹사의 상표이고, Retina와 그 로고는 Microsoft Corporation의 것입니다.
+    Amazon Web Services, AWS, Amazon EKS, Amazon S3, Elastic Load Balancing, Amazon RDS, Amazon CloudWatch는 Amazon.com, Inc. 또는 그 계열사의 상표입니다.
+    Postgres, PostgreSQL과 Slonik 로고는 PostgreSQL Community Association of Canada의 상표 또는 등록 상표입니다.
+    NVIDIA와 NVIDIA 로고는 NVIDIA Corporation의 상표입니다.
+    Ollama는 Ollama Inc.의 상표입니다.
+    Calico는 Tigera, Inc.의 상표입니다.
+    Cursor는 Anysphere, Inc.의 상표입니다.
+    함께 쓰는 도구에 나오는 그 밖의 이름과 로고는 각 소유자의 것입니다: Okta, Inc., Slack Technologies, LLC, Discord Inc., Telegram Messenger Inc., PagerDuty, Inc., Docker, Inc., Cloudflare, Inc., MinIO, Inc., Victoria Metrics Inc., Aqua Security Software Ltd., BerriAI(LiteLLM), Groq LLC, Hangzhou DeepSeek Artificial Intelligence Co., Ltd., Mistral AI, Together Computer, Inc., Fireworks AI, Inc., Advanced Micro Devices, Inc., Intel Corporation, PgBouncer 프로젝트, Prometheus Operator 프로젝트, The Linux Foundation과 그 프로젝트(Thanos, Istio, Envoy Gateway, Sigstore, SLSA, SPDX, Valkey).
+    Kubeast는 The Linux Foundation, Cloud Native Computing Foundation, LF Projects, LLC, Grafana Labs, OpenAI, Anthropic, Google LLC, Microsoft Corporation, Amazon.com, Inc., NVIDIA Corporation, Ollama Inc., Tigera, Inc., Anysphere, Inc., 위에 적은 소유자 및 이 프로젝트들과 제휴 관계가 없으며, 이들의 보증이나 후원을 받지 않습니다.</p>
+  <p class="foot-legal">The Grafana Labs Marks are trademarks of Grafana Labs, and are used with Grafana Labs’ permission. We are not affiliated with, endorsed or sponsored by Grafana Labs or its affiliates.</p>
 </footer>
 
 <div class="lightbox" id="lightbox" hidden>
@@ -340,11 +462,11 @@
     <div class="lb-video"><video muted playsinline controls></video><div class="lb-caption" aria-live="polite"></div></div>
     <div class="lb-side">
       <h3 id="lb-title"></h3>
-      <p class="lb-text"></p>
+      <div class="lb-text"></div>
       <ol class="steps lb-steps"></ol>
       <div class="lb-nav">
-        <button type="button" class="btn btn-ghost btn-sm" data-prev aria-label="Previous">←</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-next aria-label="Next">→</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-prev aria-label="Previous"><span lang="ko">이전</span><span lang="en">Previous</span></button>
+        <button type="button" class="btn btn-ghost btn-sm" data-next aria-label="Next"><span lang="ko">다음</span><span lang="en">Next</span></button>
       </div>
     </div>
     <button type="button" class="lb-close" data-close aria-label="Close">×</button>
@@ -354,5 +476,8 @@
 <script src="media/steps.js"></script>
 <script src="particles.js"></script>
 <script src="app.js"></script>
+<script src="interactions.js"></script>
+<script src="motion.js"></script>
+<script src="integrations.js"></script>
 </body>
 </html>

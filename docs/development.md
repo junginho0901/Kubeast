@@ -125,6 +125,8 @@ The harder cases of `scripts/ai-eval.py` need faults and services that call each
 
 [https://junginho0901.github.io/Kubeast/](https://junginho0901.github.io/Kubeast/) is `site/`, a static page in English with a Korean switch: `index.html`, `style.css`, `app.js` and `particles.js`.
 
+The demo in the page (`site/demo/`) is built by `site-demo/build.sh` from the released console's source and the sample data in `site-demo/sample/`; it is not committed, and `.github/workflows/pages.yaml` builds it for each deploy (`site-demo/README.md`).
+
 `.github/workflows/pages.yaml` publishes it to GitHub Pages when it changes on main. The feature clips (`site/media/<name>.mp4` and a poster `.jpg`) are recorded on the dev clusters from the scripts `e2e/demo/<name>.demo.ts`.
 
 ```bash
