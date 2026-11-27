@@ -3,6 +3,7 @@ package response
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -46,13 +47,60 @@ func TestJSONWritesWhatTheEncoderWrites(t *testing.T) {
 	}
 }
 
-// A value that cannot be encoded leaves the body empty, as the encoder did, and nil writes no body.
-func TestJSONOfNoValueOrABadOneWritesNoBody(t *testing.T) {
-	for _, v := range []any{nil, math.NaN(), map[string]any{"ch": make(chan int)}} {
-		rec := httptest.NewRecorder()
-		JSON(rec, http.StatusOK, v)
-		if rec.Body.Len() != 0 {
-			t.Errorf("%T: body %q, want none", v, rec.Body.String())
+// nil writes the status and no body.
+func TestJSONOfNoValueWritesTheStatusAndNoBody(t *testing.T) {
+	rec := httptest.NewRecorder()
+	JSON(rec, http.StatusNoContent, nil)
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Errorf("status %d, body %q", rec.Code, rec.Body.String())
+	}
+}
+
+// calls is a ResponseWriter that keeps the order of what was written to it.
+type calls struct {
+	header http.Header
+	log    []string
+	body   bytes.Buffer
+}
+
+func (c *calls) Header() http.Header { return c.header }
+func (c *calls) WriteHeader(status int) {
+	c.log = append(c.log, "status "+http.StatusText(status))
+}
+func (c *calls) Write(b []byte) (int, error) {
+	if len(c.log) == 0 || !strings.HasPrefix(c.log[len(c.log)-1], "body") {
+		c.log = append(c.log, "body")
+	}
+	return c.body.Write(b)
+}
+
+// A value JSON cannot hold (a Prometheus NaN or infinity, a channel) was a 200 with no body, which a caller reads as
+// "unexpected end of JSON input". It is a 500 with the detail InternalError gives, nothing written before it, and one
+// log line that says what could not be written.
+func TestJSONOfAValueThatCannotBeEncodedIsA500WithADetailNotAnEmptyStatus(t *testing.T) {
+	var logged bytes.Buffer
+	defer slog.SetDefault(slog.Default())
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logged, nil)))
+
+	for _, v := range []any{
+		math.NaN(),
+		math.Inf(1),
+		map[string]any{"available": true, "results": []map[string]any{{"value": 0.25}, {"value": math.Inf(-1)}}},
+		map[string]any{"ch": make(chan int)},
+	} {
+		logged.Reset()
+		w := &calls{header: http.Header{}}
+		JSON(w, http.StatusOK, v)
+		if strings.Join(w.log, ", ") != "status Internal Server Error, body" {
+			t.Errorf("%T: writes %q, want the 500 and then its body", v, w.log)
+		}
+		if w.body.String() != "{\"detail\":\"internal server error\"}\n" || w.header.Get("Content-Type") != "application/json" {
+			t.Errorf("%T: body %q, content type %q", v, w.body.String(), w.header.Get("Content-Type"))
+		}
+		lines := strings.Split(strings.TrimSpace(logged.String()), "\n")
+		if len(lines) != 1 || !strings.Contains(lines[0], "level=ERROR") || !strings.Contains(lines[0], `msg="response not encodable"`) ||
+			!strings.Contains(lines[0], "status=200") || !strings.Contains(lines[0], "json: unsupported") {
+			t.Errorf("%T: log %q, want one line", v, logged.String())
 		}
 	}
 }

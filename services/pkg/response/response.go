@@ -2,6 +2,7 @@ package response
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 )
@@ -19,18 +20,22 @@ func InternalError(w http.ResponseWriter, r *http.Request, err error) {
 	Error(w, http.StatusInternalServerError, "internal server error")
 }
 
-// JSON writes a JSON response with the given status code.
+// JSON writes a JSON response with the given status code. A value JSON cannot hold (a NaN or an infinity, a channel) is
+// logged and answered 500 with a detail: the status goes out after the body is made, never with no body.
 func JSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
 	if data == nil {
+		w.WriteHeader(status)
 		return
 	}
 	// json.Encoder holds its grown buffer until a slow client takes the answer; this holds the answer's own bytes.
 	b, err := json.Marshal(data)
 	if err != nil {
+		slog.Error("response not encodable", "type", fmt.Sprintf("%T", data), "status", status, "err", err)
+		Error(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
+	w.WriteHeader(status)
 	_, _ = w.Write(b)
 	_, _ = w.Write(newline)
 }

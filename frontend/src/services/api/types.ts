@@ -672,7 +672,8 @@ export interface GPUMetricsData {
 
 export interface PrometheusQueryResult {
   metric: Record<string, string>
-  value: number
+  // null where Prometheus answered NaN or ±Inf (0/0, x/0), which JSON cannot hold
+  value: number | null
 }
 
 // GET /cluster/prometheus/status — where the cluster's metrics come from.

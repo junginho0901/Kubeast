@@ -33,8 +33,13 @@ func TestLokiQuery_MetricSeriesForTheChart(t *testing.T) {
 		!strings.Contains(m["effective_query"].(string), `k8s_namespace_name="shop"`) {
 		t.Fatalf("result: %s", out)
 	}
-	if pts := results[0].(map[string]interface{})["points"].([]interface{}); len(pts) != 2 || !strings.Contains(m["note"].(string), "no point") {
+	if pts := results[0].(map[string]interface{})["points"].([]interface{}); len(pts) != 2 {
 		t.Fatalf("points: %s", out)
+	}
+	// k8s-service leaves out a step with no line and one whose value is not a number (0/0, x/0): only the first is 0
+	if note := m["note"].(string); !strings.Contains(note, "no line matched there (a count or rate of 0)") || !strings.Contains(note, "not a number") ||
+		!strings.Contains(note, "missing point is not 0") {
+		t.Fatalf("note: %q", note)
 	}
 }
 

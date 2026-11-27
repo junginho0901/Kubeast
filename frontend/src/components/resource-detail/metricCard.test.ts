@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import '@/i18n'
-import { MetricCard } from './PrometheusMetrics'
+import { MetricBar, MetricCard } from './PrometheusMetrics'
 
 // A card's number: a count (pods, restarts) as a whole number, a percent rounded, anything else to one decimal.
 const shown = (props: Parameters<typeof MetricCard>[0]) =>
@@ -21,5 +21,22 @@ describe('MetricCard', () => {
 
   it('rounds a percent', () => {
     expect(shown({ label: 'CPU Usage', value: 41.6 })).toBe('42%')
+  })
+})
+
+// A bar's number and how full it is; null is a value Prometheus answered as NaN or ±Inf.
+const bar = (props: Parameters<typeof MetricBar>[0]) => {
+  const html = renderToStaticMarkup(createElement(MetricBar, props))
+  return { text: html.match(/font-mono text-slate-300">([^<]*)</)?.[1], width: html.match(/width:([^;"]*)/)?.[1] }
+}
+
+describe('MetricBar', () => {
+  it('reads a percent rounded and fills to it', () => {
+    expect(bar({ label: 'CPU 250m', value: 41.6 })).toEqual({ text: '42%', width: '41.6%' })
+  })
+
+  it('reads a value that is not a number as "-" over an empty bar', () => {
+    expect(bar({ label: 'Memory -', value: null })).toEqual({ text: '-', width: '0%' })
+    expect(bar({ label: 'Total', value: null, unit: ' MiB', max: 512 })).toEqual({ text: '-', width: '0%' })
   })
 })

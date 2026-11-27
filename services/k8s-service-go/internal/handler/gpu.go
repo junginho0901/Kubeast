@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -96,7 +97,7 @@ func (h *Handler) PrometheusQuery(w http.ResponseWriter, r *http.Request) {
 	for _, r := range results {
 		items = append(items, map[string]interface{}{
 			"metric": r.Metric,
-			"value":  r.Value,
+			"value":  promJSONValue(r.Value),
 		})
 	}
 
@@ -104,6 +105,15 @@ func (h *Handler) PrometheusQuery(w http.ResponseWriter, r *http.Request) {
 		"available": true,
 		"results":   items,
 	})
+}
+
+// promJSONValue is v as JSON holds it: nil (null) for the NaN or infinity Prometheus answers for 0/0, x/0 or a quantile
+// over no observations. An instant result keeps its series with a null value; a range result leaves the point out.
+func promJSONValue(v float64) interface{} {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return nil
+	}
+	return v
 }
 
 // PrometheusQueryRange backs GET /api/v1/prometheus/query_range. Same response
@@ -160,6 +170,9 @@ func (h *Handler) PrometheusQueryRange(w http.ResponseWriter, r *http.Request) {
 	for _, r := range results {
 		pts := make([]map[string]float64, 0, len(r.Points))
 		for _, p := range r.Points {
+			if promJSONValue(p.V) == nil {
+				continue
+			}
 			pts = append(pts, map[string]float64{"t": p.T, "v": p.V})
 		}
 		items = append(items, map[string]interface{}{
