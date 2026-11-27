@@ -96,7 +96,7 @@ const MessageBubble = memo(function MessageBubble({ role, content, pending, queu
   if (role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className={`max-w-[85%] rounded-lg bg-primary-600 px-3 py-2 text-sm text-white ${pending ? 'opacity-90' : ''}`}>
+        <div className={`max-w-[85%] rounded-lg bg-slate-700 px-3 py-2 text-sm text-ink ${pending ? 'opacity-90' : ''}`}>
           <p className="whitespace-pre-wrap wrap-break-word">{content}</p>
         </div>
       </div>

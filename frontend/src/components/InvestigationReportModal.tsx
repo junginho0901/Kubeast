@@ -8,6 +8,7 @@ import { AIMarkdown } from '@/components/AIMarkdown'
 import { InvestigationResultView } from '@/components/InvestigationResultView'
 import { ModalFrame } from '@/components/ModalFrame'
 import { ExternalHttpLink } from '@/components/ExternalHttpLink'
+import { modalButton } from '@/components/modalStyles'
 import { formatWhen } from '@/pages/admin/accessRequestFormat'
 import { duration, severityClass, skipReason, statusClass } from '@/utils/investigationFormat'
 import { reportLayer } from '@/utils/investigationResult'
@@ -39,13 +40,13 @@ export default function InvestigationReportModal({ id, load, onClose }: {
     <ModalFrame
       title={data ? data.alertname || id : tr('investigations.report', 'Report')}
       subtitle={data ? `${data.cluster}${data.namespace ? ' / ' + data.namespace : ''} · ${formatWhen(data.received_at)}` : undefined}
-      icon={<Siren className="w-5 h-5 text-primary-400" />}
+      icon={<Siren className="w-5 h-5 text-slate-400" />}
       size="lg"
       body="scroll"
       onClose={onClose}
       testId="investigation-modal"
       footer={
-        <button type="button" onClick={onClose} className="btn btn-secondary">
+        <button type="button" onClick={onClose} className={modalButton.cancel}>
           {tr('common.close', 'Close')}
         </button>
       }
@@ -80,7 +81,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
           {data.report && (
             <section>
               <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('investigations.section.report', 'Report')}</h3>
-              <div className="prose prose-invert prose-sm max-w-none rounded-lg border border-slate-700 bg-slate-950/40 px-4 py-3" data-testid="investigation-report">
+              <div className="prose prose-invert prose-sm max-w-none border-t border-hairline pt-3" data-testid="investigation-report">
                 <AIMarkdown>{data.report}</AIMarkdown>
               </div>
             </section>
@@ -91,14 +92,14 @@ export default function InvestigationReportModal({ id, load, onClose }: {
           <section>
             <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('investigations.section.alert', 'Alert')}</h3>
             <div className="grid gap-3 md:grid-cols-2">
-              <dl className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs">
+              <dl className="min-w-0 border-l border-hairline pl-3 py-2 text-xs">
                 {Object.entries(data.labels).map(([k, v]) => (
-                  <div key={k} className="flex gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500">{k}</dt><dd className="break-all font-mono text-slate-200">{v}</dd></div>
+                  <div key={k} className="flex flex-wrap gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500 [overflow-wrap:anywhere]">{k}</dt><dd className="min-w-0 break-all font-mono text-slate-200">{v}</dd></div>
                 ))}
               </dl>
-              <dl className="rounded-lg border border-slate-700 bg-slate-950/40 px-3 py-2 text-xs">
+              <dl className="min-w-0 border-l border-hairline pl-3 py-2 text-xs">
                 {Object.entries(data.annotations).map(([k, v]) => (
-                  <div key={k} className="flex gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500">{k}</dt><dd className="break-words text-slate-200">{v}</dd></div>
+                  <div key={k} className="flex flex-wrap gap-2 py-0.5"><dt className="min-w-[110px] text-slate-500 [overflow-wrap:anywhere]">{k}</dt><dd className="min-w-0 [overflow-wrap:anywhere] text-slate-200">{v}</dd></div>
                 ))}
                 {Object.keys(data.annotations).length === 0 && <div className="text-slate-500">{tr('investigations.noAnnotations', 'No annotations')}</div>}
               </dl>
@@ -121,6 +122,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
             {data.tool_calls.length === 0 ? (
               <div className="text-xs text-slate-500">{tr('investigations.noTools', 'The model answered without calling a tool.')}</div>
             ) : (
+              <div className="overflow-x-auto">
               <table className="w-full text-xs" data-testid="investigation-tools">
                 <thead className="text-slate-500">
                   <tr>
@@ -133,7 +135,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
                 </thead>
                 <tbody>
                   {data.tool_calls.map((c, i) => (
-                    <tr key={i} className="border-t border-slate-800">
+                    <tr key={i} className="border-t border-hairline">
                       <td className="px-2 py-1 font-mono text-slate-400" data-testid="investigation-call-number">#{i + 1}</td>
                       <td className="px-2 py-1 text-slate-500">{c.step}</td>
                       <td className="px-2 py-1 font-mono text-slate-200">{c.tool}</td>
@@ -145,6 +147,7 @@ export default function InvestigationReportModal({ id, load, onClose }: {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </section>
         </div>
