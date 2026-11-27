@@ -71,7 +71,7 @@ type Config struct {
 	// Service writes and replica counts set, in a namespace. Alone it opens no route.
 	TimelineChangesMore bool
 
-	// Narrowing for the AI (chart features.anomalyRank, off by default): GET
+	// Narrowing for the AI (chart features.anomalyRank, on by default): GET
 	// /namespaces/{namespace}/anomalies ranks what differs from the window
 	// before. Off = the route answers 404 and reads nothing. The rest bound one
 	// answer: store queries, seconds per check and for the whole answer, checks

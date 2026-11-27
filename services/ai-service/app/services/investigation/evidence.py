@@ -1,4 +1,4 @@
-"""The evidence check of an investigation's report (features.alertInvestigation.evidenceCheck, off by default).
+"""The evidence check of an investigation's report (features.alertInvestigation.evidenceCheck, on by default).
 
 With it on, the report ends with an rca block (investigation/rca.py, the one mechanism this check shares with the
 hypothesis ledger): one fenced JSON object of causes (resource, kind, start, the numbers of the calls that show it),

@@ -47,6 +47,7 @@ class ToolContext:
         self.session_id = session_id
         self.state = {}  # 실행 상태
         self.cache = TTLCache()  # 결과 캐시 (5분 TTL)
+        self.writes = 0  # the writes that ran (tool_dispatch): an answer read before one is not kept after it
 
 
 _TOOL_BLOCK_START = re.compile(r"^<details>[ \t\r\n]*<summary>🔧", re.MULTILINE)

@@ -178,6 +178,10 @@ class AnthropicMessagesClient:
             self._thinking.popitem(last=False)
 
     def _recall(self, tool_use_id: Optional[str]) -> list[dict]:
+        """The blocks of a turn, its place in the store renewed: an answer that goes on sends every one of its turns, so
+        what makes room for the others is what no answer sent for longest."""
+        if tool_use_id in self._thinking:
+            self._thinking.move_to_end(tool_use_id)
         return list(self._thinking.get(tool_use_id or "", []))
 
     # --- request ---

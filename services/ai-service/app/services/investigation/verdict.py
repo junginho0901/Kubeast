@@ -1,4 +1,4 @@
-"""The outcome of an alert investigation (features.alertInvestigation.verdict, off by default; nothing without
+"""The outcome of an alert investigation (features.alertInvestigation.verdict, on by default; nothing without
 evidenceCheck or ledger, whose rca block it is part of).
 
 With it on the rca block (investigation/rca.py) also says which of three answers the report gives — a cause found, no

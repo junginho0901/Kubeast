@@ -454,6 +454,20 @@ def tool_outcome(response) -> tuple[str, Optional[str], Optional[str]]:
     return "success", None, status
 
 
+def read_outcome(tool: str, response, service) -> tuple[str, Optional[str], Optional[str]]:
+    """tool_outcome of a call that ran, but of a read of raw text (a log, a describe, a YAML) only what tool-server or
+    ai-service wrote in its place (investigation/answers.py raw_outcome): the text is a container's or the cluster's, also
+    where it is a JSON object with an error or a status."""
+    from app.services.investigation import answers
+    from app.services.tool_whitelists import READONLY_TOOL_NAMES
+
+    own = response == AUDIT_UNAVAILABLE_RESULT or not tool_replay.call_fields(service, True).get("replay_hit", True)
+    if own or tool not in answers.RAW_TEXT_TOOLS or tool not in READONLY_TOOL_NAMES:
+        return tool_outcome(response)
+    problem, status = answers.raw_outcome(tool, response)
+    return ("failure" if problem else "success"), problem, status
+
+
 async def _call_tool(service, db, session, session_id, tools, tool_context, function_name, function_args, *,
                      iteration, audit_actor, audit_http, call_id=None, repeats=None) -> tuple[list[str], dict, str]:
     """Answer one tool call of the model: park a write for approval or run the tool, audit it, and return the
@@ -526,10 +540,13 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         function_response = AUDIT_UNAVAILABLE_RESULT
     else:
         ran = True
+        writes_before = repeats.writes if repeats is not None else None
         access_mod.reset(service)
         function_response = await service._execute_function_with_context(
             function_name, function_args, tool_context
         )
+        if repeats is not None:
+            repeats.changed(function_name)
         call_access = access_mod.of_call(service, function_name)
         call_requests = access_mod.requests_of_call(service)
 
@@ -537,7 +554,7 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
     if audit_actor:
         args_dict = function_args if isinstance(function_args, dict) else {}
         target = tool_target(function_name, args_dict)
-        tool_result, tool_error, tool_status = tool_outcome(function_response)
+        tool_result, tool_error, tool_status = read_outcome(function_name, function_response, service) if ran else tool_outcome(function_response)
         tool_input = write_tool_input(function_name, args_dict)
         stored = await write_audit(
             action='ai.tool.call',
@@ -589,8 +606,8 @@ async def _call_tool(service, db, session, session_id, tools, tool_context, func
         if stored is False and ran and function_name not in WRITE_TOOL_NAMES and fail_closed_enabled():
             # As on the screens, a read nobody could find later gives no answer. A write has happened, so it keeps its own.
             function_response = AUDIT_UNAVAILABLE_RESULT
-    if repeats is not None and ran and tool_outcome(function_response)[0] == "success":
-        repeats.note(function_name, function_args, step=iteration, call=call_id)
+    if repeats is not None and ran and read_outcome(function_name, function_response, service)[0] == "success":
+        repeats.note(function_name, function_args, step=iteration, call=call_id, writes=writes_before)
 
     log.debug("[DEBUG] Function response length: %d", len(str(function_response)))
 

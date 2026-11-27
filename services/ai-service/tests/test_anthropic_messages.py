@@ -269,6 +269,42 @@ async def test_without_the_kept_thinking_the_api_refuses():
     assert e.value.status_code == 400 and "thinking" in e.value.message
 
 
+def _asks(call_id):
+    return {"content": [{**THINK, "signature": f"sig-{call_id}"}, {"type": "tool_use", "id": call_id, "name": "x", "input": {}}],
+            "stop_reason": "tool_use", "usage": {}}
+
+
+async def _goes_on(client, messages, call_id):
+    """One answer that calls a tool, and the messages with its result."""
+    out = await client.chat.completions.create(messages=messages, tools=[TOOL])
+    return messages + [
+        {"role": "assistant", "content": out.choices[0].message.content, "tool_calls": [
+            {"id": call_id, "type": "function", "function": {"name": "x", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": call_id, "content": "ok"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_an_answer_that_goes_on_keeps_its_thinking_past_the_answers_made_beside_it(monkeypatch):
+    """The store is every chat's of one client: its place goes to the block that was sent back longest ago, not to a
+    running answer's first one."""
+    monkeypatch.setattr(am, "THINKING_KEEP", 4)
+    fake = FakeAnthropic([_asks("toolu_a1"), _asks("toolu_b1"), _asks("toolu_a2"), _asks("toolu_c1"), _asks("toolu_a3"), _asks("toolu_d1"),
+                          said("the answer of a")])
+    c = client_for(fake)
+    ask = lambda who: [{"role": "user", "content": who}]  # noqa: E731
+    a = await _goes_on(c, ask("a"), "toolu_a1")
+    await _goes_on(c, ask("b"), "toolu_b1")
+    a = await _goes_on(c, a, "toolu_a2")
+    await _goes_on(c, ask("c"), "toolu_c1")
+    a = await _goes_on(c, a, "toolu_a3")
+    await _goes_on(c, ask("d"), "toolu_d1")  # the fifth and sixth block: b's and c's places go
+    out = await c.chat.completions.create(messages=a, tools=[TOOL])
+    assert out.choices[0].message.content == "the answer of a"
+    assert [b["signature"] for b in thinking_in(fake.bodies[-1])] == ["sig-toolu_a1", "sig-toolu_a2", "sig-toolu_a3"]
+    assert list(c._thinking) == ["toolu_d1", "toolu_a1", "toolu_a2", "toolu_a3"]  # and no more than the store holds
+
+
 @pytest.mark.asyncio
 async def test_overloaded_is_retried_and_a_400_is_not(monkeypatch):
     async def no_sleep(_):
