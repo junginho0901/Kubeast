@@ -36,6 +36,16 @@ func emptyAnswerCaseSet(t *testing.T) []emptyAnswerCase {
 	web := args{"pod_name": "web-1", "namespace": "shop"}
 	grepped := args{"pod_name": "web-1", "namespace": "shop", "grep": "web-1"}
 	every := args{"pod_name": "web-1", "namespace": "shop", "all_containers": true}
+	everyPrevious := args{"pod_name": "web-1", "namespace": "shop", "all_containers": true, "previous": true}
+	everyPreviousGrepped := args{"pod_name": "web-1", "namespace": "shop", "all_containers": true, "previous": true, "grep": "refused"}
+	of := func(names string, containers ...aContainer) func([]string) (string, error) {
+		return aPod{names: names, says: defaulted, containers: containers}.kubectl
+	}
+	appEmpty, sideEmpty := aContainer{name: "app"}, aContainer{name: "side"}
+	appWrote, appGone := aContainer{name: "app", log: "stopped\n"}, aContainer{name: "app", words: goneText}
+	sideGone, sideNever := aContainer{name: "side", words: goneFile}, aContainer{name: "side", never: true}
+	sideWaits := notYet("side", "waiting to start: PodInitializing")
+	everyGrepped := args{"pod_name": "web-1", "namespace": "shop", "all_containers": true, "grep": "refused"}
 	names := args{"resource_type": "configmaps", "namespace": "shop", "output": "name"}
 	file := args{"namespace": "shop", "pod_name": "web-1", "path": "/var/log/web-1.log"}
 	type given struct {
@@ -63,9 +73,23 @@ func emptyAnswerCaseSet(t *testing.T) []emptyAnswerCase {
 		{name: "a log whose container is gone", tool: "k8s_get_pod_logs", args: args{"pod_name": "web-1", "namespace": "shop", "container": "app", "previous": true}, kubectl: kubectlSays(goneText), holds: "unread"},
 		{name: "a log whose file is gone", tool: "k8s_get_pod_logs", args: web, kubectl: kubectlSays(defaulted + goneFile), holds: "unread"},
 		{name: "a search of a log whose container is gone", tool: "k8s_get_pod_logs", args: grepped, kubectl: kubectlSays(goneText), holds: "unread"},
-		{name: "logs whose containers are gone", tool: "k8s_get_pod_logs", args: every, kubectl: kubectlSays("[pod/web-1/app] " + goneText + "[pod/web-1/side] " + goneFile), holds: "unread"},
+		{name: "logs whose containers are gone", tool: "k8s_get_pod_logs", args: every, kubectl: of("app side", appGone, sideGone), holds: "unread"},
 		{name: "a log beside one whose container is gone", tool: "k8s_get_pod_logs", args: every, kubectl: kubectlSays("[pod/web-1/app] " + goneText + "[pod/web-1/side] ready\n"), holds: "something"},
 		{name: "a line of a log with the words of one that is gone", tool: "k8s_get_pod_logs", args: web, kubectl: kubectlSays(goneText + "\n"), holds: "something"},
+		{name: "a line of a log with those words and no end", tool: "k8s_get_pod_logs", args: web, kubectl: of("app", aContainer{name: "app", log: goneText}), holds: "something"},
+		{name: "a search of an empty log", tool: "k8s_get_pod_logs", args: grepped, kubectl: kubectlSays(""), holds: "nothing"},
+		{name: "an empty log of the container kubectl picked", tool: "k8s_get_pod_logs", args: web, kubectl: of("app side", appEmpty, sideEmpty), holds: "nothing"},
+		{name: "a search of it for a word of kubectl's line", tool: "k8s_get_pod_logs", args: args{"pod_name": "web-1", "namespace": "shop", "grep": "Defaulted"}, kubectl: of("app side", appEmpty, sideEmpty), holds: "nothing"},
+		{name: "an empty log beside one whose container is gone", tool: "k8s_get_pod_logs", args: every, kubectl: of("app side", appGone, sideEmpty), holds: "nothing"},
+		{name: "previous logs past a container that has not restarted", tool: "k8s_get_pod_logs", args: everyPrevious, kubectl: of("app side", sideNever, appWrote), holds: "something"},
+		{name: "a search of those without a match", tool: "k8s_get_pod_logs", args: everyPreviousGrepped, kubectl: of("app side", sideNever, appWrote), holds: "nothing"},
+		{name: "a previous log without a line past a container that has not restarted", tool: "k8s_get_pod_logs", args: everyPrevious, kubectl: of("app side", sideNever, appEmpty), holds: "nothing"},
+		{name: "a previous log that is gone past a container that has not restarted", tool: "k8s_get_pod_logs", args: everyPrevious, kubectl: of("app side", sideNever, appGone), holds: "unread"},
+		{name: "previous logs of containers that have not restarted", tool: "k8s_get_pod_logs", args: everyPrevious, kubectl: of("side", sideNever), holds: "unread"},
+		{name: "logs past a container that has not started", tool: "k8s_get_pod_logs", args: every, kubectl: of("app side", sideWaits, appWrote), holds: "something"},
+		{name: "a search of logs past a container that has not started", tool: "k8s_get_pod_logs", args: everyGrepped, kubectl: of("app side", sideWaits, appWrote), holds: "nothing"},
+		{name: "a log without a line past a container that has not started", tool: "k8s_get_pod_logs", args: every, kubectl: of("app side", sideWaits, appEmpty), holds: "nothing"},
+		{name: "a log that is gone past a container that has not started", tool: "k8s_get_pod_logs", args: every, kubectl: of("app side", sideWaits, appGone), holds: "unread"},
 		{name: "a list of no name", tool: "k8s_get_resources", args: names, kubectl: kubectlSays(""), holds: "nothing"},
 		{name: "a list of no event's name", tool: "k8s_get_resources", args: args{"resource_type": "events", "all_namespaces": true, "output": "name"}, kubectl: kubectlSays(""), holds: "nothing"},
 		{name: "a list of a name", tool: "k8s_get_resources", args: names, kubectl: kubectlSays("configmap/web\n"), holds: "something"},

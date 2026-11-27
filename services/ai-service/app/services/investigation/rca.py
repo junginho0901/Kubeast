@@ -324,11 +324,12 @@ def not_in_ledger(block: dict, hypotheses: list[dict[str, Any]]) -> list[str]:
 def rows(tool_log: list[dict[str, Any]], same_as: Optional[dict[int, int]] = None,
          nothing: Iterable[int] = ()) -> list[tuple[str, Any, str]]:
     """The run's calls for the second ask: (tool, arguments, what came of it). `nothing`: with the verdict on, the calls
-    whose answer holds nothing."""
+    whose answer holds nothing; a read of a log the node had none of (the entry's no_log) is one with it off too, as the
+    ledger reads it."""
     same_as, none_held = same_as or {}, set(nothing)
     return [(e.get("tool", ""), e.get("args") or {},
              f"the same read as call {same_as[i]}" if i in same_as else "failed" if e.get("error") else
-             "answered, holding nothing" if i in none_held else "answered")
+             "answered, holding nothing" if i in none_held or e.get("no_log") else "answered")
             for i, e in enumerate(tool_log, 1)]
 
 
