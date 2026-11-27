@@ -45,6 +45,8 @@ class Read:
     same_as: Optional[int] = None
     # with the verdict on (investigation/answers.py): "unread" an answer that read nothing, "empty" one that holds nothing
     nothing: str = ""
+    # with pastReports.model on (investigation/past.py): the names its answer gives as objects'
+    names: frozenset[str] = frozenset()
 
     @property
     def shows(self) -> bool:

@@ -21,6 +21,7 @@ from app.database import get_db_service, utcnow
 from app.security import TokenPayload, require_auth
 from app.services.audit_writer import AuditUnavailable, require_audit_ready, write_audit
 from app.services.investigation import inbox, skip_reasons, store
+from app.services.investigation import past as inv_past
 from app.services.investigation import settings as inv_settings
 from app.services.investigation import webhook
 
@@ -140,13 +141,17 @@ async def _readable_row(item_id: str, payload: TokenPayload):
     return db, row
 
 
-async def _window(db, cfg: inv_settings.InvestigationSettings, payload: TokenPayload, row) -> dict[str, Any]:
-    """One alert as its window shows it: the detail and the "Investigate now" state."""
+async def _window(db, cfg: inv_settings.InvestigationSettings, payload: TokenPayload, row, past: bool = False) -> dict[str, Any]:
+    """One alert as its window shows it: the detail and the "Investigate now" state. `past`: the screen asks for the same
+    alert's earlier investigations too (features.alertInvestigation.pastReports.window; null when they could not be read,
+    absent with the switch off). The AI's alerts_inbox does not ask."""
     now = utcnow()
     stale_before = inbox.stale_cutoff(now, cfg.inbox_stale_hours)
     investigation = (await inbox.investigations_for(db, [row])).get(row.id)
     out = detail_of(row, inbox.status_of(row, stale_before), investigation)
     out["investigate_now"] = await investigate_now_of(db, cfg, payload, row, investigation, now)
+    if past and cfg.past_window:
+        out["past_investigations"] = await inv_past.listed(db, row, investigation, now)
     return out
 
 
@@ -183,10 +188,10 @@ async def list_inbox(
 
 
 @router.get("/inbox/{item_id}")
-async def get_inbox_item(item_id: str, payload: TokenPayload = Depends(require_auth)) -> dict[str, Any]:
+async def get_inbox_item(item_id: str, past: bool = Query(False), payload: TokenPayload = Depends(require_auth)) -> dict[str, Any]:
     cfg = _settings()
     db, row = await _readable_row(item_id, payload)
-    return await _window(db, cfg, payload, row)
+    return await _window(db, cfg, payload, row, past)
 
 
 class MarksIn(BaseModel):
@@ -198,7 +203,8 @@ class MarksIn(BaseModel):
 
 
 @router.patch("/inbox/{item_id}")
-async def set_inbox_marks(item_id: str, body: MarksIn, request: Request, payload: TokenPayload = Depends(require_auth)) -> dict[str, Any]:
+async def set_inbox_marks(item_id: str, body: MarksIn, request: Request, past: bool = Query(False),
+                          payload: TokenPayload = Depends(require_auth)) -> dict[str, Any]:
     cfg = _settings()
     changes = body.model_dump(exclude_none=True)
     if "assignee" in changes:
@@ -226,7 +232,7 @@ async def set_inbox_marks(item_id: str, body: MarksIn, request: Request, payload
         if not stored:
             await inbox.restore_marks(db, row.id, columns)
             raise HTTPException(status_code=503, detail="audit unavailable")
-    return await _window(db, cfg, payload, await inbox.get(db, row.id))
+    return await _window(db, cfg, payload, await inbox.get(db, row.id), past)
 
 
 # The status and English sentence of each refusal of "Investigate now"; the screen words it from the code and until.
@@ -239,7 +245,8 @@ _REFUSALS = {
 
 
 @router.post("/inbox/{item_id}/investigate")
-async def investigate_inbox_item(item_id: str, request: Request, payload: TokenPayload = Depends(require_auth)) -> dict[str, Any]:
+async def investigate_inbox_item(item_id: str, request: Request, past: bool = Query(False),
+                                 payload: TokenPayload = Depends(require_auth)) -> dict[str, Any]:
     """Queues an investigation of the alert now, as the webhook queues one (the worker runs it), and answers the alert
     window with `started`. Nothing new when this firing's investigation is queued, running or done (started false)."""
     cfg = _settings()
@@ -290,14 +297,17 @@ async def investigate_inbox_item(item_id: str, request: Request, payload: TokenP
         stored = await audit(row, investigation_id=investigation.id, started=False, status=investigation.status)
         if not stored:
             raise HTTPException(status_code=503, detail="audit unavailable")
-    out = await _window(db, cfg, payload, row)
+    out = await _window(db, cfg, payload, row, past)
     out["started"] = started
     return out
 
 
 @router.get("/inbox/{item_id}/investigation")
-async def get_inbox_investigation(item_id: str, request: Request, payload: TokenPayload = Depends(require_auth)) -> dict[str, Any]:
-    _settings()
+async def get_inbox_investigation(item_id: str, request: Request, past: str = Query("", max_length=64),
+                                  payload: TokenPayload = Depends(require_auth)) -> dict[str, Any]:
+    """The report of this firing's investigation; `past`: of one of the earlier investigations the window may list
+    (features.alertInvestigation.pastReports.window), by its ID — any other is not found."""
+    cfg = _settings()
     try:
         db, row = await _readable_row(item_id, payload)
     except HTTPException as e:
@@ -308,7 +318,10 @@ async def get_inbox_investigation(item_id: str, request: Request, payload: Token
                 after={"from": "inbox"}, **_http(request),
             )
         raise
-    investigation = (await inbox.investigations_for(db, [row])).get(row.id)
+    if past:
+        investigation = await inv_past.one(db, row, past, utcnow()) if cfg.past_window else None
+    else:
+        investigation = (await inbox.investigations_for(db, [row])).get(row.id)
     if investigation is None:
         raise HTTPException(status_code=404, detail="no investigation for this alert")
     stored = await write_audit(

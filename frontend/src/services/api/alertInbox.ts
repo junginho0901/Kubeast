@@ -3,7 +3,7 @@
 // opening the alert's investigation report and "Investigate now" are audited server-side.
 
 import { client } from './client'
-import type { Investigation } from './investigations'
+import type { Investigation, InvestigationOutcome } from './investigations'
 import type { SkipReason } from '@/utils/investigationFormat'
 
 export type AlertInboxStatus = 'firing' | 'stale' | 'resolved'
@@ -48,6 +48,17 @@ export interface InvestigateNowState {
   used: number
 }
 
+// One of the same alert's earlier investigations, as its window lists it: when it was received, the outcome the server
+// kept (null: no block it could read) and its first causes. Masked values are the placeholders the model read.
+export interface PastInvestigation {
+  id: string
+  received_at: string
+  outcome: InvestigationOutcome | null
+  // verified: whether that run's calls showed the cause (null with evidenceCheck off)
+  causes: { resource: string; kind: string; verified: boolean | null }[]
+  causes_total: number
+}
+
 export interface AlertInboxDetail extends AlertInboxItem {
   annotations: Record<string, string>
   generator_url: string
@@ -58,6 +69,8 @@ export interface AlertInboxDetail extends AlertInboxItem {
   note_at: string | null
   // absent from a server before "Investigate now"
   investigate_now?: InvestigateNowState
+  // features.alertInvestigation.pastReports.window: absent with it off, null when they could not be read
+  past_investigations?: PastInvestigation[] | null
 }
 
 export interface AlertInboxList {
@@ -122,6 +135,8 @@ export interface SilencePreview {
 }
 
 const base = '/alerts/inbox'
+// the alert's window asks for the same alert's earlier investigations too; the server leaves them out with the switch off
+const withPast = { params: { past: 'true' } }
 
 export const alertInboxApi = {
   listAlertInbox: async (filter: AlertInboxFilter = {}): Promise<AlertInboxList> => {
@@ -138,24 +153,27 @@ export const alertInboxApi = {
   },
 
   getAlertInboxItem: async (id: string): Promise<AlertInboxDetail> => {
-    const { data } = await client.get(`${base}/${encodeURIComponent(id)}`)
+    const { data } = await client.get(`${base}/${encodeURIComponent(id)}`, withPast)
     return data
   },
 
   setAlertInboxMarks: async (id: string, marks: AlertInboxMarks): Promise<AlertInboxDetail> => {
-    const { data } = await client.patch(`${base}/${encodeURIComponent(id)}`, marks)
+    const { data } = await client.patch(`${base}/${encodeURIComponent(id)}`, marks, withPast)
     return data
   },
 
   // "Investigate now": queued as the webhook queues one (audited ai.investigation.request); the answer is the alert
   // window, with started false when this firing's investigation was queued, running or done already
   investigateAlertInboxItem: async (id: string): Promise<AlertInboxDetail & { started: boolean }> => {
-    const { data } = await client.post(`${base}/${encodeURIComponent(id)}/investigate`)
+    const { data } = await client.post(`${base}/${encodeURIComponent(id)}/investigate`, undefined, withPast)
     return data
   },
 
-  getAlertInboxInvestigation: async (id: string): Promise<Investigation> => {
-    const { data } = await client.get(`${base}/${encodeURIComponent(id)}/investigation`)
+  // this firing's report, or with `past` (an ID the window lists) that earlier investigation's; each open is audited
+  getAlertInboxInvestigation: async (id: string, past?: string): Promise<Investigation> => {
+    const { data } = await client.get(`${base}/${encodeURIComponent(id)}/investigation`, past ? { params: { past } } : undefined)
+    // an ai-service that does not know `past` (one a rolling update has yet to replace) answers this firing's report
+    if (past && data?.id !== past) throw new Error('not the investigation asked for')
     return data
   },
 

@@ -1194,6 +1194,22 @@ features:
     # and lists what was checked and normal and what was not looked at from
     # the run's calls.
     verdict: true
+    # The same alert's earlier investigations: the done ones of the same alert
+    # (fingerprint), cluster and namespace, of the last 30 days, read from the
+    # rows retention.investigationDays keeps; nothing new is stored.
+    # Stage: alpha, not run yet: both switches on the kind dev install, and the AI evaluation's alert investigations on
+    # alerts that fire again with the same and with another cause (docs/configuration.md "Stages of new values").
+    pastReports:
+      window: false           # the alert's window in Alerts lists at most five: when, outcome, causes, and the report
+      # An investigation's first message holds at most five lines of them
+      # between markers: when, and the objects and kinds of the causes the
+      # evidenceCheck of that time verified (none with evidenceCheck off) and
+      # a read of objects or events named (kept with the cause while this is
+      # on: an earlier investigation gives no line), in the alert's own
+      # namespace. They have no call number, so no cause can rest on them,
+      # and the run reads no stored report through alerts_inbox. The run's
+      # audit row names the investigations they are of.
+      model: false
     inbox:
       staleAfterHours: 8      # a firing alert with no notification for this long shows "status unknown"; twice your repeat_interval
     # More read-only rules for the investigator, appended to the

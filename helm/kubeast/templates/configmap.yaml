@@ -239,6 +239,14 @@ data:
   ALERT_INVESTIGATION_CONSOLE_URL: {{ .consoleUrl | quote }}
   ALERT_INVESTIGATION_EVIDENCE_CHECK: {{ .evidenceCheck | quote }}
   ALERT_INVESTIGATION_VERDICT: {{ dig "verdict" true . | quote }}
+  {{- /* written only when set: an install with both off has the ConfigMap it had */}}
+  {{- $past := dig "pastReports" (dict) . }}
+  {{- if ne (toString (dig "window" false $past)) "false" }}
+  ALERT_INVESTIGATION_PAST_WINDOW: {{ $past.window | quote }}
+  {{- end }}
+  {{- if ne (toString (dig "model" false $past)) "false" }}
+  ALERT_INVESTIGATION_PAST_MODEL: {{ $past.model | quote }}
+  {{- end }}
   ALERT_INBOX_STALE_HOURS: {{ .inbox.staleAfterHours | int64 | quote }}
   {{- end }}
   AUTH_INVESTIGATOR_TOKEN_URL: "http://auth-service:8004/api/v1/auth/internal/investigator-token"

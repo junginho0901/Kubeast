@@ -13,7 +13,9 @@ alert's start. With changes_first the server reads what changed in the change wi
 with narrow_first anomaly_rank over the metrics window, as step 0 before the first model
 call in that order (investigation/windows.py); the first message names each read, and its
 answer follows that message as the call's tool result (tool_turn.server_calls), or on a
-Claude subscription is in it between markers. With ai.ruleCards.investigations on,
+Claude subscription is in it between markers. With pastReports.model on, the first message
+also holds, after those, at most five lines of the same alert's earlier investigations
+between markers (investigation/past.py). With ai.ruleCards.investigations on,
 the first message also holds, after those, at most two rule cards the alert's name and labels
 pick (app/services/rule_cards.py); with ai.ruleCards.symptoms its summary and description too.
 With any of rules, changes_first, narrow_first, evidence_check, ledger or call_paths on, each tool result
@@ -61,6 +63,7 @@ from app.services.investigation import settings as inv_settings
 from app.services.investigation import inbox, skip_reasons, store
 from app.services.investigation import ledger
 from app.services.investigation import numbers
+from app.services.investigation import past as inv_past
 from app.services.investigation import rca
 from app.services.investigation import result as inv_result
 from app.services.investigation import verdict as inv_verdict
@@ -256,6 +259,8 @@ async def settle(service, messages: list[dict[str, Any]], answer: str, *, tool_l
     result = inv_result.shape(kept.block, kept.status, tool_log, kept.hypotheses, asked_again=asked, ask_failed=ask_failed,
                               failures=kept.failures, cause_problems=kept.cause_problems if cfg.evidence_check else None,
                               checks={"evidence": cfg.evidence_check, "ledger": cfg.ledger}, verdict=outcome)
+    if cfg.past_model and reads is not None:  # what a later investigation of the alert may be told of it (investigation/past.py)
+        inv_past.note_names(result, reads)
     if facts is not None:  # the model's text in them can hold a lone surrogate, which the row could not take
         report, result = inv_verdict.writable(report), inv_verdict.writable(result)
     return report, result, int(asked)
@@ -321,6 +326,10 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         if name not in READONLY_TOOL_NAMES or (name == "anomaly_rank" and not anomaly_rank_on()):
             result = json.dumps({"error": f"'{name}' is not a read-only tool; investigations only read"})
             entry["error"] = "not a read-only tool"
+        elif cfg.past_model and inv_past.asks_for_report(name, args):
+            access_mod.reset(service)
+            result = json.dumps({"error": inv_past.NO_REPORT})
+            entry["error"] = "reports of earlier investigations are not read here"
         elif repeats is not None and (seen := repeats.earlier(name, args)) is not None:
             # The same read answered earlier in this run: not run again, the model is told where its answer is.
             access_mod.reset(service)
@@ -403,6 +412,8 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
         if read is not None:
             read.failed = bool(entry.get("error")) or (not ran and seen is None)
             read.text = answers.log_text(name, result) if ran and not read.failed and not entry.get("no_log") else ""
+            if cfg.past_model and read.text:
+                read.names = inv_past.names_in(name, args, raw, status)
         if facts is not None and ran and not entry.get("error"):
             facts.note(number, name, args, raw, status)
             if read is not None:
@@ -476,6 +487,11 @@ async def investigate(cfg: inv_settings.InvestigationSettings, row, progress: Op
             first.append(await changes_first(windows))
         if cfg.narrow_first:
             first.append(await narrow_first(windows))
+    if cfg.past_model:
+        past = await inv_past.given(get_db_service, row, utcnow(), getattr(service.tool_server, "numbers", None))
+        progress["past_investigations"] = past.audit()
+        if past.ids:
+            first.append(inv_prompt.past_block(past.text, past.differ))
     if cards:
         first.append(cards)
     system = inv_prompt.system_prompt(cluster=row.cluster, namespace=row.namespace, language=cfg.language, rules=cfg.rules,
@@ -590,6 +606,9 @@ async def run_one(cfg: inv_settings.InvestigationSettings, db, row) -> str:
             **({"verdict": progress["verdict"]} if progress.get("verdict") else {}),
             # ai.ruleCards.investigations: the kinds of the cards in the first message (not their text); absent when off
             **({"rule_cards": progress["rule_cards"]} if "rule_cards" in progress else {}),
+            # features.alertInvestigation.pastReports.model: how many lines of earlier investigations the first message
+            # held and whose (their IDs), not their text; absent when off
+            **({"past_investigations": progress["past_investigations"]} if "past_investigations" in progress else {}),
         },
     )
     log.info("investigation %s %s in %dms", row.id, status, duration_ms)
