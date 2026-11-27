@@ -3319,7 +3319,6 @@
     },
     "edgeAria": "{{source}} → {{target}} ({{relation}})",
     "controls": {
-      "panel": "Control Panel",
       "zoomIn": "Zoom In",
       "zoomOut": "Zoom Out",
       "fitView": "Fit View",

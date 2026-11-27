@@ -79,7 +79,9 @@ export default function ResourceGraph() {
   const { open: openDetail, target: drawerTarget } = useResourceDetail()
   // React Flow's control buttons and mini map name themselves in English unless given these
   const flowLabels = useMemo(() => ({
-    'controls.ariaLabel': t('resourceGraph.controls.panel', 'Control Panel'),
+    // Controls puts this label on its panel, a div with no role, where ARIA allows no aria-label and a screen reader
+    // drops it; left out, the panel has none and each of its buttons keeps its own
+    'controls.ariaLabel': undefined,
     'controls.zoomIn.ariaLabel': t('resourceGraph.controls.zoomIn', 'Zoom In'),
     'controls.zoomOut.ariaLabel': t('resourceGraph.controls.zoomOut', 'Zoom Out'),
     'controls.fitView.ariaLabel': t('resourceGraph.controls.fitView', 'Fit View'),

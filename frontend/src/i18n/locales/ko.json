@@ -3451,7 +3451,6 @@
     },
     "edgeAria": "{{source}} → {{target}} ({{relation}})",
     "controls": {
-      "panel": "제어판",
       "zoomIn": "확대",
       "zoomOut": "축소",
       "fitView": "화면에 맞추기",
