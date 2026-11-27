@@ -128,6 +128,35 @@ describe('YamlEditor keeps the focus when its buttons change', () => {
     expect(doc.activeElement).toBe(places.editor)
   })
 
+  it('Edit pressed before Monaco has mounted sends the focus to the editor once it mounts', () => {
+    const { doc } = page()
+    state.refs[REF.editor] = { current: null }
+    const nextRender = () => {
+      for (const [slot, said] of Object.entries(state.sets)) state.initial[Number(slot)] = said[said.length - 1]
+      state.slot = 0
+      state.ref = 0
+      state.effects = []
+      state.sets = {}
+    }
+    findButton(render(false).tree, LABELS.edit)!.props.onClick!()
+    expect(state.sets[SLOT.focusNext]).toEqual(['editor'])
+    nextRender()
+    render(true)
+    runEffects()
+    expect(doc.activeElement).toBe(doc.body)
+    const made = monacoEditor()
+    const editor = Object.assign(made.editor, { focus: () => { doc.activeElement = editor } })
+    try {
+      ;(state.onMount as (editor: unknown, monaco: unknown) => void)(editor, made.monaco)
+      nextRender()
+      render(true)
+      runEffects()
+      expect(doc.activeElement).toBe(editor)
+    } finally {
+      editor.dispose()
+    }
+  })
+
   it('Edit, Apply and Cancel are three buttons to React, so the pressed Edit leaves the page and its focus falls', () => {
     const edit = findButton(render(false).tree, LABELS.edit)!
     state.slot = 0
