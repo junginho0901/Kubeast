@@ -71,7 +71,7 @@ Viewing is through the admin screen (`admin.audit.read`) and CSV (`admin.audit.e
   - Exported record (snake_case): `id, time, service, action, result, error, actor_user_id, actor_email, target_type, target_id, target_email, cluster, namespace, path, request_ip, user_agent, request_id, before, after`.
     It is the DB row as is; masking was already done at recording time.
   - Settings: chart `audit.sinks[]`, with secrets by Secret name only.
-  - Object Lock (WORM) is left to the bucket's default retention, and Kubeast uses only `s3:PutObject`.
+  - Object Lock (WORM) is left to the bucket's default retention. Kubeast uses `s3:PutObject`, and `s3:GetObject` to read back the anchor digests and a batch the bucket refuses to write again.
 - **Integrity (hash chain and anchors, `AUDIT_INTEGRITY_*`, chart `audit.integrity`)**:
   - **Sealing**: every `AUDIT_INTEGRITY_SEAL_SEC` (default 10 seconds), auth-service's sealer takes the rows not yet sealed, in id order. It fills `chain_seq` (seal sequence), `prev_hash` and `row_hash = sha256(prev_hash ‖ 0x1e ‖ canonical row)`.
   - The canonical expression is `internal/auditchain.CanonSQL`. Postgres builds the string, so it can be recomputed with one psql line.

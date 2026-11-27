@@ -646,7 +646,7 @@ audit:
   #   s3: {bucket: kubeast-audit, prefix: audit/, region: ap-northeast-2}
   #   # endpoint: http://minio.minio:9000, forcePathStyle: true   (S3-compatible stores)
   #   # sse: aws:kms, kmsKeyId: <arn>                              (empty = bucket default)
-  #   # Object Lock (WORM): turn on the bucket's default retention; Kubeast only needs s3:PutObject.
+  #   # Object Lock (WORM): turn on the bucket's default retention; Kubeast needs s3:PutObject and s3:GetObject.
   # - name: slack-danger
   #   type: webhook
   #   secret: kubeast-audit-slack

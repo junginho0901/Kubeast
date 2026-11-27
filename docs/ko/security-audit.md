@@ -125,8 +125,17 @@ retention:
 
 - **필터**: 권한 패턴과 같은 와일드카드(`k8s.*.delete`, `admin.*`)와 `results: [failure]`를 쓸 수 있습니다. 필터가 없으면 전부 보냅니다.
 - **시작점**: `s3`·`file`은 처음부터(기존 이력 전체), 나머지는 켠 시점부터 보냅니다. `startFrom`으로 바꿀 수 있습니다.
+- **메시지 크기**: `teams` 카드는 24 KiB 아래로 보냅니다(Teams는 메시지 하나에 28 KB까지 받습니다). 카드가 그보다 커질 배치는 카드 여러 장으로 나눠 보내고, 그래도 긴 줄 하나는 1000자로 자릅니다. `pagerduty` 이벤트가 512000바이트(Events API v2 한도)를 넘으면 `custom_details`에서 그 행의 `before`·`after`를 빼고, 뺐다는 `note`를 붙여 보냅니다.
 - **S3 Object Lock(WORM, ISMS-P 증적)**: 버킷을 Object Lock과 버전 관리를 켜서 만들고 **기본 보존**(compliance 또는 governance, 기간)을 거세요.
-  Kubeast는 객체마다 보존을 지정하지 않으므로 IAM 권한은 `s3:PutObject` 하나면 됩니다. compliance 모드에서는 보존 기간 동안 root도 지울 수 없습니다.
+  - Kubeast는 객체마다 보존을 지정하지 않습니다.
+  - IAM 권한은 싱크 prefix에 `s3:PutObject`와 `s3:GetObject`가 필요합니다. 앵커 **검증**은 `GetObject`로 digest를 다시 읽고(`<prefix>digests/*`), 잠긴 버킷이 다시 쓰기를 거절한 배치도 다시 읽어 봅니다(아래). `s3:GetObject`가 없으면 검증은 앵커마다 객체 확인을 실패로 표시하고 접근 오류를 보여 주며, 그런 배치는 계속 실패합니다.
+  - compliance 모드에서는 보존 기간 동안 root도 지울 수 없습니다.
+- **Google Cloud Storage·Cloudflare R2**는 S3 Object Lock을 받지 않습니다. 각자의 보존 기능을 쓰세요. GCS는 버킷 보존 정책(Bucket Lock으로 영구 고정), R2는 prefix에 거는 bucket lock 규칙입니다.
+  - 이런 버킷은 객체 바꾸기를 거절합니다. GCS는 403(`retentionPolicyNotMet`), R2는 409로 답합니다. 쓰기가 됐는데 커서가 움직이지 않으면 배치를 다시 보내고, 그 배치는 같은 키로 갑니다. 그 두 번째 쓰기가 거절되면 Kubeast가 그 키를 다시 읽어, 객체가 같은 바이트면 보낸 것으로 칩니다. 다른 바이트이거나 읽지 못하면 그 전송은 실패로 남고 싱크는 멈춥니다.
+  - `sse`는 비워 두세요. R2는 `x-amz-server-side-encryption` 머리를 거절하고, GCS는 그 머리 없이도 저장한 객체를 암호화합니다.
+  - GCS: `endpoint: https://storage.googleapis.com`, 서비스 계정의 HMAC 키를 `accessKeyId`·`secretAccessKey`로 넣습니다. 이 주소에서만 Kubeast는 `Accept-Encoding`을 요청 서명에서 빼고 `x-id` 쿼리 파라미터를 지웁니다. GCS가 그래야 받습니다. 다른 주소로 가는 요청은 그대로입니다. `region`은 비워 두거나 `auto`로 둡니다.
+  - R2: `endpoint: https://<계정 ID>.r2.cloudflarestorage.com`, `region: auto`(비워도 됩니다), R2 API 토큰의 S3 키를 넣습니다.
+- **MinIO**: 커뮤니티판은 2025-10부터 소스로만 나오고(새 바이너리·컨테이너 이미지 없음) 저장소는 보관(archived)되었습니다. 마지막 릴리스 태그는 `RELEASE.2025-10-15T17-29-55Z`입니다. 릴리스 태그의 소스로 서버를 직접 빌드하거나(`go install github.com/minio/minio@<태그>`, 또는 저장소의 `Dockerfile`) 다른 S3 호환 저장소를 쓰세요. `endpoint`와 `forcePathStyle: true`를 넣습니다.
 - **보존**: `retention.auditDays`가 지나도 **아직 싱크로 보내지 않은 행은 지우지 않습니다**.
   멈춘 싱크는 알람 `KubeastAuditSinkStalled`(메트릭 `kubeast_audit_sink_pending`·`_failures_total`·`_last_success_timestamp_seconds`)로 알 수 있습니다.
 - **네트워크**: 443은 열려 있습니다. SMTP(587/465)나 클러스터 안 엔드포인트로 보내려면 `audit.sinkEgress`에 NetworkPolicy 규칙을 추가하세요.

@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"net/http"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -22,8 +24,9 @@ import (
 // S3Config: any S3-compatible store (AWS S3, MinIO, GCS interoperability,
 // Cloudflare R2). Credentials come from the sink's Secret (accessKeyId,
 // secretAccessKey) or, without one, from the default AWS chain — IRSA on EKS.
-// Object Lock is left to the bucket's default retention: Kubeast only needs
-// s3:PutObject.
+// Object Lock (or GCS retention, an R2 bucket lock) is left to the bucket:
+// Kubeast needs s3:PutObject, and s3:GetObject to read back the anchor digests
+// and a resent batch that the bucket refuses to replace.
 type S3Config struct {
 	Bucket         string `yaml:"bucket"`
 	Prefix         string `yaml:"prefix"`
@@ -74,6 +77,9 @@ func newS3Sink(s SinkConfig) (Sink, error) {
 			o.BaseEndpoint = aws.String(c.Endpoint)
 		}
 		o.UsePathStyle = c.ForcePathStyle
+		if isGCSEndpoint(c.Endpoint) {
+			o.APIOptions = append(o.APIOptions, gcsRequestSteps)
+		}
 	})
 	return &s3Sink{cfg: c, client: client}, nil
 }
@@ -172,7 +178,49 @@ func (s *s3Sink) Send(ctx context.Context, events []Event) error {
 	}
 	s.applySSE(in)
 	if _, err := s.client.PutObject(ctx, in); err != nil {
-		return fmt.Errorf("s3 put %s: %w", aws.ToString(in.Key), err)
+		key := aws.ToString(in.Key)
+		if !refusedRewrite(err) {
+			return fmt.Errorf("s3 put %s: %w", key, err)
+		}
+		// A batch is sent again when the cursor did not move after a write that
+		// went through. A bucket that keeps objects from being replaced refuses
+		// that second write; the batch is sent if the key already holds it.
+		same, gerr := s.holds(ctx, key, body)
+		if gerr != nil {
+			return fmt.Errorf("s3 put %s: %w; reading the key back: %v", key, err, gerr)
+		}
+		if !same {
+			return fmt.Errorf("s3 put %s: %w; the object already under this key differs", key, err)
+		}
+		slog.Info("audit sink: the bucket refused to replace a resent batch that it already holds; counted as sent", "bucket", s.cfg.Bucket, "key", key)
 	}
 	return nil
+}
+
+// refusedRewrite: GCS answers 403 (retentionPolicyNotMet) to a write of a key
+// under a retention policy, and an R2 bucket lock answers 409.
+func refusedRewrite(err error) bool {
+	var re interface{ HTTPStatusCode() int }
+	if !errors.As(err, &re) {
+		return false
+	}
+	code := re.HTTPStatusCode()
+	return code == http.StatusForbidden || code == http.StatusConflict
+}
+
+// holds reports whether key already holds exactly body.
+func (s *s3Sink) holds(ctx context.Context, key string, body []byte) (bool, error) {
+	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.cfg.Bucket), Key: aws.String(key)})
+	if err != nil {
+		return false, err
+	}
+	defer out.Body.Close()
+	if out.ContentLength != nil && *out.ContentLength != int64(len(body)) {
+		return false, nil
+	}
+	got, err := io.ReadAll(io.LimitReader(out.Body, int64(len(body))+1))
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(got, body), nil
 }

@@ -49,6 +49,8 @@ postgresql:
     key: ca.crt
 ```
 
+Kubeast signs in with the user and password in `DATABASE_URL`. RDS IAM database authentication (a short-lived token in place of the password) is not used, so give the database user a password.
+
 Behind PgBouncer, use session pooling or connect directly: k8s-service and auth-service each pick one replica for a job with a session advisory lock held on one connection, which transaction pooling does not keep to one server session.
 
 ## Backing up the in-cluster database

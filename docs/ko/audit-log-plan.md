@@ -72,7 +72,7 @@ AGENTS.md와 CLAUDE.md가 정본으로 가리키는 문서입니다.
     - 전송 결과는 감사 행으로 남기지 않습니다(감사가 감사를 낳는 루프가 되므로).
   - 내보내는 레코드(snake_case)는 DB 행 그대로입니다(마스킹은 기록할 때 이미 끝남):
     - `id, time, service, action, result, error, actor_user_id, actor_email, target_type, target_id, target_email, cluster, namespace, path, request_ip, user_agent, request_id, before, after`
-  - 설정은 차트 `audit.sinks[]`에 합니다(비밀은 Secret 이름만). Object Lock(WORM)은 버킷 기본 보존에 맡기고, Kubeast는 `s3:PutObject`만 씁니다.
+  - 설정은 차트 `audit.sinks[]`에 합니다(비밀은 Secret 이름만). Object Lock(WORM)은 버킷 기본 보존에 맡깁니다. Kubeast는 `s3:PutObject`를 쓰고, 앵커 digest와 버킷이 다시 쓰기를 거절한 배치를 다시 읽는 데 `s3:GetObject`를 씁니다.
 - **무결성(해시 체인 · 앵커, `AUDIT_INTEGRITY_*`, 차트 `audit.integrity`)**:
   - 봉인: auth-service의 sealer가 `AUDIT_INTEGRITY_SEAL_SEC`(기본 10초)마다 아직 봉인되지 않은 행을 id 순으로 묶어 다음 값을 채웁니다.
     - `chain_seq`(봉인 순번)

@@ -105,7 +105,7 @@ func (w *webhookSink) Send(ctx context.Context, events []Event) error {
 		return w.post(ctx, w.url, body, headers)
 	case "pagerduty":
 		for _, e := range events {
-			if err := w.post(ctx, w.url, mustJSON(pagerDutyEvent(w.key, w.cfg.Severity, e)), nil); err != nil {
+			if err := w.post(ctx, w.url, pagerDutyBody(w.key, w.cfg.Severity, e), nil); err != nil {
 				return err
 			}
 		}
@@ -123,7 +123,12 @@ func (w *webhookSink) Send(ctx context.Context, events []Event) error {
 		case "slack":
 			body = mustJSON(slackMessage(events, start, end))
 		case "teams":
-			body = mustJSON(teamsMessage(events, start, end))
+			for _, card := range teamsBodies(events, start, end) {
+				if err := w.post(ctx, target, card, nil); err != nil {
+					return err
+				}
+			}
+			continue
 		case "discord":
 			body = mustJSON(discordMessage(events, start, end))
 		case "telegram":
@@ -172,11 +177,33 @@ func slackEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
 }
 
-func teamsMessage(events []Event, start, end int) map[string]any {
+// teamsMaxBytes keeps a card under the 28 KB Teams takes in one message.
+const teamsMaxBytes = 24 << 10
+
+// teamsBodies is the card for events[start:end], split in halves while a card
+// is over teamsMaxBytes; a card of one line still over it has the line cut to
+// 1000 characters.
+func teamsBodies(events []Event, start, end int) [][]byte {
+	if body := mustJSON(teamsMessage(events, start, end, 0)); len(body) <= teamsMaxBytes {
+		return [][]byte{body}
+	}
+	if end-start == 1 {
+		return [][]byte{mustJSON(teamsMessage(events, start, end, 1000))}
+	}
+	mid := start + (end-start)/2
+	return append(teamsBodies(events, start, mid), teamsBodies(events, mid, end)...)
+}
+
+// teamsMessage: lineMax > 0 cuts each line to that many characters.
+func teamsMessage(events []Event, start, end, lineMax int) map[string]any {
 	body := []map[string]any{{"type": "TextBlock", "text": Summary(events[start:end]), "weight": "Bolder", "wrap": true}}
 	for _, e := range events[start:end] {
+		line := e.Line()
+		if lineMax > 0 {
+			line = truncate(line, lineMax)
+		}
 		// A TextBlock reads Markdown and a line holds what a request wrote; a TextRun reads none.
-		body = append(body, map[string]any{"type": "RichTextBlock", "spacing": "Small", "inlines": []map[string]any{{"type": "TextRun", "text": e.Line()}}})
+		body = append(body, map[string]any{"type": "RichTextBlock", "spacing": "Small", "inlines": []map[string]any{{"type": "TextRun", "text": line}}})
 	}
 	return map[string]any{
 		"type": "message",
@@ -229,6 +256,36 @@ func pagerDutyEvent(routingKey, severity string, e Event) map[string]any {
 			"custom_details": e,
 		},
 	}
+}
+
+// pagerDutyMaxEventBytes is the largest event the Events API v2 takes.
+const pagerDutyMaxEventBytes = 512000
+
+// pagerDutyCutDetails is custom_details without the row's before and after.
+type pagerDutyCutDetails struct {
+	Event
+	Note string `json:"note"`
+}
+
+// pagerDutyBody is the event as JSON. Over pagerDutyMaxEventBytes, which
+// PagerDuty refuses with a 400 on every retry, custom_details drops the row's
+// before and after, and then every field but a note, as Alertmanager and
+// Grafana drop custom details past that size.
+func pagerDutyBody(routingKey, severity string, e Event) []byte {
+	ev := pagerDutyEvent(routingKey, severity, e)
+	body := mustJSON(ev)
+	if len(body) <= pagerDutyMaxEventBytes {
+		return body
+	}
+	payload := ev["payload"].(map[string]any)
+	cut := e
+	cut.Before, cut.After = nil, nil
+	payload["custom_details"] = pagerDutyCutDetails{Event: cut, Note: "before and after removed: the event was over the 512000 bytes PagerDuty takes"}
+	if body = mustJSON(ev); len(body) <= pagerDutyMaxEventBytes {
+		return body
+	}
+	payload["custom_details"] = map[string]string{"note": "custom details removed: the event was over the 512000 bytes PagerDuty takes"}
+	return mustJSON(ev)
 }
 
 func mustJSON(v any) []byte {
