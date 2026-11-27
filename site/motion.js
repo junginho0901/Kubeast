@@ -158,14 +158,16 @@
   const clamp=v=>Math.max(0,Math.min(1,v)),ease=v=>v*v*(3-2*v),mix=(a,b,t)=>a+(b-a)*t;
   function draw(){frame=0;const w=innerWidth,h=innerHeight,hero=document.getElementById('hero-title').getBoundingClientRect(),foot=document.getElementById('footer-mark').getBoundingClientRect();
     const start=Math.min(900,w*.85),size=Math.min(1300,w*1.05),intro=reduced.matches?0:ease(clamp(scrollY/900)),end=reduced.matches?0:ease(clamp(1-(foot.top-h*.45)/(h*.6)));
-    const target={x:mix(mix(w/2,w-size*.2,intro),foot.left+foot.width/2,end),y:mix(mix(hero.top+hero.height/2,h*.55,intro),foot.top+foot.height/2,end),size:mix(mix(start,size,intro),foot.width,end),opacity:mix(.12,.10,intro)*(1-clamp(end/.85))};
+    // Below the hero the mark stays at about half its strength, as the hero leaves the screen; with reduced motion in one step.
+    const left=clamp(1-document.getElementById('hero').getBoundingClientRect().bottom/h),past=reduced.matches?(left<.5?0:1):ease(left);
+    const target={x:mix(mix(w/2,w-size*.2,intro),foot.left+foot.width/2,end),y:mix(mix(hero.top+hero.height/2,h*.55,intro),foot.top+foot.height/2,end),size:mix(mix(start,size,intro),foot.width,end),opacity:mix(.12,.05,past)*(1-clamp(end/.85))};
     if(!current||reduced.matches)current={...target};let unsettled=false;for(const k of Object.keys(target)){const delta=target[k]-current[k];current[k]+=delta*.15;if(Math.abs(delta)>(k==='opacity'?.001:.3))unsettled=true;}
     drift.style.width=current.size+'px';drift.style.transform=`translate3d(${current.x-current.size/2}px,${current.y-current.size/2}px,0)`;drift.style.opacity=current.opacity;
     if(unsettled&&!reduced.matches&&!document.hidden)frame=requestAnimationFrame(draw);
   }
-  function queue(){if(!frame&&!reduced.matches&&!document.hidden)frame=requestAnimationFrame(draw);}
+  function queue(){if(reduced.matches)return draw();if(!frame&&!document.hidden)frame=requestAnimationFrame(draw);}
   addEventListener('scroll',queue,{passive:true});addEventListener('resize',queue,{passive:true});draw();
   document.addEventListener('visibilitychange',()=>{root.classList.toggle('motion-document-hidden',document.hidden);if(document.hidden){cancel();clearTimeout(traceTimer);if(frame)cancelAnimationFrame(frame);frame=0;}else{later(200);traceLoop();queue();}});
-  reduced.addEventListener('change',()=>{reset();traceLoop();root.classList.toggle('motion-reduced',reduced.matches);if(reduced.matches){if(frame)cancelAnimationFrame(frame);frame=0;}else queue();});
+  reduced.addEventListener('change',()=>{reset();traceLoop();root.classList.toggle('motion-reduced',reduced.matches);if(frame)cancelAnimationFrame(frame);frame=0;queue();});
   root.classList.toggle('motion-reduced',reduced.matches);
 })();
