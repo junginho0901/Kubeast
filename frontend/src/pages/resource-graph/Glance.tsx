@@ -1,7 +1,8 @@
-// Resource graph 노드 호버 시 우측에 뜨는 미니 프리뷰 카드
+// The small preview card shown to the right of a Resource graph node on hover or keyboard focus
 //
 // frontend/src/pages/ResourceGraph.tsx 의 Glance 함수를 컴포넌트로 추출.
-// position 은 viewport 기준 fixed.
+// position is fixed to the viewport. The card's left 16px (before) is a strip that reaches the node's edge, so the card
+// stays while the pointer moves from the node onto the card (WCAG 2.2 1.4.13 — useGlance).
 
 import { useTranslation } from 'react-i18next'
 import type { ResourceGraphNode } from '@/services/api'
@@ -10,9 +11,11 @@ import { kindIcon, nodeColor } from './constants'
 interface Props {
   node: ResourceGraphNode | null
   position: { x: number; y: number }
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
 }
 
-export function Glance({ node, position }: Props) {
+export function Glance({ node, position, onMouseEnter, onMouseLeave }: Props) {
   const { t } = useTranslation()
   if (!node) return null
 
@@ -20,8 +23,10 @@ export function Glance({ node, position }: Props) {
 
   return (
     <div
-      className="fixed z-200 bg-slate-800 border border-hairline rounded-xl shadow-xl p-4 min-w-[220px] max-w-[300px] pointer-events-none"
+      className="fixed z-200 bg-slate-800 border border-hairline rounded-xl shadow-xl p-4 min-w-[220px] max-w-[300px] before:absolute before:inset-y-0 before:-left-4 before:w-4"
       style={{ left: position.x + 16, top: position.y - 10 }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <div className="flex items-center gap-2 mb-2">
         <span className="text-base">{kindIcon[node.kind] || '📄'}</span>

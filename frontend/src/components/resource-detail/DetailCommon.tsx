@@ -1,6 +1,7 @@
 import type { ReactNode, ThHTMLAttributes } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAIContext } from '@/hooks/useAIContext'
+import { useHoverTip } from '@/hooks/useHoverTip'
 import type { LabelValues } from './detailLabel'
 import { fmtRel } from './detailFormat'
 import { usePagination } from './usePagination'
@@ -113,19 +114,33 @@ export function SummaryText({ label, value }: { label: string; value: string }) 
   )
 }
 
+// A tag's whole key and value show under it on hover and on keyboard focus (useHoverTip); its padding joins it to the
+// tag, so the pointer can move onto it. Screen readers read the tag's own text, which is never cut.
 export function KeyValueTags({ data, emptyText = 'None' }: { data?: Record<string, string>; emptyText?: string }) {
   const dl = useDetailLabel()
+  const tip = useHoverTip<string>()
   const entries = data ? Object.entries(data) : []
   if (entries.length === 0) return <span className="text-slate-400 text-xs">{dl(emptyText)}</span>
   return (
     <div className="flex flex-wrap gap-2 text-xs text-slate-200">
       {entries.map(([key, value]) => (
-        <span key={`${key}=${value}`} data-detail-tag="" className="relative inline-flex items-center rounded-md bg-slate-700/50 px-2 py-1 max-w-full group">
+        <span
+          key={`${key}=${value}`}
+          data-detail-tag=""
+          tabIndex={0}
+          onMouseEnter={() => tip.enter(key)}
+          // a tag drawn under a resting pointer has had no mouseenter
+          onMouseMove={() => tip.enter(key)}
+          onMouseLeave={tip.leave}
+          onFocus={() => tip.focus(key)}
+          onBlur={tip.blur}
+          className="relative inline-flex items-center rounded-md bg-slate-700/50 px-2 py-1 max-w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
+        >
           <span className="font-mono text-slate-300 max-w-[160px] truncate">{key}</span>
           <span className="mx-1 text-slate-500">:</span>
           <span className="max-w-[260px] truncate">{value}</span>
-          <span className="pointer-events-none absolute left-0 top-full mt-1 z-20 hidden w-max max-w-[min(520px,calc(100vw-4rem))] rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 shadow-lg group-hover:block">
-            <span className="wrap-break-word">{`${key}: ${value}`}</span>
+          <span aria-hidden="true" data-detail-tag-tip="" className={`absolute left-0 top-full z-20 w-max max-w-[min(520px,calc(100vw-4rem))] pt-1 ${tip.shown === key ? 'block' : 'hidden'}`}>
+            <span className="block rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-200 shadow-lg wrap-break-word">{`${key}: ${value}`}</span>
           </span>
         </span>
       ))}

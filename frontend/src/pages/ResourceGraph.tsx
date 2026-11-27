@@ -32,6 +32,8 @@ import {
   type GroupBy,
 } from './resource-graph/constants'
 import { Glance } from './resource-graph/Glance'
+import { useGlance } from './resource-graph/useGlance'
+import { lineForKey } from './resource-graph/lineKey'
 import { PodGroupList } from './resource-graph/PodGroupList'
 import { ResourceGraphHeader } from './resource-graph/ResourceGraphHeader'
 import { useResourceGraphLayout } from './resource-graph/useResourceGraphLayout'
@@ -90,8 +92,6 @@ export default function ResourceGraph() {
   const [searchQuery, setSearchQuery] = useState('')
   const [groupBy, setGroupBy] = useState<GroupBy>('none')
   const [statusFilter, setStatusFilter] = useState<'all' | 'issues'>('all')
-  const [glanceNode, setGlanceNode] = useState<ResourceGraphNode | null>(null)
-  const [glancePos, setGlancePos] = useState({ x: 0, y: 0 })
   // Traffic lines (off until switched on): the sources this cluster has and the user may read
   const { currentCluster } = useCluster()
   const features = useClusterFeatures().data
@@ -116,7 +116,7 @@ export default function ResourceGraph() {
   const view: GraphView = sources.length > 0 || metricsDown ? pickedView : 'structure'
   const source = pickedSource && sources.includes(pickedSource) ? pickedSource : sources[0]
   const [selected, setSelected] = useState<{ id: string; line: TrafficLine } | null>(null)
-  // the line pressed to open the traffic panel, which Escape gives the focus back to
+  // the line pressed, or opened with Enter, to open the traffic panel, which Escape gives the focus back to
   const lineOpener = useRef<{ focus(): void } | null>(null)
   const closeLine = useCallback(() => setSelected(null), [])
   const [hoverEdge, setHoverEdge] = useState<string | null>(null)
@@ -306,6 +306,7 @@ export default function ResourceGraph() {
         : picked ? { edge: picked.id }
           : drawerNode ? { node: drawerNode } : null
   const { nodes, edges } = useMemo(() => focusLines(laidNodes, laidEdges, focus), [laidNodes, laidEdges, focus?.edge, focus?.node]) // eslint-disable-line react-hooks/exhaustive-deps
+  const glance = useGlance(nodes)
 
   // Interactions
   const openEnd = useCallback((e: TrafficEnd) => {
@@ -329,26 +330,29 @@ export default function ResourceGraph() {
     setSelected({ id: edge.id, line })
   }, [])
 
+  // Enter on a line with the keyboard focus opens its panel as a press does, and Escape gives the focus back to it
+  const onLineKey = useCallback((e: React.KeyboardEvent) => {
+    const hit = lineForKey({ key: e.key, isComposing: e.nativeEvent.isComposing, target: e.target }, edges)
+    if (!hit) return
+    lineOpener.current = hit.element
+    setSelected({ id: hit.id, line: hit.line })
+  }, [edges])
+
   const onEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: Edge) => {
     if (edge.data?.line) setHoverEdge(edge.id)
   }, [])
   const onEdgeMouseLeave = useCallback(() => setHoverEdge(null), [])
 
-  const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
+  const { onNodeMouseEnter: glanceEnter, onNodeMouseLeave: glanceLeave } = glance
+  const onNodeMouseEnter = useCallback((e: React.MouseEvent, node: Node) => {
     setHoverNode(node.id)
-    const raw = node.data?.raw as ResourceGraphNode | undefined
-    if (raw && !isPeer(raw)) {
-      setGlanceNode(raw)
-      // Position relative to viewport
-      const rect = (_.target as HTMLElement).getBoundingClientRect()
-      setGlancePos({ x: rect.right, y: rect.top })
-    }
-  }, [])
+    glanceEnter(e, node)
+  }, [glanceEnter])
 
   const onNodeMouseLeave = useCallback(() => {
-    setGlanceNode(null)
+    glanceLeave()
     setHoverNode(null)
-  }, [])
+  }, [glanceLeave])
 
   const setGrouping = useCallback(async (on: boolean) => {
     if (on) {
@@ -502,6 +506,10 @@ export default function ResourceGraph() {
               nodesDraggable={!routed}
               onNodeMouseEnter={onNodeMouseEnter}
               onNodeMouseLeave={onNodeMouseLeave}
+              // on React Flow's own box: a box with the keyboard focus shows its glance
+              onFocus={glance.onFocus}
+              onBlur={glance.onBlur}
+              onKeyDown={onLineKey}
               fitView
               // with lines on screen, room for the status box above and the open legend on the left, so they cover no box
               fitViewOptions={{ padding: routed ? { top: '64px', right: 0.1, bottom: 0.1, left: legendOpen ? '180px' : 0.1 } : 0.2 }}
@@ -562,7 +570,7 @@ export default function ResourceGraph() {
         )}
 
         {/* Glance */}
-        <Glance node={glanceNode} position={glancePos} />
+        <Glance node={glance.shown?.node ?? null} position={glance.shown ?? { x: 0, y: 0 }} {...glance.tip} />
 
         {/* Legend (bottom left) — only with a graph on screen (the empty state
             has nothing to decode and the panel overlapped its cards at 1024px),
