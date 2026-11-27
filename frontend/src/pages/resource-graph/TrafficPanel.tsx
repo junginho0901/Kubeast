@@ -1,5 +1,8 @@
+import type { RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
+import { usePanelEscape } from '@/hooks/useDismiss'
+import { modalOpen } from '@/hooks/useModalStack'
 import type { TrafficEnd, TrafficLine, TrafficResult } from '@/services/api'
 import { endLabel } from '@/components/resource-detail/netflowText'
 import { formatTime } from '@/utils/time'
@@ -7,16 +10,19 @@ import { checkFor, endText, lineColor, lineState, openableEnd, type LineCheck } 
 
 // The window a traffic line opens on the right: its ends, what was counted, the ports, the drop reasons and the
 // policies that denied it, and (recent flows) its latest connections — with the NetworkPolicy check for a
-// dropped line and the ends' drawers, whose "Recent Flows" read more.
+// dropped line and the ends' drawers, whose "Recent Flows" read more. Escape closes it and gives the focus back to the
+// line (`opener`), unless the check window or an end's drawer is open over it: that one takes the key.
 
-export function TrafficPanel({ line, result, onClose, onWhy, onOpen }: {
+export function TrafficPanel({ line, result, opener, onClose, onWhy, onOpen }: {
   line: TrafficLine
   result: TrafficResult
+  opener: RefObject<{ focus(): void } | null>
   onClose: () => void
   onWhy: (c: LineCheck) => void
   onOpen: (e: TrafficEnd) => void
 }) {
   const { t } = useTranslation()
+  usePanelEscape(true, opener, onClose, modalOpen)
   const tr = (key: string, fallback: string, options?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...options })
   const state = lineState(line)
   const check = checkFor(line)

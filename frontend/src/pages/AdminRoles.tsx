@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Member, RoleWithDetails } from '@/services/api'
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Pencil, Search, Trash2, Shield, X, Check, Users } from 'lucide-react'
 import { ModalOverlay } from '@/components/ModalOverlay'
@@ -42,6 +42,12 @@ export default function AdminRoles() {
   const [formDesc, setFormDesc] = useState('')
   const [formPerms, setFormPerms] = useState<Set<string>>(new Set())
   const [formError, setFormError] = useState<string | null>(null)
+  // Save pressed with no name: why, as the field was at the press, said under it until a name is typed, as Teams says
+  // its name's; each press draws the line anew
+  const [nameProblem, setNameProblem] = useState<{ blank: boolean; press: number } | null>(null)
+  const nameId = useId()
+  const nameProblemId = useId()
+  const nameRef = useRef<HTMLInputElement>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [usersRole, setUsersRole] = useState<RoleWithDetails | null>(null)
 
@@ -145,6 +151,7 @@ export default function AdminRoles() {
     setFormDesc('')
     setFormPerms(new Set())
     setFormError(null)
+    setNameProblem(null)
   }
 
   const openCreate = () => {
@@ -154,6 +161,7 @@ export default function AdminRoles() {
     setFormDesc('')
     setFormPerms(new Set(newRolePermissions(myPermissions)))
     setFormError(null)
+    setNameProblem(null)
   }
 
   const openEdit = (role: RoleWithDetails) => {
@@ -163,6 +171,7 @@ export default function AdminRoles() {
     setFormDesc(role.description)
     setFormPerms(new Set(role.permissions))
     setFormError(null)
+    setNameProblem(null)
   }
 
   const togglePerm = (key: string) => {
@@ -177,7 +186,10 @@ export default function AdminRoles() {
   const handleSubmit = () => {
     const name = formName.trim()
     if (!name) {
-      setFormError(tr('adminRoles.nameRequired', 'Role name is required'))
+      setNameProblem((p) => ({ blank: formName !== '', press: (p?.press ?? 0) + 1 }))
+      // an earlier Save's failure is not about this press, so only this reason shows
+      setFormError(null)
+      nameRef.current?.focus()
       return
     }
     const perms = Array.from(formPerms)
@@ -469,17 +481,31 @@ export default function AdminRoles() {
             {/* Form fields */}
             <div className="grid grid-cols-2 gap-4 mb-5">
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">
+                <label htmlFor={nameId} className="block text-xs font-semibold text-slate-400 mb-1">
                   {tr('adminRoles.form.name', 'Role Name')}
                 </label>
                 <input
+                  id={nameId}
+                  ref={nameRef}
                   value={formName}
                   maxLength={NAME_MAX}
-                  onChange={(e) => setFormName(e.target.value)}
+                  onChange={(e) => {
+                    setFormName(e.target.value)
+                    if (e.target.value.trim()) setNameProblem(null)
+                  }}
+                  aria-invalid={nameProblem ? true : undefined}
+                  aria-describedby={nameProblem ? nameProblemId : undefined}
                   disabled={editingRole?.is_system}
                   className="w-full rounded-lg border border-control bg-slate-900 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-primary-600 disabled:opacity-50"
                   placeholder={tr('adminRoles.form.namePh', 'e.g. InfraManager')}
                 />
+                {nameProblem && (
+                  <p key={nameProblem.press} id={nameProblemId} role="alert" data-testid="role-name-problem" className="mt-1 text-[11px] text-notice-text-failed">
+                    {nameProblem.blank
+                      ? tr('adminRoles.nameBlank', 'Enter a role name: spaces alone are not one.')
+                      : tr('adminRoles.nameRequired', 'Enter a role name.')}
+                  </p>
+                )}
                 {nameTaken && (
                   <p role="alert" data-testid="role-name-taken" className="mt-1 text-[11px] text-red-400">
                     {takenText(nameTaken, formName)}

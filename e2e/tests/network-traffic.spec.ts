@@ -228,6 +228,41 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
     }
   })
 
+  test("Escape leaves the traffic panel under the check window and an end's drawer, then closes it and gives the focus back to its line", async ({ page }) => {
+    test.skip(!relayReady, `cluster ${CLUSTER} is not registered in Kubeast or has no network flows (scripts/kind-cilium.sh up)`)
+    await page.goto(`/cluster/resource-graph?cluster=${CLUSTER}&namespace=${NS}`)
+    await expect(page.getByTestId('graph-view-structure')).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
+    await page.getByTestId('graph-view-traffic').click()
+    const dropped = page.locator(`[aria-label="${NS}/stranger → ${NS}/web (TCP 80)"]`)
+    await expect(dropped).toHaveCount(1, { timeout: 30_000 })
+    await dropped.locator('.react-flow__edge-textwrapper').click()
+    const panel = page.getByTestId('traffic-panel')
+    await expect(panel.getByTestId('traffic-panel-counts')).toContainText('0 flows allowed')
+    // the check window opened from the panel takes the first Escape
+    await panel.getByTestId('traffic-panel-why').click()
+    const modal = page.getByTestId('netpol-check-modal')
+    await expect(modal.getByTestId('netpol-check-overall')).toHaveText('Denied', { timeout: 20_000 })
+    await page.keyboard.press('Escape')
+    await expect(modal).toHaveCount(0)
+    await expect(panel, 'the panel stays under the window').toHaveCount(1)
+    // so does the drawer of an end
+    await panel.getByTestId('traffic-panel-open').filter({ hasText: 'stranger' }).click()
+    await expect(page).toHaveURL(/[?&]detail=Deployment(%2F|\/)flows-demo(%2F|\/)stranger/, { timeout: 20_000 })
+    await page.keyboard.press('Escape')
+    await expect(page).not.toHaveURL(/[?&]detail=/)
+    await expect(panel, 'the panel stays under the drawer').toHaveCount(1)
+    // then the panel, the focus back on the line it opened from
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveCount(0)
+    await expect(dropped).toBeFocused()
+    // with nothing over it, the first Escape closes it
+    await dropped.locator('.react-flow__edge-textwrapper').click()
+    await expect(panel.getByTestId('traffic-panel-ports')).toHaveText('TCP 80')
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveCount(0)
+    await expect(page).toHaveURL(/\/cluster\/resource-graph/)
+  })
+
   test('a cluster whose Prometheus has no Hubble metrics says so', async ({ page, request }) => {
     const features = await (await request.get('/api/v1/cluster/features?cluster=default', { headers: bearer(admin) })).json()
     test.skip(features?.prometheus?.enabled !== true, 'the second cluster has no Prometheus in Kubeast')

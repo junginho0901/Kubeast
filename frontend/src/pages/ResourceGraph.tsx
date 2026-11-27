@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, type SetStateAction } from 'react'
+import { useState, useCallback, useMemo, useRef, type SetStateAction } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ReactFlow,
@@ -116,6 +116,9 @@ export default function ResourceGraph() {
   const view: GraphView = sources.length > 0 || metricsDown ? pickedView : 'structure'
   const source = pickedSource && sources.includes(pickedSource) ? pickedSource : sources[0]
   const [selected, setSelected] = useState<{ id: string; line: TrafficLine } | null>(null)
+  // the line pressed to open the traffic panel, which Escape gives the focus back to
+  const lineOpener = useRef<{ focus(): void } | null>(null)
+  const closeLine = useCallback(() => setSelected(null), [])
   const [hoverEdge, setHoverEdge] = useState<string | null>(null)
   const [hoverNode, setHoverNode] = useState<string | null>(null)
   const [why, setWhy] = useState<LineCheck | null>(null)
@@ -318,9 +321,12 @@ export default function ResourceGraph() {
     }
   }, [openDetail, openEnd])
 
-  const onEdgeClick = useCallback((_: React.MouseEvent, edge: Edge) => {
+  const onEdgeClick = useCallback((e: React.MouseEvent, edge: Edge) => {
     const line = edge.data?.line as TrafficLine | undefined
-    if (line) setSelected({ id: edge.id, line })
+    if (!line) return
+    const pressed = e.currentTarget
+    lineOpener.current = pressed instanceof SVGElement || pressed instanceof HTMLElement ? pressed : null
+    setSelected({ id: edge.id, line })
   }, [])
 
   const onEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: Edge) => {
@@ -537,7 +543,7 @@ export default function ResourceGraph() {
         )}
 
         {selectedLine && traffic && (
-          <TrafficPanel line={selectedLine} result={traffic} onClose={() => setSelected(null)} onWhy={setWhy} onOpen={openEnd} />
+          <TrafficPanel line={selectedLine} result={traffic} opener={lineOpener} onClose={closeLine} onWhy={setWhy} onOpen={openEnd} />
         )}
         {why && <NetworkPolicyCheckModal self={why.self} selfName={why.selfName} namespace={why.namespace} initial={why.initial} onClose={() => setWhy(null)} />}
         {openGroup && (

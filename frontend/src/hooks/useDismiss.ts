@@ -32,25 +32,42 @@ export function useDismiss(open: boolean, ref: RefObject<HTMLElement | null>, se
   }, [open, ref, setOpen])
 }
 
+const uncovered = () => false
+
 /** An open panel with lists of its own: Escape closes it and gives the focus back to its button. It listens after the
- *  lists (bubble, where useDismiss listens in capture), so while one is open Escape closes only that list. */
+ *  lists (bubble, where useDismiss listens in capture), so while one is open Escape closes only that list. A panel
+ *  drawn in the page passes `covered` (a window or the drawer open over it), read before any of them hears the key:
+ *  the one that closes on it may be gone from the page before the panel hears it. */
 export function panelEscape(
   target: Pick<Document, 'addEventListener' | 'removeEventListener'>,
   close: () => void,
   opener: () => { focus(): void } | null,
+  covered: () => boolean = uncovered,
 ): () => void {
   const { onKey } = dismissHandlers(() => null, () => {
     close()
     opener()?.focus()
   })
-  target.addEventListener('keydown', onKey)
-  return () => target.removeEventListener('keydown', onKey)
+  let coveredAtPress = false
+  const look = () => { coveredAtPress = covered() }
+  const onPanelKey = (e: KeyboardEvent) => { if (!coveredAtPress) onKey(e) }
+  target.addEventListener('keydown', look, true)
+  target.addEventListener('keydown', onPanelKey)
+  return () => {
+    target.removeEventListener('keydown', look, true)
+    target.removeEventListener('keydown', onPanelKey)
+  }
 }
 
-/** While `open`, Escape sets it closed (`setOpen(false)`) and focuses `opener`. */
-export function usePanelEscape(open: boolean, opener: RefObject<HTMLElement | null>, setOpen: (open: boolean) => void): void {
+/** While `open`, Escape sets it closed (`setOpen(false)`) and focuses `opener`, unless `covered()`. */
+export function usePanelEscape(
+  open: boolean,
+  opener: RefObject<{ focus(): void } | null>,
+  setOpen: (open: boolean) => void,
+  covered?: () => boolean,
+): void {
   useEffect(() => {
     if (!open) return
-    return panelEscape(document, () => setOpen(false), () => opener.current)
-  }, [open, opener, setOpen])
+    return panelEscape(document, () => setOpen(false), () => opener.current, covered)
+  }, [open, opener, setOpen, covered])
 }
