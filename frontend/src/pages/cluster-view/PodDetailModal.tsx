@@ -36,20 +36,20 @@ export function PodDetailModal({ canExec, manifest, describeData, describeError,
   return (
     <ModalOverlay onClose={closeDetailModal}>
       <div
-        className="bg-slate-800 rounded-lg max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col"
+        className="bg-slate-800 border border-hairline rounded-xl max-w-6xl w-full h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Box className="w-6 h-6 text-primary-400" />
-            <div>
-              <h2 className="text-xl font-semibold text-ink">{selectedPod.name}</h2>
-              <p className="text-sm text-slate-400">{selectedPod.namespace}</p>
+        <div className="px-5 py-4 border-b border-hairline flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <Box className="w-5 h-5 text-slate-400 shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-ink break-all">{selectedPod.name}</h2>
+              <p className="text-sm text-slate-400 break-all">{selectedPod.namespace}</p>
             </div>
           </div>
           <button
             onClick={closeDetailModal}
-            className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+            className="p-2 hover:bg-slate-700 rounded-lg transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-primary-500"
             aria-label={tr('common.close', 'Close')}
           >
             <X className="w-5 h-5 text-slate-400" />
