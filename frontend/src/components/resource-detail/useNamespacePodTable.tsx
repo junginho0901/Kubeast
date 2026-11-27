@@ -106,7 +106,7 @@ export function useNamespacePodTable(options: {
   const every = pages && pageRows ? podPagePollEvery(pageRows) : false
   const noteText = podTableNote(options.filter.owner, bySelector)
   const note = every ? (
-    <p className="mb-2 text-[11px] text-slate-400" data-testid="drawer-pods-read-every">
+    <p className="mb-2 text-xs text-slate-400" data-testid="drawer-pods-read-every">
       <Tx text={noteText.text} values={{ ...noteText.values, seconds: every / 1000 }} />
     </p>
   ) : null

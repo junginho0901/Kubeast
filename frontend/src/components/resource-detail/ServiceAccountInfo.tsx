@@ -69,8 +69,8 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
           <InfoRow label="Name" value={name} />
           <InfoRow label="Namespace" value={namespace} />
           <InfoRow label="Created" value={createdAt ? `${fmtTs(createdAt)} (${fmtRel(createdAt)})` : '-'} />
-          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-[11px] break-all">{describe.uid}</span>} />}
-          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-[11px]">{describe.resource_version}</span>} />}
+          {describe?.uid && <InfoRow label="UID" value={<span className="font-mono text-xs break-all">{describe.uid}</span>} />}
+          {describe?.resource_version && <InfoRow label="Resource Version" value={<span className="font-mono text-xs">{describe.resource_version}</span>} />}
         </div>
       </InfoSection>
 
@@ -95,7 +95,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
         <InfoSection title="Image Pull Secrets">
           <div className="space-y-1 text-xs text-slate-200">
             {imagePullSecrets.map((s: string) => (
-              <div key={s} className="font-mono">{s}</div>
+              <div key={s} className="font-mono break-all">{s}</div>
             ))}
           </div>
         </InfoSection>
@@ -122,8 +122,8 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
         ) : (
           <div className="space-y-3">
             {pagedEffectivePerms.map((b, i) => (
-              <div data-detail-card="" key={`${b.binding_kind}/${b.binding_namespace ?? ''}/${b.binding_name}/${i}`} className="rounded-sm border border-slate-800 p-2">
-                <div className="flex items-center gap-2 text-xs mb-1">
+              <div key={`${b.binding_kind}/${b.binding_namespace ?? ''}/${b.binding_name}/${i}`} data-detail-card="" className="border-t border-hairline pt-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs mb-1">
                   <span className="text-slate-400"><Tx>via</Tx></span>
                   <ResourceLink
                     kind={b.binding_kind}
@@ -138,19 +138,19 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                   />
                 </div>
                 {b.matched_by.length > 0 && (
-                  <p className="mb-1 text-[11px] text-slate-400" data-testid="sa-binding-matched-by">
+                  <p className="mb-1 text-xs text-slate-400" data-testid="sa-binding-matched-by">
                     <Tx text="Applies through {{subjects}}" values={{ subjects: b.matched_by.join(' · ') }} />
                   </p>
                 )}
                 {b.error ? (
-                  <p className="text-[11px] text-amber-300"><Tx text="Failed to load rules: {{error}}" values={{ error: String(b.error) }} /></p>
+                  <p className="text-xs text-amber-300"><Tx text="Failed to load rules: {{error}}" values={{ error: String(b.error) }} /></p>
                 ) : b.loading ? (
-                  <p className="text-[11px] text-slate-500"><Tx>Loading rules...</Tx></p>
+                  <p className="text-xs text-slate-500"><Tx>Loading rules...</Tx></p>
                 ) : b.rules.length === 0 ? (
-                  <p className="text-[11px] text-slate-500"><Tx>No rules.</Tx></p>
+                  <p className="text-xs text-slate-500"><Tx>No rules.</Tx></p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[11px]">
+                    <table className="w-full text-xs">
                       <thead className="text-slate-400">
                         <tr>
                           {RULE_TABLE_COLUMNS.map((column) => (
@@ -167,7 +167,7 @@ export default function ServiceAccountInfo({ name, namespace, rawJson }: Props) 
                                 <td key={RULE_TABLE_COLUMNS[ci]} className={`py-1 pr-2 font-mono${RULE_TABLE_COLUMNS[ci] === 'Resource Names' ? ' text-slate-400' : ''}`}>
                                   {cell}
                                   {note && RULE_TABLE_COLUMNS[ci] === 'Non-Resource URLs' && (
-                                    <span className="block mt-0.5 font-sans text-[10px] leading-4 text-amber-300" data-testid="sa-rule-url-note"><Tx text={note} /></span>
+                                    <span className="block mt-0.5 font-sans text-xs leading-4 text-amber-300" data-testid="sa-rule-url-note"><Tx text={note} /></span>
                                   )}
                                 </td>
                               ))}

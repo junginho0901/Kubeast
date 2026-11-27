@@ -29,21 +29,21 @@ export function usePagination<T>(items: T[], pageSize = 10): {
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1
   const end = Math.min(page * pageSize, total)
   const nav = total <= pageSize ? null : (
-    <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800 mt-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 pt-1 border-t border-hairline mt-2">
       <span>{start}-{end} / {total}</span>
       <div className="flex gap-1">
         <button
           type="button"
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page <= 1}
-          className="px-2 py-0.5 rounded-sm border border-slate-700 disabled:opacity-40"
+          className="px-2 py-0.5 rounded-lg border border-control disabled:opacity-40"
         >
           <Tx>Prev</Tx></button>
         <button
           type="button"
           onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           disabled={page >= totalPages}
-          className="px-2 py-0.5 rounded-sm border border-slate-700 disabled:opacity-40"
+          className="px-2 py-0.5 rounded-lg border border-control disabled:opacity-40"
         >
           <Tx>Next</Tx></button>
       </div>

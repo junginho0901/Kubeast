@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest'
 
 // A drawer's table fits the drawer: its narrowest width is no wider than a section's box at the drawer's widest, so
 // no column and no header ("Last Transition" of the Conditions table) sits past the box's edge behind a scroll that
-// a trackpad's hidden scrollbar does not show. The box is the drawer less its border, its padding (p-5) and a
-// section's border and padding (InfoSection's p-4), less a classic scrollbar (17 px, Chrome on Windows) for a drawer
-// longer than the screen. A table inside a card of a section is narrower still: e2e drawer-tables-fit holds those.
+// a trackpad's hidden scrollbar does not show. The box is the drawer less its border and padding (p-5), less a
+// classic scrollbar (17 px, Chrome on Windows). InfoSection has a top divider and no horizontal inset. The tables
+// keep the 648 px limit from the inset sections; e2e drawer-tables-fit also holds tables inside nested cards.
 const dir = fileURLToPath(new URL('.', import.meta.url))
 const read = (file: string) => readFileSync(file, 'utf8')
 
@@ -20,18 +20,19 @@ const drawerWidth = () => {
   return { max: Number(panel![1]), padding: Number(content![1]) * 4 }
 }
 
-const sectionPadding = () => {
+const sectionHorizontalInset = () => {
   const src = read(join(dir, 'DetailCommon.tsx'))
-  const section = src.match(/export function InfoSection[\s\S]*?<div(?: data-[\w-]+="[^"]*")* className="rounded-lg border border-slate-700 bg-slate-900\/40 p-(\d+)"(?: data-[\w-]+="[^"]*")*>/)
-  expect(section, 'InfoSection: a 1 px border and p-N').not.toBeNull()
-  return Number(section![1]) * 4
+  const section = src.match(/export function InfoSection[\s\S]*?<div data-detail-section="" className="([^"]+)">/)
+  expect(section, 'InfoSection: the section wrapper').not.toBeNull()
+  expect(section![1].split(/\s+/), 'only a top border and top padding').toEqual(['border-t', 'border-hairline', 'pt-4'])
+  return 0
 }
 
 const CLASSIC_SCROLLBAR = 17
 
 function drawerSectionBox(): number {
   const { max, padding } = drawerWidth()
-  return max - 1 - 2 * padding - 2 * (1 + sectionPadding()) - CLASSIC_SCROLLBAR
+  return max - 1 - 2 * padding - sectionHorizontalInset() - CLASSIC_SCROLLBAR
 }
 
 const files: string[] = []
@@ -50,12 +51,12 @@ const tableMinWidths = () => files.flatMap((f) => read(f).split('\n').flatMap((l
 }))
 
 describe('drawer tables', () => {
-  it('a section of the drawer at its widest is 648 px across', () => {
-    expect(drawerSectionBox()).toBe(648)
+  it('a section without horizontal inset is 682 px across', () => {
+    expect(drawerSectionBox()).toBe(682)
   })
 
-  it('are no wider at their narrowest than a section of the drawer', () => {
-    const box = drawerSectionBox()
+  it('keep the 648 px width limit even without the section inset', () => {
+    const box = Math.min(648, drawerSectionBox())
     const tables = tableMinWidths()
     expect(tables.length, 'the drawer tables were found').toBeGreaterThan(40)
     expect(tables.filter((t) => t.width > box).map((t) => `${t.at} min-w-[${t.width}px]`)).toEqual([])

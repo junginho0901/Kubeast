@@ -70,7 +70,7 @@ export default function NodeInfo({ name }: Props) {
 
       {/* Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-lg border border-slate-700 bg-slate-900/60 px-4 py-3">
+        <div className="border-l border-hairline px-4 py-2">
           <p className="text-xs text-slate-400"><Tx>Since Ready Changed</Tx></p>
           <p className="text-base text-ink mt-1">{fmtRel(readyChangedAt(nodeDescribe.conditions))}</p>
         </div>
@@ -78,19 +78,19 @@ export default function NodeInfo({ name }: Props) {
           label="CPU Usage"
           value={metricForNode ? `${metricForNode.cpu || '-'} (${metricForNode.cpu_percent || '-'})` : tr('nodes.detail.noMetrics', 'No metrics (metrics-server not installed)')}
           percent={Number.isFinite(cpuP) ? cpuP : 0}
-          color={cpuP >= 80 ? '#ef4444' : cpuP >= 60 ? '#f59e0b' : 'var(--color-primary-bright)'}
+          color={cpuP >= 80 ? 'var(--color-red-500)' : cpuP >= 60 ? 'var(--color-amber-500)' : 'var(--color-primary-bright)'}
         />
         <UsageCard
           label="Memory Usage"
           value={metricForNode ? `${metricForNode.memory || '-'} (${metricForNode.memory_percent || '-'})` : tr('nodes.detail.noMetrics', 'No metrics (metrics-server not installed)')}
           percent={Number.isFinite(memP) ? memP : 0}
-          color={memP >= 80 ? '#ef4444' : memP >= 60 ? '#f59e0b' : 'var(--color-primary-bright)'}
+          color={memP >= 80 ? 'var(--color-red-500)' : memP >= 60 ? 'var(--color-amber-500)' : 'var(--color-primary-bright)'}
         />
       </div>
 
       {/* System Info */}
       <InfoSection title={tr('nodes.detail.system', 'System Info')}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-200 break-words">
           {([
             ['OS', nodeDescribe.system_info?.operating_system],
             ['Arch', nodeDescribe.system_info?.architecture],
@@ -336,7 +336,7 @@ function NodeVolumes({ volumesAttached, volumesInUse }: { volumesAttached: any; 
             <div className="text-xs font-semibold text-slate-300 mb-1"><Tx text="In Use ({{n}})" values={{ n: inUse.length }} /></div>
             <div className="flex flex-wrap gap-1">
               {inUse.map((vi: string, i: number) => (
-                <span data-detail-chip="" key={i} className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-100 font-mono break-all">
+                <span key={i} data-detail-chip="" className="inline-flex rounded-sm border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-100 font-mono break-all">
                   {vi}
                 </span>
               ))}

@@ -100,12 +100,12 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
             <WebhookRulesTable rules={wh.rules} />
             {Array.isArray(wh.match_conditions) && wh.match_conditions.length > 0 && (
               <div>
-                <p className="text-[11px] text-slate-400 mt-2 mb-1"><Tx>Match Conditions</Tx></p>
+                <p className="text-xs text-slate-400 mt-2 mb-1"><Tx>Match Conditions</Tx></p>
                 <div className="space-y-1">
                   {wh.match_conditions.map((mc: any, mi: number) => (
-                    <div data-detail-card="" key={mi} className="rounded-sm border border-slate-800 bg-slate-900/40 px-2 py-1.5">
-                      <p className="text-[11px] text-slate-300">{mc?.name || '-'}</p>
-                      <p className="font-mono text-[11px] text-slate-200 break-all">{mc?.expression || '-'}</p>
+                    <div key={mi} data-detail-card="" className="border-b border-hairline py-2">
+                      <p className="text-xs text-slate-300">{mc?.name || '-'}</p>
+                      <p className="font-mono text-xs text-slate-200 break-all">{mc?.expression || '-'}</p>
                     </div>
                   ))}
                 </div>
@@ -125,19 +125,19 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
         <InfoSection title="Affected Resources ({{kinds}} kinds, {{ops}} ops)" titleValues={{ kinds: affectedList.length, ops: operationsList.length }}>
           <div className="space-y-2">
             <div>
-              <p className="text-[11px] text-slate-400 mb-1"><Tx>Resource Types (apiGroup/resource)</Tx></p>
+              <p className="text-xs text-slate-400 mb-1"><Tx>Resource Types (apiGroup/resource)</Tx></p>
               <div className="flex flex-wrap gap-1.5">
                 {pagedAffected.map((s) => (
-                  <span data-detail-chip="" key={s} className="rounded-sm border border-slate-700 bg-slate-800/60 px-2 py-0.5 font-mono text-[11px] text-slate-200">{s}</span>
+                  <span key={s} data-detail-chip="" className="max-w-full break-all rounded-lg bg-slate-700/40 px-2 py-0.5 font-mono text-xs text-slate-200">{s}</span>
                 ))}
               </div>
               {affectedNav}
             </div>
             <div>
-              <p className="text-[11px] text-slate-400 mb-1"><Tx>Operations</Tx></p>
+              <p className="text-xs text-slate-400 mb-1"><Tx>Operations</Tx></p>
               <div className="flex flex-wrap gap-1.5">
                 {operationsList.map((op) => (
-                  <span data-detail-chip="" key={op} className="rounded-sm border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-300">{op}</span>
+                  <span key={op} data-detail-chip="" className="max-w-full break-all rounded-lg border border-amber-700/60 bg-amber-900/20 px-2 py-0.5 text-xs text-amber-300">{op}</span>
                 ))}
               </div>
             </div>
@@ -213,7 +213,7 @@ function SelectorRow({ label, selector }: { label: string; selector?: any }) {
         parts.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {parts.map((p) => (
-              <span key={p} className="inline-flex px-2 py-0.5 rounded-sm bg-slate-700/60 text-xs text-slate-200 break-all">
+              <span key={p} className="inline-flex px-2 py-0.5 rounded-lg bg-slate-700/40 text-xs text-slate-200 break-all">
                 {p}
               </span>
             ))}
@@ -233,11 +233,11 @@ function WebhookRulesTable({ rules }: { rules?: WebhookRule[] }) {
 
   return (
     <div className="mt-2">
-      <p className="text-[11px] font-medium text-slate-400 mb-1"><Tx>Rules</Tx></p>
+      <p className="text-xs font-medium text-slate-400 mb-1"><Tx>Rules</Tx></p>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border border-slate-700 rounded-sm">
+        <table className="w-full min-w-[560px] text-xs">
           <thead>
-            <tr className="bg-slate-800/60 text-slate-400">
+            <tr className="text-slate-400">
               <Th className="text-left px-2 py-1.5">API Groups</Th>
               <Th className="text-left px-2 py-1.5">API Versions</Th>
               <Th className="text-left px-2 py-1.5">Operations</Th>

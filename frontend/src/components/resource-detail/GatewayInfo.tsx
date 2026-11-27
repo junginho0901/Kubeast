@@ -160,7 +160,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
                 .join(', ')
 
               return (
-                <div data-detail-card="" key={`listener-${listenerName}-${idx}`} className="rounded-sm border border-slate-800 p-3">
+                <div key={`listener-${listenerName}-${idx}`} data-detail-card="" className="border-t border-hairline pt-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                     <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Name:</Tx></span> {listenerName}</div>
                     <div className="text-slate-200 wrap-break-word"><span className="text-slate-400"><Tx>Hostname:</Tx></span> {text(listener?.hostname)}</div>
@@ -198,7 +198,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
                 })
                 .join(', ')
               return (
-                <div data-detail-card="" key={`route-summary-${idx}`} className="rounded-sm border border-slate-800 p-2">
+                <div key={`route-summary-${idx}`} data-detail-card="" className="border-b border-hairline py-2">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                     <div className="text-slate-200"><span className="text-slate-400"><Tx>Listener:</Tx></span> {listenerName}</div>
                     <div className="text-slate-200"><span className="text-slate-400"><Tx>Attached Routes:</Tx></span> {routeCount}</div>
@@ -207,7 +207,7 @@ export default function GatewayInfo({ name, namespace, rawJson }: Props) {
                 </div>
               )
             })}
-            <p className="text-[11px] text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 mt-1">
               <Tx
                 text="Total: {{routes}} route(s) attached across {{listeners}} listener(s). Route details are available in HTTPRoute / GRPCRoute resources that reference this gateway."
                 values={{ routes: attachedRoutes, listeners: statusListeners.length }}

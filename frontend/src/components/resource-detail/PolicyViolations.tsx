@@ -70,8 +70,8 @@ export default function PolicyViolations({ kind, namespace, name, apiVersion }: 
       ) : view.rows.length === 0 ? (
         <div data-testid="policy-violations-none"><NoneText /></div>
       ) : (
-        <div data-testid="policy-violations-list">
-          <table className="w-full text-xs" data-testid="policy-violations">
+        <div className="overflow-x-auto" data-testid="policy-violations-list">
+          <table className="w-full min-w-[560px] text-xs" data-testid="policy-violations">
             <thead className="text-slate-400">
               <tr>
                 <th className="text-left py-1 pr-3 font-medium">{tr('policyReports.table.result', 'Result')}</th>

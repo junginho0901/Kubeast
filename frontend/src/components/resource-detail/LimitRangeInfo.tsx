@@ -19,9 +19,9 @@ interface Props {
 }
 
 const typeColors: Record<string, 'green' | 'amber' | 'red' | 'default'> = {
-  Container: 'green',
-  Pod: 'amber',
-  PersistentVolumeClaim: 'red',
+  Container: 'default',
+  Pod: 'default',
+  PersistentVolumeClaim: 'default',
 }
 
 export default function LimitRangeInfo({ name, namespace }: Props) {
@@ -109,8 +109,8 @@ export default function LimitRangeInfo({ name, namespace }: Props) {
         {limits.length > 0 ? (
           <div className="space-y-3">
             {limits.map((lim: any, li: number) => (
-              <div data-detail-card="" key={li} className="rounded-sm border border-slate-800 p-3">
-                <p className="text-[11px] text-slate-400 mb-1">Type: {lim.type || '-'}</p>
+              <div key={li} data-detail-card="" className="border-t border-hairline pt-3">
+                <p className="text-xs text-slate-400 mb-1">Type: {lim.type || '-'}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs table-fixed min-w-[480px]">
                     <thead className="text-slate-400">
