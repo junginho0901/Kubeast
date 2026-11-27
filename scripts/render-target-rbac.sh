@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Render every RBAC object a registered cluster needs from Kubeast — the
+# Render every object a registered cluster needs from Kubeast — the
 # impersonation roles, custom roles, the Read group's proxy Roles, the log
-# files grant and the alert investigator — from the install values plus that
-# cluster's own overlay, so a single apply covers the cluster:
+# files grant, the alert investigator and the FlowSchemas — from the install
+# values plus that cluster's own overlay, so a single apply covers the cluster:
 #
 #   scripts/render-target-rbac.sh -f values.yaml -f cluster-b.yaml | kubectl --context cluster-b apply -f -
 #
 # Extra arguments go to `helm template` as they are (`--set`, `--version` with
 # KUBEAST_CHART=oci://…). A template that renders nothing for these values (no
-# custom roles or proxy services, log files or investigation off) is skipped
+# custom roles or proxy services, log files, investigation or FlowSchemas off) is skipped
 # with a note on stderr: helm fails on an empty --show-only, so each template
 # is rendered on its own. Any other helm error stops the script.
 # docs/cluster-requirements.md §1.
@@ -16,7 +16,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CHART="${KUBEAST_CHART:-$ROOT/helm/kubeast}"
-TEMPLATES=(impersonation-rbac impersonation-custom-roles impersonation-viewer-proxy logfiles-rbac impersonation-investigator)
+TEMPLATES=(impersonation-rbac impersonation-custom-roles impersonation-viewer-proxy logfiles-rbac impersonation-investigator flowschemas)
 
 if [ $# -eq 0 ]; then
   echo "usage: $0 -f <values.yaml> [-f <cluster values.yaml>] [helm template flags]" >&2

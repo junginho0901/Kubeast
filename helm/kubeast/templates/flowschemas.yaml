@@ -1,0 +1,75 @@
+{{- $fs := .Values.multicluster.flowSchemas | default dict }}
+{{- if $fs.enabled }}
+{{- if not .Values.auth.impersonation.enabled }}
+{{- fail "multicluster.flowSchemas needs auth.impersonation.enabled: without it Kubeast sends a cluster's requests as its own credential, which these FlowSchemas do not match" }}
+{{- end }}
+{{- $cache := $fs.cachePriorityLevel | default "workload-low" }}
+{{- $people := $fs.priorityLevel | default "global-default" }}
+{{- if or (eq $cache "exempt") (eq $people "exempt") }}
+{{- fail "multicluster.flowSchemas: the exempt level puts no limit on Kubeast's requests, so a crowd on the console could hold the whole API server; name a Limited priority level" }}
+{{- end }}
+{{- /*
+Where a registered cluster's API Priority and Fairness places the requests Kubeast sends as kubeast:cache and as each
+person (docs/cluster-requirements.md §1). kubeast:cache reads once for everyone, so it is a flow per namespace, as the
+suggested kube-controller-manager FlowSchema is; it carries kubeast:authenticated too, so its FlowSchema comes first.
+Apply to every registered cluster (scripts/render-target-rbac.sh renders it with the rest).
+*/}}
+apiVersion: flowcontrol.apiserver.k8s.io/v1
+kind: FlowSchema
+metadata:
+  name: kubeast-cache
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+spec:
+  priorityLevelConfiguration:
+    name: {{ $cache | quote }}
+  matchingPrecedence: 9490
+  distinguisherMethod:
+    type: ByNamespace
+  rules:
+    - subjects:
+        - kind: User
+          user:
+            name: kubeast:cache
+      resourceRules:
+        - verbs: ["*"]
+          apiGroups: ["*"]
+          resources: ["*"]
+          namespaces: ["*"]
+          clusterScope: true
+      nonResourceRules:
+        - verbs: ["*"]
+          nonResourceURLs: ["*"]
+---
+apiVersion: flowcontrol.apiserver.k8s.io/v1
+kind: FlowSchema
+metadata:
+  name: kubeast
+  labels:
+    {{- include "kubeast.labels" . | nindent 4 }}
+spec:
+  priorityLevelConfiguration:
+    name: {{ $people | quote }}
+  matchingPrecedence: 9500
+  distinguisherMethod:
+    type: ByUser
+  rules:
+    - subjects:
+        - kind: Group
+          group:
+            name: kubeast:authenticated
+        {{- if .Values.features.alertInvestigation.enabled }}
+        - kind: Group
+          group:
+            name: kubeast:investigator
+        {{- end }}
+      resourceRules:
+        - verbs: ["*"]
+          apiGroups: ["*"]
+          resources: ["*"]
+          namespaces: ["*"]
+          clusterScope: true
+      nonResourceRules:
+        - verbs: ["*"]
+          nonResourceURLs: ["*"]
+{{- end }}

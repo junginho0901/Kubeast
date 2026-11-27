@@ -4,6 +4,10 @@ What changed in each Kubeast release, newest first, in the form of [Keep a Chang
 
 ## [Unreleased]
 
+### Added
+
+- `multicluster.flowSchemas` (off): two FlowSchemas for the API Priority and Fairness of each registered cluster. `kubeast-cache` places the reads Kubeast makes once for everyone as `kubeast:cache` in `workload-low`, the level of a Pod's service account, a flow per namespace; `kubeast` keeps each person in `global-default`, or the level `priorityLevel` names, counted apart. Without them both wait in the cluster's `global-default` level, where 100 people opening the screens at once on a kind cluster of 131 000 to 135 000 events had up to 15 of the Timeline's lists answered 429, with no error on a screen. `scripts/render-target-rbac.sh` renders them for the other clusters ([Cluster requirements](docs/cluster-requirements.md) §1).
+
 ### Changed
 
 - k8s-service builds a Pods page or Cluster View node map answer once for everyone who asks for it at one moment with the same access and the same query, and those who came while it was being built wait for the next one without taking one of the places that hold every pod row. Each person still has their own access checked and gets the bytes they would have got alone.

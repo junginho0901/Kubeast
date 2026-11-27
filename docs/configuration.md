@@ -381,6 +381,10 @@ multicluster:
   maxTerminalsPerAccount: 20     # terminals (pod exec, node shell) one account may hold open at once on each k8s-service (k8s-service-stream with streams on); one past it is refused before it opens and the screen says why; 0 = no cap, below 0 the chart refuses
   maxFollowedLogsPerAccount: 20  # followed logs (a container's output, a log file) the same way
   maxStreamsPerServer: 443       # terminals and followed logs of every account together on each k8s-service (k8s-service-stream with streams on); one past it is refused before it opens and the screen says the server is full; 0 = no cap, below 0 the chart refuses. About 0.37 MiB each on a kind node: 443 is half of what took a pod at 512 Mi to 80 % of its memory
+  flowSchemas:                   # off; on, FlowSchemas on each cluster place kubeast:cache and every person in these API Priority and Fairness levels (cluster-requirements §1, architecture.md "Many users")
+    enabled: false
+    cachePriorityLevel: workload-low  # kubeast:cache, a flow per namespace: the level of a Pod's service account
+    priorityLevel: global-default     # every person and the alert investigator, a flow each: where the cluster's other users are
 ```
 
 ## Stages of new values
@@ -437,6 +441,7 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `features.callGraph.enabled` | false | alpha | The AI evaluation with it off and on. Tested: the e2e `ai-call-graph.spec.ts` in whole e2e runs on kind (2026-11-25) |
 | `features.callGraph.clientLatency` | false | alpha | Any run with it on against a Prometheus that holds the client histogram, and the AI evaluation's `07_one_segment_slow` with it off and on beside `features.callGraph.enabled` |
 | `gateway.servedByHeader` | false | alpha | Any run with it on |
+| `multicluster.flowSchemas.enabled`, `cachePriorityLevel`, `priorityLevel` | false, workload-low, global-default | alpha | 100 people opening the screens at once on the kind dev install with it on, the API server's waits and refusals counted per FlowSchema, and the same crowd on an EKS cluster |
 
 ## Redis users
 
