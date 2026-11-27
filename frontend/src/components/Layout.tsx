@@ -89,6 +89,10 @@ type NavGroup = {
   requiredPermission?: string
 }
 
+// A line may break where the words of a kind name meet (MutatingWebhook|Configurations), so a long name wraps in the bar
+const breakableName = (name: string) =>
+  name.split(/(?<=\p{Ll})(?=\p{Lu})/u).flatMap((part, i) => (i === 0 ? [part] : [<wbr key={i} />, part]))
+
 export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -544,9 +548,9 @@ export default function Layout() {
                               ${isActive ? 'bg-slate-700 text-ink sidebar-selected' : 'text-slate-300 hover:bg-slate-700/50 hover:text-ink'}
                             `}
                           >
-                            {/* shrink-0: a long name squeezed the icon; truncate: the long kind names ran out of the bar */}
+                            {/* shrink-0: a long name squeezed the icon; a long kind name wraps at its word joins instead of running out of the bar */}
                             {Icon && <Icon className="w-4 h-4 shrink-0" />}
-                            <span className="min-w-0 truncate font-medium">{item.name}</span>
+                            <span className="min-w-0 break-words font-medium">{breakableName(item.name)}</span>
                             {item.tag && <BetaTag label={item.tag} />}
                             {item.badge ? (
                               <span
