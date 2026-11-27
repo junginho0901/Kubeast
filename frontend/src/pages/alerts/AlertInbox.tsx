@@ -20,6 +20,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
 import { ExternalHttpLink } from '@/components/ExternalHttpLink'
 import { PastInvestigations } from './PastInvestigations'
+import { AlertLabels } from './AlertLabels'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
 import { inboxPage } from './inboxPage'
@@ -652,22 +653,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
 
             {data.past_investigations !== undefined && <PastInvestigations items={data.past_investigations} onOpen={setPastOpen} />}
 
-            <section>
-              <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.section.labels', 'Labels and annotations')}</h3>
-              <div className="grid gap-3 md:grid-cols-2">
-                <dl className="border-t border-hairline py-2 text-xs" data-testid="alert-labels">
-                  {Object.entries(data.labels).map(([k, v]) => (
-                    <div key={k} className="flex gap-2 py-0.5"><dt className="w-[110px] shrink-0 break-all text-slate-500">{k}</dt><dd className="min-w-0 break-all font-mono text-slate-200">{v}</dd></div>
-                  ))}
-                </dl>
-                <dl className="border-t border-hairline py-2 text-xs">
-                  {Object.entries(data.annotations).map(([k, v]) => (
-                    <div key={k} className="flex gap-2 py-0.5"><dt className="w-[110px] shrink-0 break-all text-slate-500">{k}</dt><dd className="min-w-0 break-words text-slate-200">{v}</dd></div>
-                  ))}
-                  {Object.keys(data.annotations).length === 0 && <div className="text-slate-500">{tr('investigations.noAnnotations', 'No annotations')}</div>}
-                </dl>
-              </div>
-            </section>
+            <AlertLabels labels={data.labels} annotations={data.annotations} />
           </div>
         )}
       </ModalFrame>
