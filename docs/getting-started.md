@@ -335,6 +335,7 @@ The code is in `app/services/anthropic_messages.py`, and responses are converted
 
 - The API server refuses `bedrock`, `geminivertexai` and `anthropicvertexai`. It took them before, but Kubeast had no code that calls them.
 - For those models, use an OpenAI-compatible endpoint: the provider's own where it offers one, or a gateway such as LiteLLM in front of it. Set provider `openai` with the address in `spec.baseURL`, or provider `custom` in **Admin > AI Models**.
+- LiteLLM refuses with 400 ("does not support parameters") a parameter the model behind it does not take, such as `temperature` on a reasoning model. Kubeast then leaves it out, sends the call again and leaves it out from then on, in each ai-service pod until it restarts. With `drop_params: true` under `litellm_settings` in the proxy's config, LiteLLM drops such parameters itself and refuses no call.
 - A ModelConfig stored with one of them before the upgrade stays, and the controller no longer syncs it. `kubectl get modelconfigs -A` shows each one's provider. Change its `spec.provider` or delete it; deleting it also removes its setting from **Admin > AI Models**.
 
 **A setting saved through the API** (`POST` and `PATCH /api/v1/ai/model-configs`) names one of those providers, `azure`, `google` (Gemini) or `custom`. A new setting for another OpenAI-compatible endpoint uses `custom` with its `base_url`.

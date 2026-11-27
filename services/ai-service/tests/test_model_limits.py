@@ -139,6 +139,58 @@ async def test_a_gateway_that_refuses_max_tokens_gets_max_completion_tokens(monk
     assert len(bodies) == 2 and bodies[1]["max_completion_tokens"] == 2048 and "max_tokens" not in bodies[1]
 
 
+# The LiteLLM proxy's 400 when the model behind it refuses parameters and drop_params is off (LiteLLM v1.111.0:
+# litellm/utils.py get_optional_params, litellm/exceptions.py UnsupportedParamsError, the proxy's
+# common_utils/openai_error_payload.py for type, param and code).
+LITELLM_REFUSAL = ("litellm.UnsupportedParamsError: deepseek does not support parameters: {params}, for model=deepseek-reasoner. "
+                   "To drop these, set `litellm.drop_params=True` or for proxy:\n\n`litellm_settings:\n drop_params: true`\n. \n "
+                   "If you want to use these params dynamically send allowed_openai_params={params} in your request.")
+
+
+def litellm_refusal(params):
+    return {"error": {"message": LITELLM_REFUSAL.format(params=list(params)), "type": "invalid_request_error",
+                      "param": None, "code": "400"}}
+
+
+@pytest.mark.asyncio
+async def test_a_parameter_the_model_behind_litellm_refuses_is_left_out_and_remembered(monkeypatch):
+    bodies = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        bodies.append(body)
+        refused = [p for p in ("temperature", "top_p") if p in body]
+        return httpx.Response(400, json=litellm_refusal(refused)) if refused else httpx.Response(200, json=COMPLETION)
+
+    class Fake(httpx.AsyncClient):
+        def __init__(self, **_kw):
+            super().__init__(transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(httpx, "AsyncClient", Fake)
+    provider_adapter._refused.clear()
+    adapter = ProviderAdapter(provider="custom", model="thinker", api_key="k", base_url="http://litellm.ai.svc:4000")
+    resp = await adapter.chat.completions.create(model="thinker", messages=MSG, temperature=0.7, top_p=0.9, max_tokens=900)
+    assert resp.choices[0].message.content == "ok"
+    # one left out per refusal, the first the list names, and the answer length kept as it was sent
+    assert [[p for p in ("temperature", "top_p") if p in b] for b in bodies] == [["temperature", "top_p"], ["top_p"], []]
+    assert bodies[2]["max_tokens"] == 900 and "max_completion_tokens" not in bodies[2]
+    await adapter.chat.completions.create(model="thinker", messages=MSG, temperature=0.2, top_p=0.5)
+    assert len(bodies) == 4 and "temperature" not in bodies[3] and "top_p" not in bodies[3]
+
+
+def test_litellms_list_gives_the_first_parameter_that_may_be_left_out():
+    def refusal(params, text=LITELLM_REFUSAL):
+        err = Exception(text.format(params=list(params)))
+        err.status_code, err.param = 400, None
+        return err
+
+    assert provider_adapter._refused_param(refusal(["tool_choice", "temperature"])) == "temperature"
+    assert provider_adapter._refused_param(refusal(["tools", "tool_choice"])) is None  # a model without tools: not retried
+    escaped = refusal(["top_p"], LITELLM_REFUSAL.replace("{params}", "[\\'{p}\\']").replace("{p}", "top_p"))
+    assert provider_adapter._refused_param(escaped) == "top_p"  # the message as a dict's repr may escape its quotes
+    assert provider_adapter._refused_param(SimpleNamespace(status_code=500, param=None)) is None
+
+
 @pytest.mark.asyncio
 async def test_other_refusals_are_not_retried(monkeypatch):
     import openai
