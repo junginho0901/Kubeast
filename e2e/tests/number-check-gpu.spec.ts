@@ -1013,7 +1013,9 @@ test.describe('number check — GPU Dashboard, GPU Nodes, GPU Pods', () => {
       await test.step('GPU Dashboard', async () => {
         await page.goto(url('/gpu/dashboard'))
         const gpu = (n: number) => page.locator(`[data-testid="gpu-realtime-gpu"][data-uuid="GPU-e2e-num-${n}"]`)
-        await expect(gpu(2).getByTestId('gpu-realtime-core')).toHaveText('-', { timeout: 30_000 })
+        // a pod the API step did not reach can still give the answer from before the series changed (PROM_ANSWER_KEPT_MS),
+        // and the card reads again every 15 s
+        await expect(gpu(2).getByTestId('gpu-realtime-core')).toHaveText('-', { timeout: PROM_ANSWER_KEPT_MS + 25_000 })
         await expect(gpu(0).getByTestId('gpu-realtime-mem')).toHaveText('-')
         await expect(gpu(0).getByTestId('gpu-realtime-temp')).toHaveCount(0)
         // a real 0% stays: GPU 3 idles at 0
