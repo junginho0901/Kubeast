@@ -4196,6 +4196,8 @@
     "currentPage": "Current page: {{title}}",
     "contextIncluded": "Current page context included",
     "sessionLoading": "Preparing session...",
+    "statusAnswering": "Writing the answer...",
+    "statusAnswered": "The answer is complete.",
     "emptyHint": "Ask a question about the current page.",
     "emptyExamples": "e.g. \"What's this?\", \"Any issues?\", \"Why is this?\"",
     "inputPlaceholder": "Ask about this page...",

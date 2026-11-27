@@ -4607,6 +4607,8 @@
     "currentPage": "현재 화면: {{title}}",
     "contextIncluded": "현재 화면 맥락 포함",
     "sessionLoading": "세션 준비 중...",
+    "statusAnswering": "답변을 쓰고 있습니다.",
+    "statusAnswered": "답변이 끝났습니다.",
     "emptyHint": "현재 화면에 대해 질문해 보세요.",
     "emptyExamples": "예: \"이 화면 뭐야?\", \"문제 있어?\", \"왜 이래?\"",
     "inputPlaceholder": "이 화면에 대해 질문하세요...",

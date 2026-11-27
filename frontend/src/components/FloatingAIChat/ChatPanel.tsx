@@ -26,6 +26,7 @@ import EarlierMessages from '@/components/EarlierMessages'
 import JumpToLatest from '@/components/JumpToLatest'
 import { InputArea } from './InputArea'
 import { SuggestedQuestions } from './SuggestedQuestions'
+import { chatStatusText } from './chatStatus'
 
 interface ChatPanelProps {
   onClose: () => void
@@ -257,6 +258,7 @@ export function ChatPanel({
   }, [questions, isStreaming, scrollToBottom])
   // 세션은 첫 질문 시점에 생성하므로 평소엔 활성. 세션 생성 중이거나 스트리밍 중일 때 입력 비활성.
   const disabled = createSessionMutation.isPending
+  const status = chatStatusText(t, { starting: disabled, answering: isStreaming, streamStatus: ours ? streamState.status : undefined })
 
   // Keys pressed in the panel stay here, so a modal or drawer under it does not close on Escape or take the focus on Tab.
   // Once Escape has closed it they pass on, also before the fade starts: a second Escape closes the window under it.
@@ -342,6 +344,7 @@ export function ChatPanel({
       {!atBottom && <JumpToLatest onClick={() => scrollToBottom()} />}
       </div>
 
+      <p role="status" className="sr-only" data-testid="floating-chat-status">{status}</p>
       <ActionFailure error={stopSaveFailure} action="save" testId="floating-stop-save-error" className="shrink-0 px-3 pt-2 text-xs" />
       {createSessionMutation.error && (
         <p role="alert" data-testid="floating-start-error" className="shrink-0 px-3 pt-2 text-xs text-red-400 break-words">
