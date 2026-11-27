@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useModalStackEntry } from '@/hooks/useModalStack'
-import { focusables } from '@/utils/focusables'
+import { focusables, keepTabIn } from '@/utils/focusables'
 
 interface ModalOverlayProps {
   children: ReactNode
@@ -23,16 +23,7 @@ export function ModalOverlay({ children, onClose, closeOnOverlayClick = true, zI
       // the Escape that closed this window goes no further: the drawer under it listens on window and, once this
       // window has left the stack, would read itself as the top one
       if (e.key === 'Escape' && onClose) { e.stopPropagation(); onClose() }
-      // Tab cycles inside the top-most modal (an editor that took the key, e.g. Monaco indenting, is left alone)
-      if (e.key === 'Tab' && !e.defaultPrevented && overlayRef.current) {
-        const list = focusables(overlayRef.current)
-        if (list.length === 0) { e.preventDefault(); return }
-        const first = list[0], last = list[list.length - 1]
-        const active = document.activeElement
-        const inside = overlayRef.current.contains(active)
-        if (e.shiftKey && (active === first || !inside)) { e.preventDefault(); last.focus() }
-        else if (!e.shiftKey && (active === last || !inside)) { e.preventDefault(); first.focus() }
-      }
+      if (e.key === 'Tab' && overlayRef.current) keepTabIn(overlayRef.current, e, document.activeElement)
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
