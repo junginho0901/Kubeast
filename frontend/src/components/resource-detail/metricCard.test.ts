@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import '@/i18n'
 import { MetricBar, MetricCard } from './PrometheusMetrics'
 import serviceSource from './ServiceInfo.tsx?raw'
+import namespaceSource from './NamespaceInfo.tsx?raw'
 
 // A card's number: a count (pods, restarts) as a whole number, a percent rounded, anything else to one decimal.
 const shown = (props: Parameters<typeof MetricCard>[0]) =>
@@ -33,8 +34,9 @@ describe('MetricCard', () => {
     expect(colour({ label: 'Backing Pods', value: 250, unit: '', whole: true, thresholds: null })).toBe('text-ink')
   })
 
-  it("is how a Service's backing pods read", () => {
+  it("is how a Service's backing pods and a Namespace's pods read", () => {
     expect(serviceSource).toContain('<MetricCard label="Backing Pods" value={getSvcMetric(\'pod_count\')!} unit="" whole thresholds={null} />')
+    expect(namespaceSource).toContain('<MetricCard label="Pods" value={getNsMetricValue(\'pod_count\')!} unit="" whole thresholds={null} />')
   })
 })
 

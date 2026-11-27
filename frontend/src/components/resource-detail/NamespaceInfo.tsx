@@ -290,7 +290,7 @@ export default function NamespaceInfo({ name }: Props) {
             />
           )}
           {getNsMetricValue('pod_count') !== null && (
-            <MetricCard label="Pods" value={getNsMetricValue('pod_count')!} unit="" whole thresholds={{ warn: 50, danger: 100 }} />
+            <MetricCard label="Pods" value={getNsMetricValue('pod_count')!} unit="" whole thresholds={null} />
           )}
           {getNsMetricValue('restart_total') !== null && (
             <MetricCard label="Total Restarts" value={getNsMetricValue('restart_total')!} unit="" whole thresholds={{ warn: 10, danger: 50 }} />
