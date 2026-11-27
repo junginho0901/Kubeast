@@ -82,7 +82,7 @@ export function PrometheusClusterMetrics({ title, cpu, memory, disk, podCount, p
         <h2 className="text-lg font-semibold text-ink">{title}</h2>
         <span className="text-xs text-slate-500">{t('dashboard.live', 'Live')}</span>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
         <Slot testId="cluster-metric-cpu" label="CPU" value={cpu} normalClass="bg-primary-bright" missing={missing('CPU')} />
         <Slot testId="cluster-metric-memory" label={t('dashboard.memory', 'Memory')} value={memory} normalClass="bg-primary-bright" missing={missing(t('dashboard.memory', 'Memory'))} />
         <Slot testId="cluster-metric-disk" label={t('dashboard.disk', 'Disk')} value={disk} normalClass="bg-primary-bright" missing={missing(t('dashboard.disk', 'Disk'))} />

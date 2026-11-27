@@ -21,18 +21,18 @@ interface Props {
 
 export function StatsGrid({ stats, onStatClick }: Props) {
   return (
-    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {stats.map((stat) => (
         <button
           key={stat.name}
           data-testid={`stat-${stat.resourceType}`}
           onClick={() => onStatClick(stat.resourceType)}
           title={stat.title}
-          className="card hover:border-primary-500 transition-colors text-left cursor-pointer"
+          className="card p-4 hover:border-primary-500 transition-colors text-left cursor-pointer"
         >
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-400">{stat.name}</p>
+              <p className="text-xs font-medium text-slate-400">{stat.name}</p>
               <p data-testid={`stat-value-${stat.resourceType}`} className="mt-2 text-2xl font-semibold text-ink tabular-nums">
                 {stat.value}
               </p>

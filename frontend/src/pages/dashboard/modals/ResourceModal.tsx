@@ -108,12 +108,12 @@ export function ResourceModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        className="bg-slate-800 rounded-lg max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col"
+        className="bg-slate-800 rounded-xl border border-hairline shadow-xl max-w-4xl w-full h-[80vh] overflow-hidden flex flex-col [&_h3]:break-all"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 모달 헤더 */}
-        <div className="p-6 border-b border-slate-700">
-          <div className="flex items-center justify-between mb-4">
+        <div className="p-5 border-b border-hairline shrink-0">
+          <div className="flex items-start justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
               {selectedStat && (
                 <div className={`p-2 rounded-lg ${selectedStat.bgColor || 'bg-slate-700'}`}>
@@ -121,7 +121,7 @@ export function ResourceModal({
                 </div>
               )}
               <div>
-                <h2 className="text-xl font-semibold text-ink">
+                <h2 className="text-lg font-semibold text-ink">
                   {selectedStat?.name || selectedResourceType}
                 </h2>
                 {!failure && (
@@ -152,7 +152,7 @@ export function ResourceModal({
               placeholder={tr('dashboard.resourceModal.searchPlaceholder', 'Search...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-10 pr-10 bg-slate-700 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors"
+              className="w-full h-10 pl-10 pr-10 bg-slate-900 text-sm text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors"
             />
             {searchQuery && (
               <button
@@ -167,7 +167,7 @@ export function ResourceModal({
         </div>
 
         {/* 모달 내용 */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[300px]">
               <RefreshCw className="w-8 h-8 text-primary-400 animate-spin mb-4" />
@@ -188,10 +188,10 @@ export function ResourceModal({
                       <div
                         key={ns.name}
                         onClick={() => openDetail({ kind: 'Namespace', name: ns.name })}
-                        className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                        className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
                             <h3 className="font-medium text-ink">{ns.name}</h3>
                             <p className="text-sm text-slate-400 mt-1" data-testid="resource-modal-namespace-counts">
                               {tr('dashboard.resourceModal.namespaceSummary', 'Pods: {{pods}} | Services: {{services}} | Deployments: {{deployments}}', {
@@ -230,10 +230,10 @@ export function ResourceModal({
                         <div
                           key={`${pod.namespace}-${pod.name}`}
                           onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
-                          className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                          className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1 flex items-center gap-3">
                               {shown.level === 'ok' ? (
                                 <CheckCircle className="w-5 h-5 text-green-400" />
                               ) : shown.level === 'error' ? (
@@ -241,12 +241,12 @@ export function ResourceModal({
                               ) : (
                                 <AlertCircle className="w-5 h-5 text-yellow-400" />
                               )}
-                              <div>
+                              <div className="min-w-0">
                                 <h3 className="font-medium text-ink">{pod.name}</h3>
                                 <p className="text-sm text-slate-400">{pod.namespace}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
                               <span
                                 className={`badge ${shown.badge}`}
                                 title={[notReadyHint, shown.title].filter(Boolean).join(' · ') || undefined}
@@ -281,10 +281,10 @@ export function ResourceModal({
                       <div
                         key={`${svc.namespace}-${svc.name}`}
                         onClick={() => openDetail({ kind: 'Service', name: svc.name, namespace: svc.namespace })}
-                        className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                        className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
                             <h3 className="font-medium text-ink">{svc.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {svc.namespace} | {tr('dashboard.resourceModal.typeLabel', 'Type')}: {svc.type} | {tr('dashboard.resourceModal.clusterIpLabel', 'Cluster IP')}: {svc.cluster_ip || none}
@@ -313,10 +313,10 @@ export function ResourceModal({
                       <div
                         key={`${deploy.namespace}-${deploy.name}`}
                         onClick={() => openDetail({ kind: 'Deployment', name: deploy.name, namespace: deploy.namespace })}
-                        className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                        className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
                             <h3 className="font-medium text-ink">{deploy.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {deploy.namespace} | {tr('dashboard.resourceModal.replicasLabel', 'Replicas')}: {deploy.ready_replicas}/{deploy.replicas}
@@ -348,10 +348,10 @@ export function ResourceModal({
                       <div
                         key={`${pvc.namespace}-${pvc.name}`}
                         onClick={() => openDetail({ kind: 'PersistentVolumeClaim', name: pvc.name, namespace: pvc.namespace })}
-                        className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                        className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
                             <h3 className="font-medium text-ink">{pvc.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {pvc.namespace} | {pvc.capacity || empty} | {pvc.storage_class || empty}
@@ -383,10 +383,10 @@ export function ResourceModal({
                       <div
                         key={node.name}
                         onClick={() => openDetail({ kind: 'Node', name: node.name })}
-                        className="p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors cursor-pointer"
+                        className="p-3 border-b border-hairline hover:bg-slate-700/50 transition-colors cursor-pointer break-words"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
                             <h3 className="font-medium text-ink">{node.name}</h3>
                             <p className="text-sm text-slate-400 mt-1">
                               {tr('dashboard.resourceModal.versionLabel', 'Version')}: {node.version || empty} |

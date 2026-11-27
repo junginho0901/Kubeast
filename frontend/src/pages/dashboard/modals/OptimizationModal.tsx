@@ -282,11 +282,11 @@ export function OptimizationModal({
   return (
     <ModalOverlay onClose={onClose}>
       <div
-        className="bg-slate-800 rounded-lg max-w-[98vw] w-full h-[85vh] overflow-hidden flex flex-col"
+        className="bg-slate-800 rounded-xl border border-hairline shadow-xl max-w-[98vw] w-full h-[85vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b border-slate-700">
-          <div className="flex items-center justify-between mb-4">
+        <div className="p-5 border-b border-hairline shrink-0">
+          <div className="flex items-start justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-semibold text-ink">
                 {tr('dashboard.optimization.title', 'Optimization suggestions')}
@@ -311,7 +311,7 @@ export function OptimizationModal({
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="h-10 px-4 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-slate-600 focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[240px] justify-between disabled:opacity-60 disabled:cursor-not-allowed"
+                className="h-10 px-4 bg-slate-900 hover:bg-slate-700 text-ink rounded-lg border border-control focus:outline-hidden focus:border-primary-500 transition-colors flex items-center gap-2 w-[240px] max-w-full justify-between disabled:opacity-60 disabled:cursor-not-allowed"
                 title={tr('dashboard.optimization.selectNamespaceTitle', 'Select namespace')}
                 disabled={isLoadingNamespaces}
               >
@@ -352,7 +352,7 @@ export function OptimizationModal({
               )}
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <button
                 onClick={onRun}
                 disabled={!namespace || isStreaming || !table}
@@ -462,7 +462,7 @@ export function OptimizationModal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 text-sm">
           <div className="rounded-lg border border-slate-700 bg-slate-900/20 overflow-x-auto">
             {isTableLoading && !table ? (
               <div className="flex items-center justify-center gap-2 py-10 text-slate-400">
@@ -544,7 +544,7 @@ export function OptimizationModal({
           ) : (
             <>
               {!!observedMarkdown && (
-                <details className="rounded-lg border border-slate-700 bg-slate-900/20 p-3">
+                <details className="border-t border-hairline pt-3">
                   <summary className="cursor-pointer select-none text-xs font-medium text-slate-200">
                     {tr('dashboard.optimization.observedData', 'Table as sent to the model')}
                   </summary>
@@ -554,7 +554,7 @@ export function OptimizationModal({
                 </details>
               )}
 
-              {aiEnabled(features) && <div className="rounded-lg border border-slate-700 bg-slate-900/20 p-3" data-testid="optimization-ai">
+              {aiEnabled(features) && <div className="border-t border-hairline pt-3" data-testid="optimization-ai">
                 {isStreaming ? (
                   <div className="prose prose-invert prose-sm max-w-none leading-snug overflow-x-auto [&_table]:min-w-full [&_table]:w-max [&_table]:text-xs [&_th]:px-2 [&_td]:px-2 [&_th]:py-1 [&_td]:py-1 [&_pre]:text-xs">
                     <AIMarkdown>{answerMarkdownForStreaming}</AIMarkdown>

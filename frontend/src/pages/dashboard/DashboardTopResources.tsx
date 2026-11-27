@@ -31,7 +31,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       {/* Top 파드 */}
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h2 className="text-lg font-semibold text-ink">
             {tr('dashboard.topPods.title', 'Top 5 pods by resource usage')}
           </h2>
@@ -53,7 +53,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
             ))}
           </div>
         ) : metricsUnavailable ? (
-          <div className="text-center py-12">
+          <div className="text-center py-6">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-slate-400" />
               <p className="text-slate-400">{tr('dashboard.metrics.unavailable', 'Metrics server not available for this cluster')}</p>
@@ -61,7 +61,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
           </div>
         ) : isError && !topResources?.top_pods ? (
           // 에러 상태: 이전 데이터가 없을 때만 에러 표시
-          <div className="text-center py-12">
+          <div className="text-center py-6">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-red-400" />
               <p className="text-slate-400 break-words" data-testid="top-resources-read-failed">{tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(error) })}</p>
@@ -103,7 +103,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
           <RefusedMetrics path="/cluster/metrics/pods" reason={topResources.pod_metrics_error} testId="top-pods-refused" />
         ) : topResources?.pod_metrics_error ? (
           // 메트릭 수집 실패 (Node 메트릭은 있을 수 있음) — the server's pod_metrics_error, with its reason
-          <div className="text-center py-12" data-testid="top-pods-metrics-error">
+          <div className="text-center py-6" data-testid="top-pods-metrics-error">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-yellow-400" />
               <p className="text-slate-400">{tr('dashboard.topPods.metricsError', 'Failed to fetch pod metrics')}</p>
@@ -113,7 +113,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
           </div>
         ) : (
           // 데이터가 없을 때
-          <div className="text-center py-12">
+          <div className="text-center py-6">
             <p className="text-slate-400">{tr('dashboard.topResources.empty', 'No resource usage data')}</p>
           </div>
         )}
@@ -121,7 +121,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
 
       {/* Top Node */}
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h2 className="text-lg font-semibold text-ink">
             {tr('dashboard.topNodes.title', 'Top 3 nodes by resource usage')}
           </h2>
@@ -147,7 +147,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
             ))}
           </div>
         ) : metricsUnavailable ? (
-          <div className="text-center py-12">
+          <div className="text-center py-6">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-slate-400" />
               <p className="text-slate-400">{tr('dashboard.metrics.unavailable', 'Metrics server not available for this cluster')}</p>
@@ -155,7 +155,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
           </div>
         ) : isError && !topResources?.top_nodes ? (
           // 에러 상태: 이전 데이터가 없을 때만 에러 표시
-          <div className="text-center py-12">
+          <div className="text-center py-6">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-red-400" />
               <p className="text-slate-400 break-words" data-testid="top-resources-read-failed">{tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(error) })}</p>
@@ -177,9 +177,9 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
                 >
                   <div className="flex items-center gap-3">
                     <span className="w-5 shrink-0 text-sm text-slate-500 tabular-nums">#{index + 1}</span>
-                    <div className="flex-1">
-                      <h3 title={node.name} className="font-medium text-ink">{node.name}</h3>
-                      <div className="flex items-center gap-4 text-sm text-slate-400 mt-1">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-ink truncate" title={node.name}>{node.name}</h3>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-400 mt-1">
                         <span>{tr('dashboard.cpu', 'CPU')}: {node.cpu}</span>
                         <span>{tr('dashboard.memory', 'Memory')}: {node.memory}</span>
                       </div>
@@ -241,7 +241,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
           <RefusedMetrics path="/cluster/metrics/nodes" reason={topResources.node_metrics_error} testId="top-nodes-refused" />
         ) : topResources?.node_metrics_error ? (
           // 메트릭 수집 실패 (파드 메트릭은 있을 수 있음) — the server's node_metrics_error, with its reason
-          <div className="text-center py-12" data-testid="top-nodes-metrics-error">
+          <div className="text-center py-6" data-testid="top-nodes-metrics-error">
             <div className="flex flex-col items-center gap-2">
               <AlertCircle className="w-8 h-8 text-yellow-400" />
               <p className="text-slate-400">{tr('dashboard.topNodes.metricsError', 'Failed to fetch node metrics')}</p>
@@ -251,7 +251,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
           </div>
         ) : (
           // 데이터가 없을 때
-          <div className="text-center py-12">
+          <div className="text-center py-6">
             <p className="text-slate-400">{tr('dashboard.topResources.empty', 'No resource usage data')}</p>
           </div>
         )}

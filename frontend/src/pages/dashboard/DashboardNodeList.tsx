@@ -38,12 +38,12 @@ export function DashboardNodeList({ nodes, onNodeClick }: Props) {
           </Link>
         )}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto">
         {shown.map((node) => (
           <button
             key={node.name}
             onClick={() => onNodeClick(node)}
-            className="p-3 border border-slate-700 rounded-md hover:bg-slate-700/50 transition-colors text-left cursor-pointer"
+            className="p-3 border-l border-slate-700 hover:bg-slate-700/50 transition-colors text-left cursor-pointer min-w-0"
           >
             <div className="flex items-start gap-2 mb-2">
               {nodeReadiness(node.status) === 'Ready' ? (
