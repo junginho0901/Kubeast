@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -259,13 +260,19 @@ func TestWhatAClientThatStaysIsSentAndCountedAsIsWhatItWasWithPromhttpsWriters(t
 		var lines, sent [2]string
 		for i, promhttpsOwn := range []bool{false, true} {
 			m, r := counting(promhttpsOwn, h)
-			srv := httptest.NewUnstartedServer(r)
+			var handled sync.WaitGroup // srv.Close does not wait for the handler of a hijacked connection
+			srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				defer handled.Done()
+				r.ServeHTTP(w, req)
+			}))
 			srv.Config.ErrorLog = quiet()
 			srv.Start()
 			for _, method := range []string{"GET", "POST", "HEAD", "PURGE"} {
+				handled.Add(1)
 				sent[i] += rawAnswer(t, srv, method)
 			}
-			srv.Close() // waits for the handlers, so everything is counted
+			handled.Wait()
+			srv.Close()
 			lines[i] = strings.Join(counted(t, m), "\n")
 		}
 		if lines[0] != lines[1] {
