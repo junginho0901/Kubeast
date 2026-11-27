@@ -405,7 +405,7 @@ async def test_connection_test_options_that_are_no_object_are_refused(monkeypatc
 @pytest.mark.asyncio
 @pytest.mark.parametrize("request_body", [
     {"provider": "openai", "model": "m", "api_key": "sk-test-1"},
-    {"provider": "groq", "model": "m", "api_key": "sk-test-1"},
+    {"provider": "custom", "model": "m", "base_url": "https://gw.internal/v1", "api_key": "sk-test-1"},
     {"provider": "azure", "model": "m", "base_url": AZURE, "api_key_env": "KUBEAST_AI_KEY_AZURE"},
 ], ids=["openai", "openai-compatible", "azure"])
 async def test_a_model_that_refuses_tools_fails_the_connection_test_with_the_providers_message(monkeypatch, request_body):

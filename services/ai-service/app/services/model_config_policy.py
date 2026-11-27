@@ -20,6 +20,8 @@ connection to the same address rule (app/services/model_http.py):
     api_key_env only), and they are masked in responses.
   - Azure OpenAI: a base_url is required (the v1 endpoint), and deployment
     URLs or an api-version are refused with the v1 form in the message.
+  - provider: with no base_url a config goes to PROVIDER_BASE_URLS, never to
+    another provider's; custom and unnamed providers need a base_url.
 """
 import ipaddress
 import os
@@ -36,6 +38,18 @@ SUBSCRIPTION_PROVIDER = "claude-code"
 # "azureopenai" is the same provider as the kagent-compatible ModelConfig CRD names it.
 AZURE_PROVIDERS = frozenset({"azure", "azureopenai"})
 AZURE_V1_URL_HINT = "https://<resource>.openai.azure.com/openai/v1/"
+# Where a config with no base_url sends its calls; azure, azureopenai and custom have none.
+PROVIDER_BASE_URLS: Dict[str, str] = {
+    "openai": "https://api.openai.com/v1",
+    "anthropic": "https://api.anthropic.com",
+    "google": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "ollama": "http://localhost:11434/v1",
+}
+# Another OpenAI-compatible endpoint: the screen's "Custom / Other".
+CUSTOM_PROVIDER = "custom"
+# The screen's providers, the CRD's spec.provider enum and google, Gemini's other name (test_provider_route.py).
+PROVIDERS = frozenset(PROVIDER_BASE_URLS) | AZURE_PROVIDERS | {CUSTOM_PROVIDER, SUBSCRIPTION_PROVIDER}
 API_KEY_ENV_NAMES = frozenset({"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", SUBSCRIPTION_TOKEN_ENV})
 _ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
@@ -140,11 +154,42 @@ def _check_azure_base_url(base_url: Optional[str]) -> None:
         )
 
 
-def check_provider_fields(provider: Optional[str], key_envs: Iterable[Optional[str]], base_url: Optional[str]) -> None:
+def provider_id(provider: Optional[str]) -> str:
+    """A config's provider as every path reads it; none is openai, the column's default."""
+    return (provider or "").strip().lower() or "openai"
+
+
+def check_provider(provider: Optional[str], base_url: Optional[str]) -> None:
+    """Somewhere to send the calls: a base_url, where any other provider runs as custom does, or the provider's own."""
+    if (base_url or "").strip():
+        return
+    p = provider_id(provider)
+    if p == CUSTOM_PROVIDER:
+        raise PolicyError(f"provider {CUSTOM_PROVIDER} needs its OpenAI-compatible endpoint as base_url")
+    if p not in PROVIDERS:
+        raise PolicyError(
+            f"provider must be one of {', '.join(sorted(PROVIDERS))} "
+            f"(another OpenAI-compatible endpoint is provider {CUSTOM_PROVIDER} with its base_url)"
+        )
+
+
+def default_base_url(provider: Optional[str]) -> str:
+    """The address of a config with no base_url, for the chat, the connection test and the model list alike."""
+    p = provider_id(provider)
+    check_provider(p, None)
+    if p not in PROVIDER_BASE_URLS:
+        raise PolicyError(f"provider {p} has no address of its own: set base_url")
+    return PROVIDER_BASE_URLS[p]
+
+
+def check_provider_fields(provider: Optional[str], key_envs: Iterable[Optional[str]], base_url: Optional[str],
+                          need_address: bool = True) -> None:
     """A subscription token goes only to Claude Code (provider claude-code), which talks to Anthropic itself:
     no other provider may name it, and claude-code takes no base URL and no provider API key variable.
-    Azure OpenAI takes its v1 endpoint only."""
-    p = (provider or "").strip().lower()
+    Azure OpenAI takes its v1 endpoint only. With need_address, the calls have somewhere to go (check_provider)."""
+    if need_address:
+        check_provider(provider, base_url)
+    p = provider_id(provider)
     names = [n for n in key_envs if n]
     if p in AZURE_PROVIDERS:
         _check_azure_base_url(base_url)

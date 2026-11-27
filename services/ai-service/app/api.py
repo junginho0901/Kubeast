@@ -775,6 +775,10 @@ def _check_model_config_policy(data: dict, current=None) -> None:
     def field(name: str):
         return data[name] if name in data else getattr(current, name, None)
 
+    # a stored config with nowhere to send its calls may still be turned off, so it can be cleared up
+    turning_off = (current is not None and data.get("enabled") is False
+                   and model_config_policy.provider_id(field("provider")) == model_config_policy.provider_id(current.provider)
+                   and (field("base_url") or "").strip() == (current.base_url or "").strip())
     try:
         model_config_policy.check_api_key_env(data.get("api_key_env"))
         model_config_policy.check_api_key_env(data.get("api_key_secret_key"))
@@ -782,6 +786,7 @@ def _check_model_config_policy(data: dict, current=None) -> None:
         model_config_policy.check_extra_headers(data.get("extra_headers"))
         model_config_policy.check_provider_fields(
             field("provider"), (field("api_key_env"), field("api_key_secret_key")), field("base_url"),
+            need_address=not turning_off,
         )
     except model_config_policy.PolicyError as e:
         raise HTTPException(status_code=400, detail=str(e))

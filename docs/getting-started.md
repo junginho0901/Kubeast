@@ -337,6 +337,14 @@ The code is in `app/services/anthropic_messages.py`, and responses are converted
 - For those models, use an OpenAI-compatible endpoint: the provider's own where it offers one, or a gateway such as LiteLLM in front of it. Set provider `openai` with the address in `spec.baseURL`, or provider `custom` in **Admin > AI Models**.
 - A ModelConfig stored with one of them before the upgrade stays, and the controller no longer syncs it. `kubectl get modelconfigs -A` shows each one's provider. Change its `spec.provider` or delete it; deleting it also removes its setting from **Admin > AI Models**.
 
+**A setting saved through the API** (`POST` and `PATCH /api/v1/ai/model-configs`) names one of those providers, `azure`, `google` (Gemini) or `custom`. A new setting for another OpenAI-compatible endpoint uses `custom` with its `base_url`.
+
+- A setting with no `base_url` goes to its provider's own address. **Test**, the model dropdown and the chat use the same one.
+- `custom` and any other provider need a `base_url`, which is called as an OpenAI-compatible endpoint. A setting made before 0.8.0 with another provider and a `base_url` works as it did.
+- Without a `base_url`, `custom` or another provider is refused with 400. Before 0.8.0 the chat of such a setting went to OpenAI's address, and **Test** of `groq`, `deepseek`, `mistral`, `together` or `fireworks` went to that provider.
+- A setting stored that way before the upgrade stays in the list. The chat and **Test** refuse it and send nothing. It can be turned off or deleted; any other change needs a `base_url` or one of the providers above.
+- **Test** of a Gemini setting with a `base_url` calls that address as the chat does, through its OpenAI-compatible API.
+
 **Using a Claude subscription (provider `claude-code`, personal use)** lets you chat with the `claude setup-token` value of a Claude Pro/Max subscription instead of an API key.
 Only Claude Code accepts subscription tokens, so ai-service starts Claude Code for each model call (Claude Agent SDK, `app/services/claude_code.py`).
 The tools Claude Code calls are handled inside this process by the chat's tool code.
