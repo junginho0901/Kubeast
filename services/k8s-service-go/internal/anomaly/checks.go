@@ -3,6 +3,7 @@ package anomaly
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -20,12 +21,73 @@ type IssueRow struct {
 	Before   bool
 }
 
+// Pods is what the pod checks keep of a namespace's pods, or of one workload's, folded in one pod row (podrow.Info's) at
+// a time as the pods are read, so that no row is held while the other checks run: the workload's pod names (none without
+// a workload, whose checks name no pod), the nodes the pods are on, how many pods there are, and their containers'
+// terminations, each of the window and, by reason, how many of the window before. The rows of a namespace of 50 000 pods
+// held until the answer was made took about 300 MiB of k8s-service's 512 Mi.
+type Pods struct {
+	wl     *Workload
+	win    Window
+	read   int
+	names  map[string]bool
+	nodes  map[string]bool
+	hidden bool
+	now    map[string][]termination
+	prev   map[string]float64
+}
+
+// NewPods keeps the pods of wl (every pod when nil) for the checks of window w.
+func NewPods(wl *Workload, w Window) *Pods {
+	return &Pods{wl: wl, win: w, names: map[string]bool{}, nodes: map[string]bool{}, now: map[string][]termination{}, prev: map[string]float64{}}
+}
+
+// Add folds in one pod's row; a pod that is not the workload's is left out. A container shows its last termination only
+// (and the current one while it is terminated): one of the window is kept, one of the window before counted.
+func (ps *Pods) Add(p map[string]interface{}) {
+	w := ps.win
+	if !ps.wl.OwnsPod(mapList(p, "owner_references")) {
+		return
+	}
+	ps.read++
+	pod, made := mapStr(p, "name"), madeIn(p, w)
+	if ps.wl != nil {
+		ps.names[pod] = true
+	}
+	if node := mapStr(p, "node_name"); node != "" {
+		ps.nodes[node] = true
+	}
+	before := w.Before()
+	for _, c := range append(mapList(p, "containers"), mapList(p, "init_containers")...) {
+		kept := []map[string]interface{}{}
+		for _, t := range []map[string]interface{}{mapMap(mapMap(c, "state"), "terminated"), mapMap(mapMap(c, "last_state"), "terminated")} {
+			if t != nil {
+				kept = append(kept, t)
+			}
+		}
+		ps.hidden = ps.hidden || (!made && hidesEarlier(c, kept, w))
+		for _, t := range kept {
+			reason := mapStr(t, "reason")
+			at, err := time.Parse(time.RFC3339, mapStr(t, "finished_at"))
+			if reason == "" || reason == "Completed" || err != nil {
+				continue
+			}
+			switch {
+			case !at.Before(w.Start) && at.Before(w.End):
+				ps.now[reason] = append(ps.now[reason], termination{at: at, pod: pod, ctr: mapStr(c, "name"), exitCode: mapInt(t, "exit_code"), made: made})
+			case !at.Before(before.Start) && at.Before(before.End):
+				ps.prev[reason]++
+			}
+		}
+	}
+}
+
 // FromIssues is the "failing now" check: each critical or warning issue of an object in the namespace. It reads the
 // objects as they are and nothing of the window before, so no finding is new. Nodes are the node check's and a list that
 // failed (kind Collector) makes the answer partial, so neither is a finding here: with no finding the check did not run,
-// else its findings come with the lists it could not read.
-func FromIssues(rows []IssueRow, pods []map[string]interface{}, wl *Workload) CheckResult {
-	names := podNames(pods, wl)
+// else its findings come with the lists it could not read. With a workload, its pods are those of pods.
+func FromIssues(rows []IssueRow, pods *Pods) CheckResult {
+	wl := pods.wl
 	r := CheckResult{Check: CheckIssues}
 	var unread []string
 	for _, row := range rows {
@@ -35,7 +97,7 @@ func FromIssues(rows []IssueRow, pods []map[string]interface{}, wl *Workload) Ch
 			continue
 		case row.Kind == "Node" || (row.Severity != "critical" && row.Severity != "warning"):
 			continue
-		case wl != nil && !issueOfWorkload(row, wl, names):
+		case wl != nil && !issueOfWorkload(row, wl, pods.names):
 			continue
 		}
 		f := Finding{Check: CheckIssues, Target: row.Kind + "/" + row.Name, Verdict: VerdictAnomalous,
@@ -74,38 +136,21 @@ func issueOfWorkload(row IssueRow, wl *Workload, pods map[string]bool) bool {
 	return row.Kind == wl.Kind && row.Name == wl.Name
 }
 
-// podNames are the names of the pods wl owns (every pod without a workload).
-func podNames(pods []map[string]interface{}, wl *Workload) map[string]bool {
-	names := map[string]bool{}
-	for _, p := range pods {
-		if wl.OwnsPod(mapList(p, "owner_references")) {
-			names[mapStr(p, "name")] = true
-		}
-	}
-	return names
-}
-
 // FromNodeConditions is the node check: the conditions (NotReady, memory, disk or PID pressure, no network) of the nodes
 // the namespace's pods run on, as they are now. It reads no CPU: a node whose CPU is full keeps its conditions.
 // nodesError is why the nodes could not be listed (a grant limited to namespaces cannot list them).
-func FromNodeConditions(rows []IssueRow, pods []map[string]interface{}, wl *Workload, nodesError string) CheckResult {
+func FromNodeConditions(rows []IssueRow, pods *Pods, nodesError string) CheckResult {
 	r := CheckResult{Check: CheckNodeConditions}
 	if nodesError != "" {
 		r.NotRun = "the nodes could not be listed: " + nodesError
 		return r
 	}
-	onNodes := map[string]bool{}
-	for _, p := range pods {
-		if node := mapStr(p, "node_name"); node != "" && wl.OwnsPod(mapList(p, "owner_references")) {
-			onNodes[node] = true
-		}
-	}
-	if len(onNodes) == 0 {
+	if len(pods.nodes) == 0 {
 		r.NotRun = NoNodes
 		return r
 	}
 	for _, row := range rows {
-		if row.Kind != "Node" || !onNodes[row.Name] {
+		if row.Kind != "Node" || !pods.nodes[row.Name] {
 			continue
 		}
 		r.Findings = append(r.Findings, Finding{Check: CheckNodeConditions, Target: "Node/" + row.Name, Verdict: VerdictAnomalous,
@@ -161,55 +206,22 @@ func hidesEarlier(c map[string]interface{}, kept []map[string]interface{}, w Win
 // that ended in both windows counts in the later one; the summary says so. A reason with no termination in the window
 // before is new only when no container hides what it did there (hidesEarlier) and the pods that ended for it were there
 // before the window; else the window before has no data for it.
-func FromCrashReasons(pods []map[string]interface{}, wl *Workload, w Window) CheckResult {
-	before := w.Before()
-	now := map[string][]termination{}
-	prev := map[string]float64{}
-	read, hidden := 0, false
-	for _, p := range pods {
-		if !wl.OwnsPod(mapList(p, "owner_references")) {
-			continue
-		}
-		read++
-		pod, made := mapStr(p, "name"), madeIn(p, w)
-		for _, c := range append(mapList(p, "containers"), mapList(p, "init_containers")...) {
-			kept := []map[string]interface{}{}
-			for _, t := range []map[string]interface{}{mapMap(mapMap(c, "state"), "terminated"), mapMap(mapMap(c, "last_state"), "terminated")} {
-				if t != nil {
-					kept = append(kept, t)
-				}
-			}
-			hidden = hidden || (!made && hidesEarlier(c, kept, w))
-			for _, t := range kept {
-				reason := mapStr(t, "reason")
-				at, err := time.Parse(time.RFC3339, mapStr(t, "finished_at"))
-				if reason == "" || reason == "Completed" || err != nil {
-					continue
-				}
-				switch {
-				case !at.Before(w.Start) && at.Before(w.End):
-					now[reason] = append(now[reason], termination{at: at, pod: pod, ctr: mapStr(c, "name"), exitCode: mapInt(t, "exit_code"), made: made})
-				case !at.Before(before.Start) && at.Before(before.End):
-					prev[reason]++
-				}
-			}
-		}
-	}
+func FromCrashReasons(pods *Pods) CheckResult {
 	r := CheckResult{Check: CheckCrashReasons}
-	if read == 0 {
+	if pods.read == 0 {
 		r.NotRun = NoPods
 		return r
 	}
-	reasons := make([]string, 0, len(now))
-	for reason := range now {
+	reasons := make([]string, 0, len(pods.now))
+	for reason := range pods.now {
 		reasons = append(reasons, reason)
 	}
 	sort.Strings(reasons)
 	for _, reason := range reasons {
-		list := now[reason]
+		list := slices.Clone(pods.now[reason])
 		sort.Slice(list, func(i, j int) bool { return list[i].at.After(list[j].at) })
 		count := float64(len(list))
-		v, known := prev[reason], !hidden
+		v, known := pods.prev[reason], !pods.hidden
 		for _, t := range list {
 			known = known && !t.made
 		}

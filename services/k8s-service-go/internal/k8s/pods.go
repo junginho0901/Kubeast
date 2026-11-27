@@ -12,15 +12,24 @@ import (
 // GetPods lists pods in a namespace with optional label selector, a page at a time: only the rows stay, not the
 // pods (a namespace of 50 000 pods as one list took k8s-service past 512 Mi).
 func (s *Service) GetPods(ctx context.Context, namespace string, labelSelector string) ([]map[string]interface{}, error) {
+	rows := make([]map[string]interface{}, 0)
+	if err := s.EachPodRow(ctx, namespace, labelSelector, func(row map[string]interface{}) { rows = append(rows, row) }); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// EachPodRow gives fn GetPods' rows one at a time and keeps none, for a caller that keeps less than the rows: those of
+// 50 000 pods take about 300 MiB.
+func (s *Service) EachPodRow(ctx context.Context, namespace, labelSelector string, fn func(map[string]interface{})) error {
 	opts := metav1.ListOptions{}
 	if labelSelector != "" {
 		opts.LabelSelector = labelSelector
 	}
-	rows := make([]map[string]interface{}, 0)
-	if err := eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, opts, func(p *corev1.Pod) { rows = append(rows, formatPodDetail(p)) }); err != nil {
-		return nil, fmt.Errorf("list pods: %w", err)
+	if err := eachPod(ctx, s.clientsetCtx(ctx).CoreV1(), namespace, opts, func(p *corev1.Pod) { fn(formatPodDetail(p)) }); err != nil {
+		return fmt.Errorf("list pods: %w", err)
 	}
-	return rows, nil
+	return nil
 }
 
 // GetPodsJSON is GetPods' rows as response.JSON writes them, each row kept as its JSON: rows held as maps took 8.3 times the answer.

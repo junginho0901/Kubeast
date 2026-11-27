@@ -321,8 +321,8 @@ func (n *nothingReads) CollectIssues(context.Context, k8s.IssuesOptions) ([]k8s.
 		{Kind: "Collector", Name: "jobs", Severity: "info", Reason: "ListFailed"}}, n.issuesErr
 }
 
-func (n *nothingReads) GetPods(context.Context, string, string) ([]map[string]interface{}, error) {
-	return nil, n.podsErr
+func (n *nothingReads) EachPodRow(context.Context, string, string, func(map[string]interface{})) error {
+	return n.podsErr
 }
 
 // Each check that could not run is named once, with why, and none of them is normal.

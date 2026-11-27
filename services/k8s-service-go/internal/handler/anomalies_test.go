@@ -43,19 +43,22 @@ func (f *fakeAnomalies) CollectIssues(_ context.Context, opts k8s.IssuesOptions)
 	}, nil
 }
 
-func (f *fakeAnomalies) GetPods(_ context.Context, namespace, _ string) ([]map[string]interface{}, error) {
+func (f *fakeAnomalies) EachPodRow(_ context.Context, namespace, _ string, fn func(map[string]interface{})) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.podReads++
 	oom := func(at time.Time) map[string]interface{} {
 		return map[string]interface{}{"terminated": map[string]interface{}{"reason": "OOMKilled", "exit_code": int32(137), "finished_at": at.Format(time.RFC3339)}}
 	}
-	return []map[string]interface{}{
+	for _, row := range []map[string]interface{}{
 		{"name": "web-1-a", "namespace": namespace, "node_name": "n1", "owner_references": []map[string]interface{}{{"kind": "ReplicaSet", "name": "web-1"}},
 			"containers": []map[string]interface{}{{"name": "app", "last_state": oom(anomalyNow.Add(-5 * time.Minute))}}},
 		{"name": "web-1-b", "namespace": namespace, "node_name": "n1", "owner_references": []map[string]interface{}{{"kind": "ReplicaSet", "name": "web-1"}},
 			"containers": []map[string]interface{}{{"name": "app", "last_state": oom(anomalyNow.Add(-15 * time.Minute))}}},
-	}, nil
+	} {
+		fn(row)
+	}
+	return nil
 }
 
 func (f *fakeAnomalies) PrometheusAvailable(context.Context) bool { return f.prometheus }
