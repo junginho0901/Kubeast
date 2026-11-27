@@ -217,9 +217,9 @@ spec:
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('referenceGrantsPage.title', 'Reference Grants')}</h1>
-          <p className="mt-2 text-slate-400">{tr('referenceGrantsPage.subtitle', 'Inspect and manage Gateway API ReferenceGrant resources across namespaces.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('referenceGrantsPage.subtitle', 'Inspect and manage Gateway API ReferenceGrant resources across namespaces.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -257,19 +257,19 @@ spec:
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('referenceGrantsPage.stats.total', 'Total')}</p>
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('referenceGrantsPage.stats.total', 'Total')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{cards.total}</p>
         </div>
-        <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-emerald-300">{tr('referenceGrantsPage.stats.withFrom', 'With From')}</p>
+        <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('referenceGrantsPage.stats.withFrom', 'With From')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{cards.withFrom}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-400">{tr('referenceGrantsPage.stats.withTo', 'With To')}</p>
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('referenceGrantsPage.stats.withTo', 'With To')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{cards.withTo}</p>
         </div>
         <div className="rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3">
-          <p className="text-[11px] sm:text-xs leading-4 whitespace-nowrap text-slate-300">{tr('referenceGrantsPage.stats.withLabels', 'With Labels')}</p>
+          <p className="text-xs leading-4 break-words text-slate-300">{tr('referenceGrantsPage.stats.withLabels', 'With Labels')}</p>
           <p className="text-lg text-ink font-semibold mt-1">{cards.withLabels}</p>
         </div>
       </div>

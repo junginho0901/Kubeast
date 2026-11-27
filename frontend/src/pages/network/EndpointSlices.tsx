@@ -116,8 +116,8 @@ export default function EndpointSlices() {
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
       [tr('endpointSlicesPage.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('endpointSlicesPage.stats.withReady', 'With Ready'), cards.withReady, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('endpointSlicesPage.stats.withNotReady', 'With Not Ready'), cards.withNotReady, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
+      [tr('endpointSlicesPage.stats.withReady', 'With Ready'), cards.withReady, 'border-slate-700 bg-slate-900/50', 'text-emerald-300'],
+      [tr('endpointSlicesPage.stats.withNotReady', 'With Not Ready'), cards.withNotReady, 'border-slate-700 bg-slate-900/50', 'text-amber-300'],
       [tr('endpointSlicesPage.stats.totalEndpoints', 'Total Endpoints'), cards.totalEndpoints, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
     ],
     [cards.total, cards.totalEndpoints, cards.withNotReady, cards.withReady, tr],
@@ -254,9 +254,9 @@ endpoints:
       <div className="page-head items-center shrink-0">
         <div>
           <h1 className="text-3xl font-semibold text-ink">{tr('endpointSlicesPage.title', 'Endpoint Slices')}</h1>
-          <p className="mt-2 text-slate-400">{tr('endpointSlicesPage.subtitle', 'Inspect and manage EndpointSlices across namespaces.')}</p>
+          <p className="mt-1 text-sm text-slate-400">{tr('endpointSlicesPage.subtitle', 'Inspect and manage EndpointSlices across namespaces.')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canCreate && (
             <button
               type="button"
@@ -296,7 +296,7 @@ endpoints:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
           <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
-            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
+            <p className={`text-xs leading-4 break-words ${labelClass}`}>{label}</p>
             <p className="text-lg text-ink font-semibold mt-1">{value}</p>
           </div>
         ))}

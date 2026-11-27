@@ -102,10 +102,10 @@ export default function VolumeAttachments() {
 
   const summaryCards = useMemo<SummaryCard[]>(
     () => [
-      [tr('volumeattachments.stats.total', 'Total'), cards.total, 'border-slate-700 bg-slate-900/50', 'text-slate-400'],
-      [tr('volumeattachments.stats.attached', 'Attached'), cards.attached, 'border-emerald-700/40 bg-emerald-900/10', 'text-emerald-300'],
-      [tr('volumeattachments.stats.detached', 'Detached'), cards.detached, 'border-amber-700/40 bg-amber-900/10', 'text-amber-300'],
-      [tr('volumeattachments.stats.errors', 'Errors'), cards.errors, 'border-rose-700/40 bg-rose-900/10', 'text-rose-300'],
+      [tr('volumeattachments.stats.total', 'Total'), cards.total, 'border-slate-700/70', 'text-slate-400'],
+      [tr('volumeattachments.stats.attached', 'Attached'), cards.attached, 'border-slate-700/70', 'text-emerald-300'],
+      [tr('volumeattachments.stats.detached', 'Detached'), cards.detached, 'border-slate-700/70', 'text-amber-300'],
+      [tr('volumeattachments.stats.errors', 'Errors'), cards.errors, 'border-slate-700/70', 'text-rose-300'],
     ],
     [cards.attached, cards.detached, cards.errors, cards.total, tr],
   )
@@ -226,7 +226,7 @@ spec:
             {tr('storage.volumeAttachment.infoLine2', '(e.g., NFS may not create them)')}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex max-w-full flex-wrap items-center gap-2 shrink-0">
           {canCreate && (
             <button
               type="button"
@@ -259,11 +259,11 @@ spec:
         searchPlaceholder={tr('volumeattachments.searchPlaceholder', 'Search VolumeAttachments by name, PV, node, attacher, status or error...')}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-1 rounded-lg border border-slate-700/70 bg-slate-800 shrink-0">
         {summaryCards.map(([label, value, boxClass, labelClass]) => (
-          <div key={label} className={`rounded-lg border px-4 py-3 ${boxClass}`}>
-            <p className={`text-[11px] sm:text-xs leading-4 whitespace-nowrap ${labelClass}`}>{label}</p>
-            <p className="mt-1 text-lg font-semibold text-ink">{value}</p>
+          <div key={label} className={`border-l first:border-l-0 px-4 py-2.5 ${boxClass}`}>
+            <p className={`text-xs leading-4 whitespace-nowrap ${typeof value === 'number' && value > 0 ? labelClass : 'text-slate-400'}`}>{label}</p>
+            <p className="mt-1 text-lg font-medium tabular-nums text-ink">{value}</p>
           </div>
         ))}
       </div>
@@ -271,7 +271,7 @@ spec:
       <div className="card flex-1 min-h-0 flex flex-col" ref={tableContainerRef}>
         {/* a list with rows says a failed Refresh once, under the header */}
         {isError && volumeAttachments === undefined && (
-          <div className="px-4 py-3 border-b border-slate-800">
+          <div className="px-4 py-3 border-b border-hairline">
             <p className="text-xs text-amber-300 break-words" data-testid="volumeattachments-read-failed">
               {tr('common.readFailed', 'Could not read the list: {{reason}}', { reason: failureText(readError) })}
             </p>
