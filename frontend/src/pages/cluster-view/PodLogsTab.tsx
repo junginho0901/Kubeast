@@ -381,7 +381,8 @@ export function PodLogsTab({
       </div>
 
       {/* 로그 - 스크롤 가능 */}
-      <div className="flex-1 bg-slate-900 rounded-lg p-4 mt-4 font-mono text-sm text-slate-300 overflow-x-auto overflow-y-auto">
+      {/* in the Tab order, so the keys scroll it: the pod window's Tab cycle counts only controls and tabindex */}
+      <div tabIndex={0} className="flex-1 bg-slate-900 rounded-lg p-4 mt-4 font-mono text-sm text-slate-300 overflow-x-auto overflow-y-auto focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-400">
         <pre className="whitespace-pre-wrap wrap-break-word">
           {logs
             ? logs

@@ -906,7 +906,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             </button>
           </div>
           {showLogs && (
-            <div ref={logRef} className="bg-slate-950 rounded-lg p-3 font-mono text-xs text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
+            // in the Tab order, so the keys scroll it (the drawer's Tab cycle counts only what has a tabindex or is a control)
+            <div ref={logRef} tabIndex={0} className="bg-slate-950 rounded-lg p-3 font-mono text-xs text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-400">
               {logsFetching ? dl('Loading...') : logsError ? null : logData || dl('(no logs)')}
               {/* a refused or failed read is not "no logs": its reason (a container not started, no permission) */}
               {!logsFetching && logsError && (

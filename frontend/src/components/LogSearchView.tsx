@@ -270,11 +270,13 @@ export function LogSearchView({ namespace, pod, workload, container, size = 'md'
       )}
       <div
         data-testid="logsearch-output"
-        className={
+        // in the Tab order, so the keys scroll it inside a drawer or window, whose Tab cycle counts only controls and tabindex
+        tabIndex={0}
+        className={`${
           sm
             ? 'bg-slate-900 border border-hairline rounded-lg p-3 font-mono text-xs text-slate-300 max-h-[400px] overflow-auto'
             : 'flex-1 min-h-0 bg-slate-900 border border-hairline rounded-lg p-4 mt-3 font-mono text-sm text-slate-300 overflow-x-auto overflow-y-auto'
-        }
+        } focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-400`}
       >
         {error ? (
           <p className="text-red-400 whitespace-pre-wrap" data-testid="logsearch-error">{error}</p>
