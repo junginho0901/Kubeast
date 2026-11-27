@@ -12,20 +12,20 @@ export function PastInvestigations({ items, onOpen }: { items: PastInvestigation
   const { t } = useTranslation()
   const tr = (key: string, fallback: string, opts?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...opts })
   return (
-    <section data-testid="alert-past-section">
+    <section className="border-t border-hairline pt-4" data-testid="alert-past-section">
       <h3 className="mb-1 text-xs font-semibold text-slate-400">{tr('alertInbox.past.title', 'Past investigations of this alert')}</h3>
-      <p className="mb-2 text-xs text-slate-500">
+      <p className="mb-3 text-xs leading-relaxed text-notice-text-muted">
         {tr('alertInbox.past.note', 'Up to five of the last 30 days, newest first: what the AI concluded then, confirmed by no person. This time the cause may be another.')}
       </p>
       {items === null ? (
-        <p className="text-xs text-amber-300" data-testid="alert-past-failed">{tr('alertInbox.past.failed', 'The past investigations could not be read.')}</p>
+        <p className="text-xs text-notice-text-warning" data-testid="alert-past-failed">{tr('alertInbox.past.failed', 'The past investigations could not be read.')}</p>
       ) : items.length === 0 ? (
-        <p className="text-xs text-slate-500" data-testid="alert-past-none">{tr('common.none', 'None')}</p>
+        <p className="text-xs text-notice-text-muted" data-testid="alert-past-none">{tr('common.none', 'None')}</p>
       ) : (
-        <ul className="space-y-2 text-xs" data-testid="alert-past-list" data-list-bounded="an alert's past investigations, at most five">
+        <ul className="divide-y divide-hairline text-xs" data-testid="alert-past-list" data-list-bounded="an alert's past investigations, at most five">
           {items.map((p) => (
-            <li key={p.id} className="flex items-start gap-3" data-testid={`alert-past-${p.id}`}>
-              <span className="shrink-0 whitespace-nowrap text-slate-300" title={utcTitle(p.received_at)}>{formatTime(p.received_at)}</span>
+            <li key={p.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[auto_auto_minmax(0,1fr)_auto]" data-testid={`alert-past-${p.id}`}>
+              <span className="shrink-0 whitespace-nowrap tabular-nums text-slate-300" title={utcTitle(p.received_at)}>{formatTime(p.received_at)}</span>
               {p.outcome
                 ? <span className={`shrink-0 ${outcomeBadge[p.outcome] ?? 'badge badge-neutral'}`} data-outcome={p.outcome}>{outcomeText(p.outcome, tr)}</span>
                 : <span className="shrink-0 text-slate-500">-</span>}
@@ -35,7 +35,7 @@ export function PastInvestigations({ items, onOpen }: { items: PastInvestigation
                     <span className="font-mono text-ink">{c.resource || '-'}</span>
                     {c.kind && <span className="ml-2 text-slate-400">{c.kind}</span>}
                     {c.verified === true && <span className="ml-2 text-slate-400">{tr('alertInbox.past.checked', 'Checked by the server')}</span>}
-                    {c.verified === false && <span className="ml-2 text-amber-300">{tr('investigations.result.notVerifiedBare', 'Not verified')}</span>}
+                    {c.verified === false && <span className="ml-2 text-notice-text-warning">{tr('investigations.result.notVerifiedBare', 'Not verified')}</span>}
                   </span>
                 ))}
                 {p.causes_total > p.causes.length && (

@@ -598,7 +598,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
               )}
             </section>
 
-            <section data-testid="alert-investigation-section">
+            <section className="border-t border-hairline pt-4" data-testid="alert-investigation-section">
               <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.col.investigation', 'AI investigation')}</h3>
               {/* a row of one height and a note of two lines: the status, the buttons and the notes change in place
                   while an investigation is asked for, queued, runs and ends (no empty row for someone with neither) */}
@@ -631,7 +631,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
                     >
                       {start.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bot className="w-3.5 h-3.5" />} {tr('alertInbox.investigateNow.button', 'Investigate now')}
                     </button>
-                    <span className={`min-w-0 truncate text-xs ${start.isError ? 'text-red-300' : 'text-slate-400'}`} title={nowNote || undefined} data-testid="alert-investigate-note">{nowNote}</span>
+                    <span className={`min-w-0 truncate text-xs ${start.isError ? 'text-notice-text-failed-detail' : 'text-slate-400'}`} title={nowNote || undefined} data-testid="alert-investigate-note">{nowNote}</span>
                   </>
                 )}
               </div>}
