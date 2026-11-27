@@ -136,14 +136,14 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               />
               <p className="mt-1 text-xs text-slate-500" data-testid="model-list-source" title={modelList.error}>
                 {modelList.noList
-                  ? tr('admin.aiModels.modelsNoList', 'Built-in list — Claude Code has no model list')
+                  ? tr('admin.aiModels.modelsNoList', 'Built-in list — Claude Code has no model list.')
                   : modelList.loading
                   ? tr('admin.aiModels.modelsLoading', 'Loading the provider\'s model list…')
                   : modelList.fromProvider
                     ? t('admin.aiModels.modelsFromProvider', { count: modelList.count, defaultValue: 'From the provider ({{count}})' })
                     : modelList.error
                     ? t('admin.aiModels.modelsBuiltInWhy', { reason: modelList.error, defaultValue: 'Built-in list — the provider\'s list could not be read: {{reason}}' })
-                    : tr('admin.aiModels.modelsBuiltIn', 'Built-in list — the provider\'s list could not be read')}
+                    : tr('admin.aiModels.modelsBuiltIn', 'Built-in list — the provider\'s list could not be read.')}
               </p>
             </>
           ) : (
