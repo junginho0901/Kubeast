@@ -124,13 +124,16 @@ test('every GET route answers without changing the objects, the row counts or th
     .split('\n').filter(Boolean).map((l) => l.split('|'))
   const writes = auditRows.filter(([, action]) => !READ_ROWS.has(action)).map((r) => r.join(' '))
   await testInfo.attach('get-routes.json', {
-    body: JSON.stringify({ namespace: NS, statuses, leftOut, noisy: [...noisy], audit: auditRows.map((r) => r.join(' ')) }, null, 2),
+    body: JSON.stringify({ namespace: NS, objects: before.objects.size, tables: before.rows.size, statuses, leftOut, noisy: [...noisy], audit: auditRows.map((r) => r.join(' ')) }, null, 2),
     contentType: 'application/json',
   })
 
   const answered = Object.values(statuses).filter((s) => typeof s === 'number' && s >= 200 && s < 300).length
   expect(statuses['/api/v1/auth/me?cluster=self'], 'the admin is signed in').toBe(200)
   expect(answered, `routes answered 2xx of ${called.length}`).toBeGreaterThan(called.length / 2)
+  expect([...before.objects].filter(([k, v]) => v === 'unreadable' && k !== 'modelconfigs').map(([k]) => k), 'every object list was read').toEqual([])
+  expect(before.objects.size, 'objects whose resourceVersion is compared').toBeGreaterThan(20)
+  expect(before.rows.size, 'tables whose rows are counted').toBeGreaterThan(20)
   expect(objectChanges, 'objects whose resourceVersion moved').toEqual([])
   expect(rowChanges, 'tables whose row count moved').toEqual([])
   expect(writes, 'audit rows of an action that is not a read').toEqual([])
