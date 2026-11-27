@@ -43,7 +43,7 @@ export default function ModelConfigCard({
             ? 'border-slate-700 bg-slate-800'
             : cfg.enabled
               ? 'border-slate-700 bg-slate-800 hover:border-slate-500'
-              : 'border-slate-700/50 bg-slate-800/50 opacity-60'
+              : 'border-slate-700/50 bg-slate-800/50'
       }`}
     >
       {isActive && !isEditing && (
