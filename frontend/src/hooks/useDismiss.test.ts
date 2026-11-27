@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { dismissHandlers, panelEscape } from './useDismiss'
+import { dismissHandlers, focusKeeper, panelEscape } from './useDismiss'
 
 // Codex QA Q10: the Namespace and Fit lists stayed open on Escape.
 describe('dismissHandlers', () => {
@@ -183,5 +183,65 @@ describe('panelEscape under a window or the drawer', () => {
     expect(p.listening()).toBe(2)
     stop()
     expect(p.listening()).toBe(0)
+  })
+})
+
+// D5 keyboard flow 1-2 and 2-4: a picked option took its button out of the page with the list, and the focus fell to
+// the page. A list's button: what had the focus when it opened.
+function list() {
+  const doc = { activeElement: null as Element | null, body: null as Element | null }
+  const el = (name: string) => {
+    const e = { name, isConnected: true, focus: () => { doc.activeElement = e as unknown as Element } }
+    return e as unknown as Element & { name: string; isConnected: boolean; focus(): void }
+  }
+  doc.body = el('body')
+  const button = el('namespace button')
+  const option = el('kbd-ns')
+  button.focus()
+  const keeper = focusKeeper(doc)
+  keeper.opened()
+  option.focus()
+  // closing takes the options out of the page
+  const close = () => {
+    option.isConnected = false
+    doc.activeElement = doc.body
+    keeper.closed()
+  }
+  return { doc, el, button, keeper, close }
+}
+
+describe('focusKeeper', () => {
+  it('gives the focus back to the list’s button when an option is picked', () => {
+    const { doc, button, close } = list()
+    close()
+    expect(doc.activeElement).toBe(button)
+  })
+
+  it('does the same when Escape closes the list', () => {
+    const { doc, button, keeper } = list()
+    const { onKey } = dismissHandlers(() => null, () => {
+      doc.activeElement = doc.body
+      keeper.closed()
+    })
+    onKey({ key: 'Escape', isComposing: false, stopPropagation: () => {} })
+    expect(doc.activeElement).toBe(button)
+  })
+
+  it('leaves the focus where a press outside put it', () => {
+    const { doc, button, keeper, close } = list()
+    keeper.pressedOutside()
+    close()
+    expect(doc.activeElement).not.toBe(button)
+  })
+
+  it('leaves a focus the page moved on purpose, and forgets the button once closed', () => {
+    const { doc, el, button, keeper } = list()
+    const search = el('search')
+    search.focus()
+    keeper.closed()
+    expect(doc.activeElement).toBe(search)
+    doc.activeElement = doc.body
+    keeper.closed()
+    expect(doc.activeElement).not.toBe(button)
   })
 })

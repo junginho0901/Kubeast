@@ -8,6 +8,8 @@ import { handleUnauthorized } from '@/services/auth'
 import { getCurrentClusterID } from '@/services/clusterRef'
 import { nodeShellStatusLines, parseNodeShellStatus } from '@/utils/nodeShellStatus'
 import { uiLang } from '@/utils/uiLang'
+import { useTerminalTabFocus } from '@/hooks/useTerminalTabFocus'
+import TerminalKeyHint from '@/components/TerminalKeyHint'
 import { terminalEnd, terminalEndText, type TerminalEnd } from '@/utils/serverShutdown'
 
 interface NodeShellTerminalProps {
@@ -51,6 +53,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
   // A shell the server could not keep (replaced, or the connection dropped) offers a new one; attempt opens it.
   const [ended, setEnded] = useState<TerminalEnd | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const { tabMovesFocus, attach, hintId } = useTerminalTabFocus()
 
   useEffect(() => {
     const term = new Terminal({
@@ -68,6 +71,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
       term.open(containerRef.current)
       fit.fit()
     }
+    attach(term)
 
     term.writeln(tRef.current('nodes.shell.connectingTo', 'Connecting to {{node}}...', { node: nodeName }))
 
@@ -163,7 +167,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
       }
       term.dispose()
     }
-  }, [nodeName, namespace, image, attempt])
+  }, [nodeName, namespace, image, attempt, attach])
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
@@ -216,6 +220,7 @@ export default function NodeShellTerminal({ nodeName, namespace, image, onClose,
         </div>
       </div>
       <div className="min-h-0 min-w-0 flex-1 bg-slate-950" ref={containerRef} />
+      <TerminalKeyHint id={hintId} tabMovesFocus={tabMovesFocus} />
     </div>
   )
 }
