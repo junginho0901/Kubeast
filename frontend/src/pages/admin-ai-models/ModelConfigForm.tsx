@@ -374,7 +374,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
         {!inModal && <div className="ml-auto flex gap-2">
           <button
             onClick={resetForm}
-            className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+            className="btn btn-secondary px-3 py-1.5 text-xs"
           >
             {tr('common.cancel', 'Cancel')}
           </button>

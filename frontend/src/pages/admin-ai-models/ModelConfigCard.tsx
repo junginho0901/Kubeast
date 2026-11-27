@@ -96,6 +96,7 @@ export default function ModelConfigCard({
           </div>
         </div>
 
+        {/* the shared row buttons, at the card's small size (an icon button's border comes out of its padding) */}
         <div className="flex flex-wrap items-center gap-1">
           {cfg.enabled && !isActive && (
             <button
@@ -109,7 +110,7 @@ export default function ModelConfigCard({
                 if (ok) activateMutation.mutate(cfg.id)
               }}
               disabled={activateMutation.isPending}
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-emerald-500/10 hover:text-emerald-400 transition"
+              className="btn-row gap-1 px-2 py-1 text-[11px] font-medium"
               title={tr('admin.aiModels.setActive', 'Set as Active')}
             >
               <Radio className="h-3 w-3" />
@@ -118,11 +119,7 @@ export default function ModelConfigCard({
           )}
           <button
             onClick={() => isEditing ? onCancelEdit() : onEdit(cfg)}
-            className={`rounded-lg p-1.5 transition ${
-              isEditing
-                ? 'bg-primary-500/20 text-primary-400'
-                : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
-            }`}
+            className={isEditing ? 'btn-row p-[5px] bg-primary-500/20 text-primary-400' : 'btn-row p-[5px]'}
             title={isEditing ? tr('admin.aiModels.closeEdit', 'Close edit') : tr('admin.aiModels.editTitle', 'Edit')}
           >
             {isEditing ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
@@ -139,7 +136,7 @@ export default function ModelConfigCard({
             }}
             disabled={deleting}
             aria-busy={deleting || undefined}
-            className="rounded-lg p-1.5 text-slate-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+            className="btn-row-danger p-[5px]"
             title={tr('common.delete', 'Delete')}
           >
             <Trash2 className="h-3.5 w-3.5" />

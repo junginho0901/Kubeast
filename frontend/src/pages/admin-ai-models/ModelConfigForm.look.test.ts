@@ -15,4 +15,8 @@ describe('the edit form under a model card', () => {
     expect(update).toContain('px-3 py-1.5 text-xs')
     expect(update).toContain('disabled={isSaving || !formName || !formModel || !!unavailableReason || !!baseUrlProblem}')
   })
+
+  it('draws Cancel as the shared secondary button, no taller than Update', () => {
+    expect(buttonOf('resetForm')).toContain('className="btn btn-secondary px-3 py-1.5 text-xs"')
+  })
 })
