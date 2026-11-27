@@ -369,6 +369,10 @@ multicluster:
   maxTerminalsPerAccount: 20     # 한 계정이 k8s-service 하나(streams를 켜면 k8s-service-stream)에 한꺼번에 열어 둘 수 있는 터미널(파드 exec, 노드 셸) 수. 넘는 것은 열기 전에 거절하고 화면이 까닭을 보여 줌. 0 = 상한 없음, 0보다 작으면 차트가 멈춤
   maxFollowedLogsPerAccount: 20  # 실시간 로그(컨테이너 출력, 로그 파일)도 같은 방식
   maxStreamsPerServer: 443       # k8s-service 하나(streams를 켜면 k8s-service-stream)에 모든 계정을 합쳐 한꺼번에 열어 둘 수 있는 터미널과 실시간 로그 수. 넘는 것은 열기 전에 거절하고 화면이 서버가 찼다고 알림. 0 = 상한 없음, 0보다 작으면 차트가 거부. kind 노드에서 하나에 약 0.37 MiB: 443은 512 Mi 파드가 메모리의 80 %에 닿은 수의 절반
+  flowSchemas:                   # 끔. 켜면 클러스터마다 FlowSchema가 kubeast:cache와 모든 사람을 이 API Priority and Fairness 수준에 둠(cluster-requirements §1, architecture.md "Many users")
+    enabled: false
+    cachePriorityLevel: workload-low  # kubeast:cache, 네임스페이스마다 흐름 하나: 파드 서비스 계정의 수준
+    priorityLevel: global-default     # 모든 사람과 알림 조사, 사람마다 흐름 하나: 클러스터의 다른 사용자가 있는 곳
 ```
 
 ## 새 값의 단계
@@ -425,6 +429,7 @@ multicluster:
 | `features.callGraph.enabled` | false | alpha | 끄고 켠 AI 평가. 돌려 봄: kind의 전체 e2e에서 `ai-call-graph.spec.ts`(2026-11-25) |
 | `features.callGraph.clientLatency` | false | alpha | 클라이언트 히스토그램이 있는 Prometheus에서 켠 상태로 한 번도 안 돌림, `features.callGraph.enabled`를 켠 채 끄고 켠 AI 평가의 `07_one_segment_slow` |
 | `gateway.servedByHeader` | false | alpha | 켠 상태로 한 번도 안 돌림 |
+| `multicluster.flowSchemas.enabled`, `cachePriorityLevel`, `priorityLevel` | false, workload-low, global-default | alpha | 켠 상태로 kind 개발 설치에서 100명이 한꺼번에 화면을 연 부하(API 서버의 기다림과 거절을 FlowSchema마다 셈), 같은 부하를 EKS 클러스터에서 |
 
 ## Redis 사용자
 

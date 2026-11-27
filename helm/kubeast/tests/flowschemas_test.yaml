@@ -1,0 +1,118 @@
+suite: flowschemas — where a cluster's API Priority and Fairness places kubeast:cache and each person
+templates:
+  - flowschemas.yaml
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders nothing for values that have no flowSchemas (an upgrade that reuses an earlier release's values)
+    set:
+      multicluster.flowSchemas: null
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: places kubeast:cache by namespace in workload-low and each person by user in global-default, the cache's FlowSchema first
+    set:
+      multicluster.flowSchemas.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 2
+      - isKind:
+          of: FlowSchema
+      - isAPIVersion:
+          of: flowcontrol.apiserver.k8s.io/v1
+      - equal:
+          path: metadata.name
+          value: kubeast-cache
+        documentIndex: 0
+      - equal:
+          path: spec
+          value:
+            priorityLevelConfiguration: {name: workload-low}
+            matchingPrecedence: 9490
+            distinguisherMethod: {type: ByNamespace}
+            rules:
+              - subjects:
+                  - {kind: User, user: {name: "kubeast:cache"}}
+                resourceRules:
+                  - {verbs: ["*"], apiGroups: ["*"], resources: ["*"], namespaces: ["*"], clusterScope: true}
+                nonResourceRules:
+                  - {verbs: ["*"], nonResourceURLs: ["*"]}
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: kubeast
+        documentIndex: 1
+      - equal:
+          path: spec
+          value:
+            priorityLevelConfiguration: {name: global-default}
+            matchingPrecedence: 9500
+            distinguisherMethod: {type: ByUser}
+            rules:
+              - subjects:
+                  - {kind: Group, group: {name: "kubeast:authenticated"}}
+                resourceRules:
+                  - {verbs: ["*"], apiGroups: ["*"], resources: ["*"], namespaces: ["*"], clusterScope: true}
+                nonResourceRules:
+                  - {verbs: ["*"], nonResourceURLs: ["*"]}
+        documentIndex: 1
+
+  - it: names the levels the values give
+    set:
+      multicluster.flowSchemas.enabled: true
+      multicluster.flowSchemas.priorityLevel: workload-low
+      multicluster.flowSchemas.cachePriorityLevel: kubeast-reads
+    asserts:
+      - equal:
+          path: spec.priorityLevelConfiguration.name
+          value: kubeast-reads
+        documentIndex: 0
+      - equal:
+          path: spec.priorityLevelConfiguration.name
+          value: workload-low
+        documentIndex: 1
+
+  - it: places the alert investigator with the people while features.alertInvestigation is on
+    set:
+      multicluster.flowSchemas.enabled: true
+      features.alertInvestigation.enabled: true
+    asserts:
+      - equal:
+          path: spec.rules[0].subjects
+          value:
+            - {kind: Group, group: {name: "kubeast:authenticated"}}
+            - {kind: Group, group: {name: "kubeast:investigator"}}
+        documentIndex: 1
+      - equal:
+          path: spec.rules[0].subjects
+          value:
+            - {kind: User, user: {name: "kubeast:cache"}}
+        documentIndex: 0
+
+  - it: refuses the exempt level for the people
+    set:
+      multicluster.flowSchemas.enabled: true
+      multicluster.flowSchemas.priorityLevel: exempt
+    asserts:
+      - failedTemplate:
+          errorPattern: "the exempt level puts no limit"
+
+  - it: refuses the exempt level for kubeast:cache
+    set:
+      multicluster.flowSchemas.enabled: true
+      multicluster.flowSchemas.cachePriorityLevel: exempt
+    asserts:
+      - failedTemplate:
+          errorPattern: "the exempt level puts no limit"
+
+  - it: stops when Kubeast sends a cluster's requests as its own credential
+    set:
+      multicluster.flowSchemas.enabled: true
+      auth.impersonation.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: "multicluster.flowSchemas needs auth.impersonation.enabled"

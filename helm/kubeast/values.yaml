@@ -1625,9 +1625,29 @@ multicluster:
   # most half of them, rounded up; the only cluster takes them all.
   bigReadConcurrency: 2
   # How many lists of one object's events (the drawers' Events) one cluster gets
-  # at once; the rest wait. Priority and fairness counts such a list as up to 10
-  # seats of the API server's global-default level, about 49 by default.
+  # at once; the rest wait. Priority and fairness counts such a list as up to 8
+  # of the about 49 seats of the API server's global-default level by default.
   eventListConcurrency: 4
+  # Where each registered cluster's API server places Kubeast's requests among
+  # its other users' (API Priority and Fairness). Kubeast sends a cluster's
+  # requests as the signed-in person or as kubeast:cache, so the cluster's own
+  # FlowSchemas put both in its global-default level: about 49 seats at the API
+  # server's default limits, one list counting up to 8 of them, and a request
+  # that waits there 15 s is answered 429 (client-go sends a read again after
+  # its Retry-After). On, the chart adds two FlowSchemas: kubeast-cache places
+  # kubeast:cache, which reads once for everyone, in cachePriorityLevel, a flow
+  # per namespace; kubeast places every person (group kubeast:authenticated) and
+  # the alert investigator in priorityLevel, a flow each. workload-low is the
+  # level of a Pod's service account, about 245 seats; global-default keeps
+  # people with the cluster's other users, counted apart as flow_schema="kubeast".
+  # Name levels the cluster has: a FlowSchema naming none is ignored. exempt is
+  # refused. Creating them takes create on flowschemas.flowcontrol.apiserver.k8s.io;
+  # render them for every registered cluster (docs/cluster-requirements.md §1).
+  # Stage: alpha, not run yet: 100 people opening the screens at once on the kind dev install with it on (docs/configuration.md "Stages of new values").
+  flowSchemas:
+    enabled: false
+    cachePriorityLevel: workload-low
+    priorityLevel: global-default
   # How many kubectl processes tool-server runs at once (a k8s_jq_query program's
   # child process takes a place too); the rest wait inside their call's 50 s.
   # About 40 MiB each, inside resources.toolServer's limit, and the Go
