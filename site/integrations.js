@@ -165,6 +165,21 @@
     if (inLine(item)) lines.append(el('button', Object.assign({class: 'int-line', 'data-cat': item.cat}, pick(item)), [el('span', {class: 'int-line-tag'}, words('Standard', '표준')), el('span', {}, nameOf(item))]));
     else wall.append(el('button', Object.assign({class: 'int-tile', 'data-cat': item.cat}, pick(item)), [logoOf(item), el('span', {class: 'int-name'}, nameOf(item))]));
   });
+  // A name breaks only between words: one with a word wider than its tile (VictoriaMetrics in a narrow column) is set
+  // a little smaller, half a pixel at a time. Again when the width or the language changes, and for the tiles a
+  // category shows.
+  const fitNames = () => wall.querySelectorAll('.int-tile:not([hidden]) .int-name').forEach(name => {
+    name.style.fontSize = '';
+    let size = parseFloat(getComputedStyle(name).fontSize);
+    while (name.scrollWidth > name.clientWidth && size > 9) {
+      size -= 0.5;
+      name.style.fontSize = size + 'px';
+    }
+  });
+  fitNames();
+  addEventListener('resize', fitNames, {passive: true});
+  new MutationObserver(fitNames).observe(document.documentElement, {attributes: true, attributeFilter: ['lang']});
+  if (document.fonts) document.fonts.ready.then(fitNames);
   // The category buttons, each with the number of its tools.
   DATA.categories.forEach(([key, en, ko]) => {
     const count = key === 'all' ? items.length : items.filter(item => item.cat === key).length;
@@ -266,6 +281,7 @@
     })) : [];
     settle(shifts);
     section.querySelectorAll('[data-int]').forEach(button => { button.hidden = cat !== 'all' && button.dataset.cat !== cat; });
+    fitNames();
     lines.classList.toggle('int-lines-none', !lines.querySelector('[data-int]:not([hidden])'));
     const open = section.querySelector('[data-int][aria-expanded="true"]');
     if (open && open.hidden) close();
