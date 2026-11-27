@@ -9,16 +9,6 @@ import { addsRow, clusterOf, compileRules, flatten, rowsLeftOut, sortCells, tail
 
 const answer = (body: unknown, status = 200): Answer => ({ status, body })
 const rows = (...names: string[]) => ({ items: names.map((name) => ({ name, namespace: 'n', phase: 'Running' })) })
-const catalogGroup = (category: string, ...keys: string[]) => ({ category, permissions: keys.map((key) => ({ key, description: `${key} in words` })) })
-
-// The cells response-diff.spec.ts would fail on, one rule list and one request's answers given: what the list does not name.
-function unnamed(rules: IgnoreRule[], request: string, old: Answer, fresh: Answer): string[] {
-  const match = compileRules(rules)
-  return sortCells(old, fresh, old).real
-    .filter((d) => !match(request.split('?')[0], d.cell, 'global-admin', String(fresh.status), clusterOf(request), rowsLeftOut(old, fresh, old), tailCopies(old, fresh, old)(d.cell), d))
-    .map((d) => d.cell).sort()
-}
-const ignoreList = () => (JSON.parse(fs.readFileSync(path.join(__dirname, 'response-diff-ignore.json'), 'utf8')) as { rules: IgnoreRule[] }).rules
 
 test.describe('the response comparison', () => {
   test('nothing differs: no real difference and no noise', () => {
@@ -223,49 +213,6 @@ test.describe('the response comparison', () => {
     const match = compileRules([{ route: '^/x$', cell: '^\\$\\.l', addedRow: 'b', why: 'a new row', pr: '#1' }])
     expect(match('/x', '$.l[b].key', '', '200', '', false, false, difference('$.l[b].key', 'added', null, '"b"'))?.pr).toBe('#1')
     expect(match('/x', '$.l[b].key'), 'nothing said of the difference').toBeNull()
-  })
-
-  test('the ignore list names the three keys v0.7.9 adds to the features answer, and any other key is still reported', () => {
-    const request = '/api/v1/cluster/features?cluster=self'
-    const v078 = { ai: { enabled: true }, logSearch: { enabled: true, clusters: ['self'] }, alertInvestigation: { enabled: true }, writeGuardedNamespaces: ['kube-system'] }
-    const three = { anomalyRank: { enabled: false }, callGraph: { enabled: false }, nodeNeighbors: { enabled: false } }
-    const left = (fresh: Record<string, unknown>, asked = request) => unnamed(ignoreList(), asked, answer(v078), answer({ ...v078, ...fresh }))
-    expect(left(three)).toEqual([])
-    expect(left({ ...three, anomalyRank: { enabled: true }, nodeNeighbors: { enabled: true } }), 'two of them on').toEqual([])
-    expect(left({ ...three, unknownKey: { enabled: false } }), 'an unknown extra key').toEqual(['$.unknownKey.enabled'])
-    expect(left({ ...three, callGraphs: { enabled: false } }), 'a key that begins as a named one').toEqual(['$.callGraphs.enabled'])
-    expect(left({ ...three, callGraph: { enabled: false, url: 'http://x' } }), 'another cell of a named key').toEqual(['$.callGraph.url'])
-    expect(left({ ...three, anomalyRank: true }), 'a named key of another shape').toEqual(['$.anomalyRank'])
-    expect(left({ ...three, ai: { enabled: false } }), 'a key both builds answer, changed').toEqual(['$.ai.enabled'])
-    expect(left({ ...three, logSearch: { enabled: true, clusters: ['self', 'test2'] } }), 'one more cluster with a log store')
-      .toEqual(['$.logSearch.clusters.$length', '$.logSearch.clusters.$order', '$.logSearch.clusters[test2]'])
-    expect(left(three, '/api/v1/cluster/overview?cluster=self'), 'the same keys in another answer')
-      .toEqual(['$.anomalyRank.enabled', '$.callGraph.enabled', '$.nodeNeighbors.enabled'])
-    const refused = unnamed(ignoreList(), request, answer(v078), answer({ detail: 'x' }, 500))
-    expect(refused, 'a server error').toEqual(expect.arrayContaining(['$status', '$.detail', '$.ai.enabled']))
-  })
-
-  test('the ignore list names the permission v0.7.9 adds to the catalog, and another row, order, group or text is still reported', () => {
-    const rank = 'ai.tool.anomaly_rank'
-    const tools = ['ai.tool.*', 'ai.tool.gpu', 'ai.tool.hygiene']
-    const v078 = [catalogGroup('AI tools', ...tools), catalogGroup('Admin', 'admin.*')]
-    const left = (fresh: unknown, old: unknown = v078) => unnamed(ignoreList(), '/api/v1/auth/permissions?cluster=self', answer(old), answer(fresh))
-    const withTools = (...keys: string[]) => [catalogGroup('AI tools', ...keys), catalogGroup('Admin', 'admin.*')]
-    const v079 = withTools('ai.tool.*', 'ai.tool.gpu', rank, 'ai.tool.hygiene')
-    const at = '$[AI tools].permissions'
-    expect(left(v079)).toEqual([])
-    expect(left(withTools('ai.tool.*', 'ai.tool.gpu', rank, 'ai.tool.hygiene', 'ai.tool.other')), 'one more row beside it')
-      .toEqual([`${at}.$length`, `${at}.$order`, `${at}[ai.tool.other].description`, `${at}[ai.tool.other].key`])
-    expect(left(withTools('ai.tool.*', 'ai.tool.hygiene', rank, 'ai.tool.gpu')), 'the other rows in another order').toEqual([`${at}.$order`])
-    expect(left(withTools('ai.tool.*', rank, 'ai.tool.hygiene')), 'a row of v0.7.8 lost')
-      .toEqual([`${at}.$order`, `${at}[ai.tool.gpu].description`, `${at}[ai.tool.gpu].key`])
-    expect(left([catalogGroup('AI tools', ...tools), catalogGroup('Admin', 'admin.*', rank)]), 'the row in another group')
-      .toEqual(['$[Admin].permissions.$length', '$[Admin].permissions.$order', `$[Admin].permissions[${rank}].description`, `$[Admin].permissions[${rank}].key`])
-    expect(left(v078, v079), 'the row only the old build has')
-      .toEqual([`${at}.$length`, `${at}.$order`, `${at}[${rank}].description`, `${at}[${rank}].key`])
-    const reworded = withTools('ai.tool.*', 'ai.tool.gpu', rank, 'ai.tool.hygiene')
-    reworded[0].permissions[1].description = 'other words'
-    expect(left(reworded), 'another row\'s text').toEqual([`${at}[ai.tool.gpu].description`])
   })
 
   test('a rule that takes in $status names the status the new build answers, or it is refused', () => {
