@@ -23,12 +23,12 @@
     {
       "screen": "^(default|dark|light) · /cluster-view on (self|default|test2)$",
       "why": "The cluster map and its pod cards take the console surfaces of the redesign (frontend/src/pages/cluster-view/).",
-      "pr": "TBD v080/design-pr-09-cluster-view"
+      "pr": "#1122"
     },
     {
       "screen": "^(default|dark|light) · /workloads/(pods|deployments|statefulsets|daemonsets|replicasets|jobs|cronjobs|hpas|vpas|pdbs) on (self|default|test2)$",
       "why": "The workload lists take the console surfaces, table spacing and status colours of the redesign (frontend/src/pages/workloads/).",
-      "pr": "TBD v080/design-pr-10-workloads"
+      "pr": "#1123"
     },
     {
       "screen": "^(default|dark|light) · /(cluster/(namespaces|nodes|priorityclasses|runtimeclasses|mutatingwebhookconfigurations|validatingwebhookconfigurations|resourcequotas|limitranges|leases)|configuration/(configmaps|secrets)|custom-resources/(instances|groups)) on (self|default|test2)$",
