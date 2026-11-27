@@ -19,6 +19,7 @@ import {
   type SortKey,
 } from './httpRouteHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -130,12 +131,12 @@ export function HTTPRouteTable({
                     ref={idx === 0 ? firstRowRef : undefined}
                 key={`${item.namespace}/${item.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({
+                {...openOnPress(() => openDetail({
                   kind: 'HTTPRoute',
                   name: item.name,
                   namespace: item.namespace,
                   rawJson: httpRouteToRawJson(item),
-                })}
+                }))}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={item.namespace}><span className="block truncate">{item.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>

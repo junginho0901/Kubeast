@@ -24,6 +24,7 @@ import { isProtectedNamespaceError } from '@/utils/protectedNamespace'
 import { applySecretWatchEvent } from './secrets/secretWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'namespace' | 'type' | 'data' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -315,7 +316,7 @@ stringData:
             <tbody className="divide-y divide-slate-700">
               {pagedItems.map((secret, idx) => (
                 <tr
-                      ref={idx === 0 ? firstRowRef : undefined} key={`${secret.namespace}/${secret.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'Secret', name: secret.name, namespace: secret.namespace })}>
+                      ref={idx === 0 ? firstRowRef : undefined} key={`${secret.namespace}/${secret.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" {...openOnPress(() => openDetail({ kind: 'Secret', name: secret.name, namespace: secret.namespace }))}>
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={secret.namespace}>{secret.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{secret.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono truncate">{secret.type}</td>

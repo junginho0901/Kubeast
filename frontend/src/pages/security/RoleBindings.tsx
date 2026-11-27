@@ -21,6 +21,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyRoleBindingWatchEvent } from './rolebindings/roleBindingWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'namespace' | 'roleRef' | 'subjects' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -290,7 +291,7 @@ subjects:
             <tbody className="divide-y divide-slate-700">
               {pagedItems.map((rb, idx) => (
                 <tr
-                      ref={idx === 0 ? firstRowRef : undefined} key={`${rb.namespace}/${rb.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'RoleBinding', name: rb.name, namespace: rb.namespace })}>
+                      ref={idx === 0 ? firstRowRef : undefined} key={`${rb.namespace}/${rb.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" {...openOnPress(() => openDetail({ kind: 'RoleBinding', name: rb.name, namespace: rb.namespace }))}>
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={rb.namespace}>{rb.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{rb.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono truncate" title={`${rb.role_ref_kind}/${rb.role_ref_name}`}>

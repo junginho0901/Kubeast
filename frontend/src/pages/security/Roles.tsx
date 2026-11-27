@@ -22,6 +22,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyRoleWatchEvent } from './roles/roleWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'namespace' | 'rules' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -291,7 +292,7 @@ rules:
             <tbody className="divide-y divide-slate-700">
               {pagedItems.map((role, idx) => (
                 <tr
-                      ref={idx === 0 ? firstRowRef : undefined} key={`${role.namespace}/${role.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'Role', name: role.name, namespace: role.namespace })}>
+                      ref={idx === 0 ? firstRowRef : undefined} key={`${role.namespace}/${role.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" {...openOnPress(() => openDetail({ kind: 'Role', name: role.name, namespace: role.namespace }))}>
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={role.namespace}>{role.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{role.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{role.rules_count}</td>

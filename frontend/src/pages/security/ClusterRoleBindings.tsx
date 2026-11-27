@@ -19,6 +19,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { applyClusterRoleBindingWatchEvent } from './rolebindings/roleBindingWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'roleRef' | 'subjects' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -233,7 +234,7 @@ subjects:
             <tbody className="divide-y divide-slate-700">
               {pagedItems.map((crb, idx) => (
                 <tr
-                      ref={idx === 0 ? firstRowRef : undefined} key={crb.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ClusterRoleBinding', name: crb.name })}>
+                      ref={idx === 0 ? firstRowRef : undefined} key={crb.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" {...openOnPress(() => openDetail({ kind: 'ClusterRoleBinding', name: crb.name }))}>
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{crb.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono truncate" title={`${crb.role_ref_kind}/${crb.role_ref_name}`}>
                     <span className="text-slate-400">{crb.role_ref_kind}/</span>{crb.role_ref_name}

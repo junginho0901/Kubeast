@@ -27,6 +27,7 @@ import { MetricsRefreshFailed } from './MetricsRefreshFailed'
 import { metricsReadPace, metricsRefreshFailure, metricsRefusal, refreshFailureForChat } from './metricsRefresh'
 import { metricsNotShownLayer, metricsTabView } from './metricsTabView'
 import type { NodeMetric } from './types'
+import { openOnPress } from '@/components/openOnPress'
 
 const COLUMNS = 5
 
@@ -257,16 +258,10 @@ export default function MonitoringNodes({
                   <tr
                     key={node.name}
                     ref={idx === 0 ? firstRowRef : undefined}
-                    tabIndex={0}
-                    onClick={() => openNode(node.name)}
                     // the row opens its Node from the keyboard too, as the card button it replaced did
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter' && e.key !== ' ') return
-                      e.preventDefault()
-                      openNode(node.name)
-                    }}
+                    {...openOnPress(() => openNode(node.name))}
                     data-testid="monitoring-node"
-                    className="text-slate-200 hover:bg-slate-700/40 cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-400"
+                    className="text-slate-200 hover:bg-slate-700/40 cursor-pointer"
                   >
                     <td className="py-3 px-4 font-medium text-ink">
                       <span className="flex items-center gap-2 min-w-0">

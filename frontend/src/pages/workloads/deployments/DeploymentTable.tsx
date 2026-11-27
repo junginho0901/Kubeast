@@ -19,6 +19,7 @@ import {
 } from './deploymentHelpers'
 import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -142,12 +143,12 @@ export function DeploymentTable({
                     ref={idx === 0 ? firstRowRef : undefined}
                 key={`${dep.namespace}/${dep.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({
+                {...openOnPress(() => openDetail({
                   kind: 'Deployment',
                   name: dep.name,
                   namespace: dep.namespace,
                   rawJson: deploymentToWorkloadRawJson(dep),
-                })}
+                }))}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={dep.namespace}>{dep.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{dep.name}</span></td>

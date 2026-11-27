@@ -19,6 +19,7 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide-react'
 import { applyClusterRoleWatchEvent } from './clusterroles/clusterRoleWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'rules' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -223,7 +224,7 @@ rules:
             <tbody className="divide-y divide-slate-700">
               {pagedItems.map((cr, idx) => (
                 <tr
-                      ref={idx === 0 ? firstRowRef : undefined} key={cr.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ClusterRole', name: cr.name })}>
+                      ref={idx === 0 ? firstRowRef : undefined} key={cr.name} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" {...openOnPress(() => openDetail({ kind: 'ClusterRole', name: cr.name }))}>
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{cr.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{cr.rules_count}</td>
                   <td className="col-low py-3 px-4 text-xs font-mono">{formatAge(cr.created_at)}</td>

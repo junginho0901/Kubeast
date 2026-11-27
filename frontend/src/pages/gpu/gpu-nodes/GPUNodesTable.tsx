@@ -8,6 +8,7 @@ import type { GPUNodeInfo } from '@/services/api'
 import { getStatusColor, type SortKey } from './gpuNodesHelpers'
 import { nodeStatusParts } from '@/utils/nodeStatus'
 import { vendorNames } from '../gpuNumbers'
+import { openOnPress } from '@/components/openOnPress'
 
 interface Props {
   sortedNodes: GPUNodeInfo[]
@@ -98,7 +99,7 @@ export default function GPUNodesTable({
                 ref={idx === 0 ? firstRowRef : undefined}
                 key={node.name}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({ kind: 'Node', name: node.name })}
+                {...openOnPress(() => openDetail({ kind: 'Node', name: node.name }))}
               >
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{node.name}</span></td>
                 <td className="py-3 px-4 text-xs"><span className="block truncate">{vendorNames(node.gpu_vendors) || '-'}</span></td>

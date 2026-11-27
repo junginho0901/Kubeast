@@ -184,6 +184,7 @@ Cards 12px (`.card` is `rounded-xl`). Buttons, inputs, list rows, dropdowns and 
 ## Interaction
 
 - Keyboard focus uses a 2px `primary-400` outline, 2px outside the control, unless the control already has its own visible ring. Scroll menus retain their inset ring.
+- A list row that opens a drawer takes the Tab order, opens on Enter or Space and shows the same `primary-400` as a 2px ring inside the row, which the list's scroll box does not cut. The drawer's title takes the focus as it opens; as it closes the focus goes back to the row, or to the row's list when the row has gone, with the same inside ring.
 - Pressed buttons use a neutral 10% shade over their fill; text, borders and focus rings stay visible. Normal and hover colours stay the same.
 - Buttons outside dense table rows have a transparent hit area of at least 24×24px. Close, back and floating chat controls use `hit-area-40` for at least 40×40px without enlarging the visible button. Keep adjacent hit areas apart; the drawer's 24px back and close buttons have a 20px gap.
 - Reduced motion removes console menu, disclosure, chevron and meter transitions and the movement of waiting indicators. The original AI welcome particles and sign-in scene stay unchanged.

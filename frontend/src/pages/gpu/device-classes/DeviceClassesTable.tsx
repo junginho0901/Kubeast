@@ -6,6 +6,7 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import type { DeviceClassItem } from '@/services/api'
 import { deviceClassToRawJson, formatAge, type SortKey } from './deviceClassesHelpers'
+import { openOnPress } from '@/components/openOnPress'
 
 interface Props {
   sortedDeviceClasses: DeviceClassItem[]
@@ -77,11 +78,11 @@ export default function DeviceClassesTable({
                 ref={idx === 0 ? firstRowRef : undefined}
                 key={item.name}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({
+                {...openOnPress(() => openDetail({
                   kind: 'DeviceClass',
                   name: item.name,
                   rawJson: deviceClassToRawJson(item),
-                })}
+                }))}
               >
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                 <td className="py-3 px-4 text-xs">{item.selector_count ?? 0}</td>

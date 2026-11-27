@@ -18,6 +18,7 @@ import {
   type SortKey,
 } from './gatewayHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -129,12 +130,12 @@ export function GatewayTable({
                     ref={idx === 0 ? firstRowRef : undefined}
                 key={`${gateway.namespace}/${gateway.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({
+                {...openOnPress(() => openDetail({
                   kind: 'Gateway',
                   name: gateway.name,
                   namespace: gateway.namespace,
                   rawJson: gatewayToRawJson(gateway),
-                })}
+                }))}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={gateway.namespace}><span className="block truncate">{gateway.namespace}</span></td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{gateway.name}</span></td>

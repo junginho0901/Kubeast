@@ -6,6 +6,7 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor } from './clusterNodeHelpers'
 import type { NodeInfo, NodeMetric, SortKey, SortDir } from './clusterNodeHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface Props {
   pagedNodes: NodeInfo[]
@@ -100,7 +101,7 @@ export default function NodeTable({
                   ref={idx === 0 ? firstRowRef : undefined}
                   key={node.name}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => onRowClick(node.name)}
+                  {...openOnPress(() => onRowClick(node.name))}
                 >
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{node.name}</span></td>
                   <td className="py-3 px-4">

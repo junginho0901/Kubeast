@@ -5,6 +5,7 @@
 // props 가 많은 이유: tab 상태 / 삭제 버튼 콜백 / 닫기·뒤로가기 lifecycle
 // 이 모두 부모 (drawer) 가 관리하기 때문. 구조만 분리하는 thin presentational.
 
+import type { RefObject } from 'react'
 import type { TFunction } from 'i18next'
 import { ArrowLeft, X, Info, FileCode, Trash2 } from 'lucide-react'
 import { kindIconComponent } from '@/components/kindIcons'
@@ -23,6 +24,8 @@ interface Props {
   canGoBack: boolean
   canDelete: boolean
   tab: TabId
+  // the title takes the focus as the drawer opens (drawerFocus)
+  titleRef?: RefObject<HTMLHeadingElement | null>
   onClose: () => void
   onGoBack: () => void
   onTabChange: (tab: TabId) => void
@@ -40,6 +43,7 @@ export function ResourceDetailHeader({
   canGoBack,
   canDelete,
   tab,
+  titleRef,
   onClose,
   onGoBack,
   onTabChange,
@@ -57,7 +61,14 @@ export function ResourceDetailHeader({
             <span className="text-xs text-slate-300 font-medium">{displayKind}</span>
             {ns && <span className="text-xs text-slate-500 break-all">{ns}</span>}
           </div>
-          <h2 className="text-lg font-semibold text-ink truncate" title={name}>{name}</h2>
+          <h2
+            ref={titleRef}
+            tabIndex={-1}
+            className="text-lg font-semibold text-ink truncate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
+            title={name}
+          >
+            {name}
+          </h2>
           <HelmReleaseBadge rawJson={effectiveRawJson} />
           {argo && <ArgoBadge argo={argo.managed} url={argo.url} blocked={argo.blocked} />}
         </div>

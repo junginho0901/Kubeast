@@ -12,6 +12,7 @@ import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor, runningNotReady, type SortKey } from './podHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -142,12 +143,12 @@ export function PodTable({
                   ref={idx === 0 ? firstRowRef : undefined}
                   key={`${pod.namespace}/${pod.name}`}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
+                  {...openOnPress(() => openDetail({
                     kind: 'Pod',
                     name: pod.name,
                     namespace: pod.namespace,
                     rawJson: pod as unknown as Record<string, unknown>,
-                  })}
+                  }))}
                 >
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={pod.namespace}>{pod.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pod.name}</span></td>

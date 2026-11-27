@@ -19,6 +19,7 @@ import {
   type SortKey,
 } from './serviceHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -126,12 +127,12 @@ export function ServiceTable({
                     ref={idx === 0 ? firstRowRef : undefined}
                 key={`${svc.namespace}/${svc.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({
+                {...openOnPress(() => openDetail({
                   kind: 'Service',
                   name: svc.name,
                   namespace: svc.namespace,
                   rawJson: serviceToRawJson(svc),
-                })}
+                }))}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={svc.namespace}>{svc.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{svc.name}</span></td>

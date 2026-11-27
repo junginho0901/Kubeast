@@ -18,6 +18,7 @@ import { failureText } from '@/utils/failureText'
 import { formatAge, getStatusColor, type SortKey } from './gpuPodsHelpers'
 import { vendorNames, type PodGpuUsage } from '../gpuNumbers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -153,7 +154,7 @@ export function GPUPodsTable({
                     ref={idx === 0 ? firstRowRef : undefined}
                 key={podKey}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace })}
+                {...openOnPress(() => openDetail({ kind: 'Pod', name: pod.name, namespace: pod.namespace }))}
               >
                 <td className="col-low py-3 px-4 text-xs font-mono" title={pod.namespace}><span className="block truncate">{pod.namespace}</span></td>
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{pod.name}</span></td>

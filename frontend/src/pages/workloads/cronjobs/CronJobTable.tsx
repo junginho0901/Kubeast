@@ -20,6 +20,7 @@ import {
 } from './cronJobHelpers'
 import { absoluteTitle } from '@/utils/time'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -131,12 +132,12 @@ export function CronJobTable({
                     ref={idx === 0 ? firstRowRef : undefined}
                 key={`${cronjob.namespace}/${cronjob.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({
+                {...openOnPress(() => openDetail({
                   kind: 'CronJob',
                   name: cronjob.name,
                   namespace: cronjob.namespace,
                   rawJson: cronJobToWorkloadRawJson(cronjob),
-                })}
+                }))}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={cronjob.namespace}>{cronjob.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{cronjob.name}</span></td>

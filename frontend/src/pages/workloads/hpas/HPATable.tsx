@@ -17,6 +17,7 @@ import {
   type SortKey,
 } from './hpaHelpers'
 import { Trans } from 'react-i18next'
+import { openOnPress } from '@/components/openOnPress'
 
 interface OpenDetailArgs {
   kind: string
@@ -135,12 +136,12 @@ export function HPATable({
                     ref={idx === 0 ? firstRowRef : undefined}
                 key={`${h.namespace}/${h.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => openDetail({
+                {...openOnPress(() => openDetail({
                   kind: 'HorizontalPodAutoscaler',
                   name: h.name,
                   namespace: h.namespace,
                   rawJson: hpaToRawJson(h),
-                })}
+                }))}
               >
                 {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={h.namespace}>{h.namespace}</td>}
                 <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{h.name}</span></td>

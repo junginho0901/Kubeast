@@ -23,6 +23,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { applyServiceAccountWatchEvent } from './serviceaccounts/serviceAccountWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'namespace' | 'secrets' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -302,7 +303,7 @@ metadata:
             <tbody className="divide-y divide-slate-700">
               {pagedItems.map((sa, idx) => (
                 <tr
-                      ref={idx === 0 ? firstRowRef : undefined} key={`${sa.namespace}/${sa.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" onClick={() => openDetail({ kind: 'ServiceAccount', name: sa.name, namespace: sa.namespace })}>
+                      ref={idx === 0 ? firstRowRef : undefined} key={`${sa.namespace}/${sa.name}`} className="text-slate-200 hover:bg-slate-800/60 cursor-pointer" {...openOnPress(() => openDetail({ kind: 'ServiceAccount', name: sa.name, namespace: sa.namespace }))}>
                   {showNamespaceColumn && <td className="col-low py-3 px-4 text-xs font-mono" title={sa.namespace}>{sa.namespace}</td>}
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{sa.name}</span></td>
                   <td className="py-3 px-4 text-xs font-mono">{sa.secrets}</td>

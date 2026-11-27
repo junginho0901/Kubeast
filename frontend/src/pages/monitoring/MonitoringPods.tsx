@@ -32,6 +32,7 @@ import { MetricsRefreshFailed } from './MetricsRefreshFailed'
 import { metricsReadPace, metricsRefreshFailure, metricsRefusal, refreshFailureForChat } from './metricsRefresh'
 import { metricsNotShownLayer, metricsTabView } from './metricsTabView'
 import type { PodMetric } from './types'
+import { openOnPress } from '@/components/openOnPress'
 
 interface MonitoringPodsProps {
   /** the page's notice "Metrics server not available for this cluster" is on screen */
@@ -297,7 +298,7 @@ export default function MonitoringPods({
                 <tr
                   key={`${podMetric.namespace}-${podMetric.name}`}
                   ref={idx === 0 ? firstRowRef : undefined}
-                  onClick={() => openDetail({ kind: 'Pod', name: podMetric.name, namespace: podMetric.namespace })}
+                  {...openOnPress(() => openDetail({ kind: 'Pod', name: podMetric.name, namespace: podMetric.namespace }))}
                   data-testid="monitoring-pod-row"
                   className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer"
                 >

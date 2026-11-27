@@ -19,6 +19,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
+import { openOnPress } from '@/components/openOnPress'
 
 type SortKey = null | 'name' | 'node' | 'driver' | 'pool' | 'devices' | 'age'
 
@@ -272,10 +273,10 @@ export default function ResourceSlices() {
                       ref={idx === 0 ? firstRowRef : undefined}
                   key={item.name}
                   className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => openDetail({
+                  {...openOnPress(() => openDetail({
                     kind: 'ResourceSlice',
                     name: item.name,
-                  })}
+                  }))}
                 >
                   <td className="py-3 px-4 font-medium text-ink"><span className="block truncate">{item.name}</span></td>
                   <td className="py-3 px-4 text-xs"><span className="block truncate">{item.node_name || '-'}</span></td>

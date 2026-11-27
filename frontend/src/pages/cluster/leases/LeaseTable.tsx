@@ -9,6 +9,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import { ListPager } from '@/components/ListPager'
 import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, type SortKey } from './leaseHelpers'
+import { openOnPress } from '@/components/openOnPress'
 
 interface LeaseTableProps {
   pagedLeases: LeaseInfo[]
@@ -101,7 +102,7 @@ export function LeaseTable({
                 ref={idx === 0 ? firstRowRef : undefined}
                 key={`${l.namespace}/${l.name}`}
                 className="text-slate-200 hover:bg-slate-800/60 cursor-pointer"
-                onClick={() => onOpenDetail(l)}
+                {...openOnPress(() => onOpenDetail(l))}
               >
                 {showNamespaceColumn && (
                   <td className="col-low py-3 px-4 text-xs font-mono text-slate-400" title={l.namespace}>{l.namespace}</td>

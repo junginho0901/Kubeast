@@ -10,6 +10,7 @@ import type { GPUNodeVendor } from '@/services/api'
 import { ListPager } from '@/components/ListPager'
 import { usePagedItems } from '@/hooks/usePagedItems'
 import { nodeVendorText } from '../gpuNumbers'
+import { openOnPress } from '@/components/openOnPress'
 
 // Nodes per page of the section: the dashboard scrolls, so a fixed count (as the drawers' tables) rather than a fit
 const NODE_ALLOCATION_PER_PAGE = 10
@@ -71,7 +72,7 @@ export function NodeAllocationSection({ nodeAllocation, nodeReadyCount, nodeNotR
                 data-testid="gpu-node-allocation"
                 data-node={node.name}
                 className="px-1 py-3 cursor-pointer hover:bg-slate-700/30 transition-colors"
-                onClick={() => openDetail({ kind: 'Node', name: node.name })}
+                {...openOnPress(() => openDetail({ kind: 'Node', name: node.name }), { button: true })}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <div className="flex flex-wrap items-center gap-2 min-w-0">
