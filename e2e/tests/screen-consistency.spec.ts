@@ -119,13 +119,15 @@ test.describe('every screen in every colour mode', () => {
       })
       expect(saved.ok(), `save messages: ${saved.status()}`).toBeTruthy()
       await page.goto('/ai-chat?cluster=self')
+      // below 1280 px the conversation list is folded behind its toggle
+      await page.getByTestId('chat-session-sidebar-toggle').click()
       await page.getByText(title, { exact: true }).first().click()
-      const bubble = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+      const bubble = page.locator('[data-testid="chat-message"][data-message-role="assistant"]').last()
       await expect(bubble.locator('pre').first()).toContainText('--timestamps', { timeout: 20_000 })
       await expect(bubble.locator('table th').first()).toHaveText('POD')
       const r = await page.evaluate(() => {
         const main = document.querySelector('main')!
-        const box = [...document.querySelectorAll('main div.flex.gap-3.p-6:not(.flex-row-reverse) > .prose')].pop()!
+        const box = [...document.querySelectorAll('main [data-testid="chat-message"][data-message-role="assistant"] > .prose')].pop()!
         const pre = box.querySelector('pre')!
         return {
           codeWiderThanBox: pre.scrollWidth - box.clientWidth,

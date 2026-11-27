@@ -24,7 +24,7 @@ test('masking', async ({ page, playwright, baseURL }) => {
     await expect(input).toBeDisabled({ timeout: 10_000 })
     await expect(input).toBeEnabled({ timeout: 180_000 })
     // The answer shows the ConfigMap as the tool gave it to the model.
-    const answer = page.locator('div.flex.gap-3.p-6:not(.flex-row-reverse)').last()
+    const answer = page.locator('[data-testid="chat-message"][data-message-role="assistant"]').last()
     await expect(answer).toContainText('REDACTED')
     await expect(answer).not.toContainText('Autumn-Sale-2026')
     c.step('masked')

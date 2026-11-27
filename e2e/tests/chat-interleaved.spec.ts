@@ -8,7 +8,7 @@ import { test, expect, type Page, type Route } from '@playwright/test'
 // the typewriter and the screen can be read mid-answer.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
-const ASSISTANT = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+const ASSISTANT = '[data-testid="chat-message"][data-message-role="assistant"]'
 const FIRST = 'First I will find the clusters.'
 const SECOND = 'Now the pods in default.'
 const LAST = 'Both clusters are up and every pod is running.'

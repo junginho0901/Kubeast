@@ -9,7 +9,7 @@ import { test, expect, type Locator, type Page, type Route } from '@playwright/t
 // The chat request is answered in the browser (no model); nothing on the cluster changes.
 
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
-const ASSISTANT = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+const ASSISTANT = '[data-testid="chat-message"][data-message-role="assistant"]'
 const QUESTION = 'are my clusters healthy?'
 const PARTIAL = 'Two clusters so far'
 

@@ -24,7 +24,7 @@ test('ai-chat', async ({ page, playwright, baseURL }) => {
     c.step('tools')
     // The answer's own text (tool blocks left out) has started.
     await page.waitForFunction(() => {
-      const bubbles = document.querySelectorAll('div.flex.gap-3.p-6:not(.flex-row-reverse)')
+      const bubbles = document.querySelectorAll('[data-testid="chat-message"][data-message-role="assistant"]')
       const last = bubbles[bubbles.length - 1]?.cloneNode(true) as HTMLElement | undefined
       last?.querySelectorAll('.md-details').forEach((d) => d.remove())
       return (last?.textContent ?? '').trim().length > 60

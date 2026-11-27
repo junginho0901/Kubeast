@@ -67,7 +67,7 @@ test.describe('AI Chat', () => {
     const sessionId = withUndo((await (await created).json()).id as string, (i) => deleteConversation(page, i))
     try {
       // user message 즉시 표시
-      await expect(page.locator('div.flex-row-reverse').filter({ hasText: '안녕' })).toBeVisible({
+      await expect(page.locator('[data-testid="chat-message"][data-message-role="user"]').filter({ hasText: '안녕' })).toBeVisible({
         timeout: 5000,
       })
 
@@ -233,7 +233,7 @@ test.describe('AI Chat', () => {
       })
 
       // user message ("hi") 가 여전히 보여야 함
-      await expect(page.locator('div.flex-row-reverse').filter({ hasText: 'hi' })).toBeVisible({
+      await expect(page.locator('[data-testid="chat-message"][data-message-role="user"]').filter({ hasText: 'hi' })).toBeVisible({
         timeout: 3_000,
       })
     } finally {

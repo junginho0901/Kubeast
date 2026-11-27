@@ -10,8 +10,8 @@ const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
 const PLACEHOLDER_RE = /메시지|message|질문|ask/i
 const SEND_RE = /전송|send/i
-// Same selector as ai-chat.spec.ts: assistant rows are the non-reversed message rows.
-const ASSISTANT_MSG = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+// Assistant rows: the chat messages MessageBubble marks with the assistant role.
+const ASSISTANT_MSG = '[data-testid="chat-message"][data-message-role="assistant"]'
 const LIST_PODS_QUERY = 'kube-system 네임스페이스의 파드 목록을 보여줘'
 
 async function login(request: APIRequestContext, email: string, password: string) {

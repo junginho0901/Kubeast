@@ -8,7 +8,7 @@ import { test, expect, type Page } from '@playwright/test'
 
 const PLACEHOLDER_RE = /메시지|message|질문|ask/i
 const SEND_RE = /^전송$|^send$/i
-const ASSISTANT_MSG = 'div.flex.gap-3.p-6:not(.flex-row-reverse)'
+const ASSISTANT_MSG = '[data-testid="chat-message"][data-message-role="assistant"]'
 const MISSING = 'zz-no-such-pod-zz'
 const QUERY = `kubeast 네임스페이스의 ${MISSING} 파드 로그를 보여줘`
 const NOT_FOUND_RE = /없|찾을 수|찾지 못|존재하지|not found|could not find|doesn't exist|does not exist|no pod/i
