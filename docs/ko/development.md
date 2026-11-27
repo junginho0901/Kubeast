@@ -124,6 +124,7 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 ### 소개 사이트 (`site/`)
 
 [https://junginho0901.github.io/Kubeast/](https://junginho0901.github.io/Kubeast/)에는 정적 페이지 `site/`(`index.html`·`style.css`·`app.js`·`particles.js`, 영어·한국어 전환)가 올라갑니다.
+페이지 안의 데모(`site/demo/`)는 `site-demo/build.sh`가 배포판 콘솔 소스와 `site-demo/sample/`의 예시 자료로 만들며, 저장소에 넣지 않고 배포할 때마다 `.github/workflows/pages.yaml`이 새로 만듭니다(`site-demo/README.md`).
 main에 반영할 때마다 `.github/workflows/pages.yaml`이 GitHub Pages로 배포합니다.
 기능 영상(`site/media/<이름>.mp4`와 첫 장면 `.jpg`)은 `e2e/demo/<이름>.demo.ts` 대본을 dev 클러스터에서 녹화해 만듭니다.
 

@@ -1,10 +1,11 @@
-# The project site: site/ as it is on main, published to GitHub Pages (https://junginho0901.github.io/Kubeast/).
+# The project site: site/ as it is on main, with the demo built from site-demo/ into site/demo/, published to GitHub Pages
+# (https://junginho0901.github.io/Kubeast/).
 name: pages
 
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/pages.yaml"]
+    paths: ["site/**", "site-demo/**", ".github/workflows/pages.yaml"]
   workflow_dispatch:
 
 permissions:
@@ -15,7 +16,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The demo's npm install runs here, in a job that holds no Pages or token permission.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - run: site-demo/build.sh
+      # Pages serves files with max-age=600 and a reload fetches only the page again: the commit on each file the
+      # page loads makes a reload after a deploy fetch the new ones (the demo's own files carry their hashes).
+      - run: |
+          sed -i -E "s#(href|src|poster|data-src)=\"(style\.css|concept\.css|refinement\.css|panels\.css|integrations\.css|app\.js|particles\.js|interactions\.js|motion\.js|integrations\.js|demo/|media/[^\"?]+|official-icons/[^\"?]+)\"#\1=\"\2?v=${GITHUB_SHA::8}\"#g" site/index.html
+          grep -c "?v=${GITHUB_SHA::8}" site/index.html
+          grep -q "data-src=\"demo/?v=${GITHUB_SHA::8}\"" site/index.html
+          test -f site/demo/index.html
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
   deploy:
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -24,15 +46,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Pages serves files with max-age=600 and a reload fetches only the page again: the commit on each file the
-      # page loads makes a reload after a deploy fetch the new ones.
-      - run: |
-          sed -i -E "s#(href|src|poster|data-src)=\"(style\.css|app\.js|particles\.js|media/[^\"?]+)\"#\1=\"\2?v=${GITHUB_SHA::8}\"#g" site/index.html
-          grep -c "?v=${GITHUB_SHA::8}" site/index.html
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: site
       - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -62,6 +62,8 @@ logs/
 build/
 dist/
 *.tsbuildinfo
+# the project site's demo, built by site-demo/build.sh (pages.yaml builds it for each deploy)
+site/demo/
 frontend/vite.config.js
 frontend/vite.config.d.ts
 
