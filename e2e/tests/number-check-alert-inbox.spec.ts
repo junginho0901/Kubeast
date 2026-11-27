@@ -193,7 +193,7 @@ test.describe('number check: the Alerts screen', () => {
           const shown = await rowIds(page)
           expect.soft(shown.filter((id) => before.includes(id)), `rows of the tab before under ${tab} while its answer is held`).toEqual([])
           expect.soft(shown, `rows under ${tab} while its answer is held`).toEqual([])
-          expect.soft((await rangeOf(page))?.total ?? 0, `the footer under ${tab} while its answer is held`).toBe(0)
+          expect.soft(norm(await page.getByTestId('list-pager').innerText()), `the footer under ${tab} while its answer is held`).toContain(EN.common.paginationNotCounted)
         } finally {
           release()
           await page.unroute(/\/api\/v1\/alerts\/inbox(\?|$)/, hold)

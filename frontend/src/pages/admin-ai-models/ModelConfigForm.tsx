@@ -67,12 +67,12 @@ export default function ModelConfigForm({ form, inModal }: Props) {
         <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
           {editingId ? (
             <>
-              <Pencil className="h-3.5 w-3.5 text-primary-400" />
+              <Pencil className="h-3.5 w-3.5 text-slate-400" />
               {tr('admin.aiModels.edit', 'Edit Model')}
             </>
           ) : (
             <>
-              <Plus className="h-3.5 w-3.5 text-primary-400" />
+              <Plus className="h-3.5 w-3.5 text-slate-400" />
               {tr('admin.aiModels.new', 'New Model')}
             </>
           )}
@@ -136,14 +136,14 @@ export default function ModelConfigForm({ form, inModal }: Props) {
               />
               <p className="mt-1 text-xs text-slate-500" data-testid="model-list-source" title={modelList.error}>
                 {modelList.noList
-                  ? tr('admin.aiModels.modelsNoList', 'Built-in list — Claude Code has no model list')
+                  ? tr('admin.aiModels.modelsNoList', 'Built-in list — Claude Code has no model list.')
                   : modelList.loading
                   ? tr('admin.aiModels.modelsLoading', 'Loading the provider\'s model list…')
                   : modelList.fromProvider
                     ? t('admin.aiModels.modelsFromProvider', { count: modelList.count, defaultValue: 'From the provider ({{count}})' })
                     : modelList.error
                     ? t('admin.aiModels.modelsBuiltInWhy', { reason: modelList.error, defaultValue: 'Built-in list — the provider\'s list could not be read: {{reason}}' })
-                    : tr('admin.aiModels.modelsBuiltIn', 'Built-in list — the provider\'s list could not be read')}
+                    : tr('admin.aiModels.modelsBuiltIn', 'Built-in list — the provider\'s list could not be read.')}
               </p>
             </>
           ) : (
@@ -374,7 +374,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
         {!inModal && <div className="ml-auto flex gap-2">
           <button
             onClick={resetForm}
-            className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+            className="btn btn-secondary px-3 py-1.5 text-xs"
           >
             {tr('common.cancel', 'Cancel')}
           </button>
@@ -382,7 +382,7 @@ export default function ModelConfigForm({ form, inModal }: Props) {
             onClick={handleSubmit}
             disabled={isSaving || !formName || !formModel || !!unavailableReason || !!baseUrlProblem}
             title={unavailableReason ?? undefined}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
           >
             {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {editingId ? tr('admin.aiModels.update', 'Update') : tr('admin.aiModels.create', 'Create')}

@@ -17,4 +17,13 @@ describe('the alert window', () => {
     for (const call of source.match(/save\.mutate\([^)]*\)/g) ?? []) expect(call).toContain('alert: id')
     expect(source).toContain('start.mutate(id)')
   })
+
+  it('draws the status, investigation and handling badges of the list and the window as pills', () => {
+    expect(source.match(/rounded-full border/g)).toHaveLength(7)
+    expect(source).not.toContain('rounded-sm')
+  })
+
+  it("keeps its title's icon in the neutral icon tone", () => {
+    expect(source).toContain('icon={<BellRing className="w-5 h-5 text-slate-400" />}')
+  })
 })

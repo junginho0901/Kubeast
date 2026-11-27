@@ -148,7 +148,7 @@ export default function NetworkPolicyCheckModal({ self, selfName, namespace, onC
     <ModalFrame
       title={tr('netpolCheck.title', 'Check a connection')}
       subtitle={tr('netpolCheck.subtitle', 'Whether NetworkPolicy allows it, and which policy and rule decide.')}
-      icon={<ShieldCheck className="w-5 h-5 text-primary-400 mt-0.5" />}
+      icon={<ShieldCheck className="w-5 h-5 text-slate-400 mt-0.5" />}
       size="lg"
       body="scroll"
       onClose={onClose}

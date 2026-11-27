@@ -242,7 +242,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
               <MetricCard label="Total Memory" value={getSvcMetric('memory')! / (1024 * 1024)} unit=" MiB" thresholds={{ warn: 1024, danger: 2048 }} />
             )}
             {getSvcMetric('pod_count') !== null && (
-              <MetricCard label="Backing Pods" value={getSvcMetric('pod_count')!} unit="" whole thresholds={{ warn: 10, danger: 20 }} />
+              <MetricCard label="Backing Pods" value={getSvcMetric('pod_count')!} unit="" whole thresholds={null} />
             )}
           </div>
         )}
@@ -267,7 +267,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="IP Families" value={(describe?.ip_families || []).join(', ') || '-'} />
           <InfoRow label="IP Family Policy" value={describe?.ip_family_policy || '-'} />
           <InfoRow label="External Name" value={describe?.external_name || '-'} />
-          <InfoRow label="Publish Not Ready" value={String(describe?.publish_not_ready_addresses ?? '-')} />
+          <InfoRow label="Publish Not Ready" value={describe?.publish_not_ready_addresses == null ? '-' : describe.publish_not_ready_addresses ? 'Yes' : 'No'} />
           {(() => {
             // topology-aware-routing — annotation 또는 spec.topologyKeys 로 어느 zone 우선
             // 라우팅인지 결정. EndpointSlice hints.forZones 와 짝.
@@ -287,7 +287,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Summary" value={toPortDisplay(ports)} />
           {ports.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs table-fixed min-w-[640px]">
+              <table className="w-full text-xs table-fixed min-w-[640px]" data-list-bounded="ports of one Service">
                 <thead className="text-slate-400">
                   <tr>
                     <Th className="text-left py-2 w-[18%]">Name</Th>

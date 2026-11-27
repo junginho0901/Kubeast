@@ -20,6 +20,7 @@ import { AdaptiveTableFillerRows } from '@/components/AdaptiveTableFillerRows'
 import InvestigationReportModal from '@/components/InvestigationReportModal'
 import { ExternalHttpLink } from '@/components/ExternalHttpLink'
 import { PastInvestigations } from './PastInvestigations'
+import { AlertLabels } from './AlertLabels'
 import SilenceList from './SilenceList'
 import SilenceModal from './SilenceModal'
 import { inboxPage } from './inboxPage'
@@ -144,6 +145,8 @@ export default function AlertInbox() {
   const { rows, limit: shownLimit } = inboxPage(data, rowsPerPage)
   const total = data?.total ?? 0
   const counts = data?.counts ?? { firing: 0, stale: 0, resolved: 0 }
+  // the tabs and the footer count an answer: before one, or after a read that brought none, they say -
+  const counted = data !== undefined
   const shown = data ? { ...data.filter, limit: shownLimit, page: data.page } : { ...filter, page }
   const totalPages = Math.max(1, Math.ceil(total / shown.limit))
   const severities = severityChoices(data?.severities, severity)
@@ -184,7 +187,7 @@ export default function AlertInbox() {
   } : null, [inbox, data, store, currentCluster, limitedUntil, storeFailed?.reason, storeFailed?.shownFrom])
 
   const statusLabel = (s: string) => tr(`alertInbox.status.${s}`, s)
-  const tab = (value: string, label: string, count?: number) => (
+  const tab = (value: string, label: string, count: number) => (
     <button
       key={value || 'all'}
       type="button"
@@ -192,7 +195,7 @@ export default function AlertInbox() {
       data-testid={`alert-tab-${value || 'all'}`}
       className={`h-10 rounded-lg border px-3 text-sm ${!silencesShown && status === value ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-700 text-slate-300 hover:border-slate-500'}`}
     >
-      {label}{count !== undefined && <span className={`ml-2 text-xs ${!silencesShown && status === value ? 'text-white' : 'text-slate-400'}`}>{count}</span>}
+      {label}<span className={`ml-2 text-xs ${!silencesShown && status === value ? 'text-white' : 'text-slate-400'}`}>{counted ? count : '-'}</span>
     </button>
   )
 
@@ -330,7 +333,7 @@ export default function AlertInbox() {
                     data-testid={`alert-row-${r.id}`}
                   >
                     <td className="py-3 px-4">
-                      <span className={`inline-block whitespace-nowrap rounded-sm border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`} data-testid="alert-status">
+                      <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs ${statusClass[r.status] ?? ''}`} data-testid="alert-status">
                         {statusLabel(r.status)}
                       </span>
                       {live && live !== 'firing' && (
@@ -365,7 +368,7 @@ export default function AlertInbox() {
                     <td className="col-optional py-3 px-4 text-right text-xs">{r.received_count}</td>
                     <td className="col-optional py-3 px-4 text-xs">
                       {r.investigation ? (
-                        <span className={`inline-block whitespace-nowrap rounded-sm border px-1.5 py-0.5 ${investigationClass[r.investigation.status] ?? ''}`} title={skip?.text}>
+                        <span className={`inline-block whitespace-nowrap rounded-full border px-1.5 py-0.5 ${investigationClass[r.investigation.status] ?? ''}`} title={skip?.text}>
                           {tr(`investigations.status.${r.investigation.status}`, r.investigation.status)}
                         </span>
                       ) : '-'}
@@ -389,7 +392,7 @@ export default function AlertInbox() {
             <AdaptiveTableFillerRows count={rowsPerPage - rows.length} columnCount={COLUMNS} />
           </table>
         </div>
-        <ListPager currentPage={shown.page} totalPages={totalPages} total={total} rowsPerPage={shown.limit} onPageChange={setPage} />
+        <ListPager currentPage={shown.page} totalPages={totalPages} total={total} counted={counted} rowsPerPage={shown.limit} onPageChange={setPage} />
       </div>
 
       {newSilence && silenceWith && <SilenceModal initial={{}} maxHours={silenceWith.maxHours} onClose={() => setNewSilence(false)} />}
@@ -403,9 +406,9 @@ function Marks({ item, tr }: { item: Pick<AlertInboxItem, 'acknowledged' | 'assi
   if (!item.acknowledged && !item.assignee && !item.done) return <>-</>
   return (
     <span className="flex flex-wrap gap-1">
-      {item.done && <span className="rounded-sm border border-emerald-800/60 bg-emerald-900/30 px-1.5 py-0.5 text-emerald-300">{tr('alertInbox.mark.done', 'Done')}</span>}
-      {item.acknowledged && !item.done && <span className="rounded-sm border border-slate-600 px-1.5 py-0.5 text-slate-300">{tr('alertInbox.mark.acknowledged', 'Acknowledged')}</span>}
-      {item.assignee && <span className="max-w-full truncate rounded-sm border border-slate-600 px-1.5 py-0.5 text-slate-300" title={item.assignee}>{item.assignee}</span>}
+      {item.done && <span className="rounded-full border border-emerald-800/60 bg-emerald-900/30 px-1.5 py-0.5 text-emerald-300">{tr('alertInbox.mark.done', 'Done')}</span>}
+      {item.acknowledged && !item.done && <span className="rounded-full border border-slate-600 px-1.5 py-0.5 text-slate-300">{tr('alertInbox.mark.acknowledged', 'Acknowledged')}</span>}
+      {item.assignee && <span className="max-w-full truncate rounded-full border border-slate-600 px-1.5 py-0.5 text-slate-300" title={item.assignee}>{item.assignee}</span>}
     </span>
   )
 }
@@ -493,7 +496,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
       <ModalFrame
         title={data ? data.alertname || id : tr('alertInbox.detail', 'Alert')}
         subtitle={data ? `${data.cluster}${data.namespace ? ' / ' + data.namespace : ''} · ${formatTime(data.starts_at)}` : undefined}
-        icon={<BellRing className="w-5 h-5 text-primary-400" />}
+        icon={<BellRing className="w-5 h-5 text-slate-400" />}
         size="lg"
         body="scroll"
         onClose={onClose}
@@ -510,7 +513,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
         {data && (
           <div className="space-y-5">
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-400" data-testid="alert-detail-meta">
-              <span>{tr('alertInbox.col.status', 'Status')}: <span className={`rounded-sm border px-1.5 py-0.5 ${statusClass[data.status] ?? ''}`}>{tr(`alertInbox.status.${data.status}`, data.status)}</span></span>
+              <span>{tr('alertInbox.col.status', 'Status')}: <span className={`rounded-full border px-1.5 py-0.5 ${statusClass[data.status] ?? ''}`}>{tr(`alertInbox.status.${data.status}`, data.status)}</span></span>
               {liveLine && (
                 <span>
                   {tr('alertInbox.liveLabel', 'Alertmanager now')}:{' '}
@@ -602,7 +605,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
               {(data.investigation || now.show) && <div className="flex h-8 flex-nowrap items-center gap-3 text-sm">
                 {data.investigation && (
                   <>
-                    <span className={`inline-block min-w-[4.5rem] shrink-0 rounded-sm border px-1.5 py-0.5 text-center text-xs ${investigationClass[data.investigation.status] ?? ''}`} data-testid="alert-investigation-status">
+                    <span className={`inline-block min-w-[4.5rem] shrink-0 rounded-full border px-1.5 py-0.5 text-center text-xs ${investigationClass[data.investigation.status] ?? ''}`} data-testid="alert-investigation-status">
                       {tr(`investigations.status.${data.investigation.status}`, data.investigation.status)}
                     </span>
                     <button
@@ -652,22 +655,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
 
             {data.past_investigations !== undefined && <PastInvestigations items={data.past_investigations} onOpen={setPastOpen} />}
 
-            <section>
-              <h3 className="mb-2 text-xs font-semibold text-slate-400">{tr('alertInbox.section.labels', 'Labels and annotations')}</h3>
-              <div className="grid gap-3 md:grid-cols-2">
-                <dl className="border-t border-hairline py-2 text-xs" data-testid="alert-labels">
-                  {Object.entries(data.labels).map(([k, v]) => (
-                    <div key={k} className="flex gap-2 py-0.5"><dt className="w-[110px] shrink-0 break-all text-slate-500">{k}</dt><dd className="min-w-0 break-all font-mono text-slate-200">{v}</dd></div>
-                  ))}
-                </dl>
-                <dl className="border-t border-hairline py-2 text-xs">
-                  {Object.entries(data.annotations).map(([k, v]) => (
-                    <div key={k} className="flex gap-2 py-0.5"><dt className="w-[110px] shrink-0 break-all text-slate-500">{k}</dt><dd className="min-w-0 break-words text-slate-200">{v}</dd></div>
-                  ))}
-                  {Object.keys(data.annotations).length === 0 && <div className="text-slate-500">{tr('investigations.noAnnotations', 'No annotations')}</div>}
-                </dl>
-              </div>
-            </section>
+            <AlertLabels labels={data.labels} annotations={data.annotations} />
           </div>
         )}
       </ModalFrame>
