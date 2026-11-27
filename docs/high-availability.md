@@ -102,7 +102,13 @@ autoscaling:
 Turning autoscaling on in a running release removes `spec.replicas` from the Deployment.
 Kubernetes then sets the count to its default of 1 until the HPA's first sync (every 15 s by default) raises it to `minReplicas`, so all pods but one start to stop.
 Turn it on at a quiet time, or follow "Migrating Deployments and StatefulSets to horizontal autoscaling" in the Kubernetes HPA documentation first.
-Turning it off puts `replicas.<service>` back.
+Turning it off puts `replicas.<service>` back, unless the Deployment keeps the HPA's count.
+The Deployment keeps that count on a release Helm 4 applies server-side, when the HPA has set a count other than `replicas.<service>`; with the defaults (`minReplicas` 2, `replicas` 1) it always has.
+Helm 4 installs server-side by default, and later upgrades and rollbacks keep that mode.
+`spec.replicas` then stays held by kube-controller-manager.
+The `helm upgrade` or `helm rollback` that turns autoscaling off, or the next one, stops with a conflict over that field (`conflict with "kube-controller-manager" with subresource "scale" using apps/v1: .spec.replicas`).
+Run that one command with `--force-conflicts`.
+For an upgrade, setting `replicas.<service>` to the current pod count (`kubectl -n <namespace> get deploy`) also gets it through, until `replicas.<service>` is changed again.
 
 Check it with `kubectl -n <namespace> get hpa`.
 

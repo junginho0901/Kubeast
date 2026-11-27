@@ -1,0 +1,76 @@
+/* The demo frame on the site: a 1280×700 window onto the released console on a computer, AI Chat alone on a phone
+   (interactions.js adds this sheet to the frame's page). The console's pages are made for a full browser window; here
+   each one fits the frame. */
+
+/* Overview: the title, the six counts in one row and the Pod and Node status charts. The lists below them (top pods
+   and nodes, the node cards, quick actions) are left out. */
+.page-scrolls:has([data-testid="stat-value-namespaces"]) { padding-bottom: 0; }
+.page-scrolls:has([data-testid="stat-value-namespaces"]) > * { margin-block: 0 16px; }
+.page-scrolls:has([data-testid="stat-value-namespaces"]) > .page-head p { display: inline-block; margin: 8px 14px 0 0; }
+.page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+.page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) > .card { padding: 16px 18px; }
+.page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) + * { margin-bottom: 0; }
+.page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) + * > .card { padding: 20px; }
+.page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) + * ~ * { display: none; }
+/* While the line naming what was deleted shows: it keeps its row under the title, and the charts take the height left. */
+.page-scrolls:has([data-testid="stat-value-namespaces"]):has(> [data-testid="yaml-created"]) { display: flex; flex-direction: column; height: calc(100vh - 48px); }
+.page-scrolls:has(> [data-testid="yaml-created"]) > :has(> * [data-testid="stat-value-namespaces"]) + * { flex: 1 1 0; grid-template-rows: minmax(0, 1fr); min-height: 0; }
+.page-scrolls:has(> [data-testid="yaml-created"]) > :has(> * [data-testid="stat-value-namespaces"]) + * > .card { display: flex; flex-direction: column; min-height: 0; padding-block: 14px; }
+.page-scrolls:has(> [data-testid="yaml-created"]) > :has(> * [data-testid="stat-value-namespaces"]) + * > .card > svg { flex: 1 1 0; min-height: 0; }
+
+/* Cluster View: the title line, the node map beside its legend, and the node boxes in a box that scrolls by itself, with
+   the footer under it; a node's own view (a click on a map cell) the same way. Less space between, the same text. */
+.tour-resources:has([data-testid="cluster-view-map"]) { display: flex; height: 100vh; min-height: 0; padding-block: 20px; }
+.tour-resources > div:has(> div > [data-testid="cluster-view-map"]),
+.tour-resources > div > div:has(> [data-testid="cluster-view-map"]) { position: relative; display: flex; flex: 1 1 0; flex-direction: column; gap: 14px; min-width: 0; min-height: 0; }
+.tour-resources > div:has(> div > [data-testid="cluster-view-map"]) > *,
+.tour-resources > div > div:has(> [data-testid="cluster-view-map"]) > * { flex-shrink: 0; margin-block: 0; }
+.tour-resources > div:has(> div > [data-testid="cluster-view-map"]) > .page-head > :first-child { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.tour-resources > div:has(> div > [data-testid="cluster-view-map"]) > .page-head p { margin: 0; }
+[data-testid="cluster-view-map"] { display: flex; align-items: center; gap: 24px; padding: 14px 18px; }
+[data-testid="cluster-view-map"] > .w-full { flex: 0 0 452px; width: 452px; }
+[data-testid="cluster-view-map-legend"] { flex: 1 1 0; min-width: 0; margin-top: 0; }
+[data-testid="cluster-view-nodes-pager"], [data-testid="cluster-view-node-pods-pager"] { padding-block: 6px; }
+[data-testid="cluster-view-node"] { padding: 14px 16px; }
+[data-testid="cluster-view-node"] > .mb-4 { margin-bottom: 10px; }
+[data-testid="cluster-view-pod"] { padding: 8px 10px; }
+[data-testid="cluster-view-pod"] > .mb-2 { margin-bottom: 2px; }
+.tour-resources > div > div > [data-testid="cluster-view-node"] { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+/* The console draws the boxes near the window, by the height it measures of each row. The window does not scroll here, so
+   the rows have no box of their own (measured 0 high): every box of the page is drawn, one under the other. */
+[data-testid="cluster-view-nodes"] { display: flex; flex: 1 1 0; flex-direction: column; gap: 12px; height: auto !important; min-height: 0; overflow-y: auto; }
+[data-testid="cluster-view-nodes"] > [data-index] { display: contents; }
+[data-testid="cluster-view-nodes"] > [data-index] > * { flex-shrink: 0; }
+
+/* Helm release, Manifest: its editor is 70vh tall, 6 px more than the frame has left under the tabs. */
+.tour-resources section[style*="70vh"] { height: calc(70vh - 12px) !important; }
+
+/* AI Chat: the welcome block's space, so the message box stays inside the frame. */
+.tour-chat .py-10.justify-center { padding-block: 24px; }
+.tour-chat .py-10.justify-center p.mb-8 { margin-bottom: 24px; }
+
+/* Phone (?phone=1 sets .tour-phone): AI Chat at the phone's width and 640 px tall. The column keeps to the frame, so the
+   message box stays at the bottom; the welcome is smaller, and scrolls in its own box where a screen is shorter still. */
+.tour-phone .tour-chat .flex.h-screen > .flex-1 { min-width: 0; min-height: 0; }
+.tour-phone .tour-chat .min-h-\[100px\] { min-height: 0; padding: 12px 16px; }
+.tour-phone .tour-chat .min-h-\[100px\] > .flex-1 > .flex { flex-wrap: wrap; gap: 4px 10px; }
+.tour-phone .tour-chat .py-10.justify-center { min-height: 0; overflow-y: auto; justify-content: flex-start; padding: 12px 16px; }
+.tour-phone .tour-chat .py-10.justify-center > div { margin-block: auto; }
+.tour-phone .tour-chat .py-10.justify-center .mb-6 { margin-bottom: 10px; }
+.tour-phone .tour-chat .py-10.justify-center [class*="clamp(220px"] { width: 104px; height: 104px; }
+.tour-phone .tour-chat .py-10.justify-center h2 { font-size: 20px; line-height: 28px; }
+.tour-phone .tour-chat .py-10.justify-center p.mb-8 { margin-bottom: 12px; }
+.tour-phone .tour-chat .py-10.justify-center .grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.tour-phone .tour-chat .py-10.justify-center .grid button { padding: 10px 14px; font-size: 14px; line-height: 20px; }
+.tour-phone .tour-chat .p-4.border-t { padding: 12px; }
+.tour-phone .tour-chat .p-4.border-t > .flex { gap: 8px; }
+.tour-phone .tour-chat .p-4.border-t textarea { min-width: 0; }
+.tour-phone .tour-chat .p-4.border-t .btn { padding-inline: 14px; }
+.tour-phone .tour-chat [data-testid="chat-messages"] .p-6 { padding: 12px; gap: 8px; }
+.tour-phone .tour-chat [data-testid="chat-messages"] .prose { padding: 12px; font-size: 14px; }
+.tour-phone .tour-chat [data-testid="chat-messages"] .chat-table-wrap table { font-size: 12px; line-height: 18px; }
+.tour-phone .tour-chat [data-testid="chat-messages"] .chat-table-wrap :is(th, td) { padding: 5px 4px; }
+/* A frame 306 px wide (a 360 px phone): its three-column table is 4 px wider than the answer's box. */
+@media (max-width: 320px) {
+  .tour-phone .tour-chat [data-testid="chat-messages"] .chat-table-wrap :is(th, td) { padding-inline: 3px; }
+}

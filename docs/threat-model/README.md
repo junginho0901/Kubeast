@@ -5,7 +5,7 @@ Each release writes one page covering only what that release changes. The pages 
 | Release | What it changes | Page |
 | --- | --- | --- |
 | v0.7.8 | A stream server for terminals and followed logs, state moving from a server's memory to PostgreSQL and Redis, several k8s-service and tool-server replicas and HPA, role names and the cluster groups they give | [v0.7.8](v0.7.8.md) |
-| v0.7.9 | What the AI reads from the cluster, new AI tools | not written yet |
+| v0.7.9 | What the AI reads from the cluster, new AI tools, password sign-in of SSO accounts | [v0.7.9](v0.7.9.md) |
 | v0.8.0 | The screen components that draw text | not written yet |
 | v0.8.1 | Module boundaries; the whole model | not written yet |
 

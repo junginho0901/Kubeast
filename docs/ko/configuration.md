@@ -198,8 +198,13 @@ ai:
   model: "gpt-6-luna"
   baseUrlAllowedHosts: []  # 모델 설정의 base_url이 사설 주소(클러스터 안 Ollama, 사내 LLM 게이트웨이)면 여기에 등록하세요
   redaction:
+    enabled: true          # 모델로 나가는 글(도구 결과, 로그 분석, 리소스 설명, 플로팅 채팅의 화면)에서 자격 증명을 가립니다.
+                           # Secret의 데이터는 이 값과 상관없이 뺍니다. 화면에는 영향이 없습니다
+    pii: false             # true면 이메일 주소와 전화·주민등록·카드 번호도 가립니다
     numbered: false        # (alpha) redaction.pii와 함께: 개인 값 네 종류를 채팅 답·조사마다 종류와 번호로(<PHONE_1>), 그 글자를 담은 쓰기는 거절.
                            # 물은 사람의 채팅 답에는 그 자리에 값이 보임. 끄면 한 글 안의 <EMAIL_n>과 <REDACTED:phone>·<REDACTED:rrn>·<REDACTED:card>, 값 안 보임
+    disable: []            # 뺄 규칙: key_name, private_key, url_credentials, authorization, jwt, aws_key, provider_key, email, phone, rrn, card.
+                           # 화면과 감사 로그의 오류 글, debugDump 줄은 enabled와 disable의 값과 상관없이 모든 자격 증명 규칙으로 가립니다
   timelineChanges: false   # (alpha) AI 도구 timeline의 changes 보기(기간 동안 바뀐 것, 값은 읽지 않음)와 그것을 먼저 보라는 채팅 지시를 켭니다
   timelineChangesMore: false # (alpha) 그 보기가 지정한 네임스페이스에서 만들어진 Job, NetworkPolicy·Service 쓰기, 레플리카 수 변경도 답합니다
                            # (메타데이터만, 호출마다 목록 4~5번 더). 이것만 켜면 아무것도 열리지 않습니다. 끄면 전과 같습니다
@@ -224,6 +229,7 @@ ai:
     maxSteps: 20           # (beta) 채팅 답 하나에 쓸 수 있는 모델 호출 수, 1~100(벗어난 수는 가까운 끝). 마지막 호출은 도구를 부르지 않고 읽은 것으로 답합니다.
                            # 호출이 많으면 토큰을 더 쓸 수 있고, 채팅 토큰 예산은 턴을 시작할 때 확인합니다(features.md).
                            # Claude 구독은 providers.claudeCode.maxTurns에서 멈춘 뒤 도구 없는 호출 하나로 답합니다
+  debugDump: false         # true면 모델 응답·도구 인자·도구 결과를 ai-service 로그에 씁니다(가리고 길이를 자름). 디버깅할 때만 켭니다
   providers:
     claudeCode: { enabled: false, maxConcurrent: 2, maxConcurrentTotal: 0, memoryLimit: 2Gi, queueWaitSeconds: 60, turnTimeoutSeconds: 300, maxTurns: 10 }
     # maxConcurrent: 서버 한 대의 Claude Code 실행 수(메모리), maxConcurrentTotal: 복제본 전체(0 = maxConcurrent),
@@ -263,7 +269,7 @@ gateway:
     nodePort: 30333
   trustedProxies: []      # 앞단 프록시(Ingress 컨트롤러, LB) CIDR — 감사 로그의 클라이언트 주소를 그 뒤에서 읽습니다
   allowedOrigins: []      # 게이트웨이 자기 호스트와 Ingress 호스트 외에 API·WebSocket을 열어 줄 브라우저 origin(없으면 같은 호스트만)
-  servedByHeader: false   # true면 모든 응답의 X-Kubeast-Gateway에 게이트웨이 파드 이름을 실음, 교체 시험용(끄는 까닭: 클라이언트에게 파드 이름이 보임)
+  servedByHeader: false   # (alpha) true면 모든 응답의 X-Kubeast-Gateway에 게이트웨이 파드 이름을 실음, 교체 시험용(끄는 까닭: 클라이언트에게 파드 이름이 보임)
   accessLog:
     upstreamTimes: false  # true면 접근 로그 줄마다 요청 시간, 서비스 연결·헤더·응답 시간(초), 서비스 주소, 클라이언트 포트를 덧붙입니다
   preStopSeconds: null    # 게이트웨이 파드의 preStop 기다림(종료 유예 = 이 값 + 30, 0 = 없음). null = podShutdown.preStopSeconds, 파드 IP로 보내는 AWS ALB 뒤(아래 ingress에 alb.ingress.kubernetes.io/target-type: ip)에서는 그 값이 0보다 클 때 25로 올림
@@ -280,7 +286,13 @@ ingress:
   # annotations:
   #   alb.ingress.kubernetes.io/target-type: ip
 
-# 0.7.9에 더한 AI 스위치입니다. 모두 끄면 모델이 받는 프롬프트·도구 정의가 0.7.8과 같습니다.
+# 0.7.9에 더한 AI 스위치입니다. 모두 끄면 모델이 받는 프롬프트·도구 정의가 0.7.8과 같습니다. 다만 스위치 없이 바뀌는 것이
+# 있습니다. 알림은 규칙 식으로 모델에 가고, 채팅 질문은 출력 형식을 달라고 할 때만 그 형식의 도구로 좁혀지고, Gemini 모델의 호출에는
+# thought signature가 함께 돌아가고, anthropic 공급자에서는 도구를 부르는 차례 뒤의 호출이 그 도구 목록을 그대로 보내되 부르지 않게 하고,
+# Claude 구독의 알림 조사에서는 조사를 닫는 호출과 다시 묻기가 도구 결과를 표식 사이에 담고,
+# 채팅 답의 마지막 모델 호출은 도구를 부르지 않고 답하라는 지시를 받고(ai.chat.maxSteps), 길이에서 잘린 채팅 답의 나머지를 청하는 글이 바뀌고,
+# Claude Code는 모든 프롬프트를 쓴 그대로 받습니다.
+# AI 도구 get_pod_metrics·issues·logsearch·alerts_inbox·investigations·k8s_get_pod_logs의 답도 스위치 없이 바뀝니다(upgrade-0.7.9.md 4절).
 # (alpha): 예고 없이 바뀌거나 없어질 수 있습니다. 자세한 것은 ai-alerts.md·features.md에 있습니다
 features:
   alertInvestigation:
@@ -291,7 +303,7 @@ features:
                              # 같은 꼴로 줍니다. 시간창도 적습니다
     ledger: true             # (alpha) true면 보고서 끝에 원인·경로·배제·가설 묶음을 두고, 가설마다 뒷받침·반박한 호출로 닫아 보고서
                              # 아래에 따로 보여 줍니다(열린 가설이 있으면 한 번 더 묻습니다)
-    evidenceCheck: true      # (alpha) true면 원인마다 댄 호출이 답했고 원인 이름을 담는지 서버가 확인하고, 아니면 도구 없이 한 번 더
+    evidenceCheck: true      # (alpha) true면 원인마다 댄 호출이 답했고 원인 이름을 담는지 서버가 확인하고, 아니면 도구를 부르지 못하는 호출로 한 번 더
                              # 묻고 그래도 안 되는 것은 확인 안 됨으로 적습니다. ledger와 함께면 묶음 하나, 다시 묻기 한 번
     verdict: true            # (alpha) true면(evidenceCheck나 ledger와 함께) 묶음에 결론(원인 찾음 · 이상 없음 · 알 수 없음)도 적고 호출로
                              # 확인합니다. 확인했고 정상인 것과 안 본 것은 서버가 적습니다
@@ -351,7 +363,6 @@ multicluster:
 | 값 | 기본값 | 단계 | 아직 안 돌린 것 · 돌려 봄 |
 | --- | --- | --- | --- |
 | `podShutdown.preStopSeconds` | 5 | beta | 돌려 봄: Kubernetes 1.29.14(kind, `PodLifecycleSleepAction` 기능 게이트 꺼짐)에 기본 설치를 서버 dry-run으로 보내니 API 서버가 preStop 기다림이 있는 Deployment 7개를 거절함(`spec.template.spec.containers[0].lifecycle.preStop: Required value: must specify a handler type`). `0`이면 객체 58개를 모두 받음. 이 시험은 `streams.enabled`를 끈 설치였음 — 켜면 `k8s-service-stream`은 `podShutdown.preStopSeconds`와 상관없이 `streams.preStopSeconds`로 preStop `sleep`을 가지므로 Kubernetes 1.30 이상이 필요하고, 1.33 아래에서는 `streams.preStopSeconds`를 1 이상으로 둠([클러스터 요구 사항](cluster-requirements.md) §15) |
-| `podStartup.quickReady` | true | beta | kind 개발 설치에서 서버마다 파드를 손으로 지우기와 노드 드레인, ModelConfig 컨트롤러 rollout에 걸리는 시간, 조용한 하루 동안 확인 요청 수와 로그 줄 |
 | `redis.acl.enabled`, `redis.acl.existingSecretHasKeys`, `redis.acl.existingSecret` | true, false, "" | beta | 시험 설치에서 사용자를 끈 경우 |
 | 1보다 큰 `replicas.k8sService`와 `replicas.toolServer` | 1 | alpha | k8s-service 2대 · 3대의 크기 |
 | `autoscaling.<service>` | 끔 | alpha | 돌려 봄: EKS 1.35에서 k8s-service와 게이트웨이의 HPA가 파드 2대에서 3대로 늘었다가 돌아오고 HPA를 켰다 끄는 동안, 로드 밸런서를 거친 요청 중 실패한 것 없음 |
@@ -359,30 +370,31 @@ multicluster:
 | `pdb.enabled`, `pdb.maxUnavailable` | true, 1 | beta | 돌려 봄: EKS 1.35에서 서비스마다 파드 둘을 두고 노드 하나를 드레인해 바꾸는 동안, 막힌 내보내기 없음 · 로드 밸런서를 거친 요청 중 실패한 것 없음 |
 | `streams.*` | 끔 | alpha | kind 개발 설치에서 한 번도 안 돌림 |
 | `ai.providers.claudeCode.maxConcurrentTotal`, `queueWaitSeconds`, `memoryLimit` | 0, 60, 2Gi | alpha | 프로바이더를 켠 시험 설치 |
-| `gateway.preStopSeconds` | null: `podShutdown.preStopSeconds`, 파드 IP로 보내는 AWS ALB 뒤에서는 25, Ingress에 등록 해제 지연 20초 | beta | AWS ALB 뒤에서 차트가 스스로 준 25초와 20초. 게이트웨이 파드 교체 18번에 실패가 없던 회차는 모든 파드에 `podShutdown.preStopSeconds: 25`와 주석을 손으로 넣었음(EKS 1.35, AWS Load Balancer Controller v3.6.2) |
+| `gateway.preStopSeconds` | null: `podShutdown.preStopSeconds`, 파드 IP로 보내는 AWS ALB 뒤에서는 25, Ingress에 등록 해제 지연 20초 | beta | 돌려 봄: EKS 1.35(2026-11-25)에서 `alb.ingress.kubernetes.io/target-type: ip`만 두고 차트가 스스로 준 25초와 20초. 게이트웨이 파드 교체 18번(파드 하나와 둘), 서비스마다 파드가 둘인 노드 비우기 한 번, HPA가 게이트웨이를 셋으로 늘리고 줄이는 동안 로드 밸런서를 지난 요청이 하나도 실패하지 않음 |
 | `gateway.accessLog.upstreamTimes` | false | alpha | 돌려 봄: kind 개발 설치에서 켠 상태로 100명이 한꺼번에 화면을 엶(2026-11-17), 접근 로그 줄마다 여섯 칸이 붙음 |
 | `multicluster.breakerConsecutiveFails`(0.7.8부터 `0`이면 차단기 끔), `multicluster.breakerOpenSec`(0.7.8부터 읽음) | 5, 30 | beta | kind 개발 설치에서 클러스터를 끊어 본 경우 |
 | `multicluster.wsWatchOpeningConcurrency`, `multicluster.wsWatchStreamWindowKiB` | 8, 1024 | beta | 돌려 봄: kind에서 0.7.7부터 업그레이드 리허설(기본 설치, 기존 Secret, 외부 데이터베이스, AI 끔, 2대 · 3대)과 EKS 1.35. EKS 1.35에서는 노드를 드레인할 때 실시간 목록이 한 번 닫혔다가 1.1초 안에 다시 붙고, HPA를 켜면서 k8s-service가 2대에서 1대로 줄 때 한 번 닫혔다가 1.2초 안에 다시 붙음. HPA가 파드를 늘리고 줄일 때는 닫히지 않음 |
 | `multicluster.maxTerminalsPerAccount`, `multicluster.maxFollowedLogsPerAccount` | 20, 20 | beta | 돌려 봄: kind 개발 설치에서 기본값으로 stream-caps e2e(2026-11-19). 한 계정의 21번째 터미널과 실시간 로그가 거절되고 화면이 까닭을 보여 주며, 하나를 닫으면 새로 열림 |
 | `multicluster.maxStreamsPerServer` | 443 | beta | kind 개발 설치에서 상한에 닿아 화면이 까닭을 보여 주는 경우. 기본값은 거기서 한 부하 시험(2026-11-22)에서 왔음: 상한 없이 파드 하나에 터미널과 실시간 로그 800개를 열어 둠(하나에 약 0.37 MiB, 800개에서 512 Mi의 79 %) |
 | `auth` 설정의 `customRoles` 옆 `sharedReadChecks.enabled`, `sharedReadChecks.excludeClusters` | false, [] | alpha | 돌려 봄: 켠 상태의 전체 e2e를 kind 개발 설치에서 두 번(실패 없음), 100명이 한꺼번에 화면을 연 부하(오류 없음) |
+| `podStartup.quickReady` | true | beta | kind 개발 설치에서 서버마다 파드를 손으로 지우기와 노드 드레인, ModelConfig 컨트롤러 rollout에 걸리는 시간, 조용한 하루 동안 확인 요청 수와 로그 줄 |
 | `ai.chat.maxSteps` | 20 | beta | 이 한도에 닿는 채팅 질문을 API 키와 Claude 구독으로 kind 개발 설치에서 돌린 경우 |
 | `ai.refuseRepeatedReads` | false | alpha | 끄고 켠 AI 평가(`scripts/ai-eval.py`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.toolResultDetails` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.redaction.numbered` | false | alpha | `ai.redaction.pii`와 함께 켠 상태로 kind 개발 설치에서 한 채팅, 끄고 켠 AI 평가 |
 | `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, true, false, [], [] | alpha | `chat`과 `investigations`를 하나씩 끄고 켠 AI 평가, 그 옆에서 `symptoms`를 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
-| `ai.toolResultsJSON` | false | alpha | 끄고 켠 심어 둔 지시 문제(`evals/ai-planted/`)와 켠 상태의 AI 평가를 모델로 돌린 경우 |
+| `ai.toolResultsJSON` | false | alpha | 켠 상태의 AI 평가를 모델로 돌린 경우. 돌려 봄: kind에서 끄고 켠 심어 둔 지시 문제를 모델로 돌림(2026-11-25), 따른 답 0 |
 | `ai.timelineChanges` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.timelineChangesMore` | false | alpha | `ai.timelineChanges`와 함께 끄고 켠 AI 평가, 둘 다 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.causeQuestions` | false | alpha | 끄고 켠 AI 평가, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
-| `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | 밖으로 나가는 규칙을 지키는 네트워크 플러그인(Calico나 Cilium을 쓴 kind)에서 `allowListOnly`를 켠 경우: 모델 공급자 주소를 목록에 넣은 채팅과 뺀 채팅 |
+| `networkPolicy.aiEgress.allowListOnly`, `networkPolicy.aiEgress.clusterAPIs`, `networkPolicy.aiEgress.stsEndpoints` | false, [], [] | alpha | 돌려 봄: 네트워크 플러그인이 밖으로 나가는 규칙을 지킨 kind에서 `allowListOnly`를 켬(2026-11-24). 모델 공급자 주소를 목록에 넣은 채팅은 답했고, 뺀 채팅은 공급자 오류로 끝남 |
 | `features.alertInvestigation.rules`, `changesFirst`, `narrowFirst`, `window.metricsMinutes`, `window.logsMinutes`, `window.changesHours` | true, true, true, 15, 5, 4 | alpha | 스위치를 하나씩 끄고 켠 AI 평가의 알림 조사(`scripts/ai-eval.py --alerts`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.ledger`, `evidenceCheck`(켜면 다시 물을 때 `maxSteps`에 모델 호출 하나가 더해짐) | true, true | alpha | 하나씩 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.alertInvestigation.verdict`(`evidenceCheck`나 `ledger`와 함께, 둘 다 끄면 아무것도 안 함) | true | alpha | `evidenceCheck` 옆에서 끄고 켠 AI 평가의 알림 조사, 켠 상태로 kind 개발 설치에서 돌린 경우 |
-| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | kind 개발 설치에서 e2e `ai-anomaly-rank.spec.ts`, 끄고 켠 AI 평가 |
+| `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | 이 값만 끄고 켠 AI 평가. 돌려 봄: AI 스위치를 켠 kind 설치의 전체 e2e에서 `ai-anomaly-rank.spec.ts`(2026-11-25), 시험 넷 모두 통과 |
 | `features.nodeNeighbors.enabled` | false | alpha | 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | 값을 정한 채 kind 개발 설치에서 한 `loki_query` |
-| `features.callGraph.enabled` | false | alpha | kind 개발 설치에서 e2e `ai-call-graph.spec.ts`, 끄고 켠 AI 평가 |
+| `features.callGraph.enabled` | false | alpha | 끄고 켠 AI 평가. 돌려 봄: kind의 전체 e2e에서 `ai-call-graph.spec.ts`(2026-11-25) |
 | `gateway.servedByHeader` | false | alpha | 켠 상태로 한 번도 안 돌림 |
 
 ## Redis 사용자

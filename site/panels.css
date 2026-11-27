@@ -1,0 +1,154 @@
+/* After concept.css and refinement.css: the role card, captions at the foot of their cards, the demo's phone mode and the project marks. */
+
+/* The two cards side by side end with their captions on one line. */
+.permission-panel, .integrations-panel { display: flex; flex-direction: column; }
+.explain-panel > .diagram-caption { margin-top: auto; }
+.integrations-panel .integration-map { width: 100%; }
+.permission-panel > .permission-proof, .integrations-panel > .integration-map { margin-bottom: 22px; }
+
+/* Role card: one row per request, the outcome for the role chosen. */
+.role-matrix { height: auto; min-height: 236px; margin: 24px 0 0; }
+.role-matrix .permission-gate { height: auto; align-self: stretch; min-height: 180px; }
+.role-matrix .diagram-person small { display: block; margin-top: 4px; font-size: 12px; color: #9fb2c8; }
+.role-matrix .permission-targets { gap: 10px; }
+.role-matrix .target { flex-wrap: wrap; row-gap: 4px; font: 12.5px/1.45 InterVariable, system-ui, sans-serif; color: #d3dde6; transition: border-color .3s, background .3s; }
+.role-matrix .target i { white-space: nowrap; font: 500 11px/1.5 ui-monospace, SFMono-Regular, monospace; padding: 1px 8px; border-radius: 99px; border: 1px solid currentColor; }
+.role-matrix .target[data-outcome="ok"] { border-color: #2f6f5c; }
+.role-matrix .target[data-outcome="ok"] i { color: #61d9ae; }
+.role-matrix .target[data-outcome="approve"] { border-color: #8a6a3a; background: #17130c; }
+.role-matrix .target[data-outcome="approve"] i { color: #f1b86c; }
+.role-matrix .target[data-outcome="no"] { color: #8f9aa6; }
+.role-matrix .target[data-outcome="no"] i { color: #8f9aa6; border-style: dashed; }
+.role-matrix .target[data-outcome="mask"] i { color: #a9b8cc; }
+.permission-approval { margin: 18px 0 0; font-size: 14px; line-height: 1.65; color: #e7d2ad; }
+.permission-proof { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 0; }
+.permission-proof small { font-size: 12px; color: #8c99a6; }
+.permission-proof code { font: 12px/1.6 ui-monospace, SFMono-Regular, monospace; color: #bfe9f5; background: #0b1015; border: 1px solid #ffffff12; border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .role-matrix { min-height: 0; }
+  .role-matrix .permission-gate { min-height: 200px; }
+  .role-matrix .target { font-size: 11.5px; padding: 9px 7px; }
+  .role-matrix .target i { font-size: 10px; padding: 1px 6px; }
+}
+
+/* Demo: the frame shows a grey ground while the screens load. */
+.demo-viewport { background: #0b1017; }
+.demo-state:empty { display: none; }
+
+/* Phone: AI Chat in the frame at the phone's width; the other screens as a recording or a short note. */
+.demo-shell[data-mode="phone"] .demo-viewport { height: 640px !important; overflow: hidden; }
+.demo-shell[data-mode="phone"] .demo-canvas { width: 100% !important; height: 100% !important; }
+.demo-shell[data-mode="phone"] .demo-viewport iframe { position: static; width: 100%; height: 100%; transform: none !important; }
+.demo-poster video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #08101e; }
+.demo-poster-text { display: grid; align-content: center; gap: 10px; min-height: 200px; padding: 28px 22px; background: #0b1520; color: #c7d6e2; font-size: 15px; line-height: 1.7; }
+.demo-poster-text b { font-size: 18px; font-weight: 600; color: #e8f3f8; }
+.demo-poster figcaption { position: static; display: block; padding: 14px 16px; }
+.demo-poster figcaption p { margin: 0 0 10px; }
+.demo-poster video[hidden], .demo-poster-text[hidden] { display: none; }
+.demo-pc-note { display: inline-flex; padding: 4px 11px; border-radius: 99px; border: 1px solid #3d7f96; color: #cfeefa; font-size: 13px; }
+
+/* Project marks: logos as their owners publish them, scaled only, each linked to its owner's page; ® and ™.
+   Claude Code's logo is a wordmark. OpenAI's file has wide clear space around its mark, so the whole file is scaled up over
+   the gaps beside it. Ollama's black mark sits on a light chip. */
+.tool-home { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px; color: #b8c5cf; font: 12px/1.5 ui-monospace, SFMono-Regular, monospace; text-decoration: none; }
+.tool-home img { width: 22px; height: 22px; object-fit: contain; }
+.tool-home img[src*="claude-code.svg"] { width: auto; height: 16px; }
+.tool-home img[src*="openai.svg"], .tool-logo img[src*="openai.svg"] { scale: 1.36; }
+.tool-home img[src*="ollama.png"], .tool-logo img[src*="ollama.png"] { background: #f4f4f2; border-radius: 3px; }
+.tool-home:hover > span, .tool-home:focus-visible > span { text-decoration: underline; }
+.tool-homes { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-bottom: 4px; }
+.tool-home-logo { display: block; width: fit-content; margin: 0 auto; }
+.tm { font-size: .6em; line-height: 0; vertical-align: super; font-weight: 400; font-style: normal; }
+.foot-legal { flex-basis: 100%; margin: 0; font-size: 12px; line-height: 1.6; color: var(--text-dim); }
+
+/* Tools map: twelve nodes spaced evenly along an ellipse (index.html: --x/--y on the 600:440 map, --mx/--my on the
+   phone's taller 600:640 map, whose ellipse reaches past its sides so diagonal neighbours keep apart). A tile of two
+   logos shows them side by side, one of three or four in two rows; a logo left alone fills its tile like the others. */
+.integration-map button .tool-label { display: block; text-align: center; line-height: 1.25; white-space: nowrap; }
+.tool-break { display: none; }
+.integration-map .tool-logo:has(img + img) { grid-template-columns: repeat(2, auto); gap: 3px; place-content: center; }
+.integration-map .tool-logo:has(img + img) img { width: 18px; height: 18px; }
+.integration-map .tool-logo:has(img:nth-child(3)) img { width: 14px; height: 14px; }
+.integration-map .tool-logo img:nth-child(3):last-child { grid-column: 1 / -1; justify-self: center; }
+/* Two cards side by side on a narrow screen: the map is 400-460px wide, so the nodes are a little smaller. */
+@media (min-width: 1001px) and (max-width: 1100px) {
+  .integration-map button { font-size: 11px; gap: 6px; min-height: 0; }
+  .integration-map .tool-logo { width: 38px; height: 38px; border-radius: 11px; }
+  .integration-map .tool-logo img { width: 24px; height: 24px; }
+  .integration-map .tool-logo:has(img + img) img { width: 15px; height: 15px; }
+  .integration-map .tool-logo:has(img:nth-child(3)) img { width: 12px; height: 12px; }
+}
+@media (max-width: 760px) {
+  .integration-map { aspect-ratio: 600 / 640; }
+  .integration-map button { left: var(--mx); top: var(--my); gap: 5px; min-height: 0; }
+  .integration-map .tool-logo:has(img + img) img { width: 14px; height: 14px; }
+  .integration-map .tool-logo:has(img:nth-child(3)) img { width: 12px; height: 12px; }
+  .tool-break { display: inline; }
+}
+@media (max-width: 360px) {
+  .integration-map button { font-size: 9px; gap: 4px; min-width: 0; }
+  .integration-map .tool-logo { width: 30px; height: 30px; border-radius: 9px; }
+  .integration-map .tool-logo img { width: 20px; height: 20px; }
+  .integration-map .tool-logo:has(img + img) { gap: 2px; }
+  .integration-map .tool-logo:has(img + img) img { width: 12px; height: 12px; }
+  .integration-map .tool-logo:has(img:nth-child(3)) img { width: 10px; height: 10px; }
+}
+
+/* How Kubeast works: where requests come in, the Kubeast services, what they reach and where data is kept.
+   Narrow screens stack the groups; wide ones run left to right on shared rows. Optional parts are dashed,
+   and motion.js draws the routes between the boxes (dashed and without packets for what is off by default). */
+#architecture .arch-diagram { position: relative; display: flex; flex-direction: column; gap: 30px; padding: 24px 22px; }
+#architecture .arch-flow { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+#architecture .arch-diagram > :not(.arch-flow) { position: relative; z-index: 1; }
+#architecture .arch-cap { margin: 0; font: 500 11.5px/1.4 ui-monospace, SFMono-Regular, monospace; letter-spacing: .06em; color: #8195aa; }
+#architecture .arch-box, #architecture .arch-group { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; min-width: 0; padding: 11px 10px; font: 13px/1.45 ui-monospace, SFMono-Regular, monospace; text-align: center; overflow-wrap: anywhere; cursor: pointer; }
+#architecture .arch-box b { font-weight: 500; color: #dce9f3; }
+#architecture .arch-box small { font-size: 11px; line-height: 1.5; color: #8d9fb2; text-wrap: balance; }
+#architecture .arch-opt { border-style: dashed; background: #0e151e; }
+#architecture .arch-opt b { color: #c3d1dd; }
+#architecture .arch-opt[aria-pressed="true"] { background: #173446; border-color: #5d94a7; }
+#architecture .arch-tag { margin-top: 5px; padding: 1px 7px; border: 1px solid #364657; border-radius: 9px; font: 500 10px/1.5 InterVariable, system-ui, sans-serif; font-style: normal; color: #9eb0c1; text-wrap: balance; }
+#architecture .arch-entry, #architecture .arch-reach, #architecture .arch-store { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+#architecture .arch-store { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+#architecture .arch-entry > .arch-cap, #architecture .arch-reach > .arch-cap, #architecture .arch-store > .arch-cap { grid-column: 1 / -1; }
+#architecture .arch-core { display: flex; flex-direction: column; align-items: center; gap: 28px; padding: 12px 16px 18px; border: 1px solid #1f2b39; border-radius: 20px; background: #ffffff03; }
+#architecture .arch-core > .arch-cap { align-self: flex-start; margin-bottom: -14px; }
+#architecture .arch-gate { width: min(100%, 300px); }
+#architecture .arch-services { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; width: 100%; }
+#architecture .arch-role { width: fit-content; max-width: 100%; margin: -14px auto; padding: 2px 10px; border: 1px solid #2f6f5c; border-radius: 99px; background: #0b111a; color: #8fe3c4; font: 500 11px/1.5 InterVariable, system-ui, sans-serif; text-align: center; text-wrap: balance; }
+#architecture .arch-cluster { position: relative; display: flex; }
+#architecture .arch-cluster .tool-home-logo { position: absolute; z-index: 2; top: 11px; left: 0; right: 0; margin: 0 auto; transition: transform .25s; }
+#architecture .arch-cluster .tool-home-logo img { display: block; width: 26px; height: 26px; object-fit: contain; }
+#architecture .arch-cluster .arch-box { padding-top: 43px; }
+#architecture .arch-cluster:hover .tool-home-logo, #architecture .arch-cluster:hover .arch-box { transform: translateY(-2px); }
+@media (min-width: 1101px) {
+  #architecture .arch-diagram { display: grid; grid-template-columns: minmax(0, 1.1fr) 30px minmax(0, 1.85fr) minmax(84px, .55fr) minmax(0, 1.2fr); grid-template-rows: auto 1fr auto 1fr auto; gap: 12px 0; align-items: center; padding: 22px 22px 24px; }
+  #architecture .arch-entry, #architecture .arch-reach { grid-row: 1 / 5; align-self: stretch; grid-template-columns: minmax(0, 1fr); grid-template-rows: subgrid; row-gap: normal; align-items: center; }
+  #architecture .arch-entry { grid-column: 1; }
+  #architecture .arch-reach { grid-column: 5; }
+  #architecture .arch-entry > .arch-cap, #architecture .arch-reach > .arch-cap { align-self: end; padding-top: 12px; }
+  #architecture .arch-core { grid-column: 3; grid-row: 1 / 5; align-self: stretch; display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 0 30px; align-items: center; }
+  #architecture .arch-core > .arch-cap { grid-column: 1 / -1; margin: 0 0 8px; }
+  #architecture .arch-gate { width: 100%; }
+  #architecture .arch-services { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  #architecture .arch-role { grid-column: 4; grid-row: 3; margin: 0; max-width: calc(100% - 10px); }
+  #architecture .arch-store { grid-column: 1 / -1; grid-row: 5; margin-top: 20px; column-gap: 26px; }
+  #architecture .arch-store > .arch-cap { grid-row: 2; }
+}
+@media (max-width: 1100px) {
+  #architecture .arch-notes { max-width: 720px; }
+}
+@media (max-width: 760px) {
+  #architecture .arch-diagram { gap: 26px; padding: 18px 12px; }
+  #architecture .arch-entry { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px 6px; }
+  #architecture .arch-entry small { display: none; }
+  #architecture .arch-box, #architecture .arch-group { padding: 10px 6px; font-size: 12px; }
+  #architecture .arch-tag { padding: 1px 5px; font-size: 9.5px; }
+  #architecture .arch-core { gap: 24px; padding: 10px 10px 12px; }
+  #architecture .arch-core > .arch-cap { margin-bottom: -12px; }
+  #architecture .arch-services { grid-template-columns: 1fr 1fr; gap: 8px; }
+  #architecture .arch-reach { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  #architecture .arch-reach > .arch-cap { order: -2; }
+  #architecture .arch-cluster { order: -1; }
+  #architecture .arch-store { grid-template-columns: 1fr 1fr; gap: 8px; }
+}

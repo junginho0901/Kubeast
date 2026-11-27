@@ -118,12 +118,13 @@ npx playwright test cluster-hygiene.spec.ts   # 스펙 하나
 - 문제 칸, 실행 순서, `evals/ai-hard/`의 문제 22개는 [evals/ai/README.md](../../evals/ai/README.md)의 "Hard cases"에 있습니다.
 - `scripts/ai-eval.py --alerts`는 `alert`가 있는 문제를 채팅 대신 알림 조사로 돌리고 보고서를 채점합니다([evals/ai/README.md](../../evals/ai/README.md)의 "The alert path").
   - 문제의 시험 규칙이 두 번째 클러스터의 Prometheus에 들어 있으면 알림은 그 Alertmanager를 거쳐 오고, 없으면 러너가 Alertmanager 꼴로 웹훅에 직접 보냅니다(`--alert-source auto`, 기본값. `real`은 규칙으로만, `synthetic`은 늘 직접). `evals/ai-hard/`의 문제 22개에는 아직 시험 규칙이 없어 직접 보냅니다.
-  - kind에서 아직 돌려 본 적이 없습니다.
+  - kind 개발 설치에서 한 첫 회(직접 보낸 알림으로 돌린 어려운 문제)는 2026-11-24에 끝났습니다.
 - 러너는 토큰이 끝나기 전과 401을 받았을 때 다시 로그인하고, 문제 하나가 끝날 때마다 결과 파일을 다시 씁니다. 그래서 개발 토큰 수명(120분)보다 긴 한 회차를 한 번의 실행으로 돌릴 수 있습니다.
 
 ### 소개 사이트 (`site/`)
 
 [https://junginho0901.github.io/Kubeast/](https://junginho0901.github.io/Kubeast/)에는 정적 페이지 `site/`(`index.html`·`style.css`·`app.js`·`particles.js`, 영어·한국어 전환)가 올라갑니다.
+페이지 안의 데모(`site/demo/`)는 `site-demo/build.sh`가 배포판 콘솔 소스와 `site-demo/sample/`의 예시 자료로 만들며, 저장소에 넣지 않고 배포할 때마다 `.github/workflows/pages.yaml`이 새로 만듭니다(`site-demo/README.md`).
 main에 반영할 때마다 `.github/workflows/pages.yaml`이 GitHub Pages로 배포합니다.
 기능 영상(`site/media/<이름>.mp4`와 첫 장면 `.jpg`)은 `e2e/demo/<이름>.demo.ts` 대본을 dev 클러스터에서 녹화해 만듭니다.
 

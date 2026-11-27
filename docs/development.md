@@ -118,12 +118,14 @@ The harder cases of `scripts/ai-eval.py` need faults and services that call each
 - The case fields, the run order and the twenty-two cases of `evals/ai-hard/` are in [evals/ai/README.md](../evals/ai/README.md) "Hard cases".
 - `scripts/ai-eval.py --alerts` runs the cases that carry an `alert` through the alert investigation instead of the chat and scores the report ([evals/ai/README.md](../evals/ai/README.md) "The alert path").
   - The alert comes through the second cluster's Alertmanager when the case's test rule is loaded there, and is posted to the webhook in Alertmanager's form otherwise (`--alert-source auto`, the default; `real` runs only the rule, `synthetic` always posts). The twenty-two cases of `evals/ai-hard/` have no test rule yet, so they are posted.
-  - It has not run on kind yet.
+  - Its first round on the kind dev install, of hard cases with posted alerts, ended on 2026-11-24.
 - The runner signs in again before its token runs out and on a 401, and writes its report after each case, so one call can run a round longer than the dev token's 120 minutes.
 
 ### Project site (`site/`)
 
 [https://junginho0901.github.io/Kubeast/](https://junginho0901.github.io/Kubeast/) is `site/`, a static page in English with a Korean switch: `index.html`, `style.css`, `app.js` and `particles.js`.
+
+The demo in the page (`site/demo/`) is built by `site-demo/build.sh` from the released console's source and the sample data in `site-demo/sample/`; it is not committed, and `.github/workflows/pages.yaml` builds it for each deploy (`site-demo/README.md`).
 
 `.github/workflows/pages.yaml` publishes it to GitHub Pages when it changes on main. The feature clips (`site/media/<name>.mp4` and a poster `.jpg`) are recorded on the dev clusters from the scripts `e2e/demo/<name>.demo.ts`.
 

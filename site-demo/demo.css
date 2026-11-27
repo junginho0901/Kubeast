@@ -1,0 +1,19 @@
+/* The released console's stylesheet and Tailwind sources (v0.7.9, extracted by build.sh), then the demo frame only. */
+@import "./.release/frontend/src/index.css";
+@source "./.release/frontend/src";
+
+html, body, #root { margin: 0; min-height: 100%; background: var(--color-slate-950); }
+body { font-family: InterVariable, system-ui, sans-serif; }
+.tour-resources { padding: 24px; min-height: 100vh; }
+.tour-chat { height: 100vh; overflow: hidden; }
+.tour-chat > div { height: 100%; min-height: 0; }
+.tour-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: #151a22; border-bottom: 1px solid #303a49; padding: 12px 20px; min-height: 54px; }
+.tour-nav a { padding: 8px 12px; border-radius: 8px; font-size: 14px; color: #d3e6f2; background: #202935; }
+.tour-nav small { margin-left: auto; color: #94a3b8; }
+.tour-nav ~ .tour-chat { height: calc(100vh - 62px); }
+.tour-loading { padding: 40px; color: #cbd5e1; font-size: 14px; }
+
+/* Phone: the released AI Chat keeps a 16rem conversation list beside the chat; the narrow frame shows the chat only. */
+.tour-phone .tour-chat .flex.h-screen > .w-64 { display: none; }
+.tour-phone .tour-chat .grid-cols-2 { grid-template-columns: 1fr; }
+.tour-phone .tour-chat .px-8 { padding-left: 0; padding-right: 0; }
