@@ -447,7 +447,7 @@ describe('what the Pods tab tells the floating chat in place of rows', () => {
 
   it('says it in the screen\'s language', () => {
     renderOn('shop', answered('shop', []), { lng: 'ko' })
-    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — shop Namespace에 Pod가 없습니다.`)
+    expect(chat.current?.summary).toBe(`${ko.monitoring.pods.title} — ${ko.monitoring.pods.noPodsInNamespace.replace('{{namespace}}', 'shop')}`)
   })
 
   it('tells nothing before a namespace is chosen', () => {
