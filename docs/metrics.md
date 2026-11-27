@@ -83,9 +83,12 @@ metrics:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
     enabled: true           # five alerts, one more each with the AI on (the default), an audit anchor sink and alert investigations
+    labels: {release: monitoring}   # kube-prometheus-stack reads a PrometheusRule only with this label
 ```
 
-One ServiceMonitor selects the five backend Services labelled `kubeast.io/metrics: "true"`, with port name `http` and path `/metrics`. A Prometheus without the Operator can select the same label with `kubernetes_sd_configs` (role `endpoints`).
+One ServiceMonitor selects the backend Services labelled `kubeast.io/metrics: "true"` (auth-service, ai-service, k8s-service, session-service and, with the AI on, tool-server; k8s-service-stream too with `streams.enabled`), with port name `http` and path `/metrics`. A Prometheus without the Operator can select the same label with `kubernetes_sd_configs` (role `endpoints`).
+
+kube-prometheus-stack selects ServiceMonitors and PrometheusRules by its `release` label by default (`serviceMonitorSelectorNilUsesHelmValues` and `ruleSelectorNilUsesHelmValues`). Without `metrics.prometheusRule.labels` the rule is made and none of its alerts is loaded, and nothing says so: check that Prometheus' `/api/v1/rules` lists the group `kubeast`.
 
 ## Alerts (`metrics.prometheusRule.enabled`)
 

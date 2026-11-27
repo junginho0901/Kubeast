@@ -75,10 +75,13 @@ metrics:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
     enabled: true           # 알람 5개, AI를 켜면(기본) · 감사 앵커 싱크가 있으면 · 알림 조사를 켜면 하나씩 더
+    labels: {release: monitoring}   # kube-prometheus-stack은 이 라벨이 있는 PrometheusRule만 읽음
 ```
 
-ServiceMonitor 하나가 라벨 `kubeast.io/metrics: "true"`가 붙은 백엔드 Service 다섯 개를 포트 이름 `http`, 경로 `/metrics`로 고릅니다.
+ServiceMonitor 하나가 라벨 `kubeast.io/metrics: "true"`가 붙은 백엔드 Service(auth-service, ai-service, k8s-service, session-service, AI를 켜면 tool-server, `streams.enabled`면 k8s-service-stream도)를 포트 이름 `http`, 경로 `/metrics`로 고릅니다.
 Operator 없이 Prometheus를 쓴다면 `kubernetes_sd_configs`(role `endpoints`)로 같은 라벨을 고르면 됩니다.
+
+kube-prometheus-stack은 기본으로 `release` 라벨로 ServiceMonitor와 PrometheusRule을 고릅니다(`serviceMonitorSelectorNilUsesHelmValues`, `ruleSelectorNilUsesHelmValues`). `metrics.prometheusRule.labels`가 없으면 규칙은 만들어져도 알람이 하나도 올라가지 않고, 아무 오류도 없습니다. 그 Prometheus의 `/api/v1/rules`에 `kubeast` 그룹이 있는지 보세요.
 
 ## 알람 (`metrics.prometheusRule.enabled`)
 

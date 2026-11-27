@@ -375,6 +375,10 @@ multicluster:
     priorityLevel: global-default     # 모든 사람과 알림 조사, 사람마다 흐름 하나: 클러스터의 다른 사용자가 있는 곳
 ```
 
+## 직접 관리하는 Secret
+
+`secrets.existingSecret`과 `ai.apiKeysSecret`은 직접 만든 Secret(손으로, 또는 External Secrets Operator나 sealed-secrets 같은 도구로)의 이름입니다. 파드는 시작할 때 그 Secret을 환경 변수로 읽습니다. 차트는 그 Secret을 볼 수 없으므로, 거기서 값이 바뀌어도 그 값을 가진 파드가 다시 시작하기 전에는 읽지 않습니다. 차트가 만드는 Secret(`kubeast-secrets`)은 값이 바뀌면 파드를 다시 띄웁니다. 값이 바뀐 뒤에는 그 Secret을 읽는 Deployment를 다시 시작하거나(`kubectl -n <namespace> rollout restart deployment/<이름>`), Stakater Reloader처럼 Secret이 바뀌면 다시 시작해 주는 도구에 맡기세요.
+
 ## 새 값의 단계
 
 0.7.8부터 릴리스가 더하거나 뜻을 바꾼 값마다 단계가 있고, 이 표와 그 값의 `values.yaml` 주석에 적습니다.

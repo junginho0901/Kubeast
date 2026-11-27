@@ -25,6 +25,21 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   --header "Authorization: Bearer $KUBEAST_API_KEY"
 ```
 
+For Cursor, put the server in `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
+
+```json
+{
+  "mcpServers": {
+    "kubeast": {
+      "url": "https://console.example.com/api/v1/ai/mcp",
+      "headers": { "Authorization": "Bearer <your Kubeast API key>" }
+    }
+  }
+}
+```
+
+The file then holds the key, so keep it out of a shared repository. Kubeast takes the key in the `Authorization` header only. It has no OAuth sign-in for MCP clients, so a client that offers to sign in after a 401 has the wrong key or none.
+
 - Turning it on: `mcp.enabled: true` (`MCP_ENABLED` in compose). Off by default; when off, the path does not exist.
 - Permissions:
   - `ai.mcp.use` on that cluster. The system Read and Write roles include it, and Admin has everything.

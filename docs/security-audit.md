@@ -111,7 +111,7 @@ Without sinks, nothing changes.
 | `email` | email (SMTP, STARTTLS/TLS) | `username`, `password` |
 | `file` | NDJSON on a PVC (`/var/lib/kubeast-audit`, `audit.fileSinkVolume`) | — |
 
-`teams`, `discord` and `pagerduty` follow each service's published payload format but have not been tested against the real services yet.
+`discord` was checked against a real Discord channel on 2026-10-05: a batch arrived as a message. `teams` and `pagerduty` follow each service's published payload format but have not been tested against the real services yet.
 
 ```yaml
 audit:
@@ -131,6 +131,8 @@ retention:
 - **Filter**: the same wildcards as permission patterns (`k8s.*.delete`, `admin.*`) and `results: [failure]`. No filter means everything.
 - **Starting point**: `s3` and `file` start from the beginning (the whole existing history), the rest from when they are turned on (change with `startFrom`).
 - **Message size**: a `teams` card is kept under 24 KiB (Teams takes up to 28 KB in one message). A batch whose card would be larger goes out as several cards, and one line that is still too long is cut to 1000 characters. A `pagerduty` event over 512000 bytes (the Events API v2 limit) goes out without the row's `before` and `after` in `custom_details`, with a `note` saying so.
+- **Teams**: the `url` is that of a Teams workflow (in the channel, Workflows → **Send webhook alerts to a channel**), which takes the Adaptive Card the sink sends. An Office 365 connector address (`*.webhook.office.com`) no longer works: Microsoft retired those connectors in May 2026.
+- **PagerDuty**: each row is one incident (`dedup_key` `kubeast-audit-<id>`, so a row sent again is the same incident), and Kubeast never resolves it. Narrow the sink with `filter`, such as `results: [failure]` or `actions: ["k8s.*.delete"]`.
 - **S3 Object Lock (WORM, ISMS-P evidence)**: create the bucket with Object Lock and versioning, and set a **default retention** (compliance or governance mode, and a period).
   - Kubeast does not set retention per object.
   - IAM permissions on the sink's prefix: `s3:PutObject` and `s3:GetObject`. The anchor's **Verify** reads the digests back with `GetObject` (`<prefix>digests/*`), and a batch that a locked bucket refuses to write again is read back (below). Without `s3:GetObject`, Verify marks each anchor's object check as failed with the access error, and such a batch keeps failing.

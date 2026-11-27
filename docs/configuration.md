@@ -387,6 +387,10 @@ multicluster:
     priorityLevel: global-default     # every person and the alert investigator, a flow each: where the cluster's other users are
 ```
 
+## Secrets you keep yourself
+
+`secrets.existingSecret` and `ai.apiKeysSecret` name Secrets you make, by hand or with a tool such as External Secrets Operator or sealed-secrets. The pods read them as their environment when they start. The chart cannot see those Secrets, so a value that changes there is not read until the pods that hold it restart; the chart's own Secret (`kubeast-secrets`) rolls its pods when one of its values changes. After such a change, restart the Deployments that read the Secret (`kubectl -n <namespace> rollout restart deployment/<name>`), or have a tool that restarts them on a Secret change, such as Stakater Reloader, do it.
+
 ## Stages of new values
 
 Each value a release adds from 0.7.8 on, or whose meaning it changes, has a stage, written here and in its `values.yaml` comment:

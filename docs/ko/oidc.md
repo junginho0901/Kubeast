@@ -126,11 +126,14 @@ auth:
 - 토큰에는 그룹이 200개까지 들어갑니다. 그보다 많은 그룹에 든 사람이면 Entra ID는 그룹을 빼고 그 자리에 `_claim_names`와 `_claim_sources`를 보냅니다(groups overage). 이때 Kubeast는 `syncRoles` 값과 상관없이 로그인을 `oidc_groups_overage`로 거부합니다(§6). 그룹 없이 진행하면 첫 로그인은 `defaultRole`을 받고, 이미 있는 계정은 전에 그룹이 준 역할과 클러스터 권한을 그대로 갖기 때문입니다. Kubeast는 Microsoft Graph에서 그룹을 읽지 않습니다. 그룹이 많은 조직은 다음 중 하나를 쓰세요.
   - 애플리케이션에 할당된 그룹만 보내기: groups claim에서 **Groups assigned to the application**(매니페스트의 `groupMembershipClaims: ApplicationGroup`)을 고르고, 매핑할 그룹을 엔터프라이즈 애플리케이션에 할당합니다. 중첩 그룹은 세지 않습니다.
   - 그룹 대신 앱 역할 쓰기: 앱 등록에 앱 역할을 만들어 사용자나 그룹에 할당하고 `auth.oidc.claims.groups: roles`로 둡니다. 그러면 `roleMapping`·`clusterGroupMapping`에는 앱 역할의 값을 적습니다.
+- 메일함이 없는 계정은 `email` 클레임이 없어 `oidc_no_email`로 로그인이 거부됩니다. 이런 계정으로 로그인하려면 `auth.oidc.claims.email: preferred_username`(사용자 계정 이름, `이름@<테넌트 도메인>`)으로 두고 `allowedDomains`에 테넌트의 도메인을 적으세요. 그러면 모든 로그인이 이 클레임을 읽으므로, 메일 주소와 사용자 계정 이름이 다른 사람은 전과 다른 계정으로 로그인합니다. Microsoft는 이 클레임이 바뀔 수 있다고 하므로, Entra ID에서 이름이 바뀐 사람은 Kubeast에서 새 계정이 됩니다.
 
 ### Okta
 
 - OIDC Web Application, Sign-in redirect URI = 위 callback. `issuerUrl`에는 사용하는 authorization server 주소를 넣습니다(`https://<org>.okta.com/oauth2/default` 등).
-- 그룹을 쓰려면 authorization server의 claim(`groups`, filter로 범위 제한)을 ID 토큰에 넣으세요.
+- 그룹을 쓰려면 authorization server에 groups claim을 만들고 **ID Token**에 넣되 **Always**로 두세요. **Always**가 아니면 그 claim을 요청한 토큰에만 들어가므로 그룹 없이 로그인합니다(`defaultRole`).
+- org authorization server(`issuerUrl: https://<org>.okta.com`)를 쓰거나 claim을 `groups` scope에 묶었다면 `auth.oidc.scopes`에 `groups`를 더하세요.
+- claim의 filter는 좁게 두세요(예: **Starts with** `kubeast-`). 토큰에는 그룹이 100개까지 들어가고, 그보다 많으면 Okta가 로그인을 거부해 `oidc_denied`로 돌아옵니다.
 
 ## 5. Kubernetes 쪽
 

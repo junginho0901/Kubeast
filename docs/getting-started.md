@@ -345,6 +345,23 @@ The code is in `app/services/anthropic_messages.py`, and responses are converted
 - Without a `base_url`, `custom` or another provider is refused with 400. Before 0.8.0 the chat of such a setting went to OpenAI's address, and **Test** of `groq`, `deepseek`, `mistral`, `together` or `fireworks` went to that provider.
 - A setting stored that way before the upgrade stays in the list. The chat and **Test** refuse it and send nothing. It can be turned off or deleted; any other change needs a `base_url` or one of the providers above.
 - **Test** of a Gemini setting with a `base_url` calls that address as the chat does, through its OpenAI-compatible API.
+- **Test** of a Gemini setting with no `base_url` asks Google's own API (`generateContent`) for a short answer without tools, while the chat calls Google's OpenAI-compatible address with tools. A **Test** that passes shows that the key and the model name are taken; the first chat answer that calls a tool shows the rest.
+
+**Other OpenAI-compatible providers** are set up as provider `custom` with their address as `base_url`, and their key:
+
+| Provider | `base_url` |
+| --- | --- |
+| Groq | `https://api.groq.com/openai/v1` |
+| DeepSeek | `https://api.deepseek.com` |
+| Mistral AI | `https://api.mistral.ai/v1` |
+| Together AI | `https://api.together.ai/v1` |
+| Fireworks AI | `https://api.fireworks.ai/inference/v1` |
+| A LiteLLM proxy in this cluster | its Service, such as `http://litellm.<namespace>.svc:<port>` |
+
+- **Test** sends a tool with its question, so a model that does not take tools fails **Test**, as it would fail in the chat.
+- A thinking model that answers with `reasoning_content` or `reasoning` (DeepSeek's thinking mode, Together's thinking models) gets that text back in the next requests of a tool loop, as those providers ask.
+- A LiteLLM proxy in the cluster has a private address: list its host in `ai.baseUrlAllowedHosts`, and with `networkPolicy.enabled` its address and port in `networkPolicy.allowExternalEgressCIDRs` (on EKS VPC CNI, the Service's cluster IP; [Cluster requirements §15](cluster-requirements.md#outbound-connections-of-the-ai-services)).
+- **Not yet verified against these services**: the addresses are from each provider's documentation, and the calls were checked against fake servers only.
 
 **Using a Claude subscription (provider `claude-code`, personal use)** lets you chat with the `claude setup-token` value of a Claude Pro/Max subscription instead of an API key.
 Only Claude Code accepts subscription tokens, so ai-service starts Claude Code for each model call (Claude Agent SDK, `app/services/claude_code.py`).

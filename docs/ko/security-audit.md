@@ -118,7 +118,7 @@ auth-service replica 하나가 싱크마다 "어디까지 보냈는지"(커서)�
 | `email` | 메일(SMTP, STARTTLS/TLS) | `username`·`password` |
 | `file` | PVC에 NDJSON으로 저장(`/var/lib/kubeast-audit`, `audit.fileSinkVolume`) | — |
 
-`teams`·`discord`·`pagerduty`는 각 서비스가 공개한 페이로드 형식을 따르지만, 실제 서비스에서는 아직 시험하지 않았습니다.
+`discord`는 2026-10-05에 실제 Discord 채널로 확인했습니다. 배치가 메시지로 도착했습니다. `teams`·`pagerduty`는 각 서비스가 공개한 페이로드 형식을 따르지만, 실제 서비스에서는 아직 시험하지 않았습니다.
 
 ```yaml
 audit:
@@ -138,6 +138,8 @@ retention:
 - **필터**: 권한 패턴과 같은 와일드카드(`k8s.*.delete`, `admin.*`)와 `results: [failure]`를 쓸 수 있습니다. 필터가 없으면 전부 보냅니다.
 - **시작점**: `s3`·`file`은 처음부터(기존 이력 전체), 나머지는 켠 시점부터 보냅니다. `startFrom`으로 바꿀 수 있습니다.
 - **메시지 크기**: `teams` 카드는 24 KiB 아래로 보냅니다(Teams는 메시지 하나에 28 KB까지 받습니다). 카드가 그보다 커질 배치는 카드 여러 장으로 나눠 보내고, 그래도 긴 줄 하나는 1000자로 자릅니다. `pagerduty` 이벤트가 512000바이트(Events API v2 한도)를 넘으면 `custom_details`에서 그 행의 `before`·`after`를 빼고, 뺐다는 `note`를 붙여 보냅니다.
+- **Teams**: `url`은 Teams 워크플로의 주소입니다(채널에서 Workflows → **Send webhook alerts to a channel**). 이 워크플로가 싱크가 보내는 Adaptive Card를 받습니다. Office 365 커넥터 주소(`*.webhook.office.com`)는 더 쓸 수 없습니다. Microsoft가 2026년 5월에 그 커넥터를 끝냈습니다.
+- **PagerDuty**: 행 하나가 인시던트 하나입니다(`dedup_key` `kubeast-audit-<id>`, 그래서 다시 보낸 행은 같은 인시던트입니다). Kubeast는 인시던트를 닫지 않습니다. `filter`로 좁혀 쓰세요(예: `results: [failure]`, `actions: ["k8s.*.delete"]`).
 - **S3 Object Lock(WORM, ISMS-P 증적)**: 버킷을 Object Lock과 버전 관리를 켜서 만들고 **기본 보존**(compliance 또는 governance, 기간)을 거세요.
   - Kubeast는 객체마다 보존을 지정하지 않습니다.
   - IAM 권한은 싱크 prefix에 `s3:PutObject`와 `s3:GetObject`가 필요합니다. 앵커 **검증**은 `GetObject`로 digest를 다시 읽고(`<prefix>digests/*`), 잠긴 버킷이 다시 쓰기를 거절한 배치도 다시 읽어 봅니다(아래). `s3:GetObject`가 없으면 검증은 앵커마다 객체 확인을 실패로 표시하고 접근 오류를 보여 주며, 그런 배치는 계속 실패합니다.

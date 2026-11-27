@@ -24,6 +24,21 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   --header "Authorization: Bearer $KUBEAST_API_KEY"
 ```
 
+Cursor는 `~/.cursor/mcp.json`(프로젝트라면 `.cursor/mcp.json`)에 서버를 적습니다.
+
+```json
+{
+  "mcpServers": {
+    "kubeast": {
+      "url": "https://console.example.com/api/v1/ai/mcp",
+      "headers": { "Authorization": "Bearer <your Kubeast API key>" }
+    }
+  }
+}
+```
+
+그 파일에 키가 들어가므로 함께 쓰는 저장소에는 넣지 마세요. Kubeast는 키를 `Authorization` 헤더로만 받습니다. MCP 클라이언트용 OAuth 로그인이 없으므로, 401 뒤에 클라이언트가 로그인을 권하면 키가 틀렸거나 빠진 것입니다.
+
 - 켜기: `mcp.enabled: true`(컴포즈는 `MCP_ENABLED`). 기본은 꺼져 있고, 꺼져 있으면 경로 자체가 없습니다.
 - 권한: 그 클러스터에 대한 `ai.mcp.use`(시스템 Read·Write 역할에 포함, Admin은 모든 권한)와 쓰려는 도구의 `ai.tool.<이름>`이 필요합니다.
   - Read는 읽기 도구 53종만, Write는 전부와 쓰기 미리보기 `k8s_diff`를 쓸 수 있습니다.
