@@ -11,18 +11,24 @@ import { checkFor, endText, lineColor, lineState, openableEnd, type LineCheck } 
 // The window a traffic line opens on the right: its ends, what was counted, the ports, the drop reasons and the
 // policies that denied it, and (recent flows) its latest connections — with the NetworkPolicy check for a
 // dropped line and the ends' drawers, whose "Recent Flows" read more. Escape closes it and gives the focus back to the
-// line (`opener`), unless the check window or an end's drawer is open over it: that one takes the key.
+// line (`opener`), unless the check window or an end's drawer is open over it: that one takes the key. Its X gives the
+// focus back to the line too, and the page puts the focus on its title (`titleRef`) when Enter on a line opened it.
 
-export function TrafficPanel({ line, result, opener, onClose, onWhy, onOpen }: {
+export function TrafficPanel({ line, result, opener, titleRef, onClose, onWhy, onOpen }: {
   line: TrafficLine
   result: TrafficResult
   opener: RefObject<{ focus(): void } | null>
+  titleRef?: RefObject<HTMLHeadingElement | null>
   onClose: () => void
   onWhy: (c: LineCheck) => void
   onOpen: (e: TrafficEnd) => void
 }) {
   const { t } = useTranslation()
   usePanelEscape(true, opener, onClose, modalOpen)
+  const closeToLine = () => {
+    onClose()
+    opener.current?.focus()
+  }
   const tr = (key: string, fallback: string, options?: Record<string, unknown>) => t(key, { defaultValue: fallback, ...options })
   const state = lineState(line)
   const check = checkFor(line)
@@ -37,8 +43,10 @@ export function TrafficPanel({ line, result, opener, onClose, onWhy, onOpen }: {
   return (
     <div className="absolute top-3 right-3 bottom-3 z-20 w-[360px] max-w-[calc(100%-24px)] overflow-y-auto rounded-xl border border-hairline bg-slate-800 p-4 text-sm shadow-xl break-words" data-testid="traffic-panel">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="text-lg font-semibold text-ink">{tr('resourceGraph.traffic.panelTitle', 'Traffic')}</div>
-        <button type="button" onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-ink hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-primary-400 hit-area-40" aria-label={tr('common.close', 'Close')} data-testid="traffic-panel-close">
+        <h2 ref={titleRef} tabIndex={-1} className="text-lg font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400" data-testid="traffic-panel-title">
+          {tr('resourceGraph.traffic.panelTitle', 'Traffic')}
+        </h2>
+        <button type="button" onClick={closeToLine} className="p-1 rounded-lg text-slate-400 hover:text-ink hover:bg-slate-700 focus-visible:outline-2 focus-visible:outline-primary-400 hit-area-40" aria-label={tr('common.close', 'Close')} data-testid="traffic-panel-close">
           <X className="w-4 h-4" />
         </button>
       </div>

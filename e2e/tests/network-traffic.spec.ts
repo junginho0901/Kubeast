@@ -263,6 +263,30 @@ test.describe('Resource Graph traffic lines (Hubble)', () => {
     await expect(page).toHaveURL(/\/cluster\/resource-graph/)
   })
 
+  test("the traffic panel's X gives the focus back to its line, and Enter on the line opens it with the focus on its title", async ({ page }) => {
+    test.skip(!relayReady, `cluster ${CLUSTER} is not registered in Kubeast or has no network flows (scripts/kind-cilium.sh up)`)
+    await page.goto(`/cluster/resource-graph?cluster=${CLUSTER}&namespace=${NS}`)
+    await expect(page.getByTestId('graph-view-structure')).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
+    await page.getByTestId('graph-view-traffic').click()
+    const dropped = page.locator(`[aria-label="${NS}/stranger → ${NS}/web (TCP 80)"]`)
+    await expect(dropped).toHaveCount(1, { timeout: 30_000 })
+    await dropped.locator('.react-flow__edge-textwrapper').click()
+    const panel = page.getByTestId('traffic-panel')
+    await expect(panel.getByTestId('traffic-panel-ports')).toHaveText('TCP 80')
+    await panel.getByTestId('traffic-panel-close').click()
+    await expect(panel).toHaveCount(0)
+    await expect(dropped).toBeFocused()
+    // the keyboard only from here: Enter on the line, then Tab to the X and Enter on it
+    await page.keyboard.press('Enter')
+    await expect(panel.getByTestId('traffic-panel-ports')).toHaveText('TCP 80')
+    await expect(panel.getByTestId('traffic-panel-title')).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(panel.getByTestId('traffic-panel-close')).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(panel).toHaveCount(0)
+    await expect(dropped).toBeFocused()
+  })
+
   test('a cluster whose Prometheus has no Hubble metrics says so', async ({ page, request }) => {
     const features = await (await request.get('/api/v1/cluster/features?cluster=default', { headers: bearer(admin) })).json()
     test.skip(features?.prometheus?.enabled !== true, 'the second cluster has no Prometheus in Kubeast')

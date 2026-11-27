@@ -6,7 +6,7 @@ import type { TrafficLine, TrafficResult } from '@/services/api'
 
 // The Resource Graph page with its reads answered: what the graph (React Flow) is handed and what the page draws
 // beside it, rendered with the fake hooks.
-const g = vi.hoisted(() => ({ nodes: [] as unknown[], edges: [] as unknown[], traffic: undefined as unknown }))
+const g = vi.hoisted(() => ({ nodes: [] as unknown[], edges: [] as unknown[], traffic: undefined as unknown, opened: [] as unknown[], target: null as unknown }))
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), ...(await import('@/testing/fakeHooks')).fakeHooks }))
 vi.mock('react-router-dom', () => ({ useSearchParams: () => [new URLSearchParams()] }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
@@ -24,7 +24,10 @@ vi.mock('@/hooks/usePrometheusQuery', () => ({ useClusterFeatures: () => ({ data
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ has: () => true }) }))
 vi.mock('@/contexts/ClusterContext', () => ({ useCluster: () => ({ currentCluster: 'self' }) }))
 vi.mock('@/services/confirm', () => ({ useConfirm: () => async () => true }))
-vi.mock('@/components/ResourceDetailContext', () => ({ useResourceDetail: () => ({ open: () => {}, target: null }) }))
+// the drawer as the page sees it: what it was asked to open, and the object it shows (null once closed)
+vi.mock('@/components/ResourceDetailContext', () => ({
+  useResourceDetail: () => ({ open: (t: unknown) => { g.opened.push(t); g.target = t }, target: g.target }),
+}))
 vi.mock('@/components/resource-detail/NetworkPolicyCheckModal', () => ({ default: () => null }))
 vi.mock('@xyflow/react', () => ({
   ReactFlow: function ReactFlow() { return null },
@@ -39,6 +42,8 @@ import ResourceGraph from './ResourceGraph'
 import { Glance } from './resource-graph/Glance'
 import { ResourceGraphHeader } from './resource-graph/ResourceGraphHeader'
 import { TrafficPanel } from './resource-graph/TrafficPanel'
+import { PodGroupList } from './resource-graph/PodGroupList'
+import { PEER_KIND } from './resource-graph/traffic'
 
 const { install } = fakeDocument()
 const line: TrafficLine = {
@@ -62,6 +67,8 @@ beforeEach(() => {
   g.nodes = nodes
   g.edges = edges
   g.traffic = traffic
+  g.opened = []
+  g.target = null
 })
 afterEach(() => {
   fakeUnmount()
@@ -137,5 +144,134 @@ describe('Resource Graph traffic line on Enter', () => {
     expect(panel(page())).toBeUndefined()
     key('Enter', drawn('.react-flow__edge', 'line-1'))
     expect(panel(page())?.line, 'the same page opens it on Enter').toBe(line)
+  })
+
+  it('puts the focus on the panel’s title once the panel an Enter opened is drawn, once for each Enter', () => {
+    trafficView()
+    key('Enter', drawn('.react-flow__edge', 'line-1'))
+    const titleRef = panel(page())?.titleRef as { current: unknown }
+    // the page draws the panel's title (a ref the fake render does not fill): the next Enter's panel has one
+    const title = { focus: vi.fn() }
+    titleRef.current = title
+    ;(panel(page())?.onClose as () => void)()
+    expect(panel(page())).toBeUndefined()
+    key('Enter', drawn('.react-flow__edge', 'line-1'))
+    expect(panel(page())?.titleRef, 'the same title the page focuses').toBe(titleRef)
+    expect(title.focus).toHaveBeenCalledOnce()
+    page()
+    expect(title.focus, 'not again as the page draws again').toHaveBeenCalledOnce()
+    // Enter on the line again, the panel still open, puts it there again
+    key('Enter', drawn('.react-flow__edge', 'line-1'))
+    page()
+    expect(title.focus).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves the focus on the line a press opened the panel from, as before, also after an Enter opened it', () => {
+    // node has no DOM: the press's element is no SVGElement or HTMLElement, which only drops the line Escape focuses
+    vi.stubGlobal('SVGElement', class {})
+    vi.stubGlobal('HTMLElement', class {})
+    trafficView()
+    key('Enter', drawn('.react-flow__edge', 'line-1'))
+    const titleRef = panel(page())?.titleRef as { current: unknown }
+    const title = { focus: vi.fn() }
+    titleRef.current = title
+    ;(panel(page())?.onClose as () => void)()
+    expect(panel(page())).toBeUndefined()
+    ;(flow(page()).onEdgeClick as (e: unknown, edge: Edge) => void)({ currentTarget: drawn('.react-flow__edge', 'line-1') }, edges[0])
+    expect(panel(page())?.line).toBe(line)
+    expect(title.focus).not.toHaveBeenCalled()
+  })
+})
+
+// A box takes the keyboard focus but Enter only selected it (React Flow's own key; onNodeClick hears the pointer only).
+describe('Resource Graph box on Enter', () => {
+  const key = (key: string, target: unknown, isComposing = false) =>
+    (flow(page()).onKeyDown as (e: unknown) => void)({ key, target, nativeEvent: { isComposing } })
+  const click = (node: Node) => (flow(page()).onNodeClick as (e: unknown, n: Node) => void)({}, node)
+  // a box as React Flow draws it: the node `div` with the focus, its data-id
+  const box = (id: string) => {
+    const el = { focus: vi.fn(), isConnected: true, getAttribute: (name: string) => (name === 'data-id' ? id : null), closest: (s: string) => (s === '.react-flow__node' ? el : null) }
+    return el
+  }
+  const groupList = (tree: unknown) => elementsOf(tree, (_p, type) => type === PodGroupList)[0]?.props as Props | undefined
+  const closeDrawer = () => {
+    g.target = null
+    page()
+  }
+  const groupRaw = { id: 'pods-web', kind: 'Pod', name: 'web (12)', namespace: 'default', status: 'Running', group: true, count: 12, ownerKind: 'Deployment', ownerName: 'web' }
+  const peerRaw = (end: Record<string, string>) => ({ id: 'peer', kind: PEER_KIND, name: 'peer', namespace: 'default', status: '', end })
+
+  it('opens the drawer of the box with the focus, as a press on it does', () => {
+    click(nodes[0])
+    const pressed = g.opened.splice(0)
+    closeDrawer()
+    key('Enter', box('n-web'))
+    expect(pressed).toEqual([{ kind: 'Deployment', name: 'web', namespace: 'default' }])
+    expect(g.opened, 'the same target as the press').toEqual(pressed)
+  })
+
+  it('gives the focus back to the box when its drawer closes, unless it was put somewhere else meanwhile', () => {
+    const web = box('n-web')
+    key('Enter', web)
+    page()
+    expect(web.focus, 'not while the drawer is open').not.toHaveBeenCalled()
+    closeDrawer()
+    expect(web.focus, 'the drawer took the focus with it').toHaveBeenCalledOnce()
+
+    const db = box('n-db')
+    key('Enter', db)
+    page()
+    ;(document as unknown as { activeElement: unknown }).activeElement = { put: 'elsewhere' }
+    closeDrawer()
+    expect(db.focus).not.toHaveBeenCalled()
+    expect(web.focus, 'once only').toHaveBeenCalledOnce()
+  })
+
+  it('opens a group box’s pods window, as a press does, and no drawer', () => {
+    const group: Node = { id: 'n-group', position: { x: 0, y: 0 }, data: { raw: groupRaw } }
+    g.nodes = [...nodes, group]
+    click(group)
+    const pressed = groupList(page())?.group
+    expect(pressed).toEqual(groupRaw)
+    ;(groupList(page())?.onClose as () => void)()
+    expect(groupList(page())).toBeUndefined()
+    const el = box('n-group')
+    key('Enter', el)
+    expect(groupList(page())?.group, 'the same window as the press').toEqual(pressed)
+    expect(g.opened).toEqual([])
+    // the window gives the focus back to the box itself (ModalOverlay's opener), so a drawer the pointer opens later
+    // does not give the focus to the group box when it closes
+    ;(groupList(page())?.onClose as () => void)()
+    click(nodes[0])
+    page()
+    closeDrawer()
+    expect(el.focus).not.toHaveBeenCalled()
+  })
+
+  it('opens a peer’s object as a press does, and nothing for a peer outside the pods', () => {
+    const peer: Node = { id: 'n-peer', position: { x: 0, y: 0 }, data: { raw: peerRaw({ kind: 'Deployment', name: 'api', namespace: 'shop' }) } }
+    const outside: Node = { id: 'n-out', position: { x: 0, y: 0 }, data: { raw: peerRaw({ name: 'world' }) } }
+    g.nodes = [...nodes, peer, outside]
+    key('Enter', box('n-peer'))
+    expect(g.opened).toEqual([{ kind: 'Deployment', name: 'api', namespace: 'shop' }])
+    closeDrawer()
+    const out = box('n-out')
+    key('Enter', out)
+    expect(g.opened, 'nothing more opened').toHaveLength(1)
+    // a drawer the pointer opens later does not give the focus to that box when it closes
+    click(nodes[0])
+    page()
+    closeDrawer()
+    expect(out.focus).not.toHaveBeenCalled()
+  })
+
+  it('opens nothing on Space or Escape (React Flow selects with them) or on Enter while an input method composes', () => {
+    key(' ', box('n-web'))
+    key('Escape', box('n-web'))
+    key('Enter', box('n-web'), true)
+    expect(g.opened).toEqual([])
+    expect(groupList(page())).toBeUndefined()
+    key('Enter', box('n-web'))
+    expect(g.opened, 'the same page opens it on Enter').toHaveLength(1)
   })
 })
