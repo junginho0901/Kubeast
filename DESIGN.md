@@ -192,6 +192,7 @@ Cards 12px (`.card` is `rounded-xl`). Buttons, inputs, list rows, dropdowns and 
 - A Resource Graph box or traffic line with the keyboard focus opens on Enter what a press opens; Space keeps React Flow's selection. A line's panel opened with Enter takes the focus to its title. Closing a box's drawer or pod list, or a line's panel by Escape or its X, puts the focus back on it.
 - The floating chat launcher stays 48×48px at bottom/right 24px and moves left of an open detail drawer at 1348px and above. It hides while scrolling down and returns immediately on upward scrolling or keyboard focus, or 500ms after scrolling stops. It stays visible near the bottom-right 110px corner, near the displaced launcher, while chat is open and when there is no scroll room. A scroll-hidden launcher remains keyboard reachable. Reduced motion removes its visibility transition.
 - The open detail drawer keeps Tab inside it, as a window does; the floating chat beside it is reached with its shortcut (⌘/ or Ctrl+/).
+- While the floating chat is open, its shortcut pressed outside it moves the focus to its input and leaves it open; only a press inside the chat closes it.
 
 ## Do's and Don'ts
 

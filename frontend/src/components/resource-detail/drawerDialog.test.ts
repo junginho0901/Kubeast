@@ -4,6 +4,7 @@ import { elementsOf, fakeRender, fakeUnmount, textsOf } from '@/testing/fakeHook
 import { drawerKeydown, keepTabIn } from './drawerDialog'
 import { ResourceDetailHeader } from './ResourceDetailHeader'
 import { chatShortcutKeydown } from '@/hooks/useChatShortcut'
+import { focusChat, focusOrigin, returnFocus as returnChatFocus, shortcutStep } from '@/components/FloatingAIChat/focusReturn'
 import drawerSrc from '../ResourceDetailDrawer.tsx?raw'
 import chatPanelSrc from '@/components/FloatingAIChat/ChatPanel.tsx?raw'
 
@@ -305,6 +306,43 @@ describe('the way to the floating chat from the drawer', () => {
       expect(close).not.toHaveBeenCalled()
       expect(s.page.active).toBe(s.info)
     }
+  })
+
+  it('with the chat already open, the first ⌘/ from the drawer takes the focus to its input, and Escape there brings it back', () => {
+    const s = scene()
+    const chat = s.page.el('chat window', null, { focusable: true })
+    const input = s.page.el('chat input', chat, { tabbable: true })
+    const doc = { get activeElement() { return as<Element | null>(s.page.active) }, body: null }
+    s.page.active = s.info
+    const close = vi.fn()
+    const steps: string[] = []
+    let from: Element | null = null
+    // the floating chat's press, as FloatingAIChat wires it: the chat is open
+    const pressed = () => {
+      const step = shortcutStep(true, doc, as(chat))
+      steps.push(step)
+      if (step === 'focus') {
+        from = focusOrigin(doc)
+        focusChat(doc, as(input), as(chat))
+      }
+    }
+    const listeners = [drawerKeydown(() => as(s.drawer), () => true, close, docOf(s.page)),
+      chatShortcutKeydown(true, () => true, pressed)] as ((e: ReturnType<typeof shortcut>) => void)[]
+    for (const fn of listeners) fn(shortcut())
+    expect(steps, 'the chat stays open').toEqual(['focus'])
+    expect(s.page.active).toBe(input)
+    expect(close, 'the drawer stays open').not.toHaveBeenCalled()
+
+    // Tab and Escape in the chat stop in its own handler (the next test), so the drawer's Tab rule does not pull it back
+    // Escape in the chat closes it only, and the focus goes back where the press found it in the drawer
+    expect(returnChatFocus(doc, as(chat), from, as(s.chatButton))).toBe('back')
+    expect(s.page.active).toBe(s.info)
+    expect(close).not.toHaveBeenCalled()
+
+    // from inside the chat the press closes it, as before
+    s.page.active = input
+    for (const fn of listeners) fn(shortcut())
+    expect(steps).toEqual(['focus', 'close'])
   })
 
   it('Tab and Escape pressed in the chat window stay there while the drawer is open', () => {

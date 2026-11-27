@@ -5,7 +5,7 @@ import { useResourceDetail } from '../ResourceDetailContext'
 // The panel carries the markdown renderer; fetch it when first opened.
 const ChatPanel = lazy(() => import('./ChatPanel').then((m) => ({ default: m.ChatPanel })))
 import { ToggleButton } from './ToggleButton'
-import { focusOrigin, returnFocus } from './focusReturn'
+import { focusChat, focusOrigin, returnFocus, shortcutStep } from './focusReturn'
 import { FLOATING_SESSION_KEY } from '@/services/floatingChatSession'
 import { useChatShortcut } from '@/hooks/useChatShortcut'
 import { useChatScrollVisibility } from '@/hooks/useChatScrollVisibility'
@@ -29,6 +29,7 @@ function readPersistedSessionId(): string | null {
  *   - mount/unmount 와 visible 상태를 분리하여 exit 애니메이션 후 DOM 제거
  * - 모달 위(z 1300)에 뜨고, 상세 드로어(폭 740px)가 열려 있으면 드로어 왼쪽 바깥으로 옮김 — 1348px 미만 화면은 그대로
  * - ⌘/ (Mac) · Ctrl+/ 로 열고 닫음 (`useChatShortcut`): 이 컴포넌트가 있는 동안만 — AI 가 꺼져 있으면 Layout 이 그리지 않음
+ *   열려 있는데 포커스가 밖(서랍 · 창 · 페이지)이면 닫지 않고 입력칸으로 포커스 (`shortcutStep`)
  * - 열면 입력칸에 포커스, 닫으면 열 때 포커스가 있던 곳(없으면 토글 버튼)으로 돌려줌
  */
 export default function FloatingAIChat() {
@@ -58,6 +59,7 @@ export default function FloatingAIChat() {
   const toggleRef = useRef<HTMLButtonElement>(null)
   const scrollHidden = useChatScrollVisibility(toggleRef, isOpen || !toggleVisible || pageType === 'ai-chat')
   const panelRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const openedFrom = useRef<HTMLElement | null>(null)
   const focusToggle = useRef(false)
   const open = useCallback(() => {
@@ -76,7 +78,18 @@ export default function FloatingAIChat() {
     focusToggle.current = false
     if (!focusOrigin(document)) toggleRef.current?.focus()
   }, [toggleVisible])
-  useChatShortcut(pageType !== 'ai-chat', () => (isOpen ? close() : open()))
+  // open with the focus elsewhere (a drawer, a window, the page): the press brings the focus in, and closing gives it
+  // back there; the next press, from inside, closes it
+  const focusIn = useCallback(() => {
+    const from = focusOrigin(document)
+    if (focusChat(document, inputRef.current, panelRef.current) !== 'none') openedFrom.current = from
+  }, [])
+  useChatShortcut(pageType !== 'ai-chat', () => {
+    const step = shortcutStep(isOpen, document, panelRef.current)
+    if (step === 'open') open()
+    else if (step === 'close') close()
+    else focusIn()
+  })
 
   useEffect(() => {
     if (isOpen) {
@@ -113,6 +126,7 @@ export default function FloatingAIChat() {
           <ChatPanel
             onClose={close}
             panelRef={panelRef}
+            inputRef={inputRef}
             getSnapshot={getSnapshot}
             consumeContextChanged={consumeContextChanged}
             currentPageTitle={pageTitle}
