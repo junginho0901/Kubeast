@@ -232,13 +232,14 @@ func (t *Tracker) Begin(ctx context.Context, r Row, base audit.Record, cancel co
 // came) it returns ctx's error, wrapped in ErrHeld if it was waiting.
 func (t *Tracker) Ready(ctx context.Context) error {
 	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
 		t.mu.Lock()
 		fresh := t.now().Sub(t.beatAt) < t.holdAfter
 		beaten := t.beaten
 		t.mu.Unlock()
+		// after the heartbeat is read: the beat that stops a drain cancels it before it saves beatAt
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if fresh {
 			return nil
 		}
