@@ -161,7 +161,7 @@
       <p lang="ko">꾸민 화면 없이, 테스트 클러스터에서 그대로 담았습니다. <span class="for-pointer">마우스를 올려 미리 보고, 클릭해 크게 보세요.</span><span class="for-touch">스크롤하면 재생되고, 탭하면 크게 펼쳐집니다.</span></p>
     </div>
 
-    <div class="grid">
+    <div class="grid" id="clips">
       <article class="card" data-clip="ai-chat">
         <div class="thumb"><video muted playsinline preload="none" poster="media/ai-chat.jpg" data-src="media/ai-chat.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
@@ -218,48 +218,6 @@
         </div>
       </article>
 
-      <article class="card" data-clip="resource-drawer">
-        <div class="thumb"><video muted playsinline preload="none" poster="media/resource-drawer.jpg" data-src="media/resource-drawer.mp4"></video><span class="play" aria-hidden="true"></span></div>
-        <div class="card-body">
-          <h3><span lang="en">Every resource in a drawer</span><span lang="ko">모든 리소스를, 패널 하나에</span></h3>
-          <p lang="en">Status, usage and events in one place, and the YAML edited in place.</p>
-          <p lang="ko">상태와 사용량, 이벤트를 한곳에서 확인하고 YAML도 그 자리에서 바로 고치세요.</p>
-          <ol class="steps">
-            <li data-step="find"><span lang="en">Find the Deployment</span><span lang="ko">Deployment 찾기</span></li>
-            <li data-step="drawer"><span lang="en">Status, usage, events</span><span lang="ko">상태, 사용량, 이벤트 확인</span></li>
-            <li data-step="edit"><span lang="en">Edit the YAML: replicas 2 → 3</span><span lang="ko">YAML 수정: replicas 2 → 3</span></li>
-            <li data-step="applied"><span lang="en">Applied: three replicas</span><span lang="ko">적용 완료, 레플리카 3개</span></li>
-          </ol>
-        </div>
-      </article>
-
-      <article class="card" data-clip="logs">
-        <div class="thumb"><video muted playsinline preload="none" poster="media/logs.jpg" data-src="media/logs.mp4"></video><span class="play" aria-hidden="true"></span></div>
-        <div class="card-body">
-          <h3><span lang="en">Live logs</span><span lang="ko">실시간 로그</span></h3>
-          <p lang="en">Logs stream in from Cluster View. With Loki, search the logs of pods already gone.</p>
-          <p lang="ko">Cluster View에서 로그를 실시간으로 따라가세요. Loki를 연결하면 이미 사라진 파드의 로그까지 찾을 수 있습니다.</p>
-          <ol class="steps">
-            <li data-step="stream"><span lang="en">Requests as they arrive</span><span lang="ko">들어오는 요청을 실시간으로</span></li>
-            <li data-step="crash"><span lang="en">Why checkout-api stops</span><span lang="ko">checkout-api가 멈추는 이유 찾기</span></li>
-          </ol>
-        </div>
-      </article>
-
-      <article class="card" data-clip="terminal">
-        <div class="thumb"><video muted playsinline preload="none" poster="media/terminal.jpg" data-src="media/terminal.mp4"></video><span class="play" aria-hidden="true"></span></div>
-        <div class="card-body">
-          <h3><span lang="en">A terminal in the browser</span><span lang="ko">브라우저 속 터미널</span></h3>
-          <p lang="en">A shell in a pod without a kubeconfig on your laptop, for roles that may exec (Admin by default). With session recording on, each session can be replayed.</p>
-          <p lang="ko">노트북에 kubeconfig가 없어도 파드 셸이 열립니다(기본은 Admin 권한). 세션 녹화를 켜 두면 셸 세션을 다시 볼 수 있습니다.</p>
-          <ol class="steps">
-            <li data-step="exec"><span lang="en">Open a shell from the pod</span><span lang="ko">파드에서 셸 열기</span></li>
-            <li data-step="commands"><span lang="en">Run commands</span><span lang="ko">명령 실행</span></li>
-            <li data-step="replay"><span lang="en">Replay the recording</span><span lang="ko">녹화된 세션 다시 보기</span></li>
-          </ol>
-        </div>
-      </article>
-
       <article class="card" data-clip="helm">
         <div class="thumb"><video muted playsinline preload="none" poster="media/helm.jpg" data-src="media/helm.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
@@ -270,21 +228,6 @@
             <li data-step="history"><span lang="en">Release history</span><span lang="ko">릴리스 이력</span></li>
             <li data-step="diff"><span lang="en">Revision 1 against now</span><span lang="ko">리비전 1과 현재 비교</span></li>
             <li data-step="rollback"><span lang="en">Rollback preview, cancelled</span><span lang="ko">롤백 결과를 미리 보고 취소</span></li>
-          </ol>
-        </div>
-      </article>
-
-      <article class="card" data-clip="changes">
-        <div class="thumb"><video muted playsinline preload="none" poster="media/changes.jpg" data-src="media/changes.mp4"></video><span class="play" aria-hidden="true"></span></div>
-        <div class="card-body">
-          <h3><span lang="en">What changed, what connects</span><span lang="ko">무엇이 바뀌었고, 어떻게 이어져 있는지</span></h3>
-          <p lang="en">Change History lines up events and rollouts; Resource Graph draws how objects connect and, with Cilium Hubble, who actually talks to whom.</p>
-          <p lang="ko">Change History는 이벤트와 롤아웃을 시간순으로 정리하고, Resource Graph는 리소스가 어떻게 연결되는지, Cilium Hubble이 있으면 실제로 누가 누구와 통신하는지 그려 줍니다.</p>
-          <ol class="steps">
-            <li data-step="timeline"><span lang="en">Events and rollouts of a namespace</span><span lang="ko">Namespace의 이벤트와 롤아웃</span></li>
-            <li data-step="graph"><span lang="en">How its objects connect</span><span lang="ko">리소스 연결 관계</span></li>
-            <li data-step="traffic"><span lang="en">Who actually talks to whom, by port</span><span lang="ko">실제로 누가 누구와, 어느 포트로 통신하는지</span></li>
-            <li data-step="why"><span lang="en">Why a connection is dropped</span><span lang="ko">연결이 왜 막혔는지</span></li>
           </ol>
         </div>
       </article>
@@ -303,7 +246,65 @@
         </div>
       </article>
 
-      <article class="card" data-clip="masking">
+      <!-- The six above show first; app.js hides the six marked data-more behind the button under the list. -->
+      <article class="card" data-clip="resource-drawer" data-more>
+        <div class="thumb"><video muted playsinline preload="none" poster="media/resource-drawer.jpg" data-src="media/resource-drawer.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">Every resource in a drawer</span><span lang="ko">모든 리소스를, 패널 하나에</span></h3>
+          <p lang="en">Status, usage and events in one place, and the YAML edited in place.</p>
+          <p lang="ko">상태와 사용량, 이벤트를 한곳에서 확인하고 YAML도 그 자리에서 바로 고치세요.</p>
+          <ol class="steps">
+            <li data-step="find"><span lang="en">Find the Deployment</span><span lang="ko">Deployment 찾기</span></li>
+            <li data-step="drawer"><span lang="en">Status, usage, events</span><span lang="ko">상태, 사용량, 이벤트 확인</span></li>
+            <li data-step="edit"><span lang="en">Edit the YAML: replicas 2 → 3</span><span lang="ko">YAML 수정: replicas 2 → 3</span></li>
+            <li data-step="applied"><span lang="en">Applied: three replicas</span><span lang="ko">적용 완료, 레플리카 3개</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="logs" data-more>
+        <div class="thumb"><video muted playsinline preload="none" poster="media/logs.jpg" data-src="media/logs.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">Live logs</span><span lang="ko">실시간 로그</span></h3>
+          <p lang="en">Logs stream in from Cluster View. With Loki, search the logs of pods already gone.</p>
+          <p lang="ko">Cluster View에서 로그를 실시간으로 따라가세요. Loki를 연결하면 이미 사라진 파드의 로그까지 찾을 수 있습니다.</p>
+          <ol class="steps">
+            <li data-step="stream"><span lang="en">Requests as they arrive</span><span lang="ko">들어오는 요청을 실시간으로</span></li>
+            <li data-step="crash"><span lang="en">Why checkout-api stops</span><span lang="ko">checkout-api가 멈추는 이유 찾기</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="terminal" data-more>
+        <div class="thumb"><video muted playsinline preload="none" poster="media/terminal.jpg" data-src="media/terminal.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">A terminal in the browser</span><span lang="ko">브라우저 속 터미널</span></h3>
+          <p lang="en">A shell in a pod without a kubeconfig on your laptop, for roles that may exec (Admin by default). With session recording on, each session can be replayed.</p>
+          <p lang="ko">노트북에 kubeconfig가 없어도 파드 셸이 열립니다(기본은 Admin 권한). 세션 녹화를 켜 두면 셸 세션을 다시 볼 수 있습니다.</p>
+          <ol class="steps">
+            <li data-step="exec"><span lang="en">Open a shell from the pod</span><span lang="ko">파드에서 셸 열기</span></li>
+            <li data-step="commands"><span lang="en">Run commands</span><span lang="ko">명령 실행</span></li>
+            <li data-step="replay"><span lang="en">Replay the recording</span><span lang="ko">녹화된 세션 다시 보기</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="changes" data-more>
+        <div class="thumb"><video muted playsinline preload="none" poster="media/changes.jpg" data-src="media/changes.mp4"></video><span class="play" aria-hidden="true"></span></div>
+        <div class="card-body">
+          <h3><span lang="en">What changed, what connects</span><span lang="ko">무엇이 바뀌었고, 어떻게 이어져 있는지</span></h3>
+          <p lang="en">Change History lines up events and rollouts; Resource Graph draws how objects connect and, with Cilium Hubble, who actually talks to whom.</p>
+          <p lang="ko">Change History는 이벤트와 롤아웃을 시간순으로 정리하고, Resource Graph는 리소스가 어떻게 연결되는지, Cilium Hubble이 있으면 실제로 누가 누구와 통신하는지 그려 줍니다.</p>
+          <ol class="steps">
+            <li data-step="timeline"><span lang="en">Events and rollouts of a namespace</span><span lang="ko">Namespace의 이벤트와 롤아웃</span></li>
+            <li data-step="graph"><span lang="en">How its objects connect</span><span lang="ko">리소스 연결 관계</span></li>
+            <li data-step="traffic"><span lang="en">Who actually talks to whom, by port</span><span lang="ko">실제로 누가 누구와, 어느 포트로 통신하는지</span></li>
+            <li data-step="why"><span lang="en">Why a connection is dropped</span><span lang="ko">연결이 왜 막혔는지</span></li>
+          </ol>
+        </div>
+      </article>
+
+      <article class="card" data-clip="masking" data-more>
         <div class="thumb"><video muted playsinline preload="none" poster="media/masking.jpg" data-src="media/masking.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
           <h3><span lang="en">Secrets stay out of the AI</span><span lang="ko">비밀번호는 AI에게도 비밀로</span></h3>
@@ -317,7 +318,7 @@
         </div>
       </article>
 
-      <article class="card" data-clip="security-audit">
+      <article class="card" data-clip="security-audit" data-more>
         <div class="thumb"><video muted playsinline preload="none" poster="media/security-audit.jpg" data-src="media/security-audit.mp4"></video><span class="play" aria-hidden="true"></span></div>
         <div class="card-body">
           <h3><span lang="en">Security you can prove</span><span lang="ko">증명할 수 있는 보안</span></h3>
@@ -331,6 +332,7 @@
         </div>
       </article>
     </div>
+    <button type="button" class="btn btn-ghost more-clips" id="more-clips" aria-controls="clips" aria-expanded="true" hidden><span class="more-clips-open"><span lang="en">See 6 more recordings</span><span lang="ko">녹화 6개 더 보기</span></span><span class="more-clips-close"><span lang="en">Show fewer</span><span lang="ko">접기</span></span></button>
   </section>
 
   <section class="more">

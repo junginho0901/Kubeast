@@ -297,8 +297,32 @@ html[lang="ko"] .hero h1 { letter-spacing: -0.02em; line-height: 1.18; }
   background: #0b1222;
   border: 1px solid var(--line);
 }
-.thumb video { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .6s var(--ease); }
-.card:hover .thumb video { transform: scale(1.02); }
+/* A card shows the part of its recording where the action is, the same still and while it plays; the large view shows
+   the whole frame. --crop-x, --crop-y and --crop-w are that part's left, top and width in the recordings' 1280×800
+   pixels; its height follows from the box's 16:10. */
+.thumb video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(calc(1280 / var(--crop-w, 1280)));
+  transform-origin: calc(var(--crop-x, 0) / (1280 - var(--crop-w, 1280)) * 100%) calc(var(--crop-y, 0) / (800 - var(--crop-w, 1280) / 1.6) * 100%);
+}
+.card[data-clip="ai-chat"] { --crop-x: 452; --crop-y: 72; --crop-w: 828; }
+.card[data-clip="floating-chat"] { --crop-x: 238; --crop-y: 218; --crop-w: 896; }
+.card[data-clip="alert-investigation"] { --crop-x: 236; --crop-y: 18; --crop-w: 808; }
+/* the cluster list it switches from opens in the sidebar, so the sidebar stays */
+.card[data-clip="dashboard"] { --crop-x: 0; --crop-y: 80; --crop-w: 1120; }
+.card[data-clip="helm"] { --crop-x: 236; --crop-y: 22; --crop-w: 1024; }
+.card[data-clip="access-audit"] { --crop-x: 228; --crop-y: 28; --crop-w: 1052; }
+/* from the search box of the list to the drawer */
+.card[data-clip="resource-drawer"] { --crop-x: 256; --crop-y: 0; --crop-w: 1024; }
+.card[data-clip="logs"] { --crop-x: 128; --crop-y: 30; --crop-w: 1024; }
+/* the Exec and Play buttons are near the right edge */
+.card[data-clip="terminal"] { --crop-x: 184; --crop-y: 10; --crop-w: 1080; }
+.card[data-clip="changes"] { --crop-x: 238; --crop-y: 110; --crop-w: 1000; }
+.card[data-clip="masking"] { --crop-x: 236; --crop-y: 125; --crop-w: 1024; }
+.card[data-clip="security-audit"] { --crop-x: 236; --crop-y: 25; --crop-w: 1024; }
 .play {
   position: absolute;
   left: 50%;
@@ -358,6 +382,11 @@ html[lang="ko"] .hero h1 { letter-spacing: -0.02em; line-height: 1.18; }
 .steps li.done::before { border-color: rgba(56, 189, 248, 0.5); color: var(--sky-soft); }
 .steps li.now { color: #fff; }
 .steps li.now::before { background: var(--grad); border-color: transparent; color: #fff; box-shadow: 0 0 14px rgba(14, 165, 233, 0.7); }
+
+/* Under the clips: the six more and back; its words follow aria-expanded. */
+.more-clips { display: flex; width: fit-content; margin: 28px auto 0; }
+.more-clips[aria-expanded="true"] .more-clips-open,
+.more-clips[aria-expanded="false"] .more-clips-close { display: none; }
 
 /* Large view */
 .lightbox { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; overflow-y: auto; overscroll-behavior: contain; }

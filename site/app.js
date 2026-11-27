@@ -124,6 +124,26 @@
     players.forEach(function (_, thumb) { onScreen.observe(thumb) })
   }
 
+  // Six recordings first: the button under the list shows the six marked data-more and hides them again. Without the
+  // script all twelve stay on the page and the button stays hidden. A card being hidden stops, and focus inside it
+  // moves to the button.
+  var moreButton = document.getElementById('more-clips')
+  var moreCards = cards.filter(function (card) { return card.hasAttribute('data-more') })
+  function showMore(open) {
+    if (!moreButton) return
+    if (!open && moreCards.some(function (card) { return card.contains(document.activeElement) })) moreButton.focus()
+    moreCards.forEach(function (card) {
+      if (!open) players.get(card.querySelector('.thumb')).stop()
+      card.hidden = !open
+    })
+    moreButton.setAttribute('aria-expanded', String(open))
+  }
+  if (moreButton && moreCards.length) {
+    moreButton.hidden = false
+    showMore(false)
+    moreButton.addEventListener('click', function () { showMore(moreButton.getAttribute('aria-expanded') !== 'true') })
+  }
+
   // The large view: the clip grows out of its card to the middle of the screen, and back into it on close.
   var lb = document.getElementById('lightbox')
   var frame = lb.querySelector('.lb-video')
@@ -195,6 +215,9 @@
   }
   function go(step) {
     currentIndex = (currentIndex + step + cards.length) % cards.length
+    // previous and next go through all twelve; landing on a hidden one opens the list, so the close and the focus
+    // that follows go back to a card on the page
+    if (cards[currentIndex].hidden) showMore(true)
     opener = cards[currentIndex]
     frame.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: still ? 0 : 260 })
     fill(currentIndex)
