@@ -42,25 +42,6 @@
       "tailCopies": true,
       "why": "A lease's holder renews it on a timer: kube-apiserver its identity lease and the kubelet its node's lease every 10 seconds, Kyverno its kyverno-health lease, and leader election (kube-scheduler, kube-controller-manager, Kyverno's controllers) every 2 seconds. A build's first live frame stays open up to 15 seconds, so how many renewals fall inside it is timing, and one build's frames can hold a lease's events past the other build's last. Only those events are taken, whole, and only while all three frames hold the lease's first event; an event both builds' frames hold is still compared cell by cell, and so is a lease one frame lacks.",
       "pr": "#946"
-    },
-    {
-      "route": "^/api/v1/cluster/features$",
-      "cell": "^\\$\\.(anomalyRank|callGraph)\\.enabled$",
-      "why": "The features answer says whether features.anomalyRank.enabled and features.callGraph.enabled are on (docs/configuration.md \"Stages of new values\", cb147ce6d); v0.7.8 did not send the two keys.",
-      "pr": "#902"
-    },
-    {
-      "route": "^/api/v1/cluster/features$",
-      "cell": "^\\$\\.nodeNeighbors\\.enabled$",
-      "why": "The features answer says whether features.nodeNeighbors.enabled is on (docs/configuration.md \"Stages of new values\"); v0.7.8 did not send the key.",
-      "pr": "#1088"
-    },
-    {
-      "route": "^/api/v1/auth/permissions$",
-      "cell": "^\\$\\[AI tools\\]\\.permissions(\\[ai\\.tool\\.anomaly_rank\\]\\.(key|description)|\\.\\$(length|order))$",
-      "addedRow": "ai.tool.anomaly_rank",
-      "why": "The catalog's AI tools name the read tool anomaly_rank (docs/features.md, cb147ce6d), which v0.7.8 did not have: that row, the count one higher, and the order of the others as it was.",
-      "pr": "#902"
     }
   ]
 }

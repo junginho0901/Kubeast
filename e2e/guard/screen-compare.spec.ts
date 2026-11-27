@@ -1,10 +1,6 @@
-import fs from 'node:fs'
-import path from 'node:path'
-
 import { test, expect, type Page } from '@playwright/test'
 
 import { comparePictures, compileIntended, FAINT_DELTA, FAINT_PIXELS, intendedWithin, TOLERANCE, type IntendedRule } from './screen-compare'
-import { DRAWER, DRAWER_KINDS, SIDEBAR } from './shared'
 
 // The picture comparison on its own, with pictures drawn in the browser: no cluster.
 
@@ -86,36 +82,5 @@ test.describe('the picture comparison', () => {
     expect(() => compileIntended([{ ...rule, within: ' ' }])).toThrow(/no element to keep to/)
     expect(() => intendedWithin([{ ...rule, within: '' }])).toThrow(/no element to keep to/)
     expect(() => intendedWithin([{ ...rule, pr: '' }])).toThrow(/reason and a PR/)
-  })
-
-  // Every name screen-diff.spec.ts gives a screen of the sidebar, and the drawers as it names them.
-  const modes = ['default', 'dark', 'light']
-  const names = [
-    ...modes.flatMap((mode) => [...new Set(SIDEBAR), '/account'].map((p) => `${mode} · ${p} on self`)),
-    ...['default', 'test2'].flatMap((cluster) => [...new Set(SIDEBAR)].map((p) => `default · ${p} on ${cluster}`)),
-    ...modes.flatMap((mode) => DRAWER_KINDS.map((kind) => `${mode} · drawer ${kind} (namespace under test)`)),
-  ]
-  const onEachCluster = (paths: string[]) => paths.flatMap((p) => [...modes.map((mode) => `${mode} · ${p} on self`), `default · ${p} on default`, `default · ${p} on test2`])
-  const intendedList = () => (JSON.parse(fs.readFileSync(path.join(__dirname, 'screen-diff-intended.json'), 'utf8')) as { rules: IntendedRule[] }).rules
-
-  test('the intended list takes the whole of nine screens, the Resource Graph and Alerts where they changed, and no other', () => {
-    const match = compileIntended(intendedList())
-    const of = (pr: string) => names.filter((name) => match(name)?.pr === pr).sort()
-    expect(of('#1077')).toEqual(onEachCluster(['/cluster/resource-graph']).sort())
-    expect(of('#1087')).toEqual([...modes.map((mode) => `${mode} · /alerts on self`), 'default · /alerts on default'].sort())
-    expect(names.filter((name) => match(name)).length, 'screens taken whole').toBe(9)
-    expect(match('default · /alerts on test2'), 'its names fit two lines').toBeNull()
-  })
-
-  test('the intended list covers one icon on the Gateway lists, the Workloads lists and the CronJob drawer, and nothing on the others', () => {
-    const covered = intendedWithin(intendedList())
-    const gateway = ['backendtlspolicies', 'gatewayclasses', 'gateways', 'grpcroutes', 'httproutes', 'policies', 'referencegrants'].map((k) => `/gateway/${k}`)
-    const workloads = ['cronjobs', 'daemonsets', 'deployments', 'hpas', 'jobs', 'pdbs', 'pods', 'replicasets', 'statefulsets', 'vpas'].map((k) => `/workloads/${k}`)
-    const inSidebar = (href: string) => [`[data-testid="sidebar-nav"] a[href="${href}"] > svg`]
-    for (const name of onEachCluster(gateway)) expect(covered(name), name).toEqual(inSidebar('/gateway/httproutes'))
-    for (const name of onEachCluster(workloads)) expect(covered(name), name).toEqual(inSidebar('/workloads/cronjobs'))
-    const drawers = modes.map((mode) => `${mode} · drawer CronJob (namespace under test)`)
-    for (const name of drawers) expect(covered(name).map((s) => s.startsWith(DRAWER) && s.endsWith('> svg')), name).toEqual([true])
-    expect(names.filter((name) => covered(name).length > 0).sort()).toEqual([...onEachCluster([...gateway, ...workloads]), ...drawers].sort())
   })
 })
