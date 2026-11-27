@@ -28,7 +28,7 @@ export function DashboardTopResources({ topResources, isLoading, isError, error,
   const { open: openDetail } = useResourceDetail()
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
       {/* Top 파드 */}
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
