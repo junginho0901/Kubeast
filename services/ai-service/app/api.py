@@ -428,12 +428,9 @@ async def approve_tool_approval(
     request: Request,
     authorization: str = Depends(bearer_or_cookie),
 ):
-    from app.database import APPROVED_RUN_LIMIT_SECONDS, utcnow
-    from app.services.audit_target import EXEC_TOOL, kept_tool_args, pod_exec_row, tool_target, write_tool_input
-    from app.services.audit_writer import AuditUnavailable, fail_closed_enabled, require_audit_ready, write_audit
-    from app.services.ai import access as tool_access, formatters
-    from app.services.ai.permissions import app_permission_error
-    from app.services.ai.streaming import tool_outcome
+    from app.database import utcnow
+    from app.services import approval_runs
+    from app.services.audit_writer import AuditUnavailable, require_audit_ready
 
     from app.services.approval_token import ApprovalTokenUnavailable, sign as sign_approval
     payload = _caller(authorization)
@@ -469,11 +466,28 @@ async def approve_tool_approval(
     # One statement moves pending → approved; a second click, or two clicks
     # racing, finds the row no longer pending and stops here.
     pending = approval
-    approval = await db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=utcnow())
+    # A shutdown that cuts this move lets it finish and closes the run it made (approval_runs.approving).
+    approval = await approval_runs.approving(
+        db, approval.id, db.transition_tool_approval(approval.id, "pending", status="approved", decided_at=utcnow()),
+    )
     if approval is None:
         refusal = HTTPException(status_code=409, detail="Approval is no longer pending")
         await _refused_decision_row("ai.tool.approve", refusal, approval_id, pending, request, authorization)
         raise refusal
+    # From here the run is this request's: a shutdown that cuts it before its end closes it at once (approval_runs).
+    async with approval_runs.running(db, approval.id) as run:
+        return await _run_approved(db, run, approval, approval_token, ai_service, payload, request, authorization)
+
+
+async def _run_approved(db, run, approval, approval_token: str, ai_service, payload, request: Request, authorization: str) -> dict:
+    """An approval this request moved to `approved`: its row, the call, its end and the chat message."""
+    from app.database import APPROVED_RUN_LIMIT_SECONDS, utcnow
+    from app.services.audit_target import EXEC_TOOL, kept_tool_args, pod_exec_row, tool_target, write_tool_input
+    from app.services.audit_writer import fail_closed_enabled, write_audit
+    from app.services.ai import access as tool_access, formatters
+    from app.services.ai.permissions import app_permission_error
+    from app.services.ai.streaming import tool_outcome
+
     actor, http = _extract_audit_meta(request, authorization)
     stored = await write_audit(
         action="ai.tool.approve", actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
@@ -521,15 +535,15 @@ async def approve_tool_approval(
         request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
         result="success" if status == "executed" else "failure", error=error[:500] if error else error,
     )
+    # An exec is a k8s.pod.exec row too, written with the end and the outcome row.
+    exec_rows = [dict(
+        **pod_exec_row(args, tool_input, approval_id=approval.id), actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
+        request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
+        result="success" if status == "executed" else "failure", error=error[:500] if error else error,
+    )] if approval.tool == EXEC_TOOL and not refusal else []
     # The rows before the chat message: the conversation may have been deleted during the call, and the message with it.
-    ended, late = await _end_run(db, approval.id, status, formatted, kept_args, outcome_row)
+    ended, late = await run.ending(_end_run(db, approval.id, status, formatted, kept_args, outcome_row, exec_rows))
     approval = ended or approval
-    if approval.tool == EXEC_TOOL and not refusal:
-        await write_audit(
-            **pod_exec_row(args, tool_input, approval_id=approval.id), actor_user_id=actor.get("user_id"), actor_email=actor.get("email"), cluster=approval.cluster,
-            request_ip=http.get("ip"), user_agent=http.get("user_agent"), request_id=http.get("request_id"), path=http.get("path"),
-            result="success" if status == "executed" else "failure", error=error[:500] if error else error,
-        )
     icon = "✅" if status == "executed" and not late else "⚠️"
     said = f"was approved and {status}"
     if late:
@@ -549,8 +563,9 @@ async def approve_tool_approval(
     return _approval_dict(approval)
 
 
-async def _end_run(db, approval_id: str, status: str, formatted: str, kept_args: dict, outcome_row: dict):
-    """The approval leaves `approved` with its ai.tool.execute row in one transaction (end_tool_run). A run that outlived
+async def _end_run(db, approval_id: str, status: str, formatted: str, kept_args: dict, outcome_row: dict, exec_rows: list):
+    """The approval leaves `approved` with its ai.tool.execute row, and an exec's k8s.pod.exec row (exec_rows), in one
+    transaction (end_tool_run). A run that outlived
     APPROVED_RUN_LIMIT_SECONDS finds its approval ended as interrupted by a sweep meanwhile (or gone with its
     conversation): the outcome is known after all, so the row stays ended and says it, and the outcome row is written
     anyway. Returns the approval as it ended (None when not this run's end) and whether the run came back late."""
@@ -558,20 +573,22 @@ async def _end_run(db, approval_id: str, status: str, formatted: str, kept_args:
     from app.services.audit_writer import write_audit
 
     ended = await db.end_tool_run(
-        approval_id, "approved", outcome_row,
+        approval_id, "approved", outcome_row, exec_rows,
         status=status, result=formatted[:APPROVAL_RESULT_MAX_CHARS], decided_at=utcnow(), args=kept_args,
     )
     if ended is not None:
         return ended, False
     current = await db.get_tool_approval(approval_id)
     if current is None or current.status != "failed" or current.result != INTERRUPTED_RESULT:
-        await write_audit(**outcome_row)
+        for row in (outcome_row, *exec_rows):
+            await write_audit(**row)
         return None, False
     late_row = {**outcome_row, "after": {**outcome_row["after"], "late_after_interrupt": True}}
     note = f"{status} after this approval was ended as interrupted: the run took longer than {APPROVED_RUN_LIMIT_SECONDS // 60} minutes."
-    ended = await db.end_tool_run(approval_id, "failed", late_row, result=f"{note}\n\n{formatted}"[:APPROVAL_RESULT_MAX_CHARS])
+    ended = await db.end_tool_run(approval_id, "failed", late_row, exec_rows, result=f"{note}\n\n{formatted}"[:APPROVAL_RESULT_MAX_CHARS])
     if ended is None:
-        await write_audit(**late_row)
+        for row in (late_row, *exec_rows):
+            await write_audit(**row)
     return ended or current, True
 
 

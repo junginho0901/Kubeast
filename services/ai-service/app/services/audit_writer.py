@@ -27,7 +27,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from sqlalchemy import text
 
@@ -196,12 +196,18 @@ async def commit_row(conn: Any, **fields: Any) -> None:
     """Commit the caller's transaction holding the row write_audit(**fields, conn=conn) added. Only then is that row
     mirrored to stdout and counted as landed, so an attempt the table refused, rolled back and tried again later prints
     nothing. A commit that fails counts as a failed write (readiness probes a write next) and raises."""
+    await commit_rows(conn, [fields])
+
+
+async def commit_rows(conn: Any, rows: Sequence[dict[str, Any]]) -> None:
+    """commit_row for a transaction holding several rows (write_audit's arguments, in the order they were added)."""
     try:
         await conn.commit()
     except Exception as exc:
-        _write_failed(fields.get("action", ""), exc)
+        _write_failed(rows[0].get("action", "") if rows else "", exc)
         raise
-    _emit_stdout(_record(**fields))
+    for fields in rows:
+        _emit_stdout(_record(**fields))
     _landed()
 
 
