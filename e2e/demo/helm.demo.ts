@@ -21,7 +21,7 @@ test('helm', async ({ page }) => {
   const first = page.locator('table tbody tr').filter({ has: page.getByRole('button', { name: /rollback/i }) }).last()
   c.step('diff')
   await first.locator('td').first().click()
-  const revision = page.locator('[role="dialog"], div.fixed.inset-0:has(button)').last()
+  const revision = page.locator('[role="dialog"]:not([data-testid="resource-drawer"]), div.fixed.inset-0:has(button)').last()
   await expect(revision).toBeVisible()
   await beat(page, 1200)
   await revision.getByRole('button', { name: /diff/i }).first().click()

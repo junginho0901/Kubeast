@@ -298,7 +298,7 @@ test.describe('audit — admin actions (M15, M27)', () => {
       await page.goto('/admin/users')
       await page.getByRole('button', { name: /Pending|대기/ }).first().click()
       // The list behind the window has the same rows.
-      const dialog = page.getByRole('dialog')
+      const dialog = page.locator('[role="dialog"]:not([data-testid="resource-drawer"])')
       await dialog.locator('tr', { hasText: staysEmail }).click()
       await dialog.locator('tr', { hasText: goesEmail }).click()
       await expect(dialog.locator('tr', { hasText: goesEmail }).locator('input[type="checkbox"]')).toBeChecked()

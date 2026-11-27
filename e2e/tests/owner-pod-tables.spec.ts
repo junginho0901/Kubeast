@@ -13,7 +13,7 @@ import { test, expect, type Locator, type Page, type Route } from '@playwright/t
 // It does not skip. The namespace is removed after.
 
 const NS = 'e2e-owner-pod-tables'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 const kubeconfig = execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' })
 const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-owner-pod-tables-')), 'kubeconfig')

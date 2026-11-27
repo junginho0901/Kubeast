@@ -18,7 +18,7 @@ import { test, expect, type Page } from '@playwright/test'
 
 const NS = 'e2e-numbers'
 const kindName = 'kubeast'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 const kc = execSync(`kind get kubeconfig --name ${kindName}`, { encoding: 'utf8' })
 const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-number-drawers-')), 'kubeconfig')

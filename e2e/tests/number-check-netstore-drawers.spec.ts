@@ -17,7 +17,7 @@ import { test, expect, type Page } from '@playwright/test'
 const NS = 'e2e-netstore'
 const CLUSTER = 'self'
 const NODE = 'kubeast-control-plane'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.netstore-fixture.yaml'), 'utf8')
 // the sections of other features, with number checks of their own (metrics, policy reports, the network views, log
 // search): left out of what is read and of what is expected

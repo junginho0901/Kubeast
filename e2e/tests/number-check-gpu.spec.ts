@@ -34,7 +34,7 @@ const READ_GROUP = 'kubeast:role:read'
 // NVIDIA k8s-device-plugin's chart as its README installs it: release nvdp, DaemonSet <release>-nvidia-device-plugin
 const PLUGIN = { namespace: 'nvidia-device-plugin', name: 'nvdp-nvidia-device-plugin', release: 'nvdp' }
 const DRA_CLASS = 'gpu.example.com' // the DRA example driver's (scripts/kind-gpu.sh up)
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 // the badges and the counts next to a section title, found by what main's page shows too, so a reverse check on its
 // build fails on the value and not on a test id it never had
 const pluginBadge = (page: Page) => page.getByText(/^Device Plugin /).first()

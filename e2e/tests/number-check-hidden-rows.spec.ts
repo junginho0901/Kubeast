@@ -24,7 +24,7 @@ const NS = 'e2e-hidden-rows'
 const NS_B = 'e2e-hidden-rows-b'
 const CLUSTER = 'self'
 const KIND_CLUSTER = 'kubeast'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const LABELS = { 'kubeast.io/e2e': 'hidden-rows' }
 const RBAC = 'rbac.authorization.k8s.io'
 // past the old caps of 50 and the pages of 10

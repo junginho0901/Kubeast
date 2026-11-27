@@ -17,7 +17,7 @@ import { test, expect, type Page } from '@playwright/test'
 const NS = 'e2e-rbac-drawers'
 const CLUSTER = 'self'
 const KIND_CLUSTER = 'kubeast'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const FIXTURE = fs.readFileSync(path.join(__dirname, 'number-check.rbac-drawers-fixture.yaml'), 'utf8')
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

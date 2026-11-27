@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 // With the UI in Korean, a resource drawer's Info tab shows descriptive labels in
 // Korean while Kubernetes field names stay English (the detail label catalog).
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 // a row that opens the drawer: while the list loads, its first row is the loading row, which opens nothing
 const ROW = 'tbody tr.cursor-pointer'
 

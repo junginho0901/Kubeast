@@ -23,7 +23,7 @@ import { CR_CRD, GWPOL_CRD, VPA17_MISSING, crInstances, numbersPolicies, vpa17, 
 // is number-check-drawers.spec.ts's), a PolicyReport's drawer to its fields beside spec and status.
 
 const NS = 'e2e-cr-drawers'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 // the screen's words as the English catalog has them, else the code's own
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

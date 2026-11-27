@@ -22,7 +22,7 @@ function kubectlFor(kindName: string) {
 }
 const kubectl = kubectlFor('kubeast')
 
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 async function search(page: Page, text: string) {
   await page.getByPlaceholder(/search|검색/i).first().fill(text)

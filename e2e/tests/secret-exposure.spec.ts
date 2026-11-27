@@ -220,7 +220,7 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
 
   test('the drawer shows that annotation as *** to someone who may reveal, and a value only under Show', async ({ page }) => {
     await page.goto(`/configuration/secrets?cluster=${CLUSTER}&namespace=${NS}&detail=${encodeURIComponent(`Secret/${NS}/${secretName}`)}`)
-    const drawer = page.locator('[class*="max-w-[740px]"]')
+    const drawer = page.locator('[data-testid="resource-drawer"]')
     // an annotation tag is its key, ":" and its value (KeyValueTags)
     const tag = (key: string) => drawer.locator('[data-detail-tag]').filter({ has: page.locator('span.font-mono', { hasText: new RegExp(`^${key.replace(/\./g, '\\.')}$`) }) })
     await expect(tag('kubectl.kubernetes.io/last-applied-configuration').locator('span.truncate').nth(1)).toHaveText('***', { timeout: 30_000 })
@@ -239,7 +239,7 @@ test.describe.serial('Secret exposure — generic resource paths and Helm text',
   test('a value shown in one Secret\'s drawer stays hidden in the next Secret\'s until its own Show', async ({ page }) => {
     const at = (name: string) => `/configuration/secrets?cluster=${CLUSTER}&namespace=${NS}&detail=${encodeURIComponent(`Secret/${NS}/${name}`)}`
     await page.goto(at(secretName))
-    const drawer = page.locator('[class*="max-w-[740px]"]')
+    const drawer = page.locator('[data-testid="resource-drawer"]')
     const row = drawer.locator('div.rounded-sm.border-slate-800').filter({ has: page.locator('span.font-mono', { hasText: /^password$/ }) })
     const team = drawer.locator('span.rounded-full').filter({ has: page.locator('span.font-mono', { hasText: /^e2e-team$/ }) }).locator('span.truncate').nth(1)
     await expect(team).toHaveText('shop', { timeout: 30_000 })

@@ -16,7 +16,7 @@ import { sessionToken } from './session-token'
 // objects and the user are removed after.
 
 const NS = 'e2e-live-drawers'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const STAMP = Date.now().toString(36)
 const CRD = 'livewidgets.e2e-live.kubeast.io'
 const SC = `e2e-live-sc-${STAMP}`

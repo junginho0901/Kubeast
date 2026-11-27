@@ -25,7 +25,7 @@ const CLUSTER = 'self'
 const NS = 'default'
 const STAMP = Date.now().toString(36)
 const POD = `e2e-caps-${STAMP}`
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 const EN: unknown = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'frontend/src/i18n/locales/en.json'), 'utf8'))
 function tr(key: string): string {

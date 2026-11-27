@@ -24,7 +24,7 @@ const ALL_SLICE = 'e2e-dra-num-all'
 const LIVE_SLICE = 'e2e-dra-num-live'
 const READ_GROUP = 'kubeast:role:read'
 const R = '/apis/resource.k8s.io/v1'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Obj = any

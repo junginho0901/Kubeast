@@ -26,6 +26,8 @@ interface Props {
   tab: TabId
   // the title takes the focus as the drawer opens (drawerFocus)
   titleRef?: RefObject<HTMLHeadingElement | null>
+  // the kind (`<labelId>-kind`) and the title (`<labelId>-title`) name the drawer's dialog
+  labelId?: string
   onClose: () => void
   onGoBack: () => void
   onTabChange: (tab: TabId) => void
@@ -44,6 +46,7 @@ export function ResourceDetailHeader({
   canDelete,
   tab,
   titleRef,
+  labelId,
   onClose,
   onGoBack,
   onTabChange,
@@ -58,11 +61,12 @@ export function ResourceDetailHeader({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <KindIcon className="w-4 h-4 text-slate-400 shrink-0" aria-hidden />
-            <span className="text-xs text-slate-300 font-medium">{displayKind}</span>
+            <span id={labelId && `${labelId}-kind`} className="text-xs text-slate-300 font-medium">{displayKind}</span>
             {ns && <span className="text-xs text-slate-500 break-all">{ns}</span>}
           </div>
           <h2
             ref={titleRef}
+            id={labelId && `${labelId}-title`}
             tabIndex={-1}
             className="text-lg font-semibold text-ink truncate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
             title={name}

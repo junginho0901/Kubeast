@@ -32,7 +32,7 @@ function samplerScript() {
   if (w.__switchGuard) return
   type P = { sel: string; attr?: string; value?: boolean }
   type Cfg = { rows: string; rowsMax: number; probes: Record<string, P> }
-  const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+  const DRAWER = '[data-testid="resource-drawer"]'
   const BANNERS = '[data-testid="forbidden-banner"], [data-testid="table-forbidden"], [data-testid="table-load-error"], [data-testid="table-not-installed"]'
   const norm = (s: string | null | undefined) => (s ?? '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim()
   const text = (el: Element | null) => (el ? norm((el as HTMLElement).innerText ?? el.textContent) : '')

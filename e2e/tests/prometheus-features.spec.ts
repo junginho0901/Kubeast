@@ -19,7 +19,7 @@ function kubectlFor(kindName: string) {
 const kubectl = kubectlFor('kubeast')
 const kubectlB = kubectlFor('kubeast-b')
 
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 async function openDrawer(page: Page, route: string, name: string) {
   await page.goto(route)

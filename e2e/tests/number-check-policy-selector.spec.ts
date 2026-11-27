@@ -16,7 +16,7 @@ import { sessionToken } from './session-token'
 const CLUSTER = 'default'
 const run = Date.now().toString(36)
 const NS = `e2e-polsel-${run}`
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 const kc = execSync('kind get kubeconfig --name kubeast-b', { encoding: 'utf8' })
 const kcPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-polsel-')), 'kubeconfig')

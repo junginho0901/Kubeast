@@ -19,7 +19,7 @@ import { waitUntilListed } from './number-check.cr-shared'
 
 const RUN = Date.now().toString(36)
 const LABEL = 'kubeast.io/e2e=two-group-refs'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 // the screen's words as the English catalog has them
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -246,7 +246,7 @@ test.describe('number check — one Kind of two groups where a screen picked by 
           // the button comes once the cluster's features have loaded; a row whose requests are its recommendation has none
           if (!(await button.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true, () => false))) return { total: null, sent: null }
           await button.click()
-          const dialog = page.getByRole('dialog')
+          const dialog = page.locator('[role="dialog"]:not([data-testid="resource-drawer"])')
           const [request] = await Promise.all([
             page.waitForRequest((r) => r.method() === 'POST' && r.url().includes(`/namespaces/${NS}/optimization/resize`), { timeout: 30_000 }),
             dialog.getByRole('button', { name: say('dashboard.optimization.resize.confirm', 'Apply'), exact: true }).click(),

@@ -67,7 +67,7 @@ async function cleanup(request: APIRequestContext, token: string) {
 async function membersWindow(page: Page, title: string) {
   return page.evaluate((title) => {
     const txt = (el: Element) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()
-    const dialog = [...document.querySelectorAll('[role="dialog"]')].find((d) => [...d.querySelectorAll('h2')].some((h) => txt(h) === title))
+    const dialog = [...document.querySelectorAll('[role="dialog"]:not([data-testid="resource-drawer"])')].find((d) => [...d.querySelectorAll('h2')].some((h) => txt(h) === title))
     if (!dialog) return null
     const heading = dialog.querySelector('h2')?.parentElement?.querySelector('p')
     return {

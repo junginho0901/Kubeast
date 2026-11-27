@@ -22,7 +22,7 @@ const CRD = `widgets.${GROUP}`
 const TWIN_GROUP = `yamltwin${run}.kubeast.io`
 const TWIN_CRD = `gadgets.${TWIN_GROUP}`
 const NODE_LABEL = `e2e-yaml-edit-${run}`
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 const kubeconfig = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-yaml-edit-')), 'kubeconfig')
 fs.writeFileSync(kubeconfig, execSync('kind get kubeconfig --name kubeast', { encoding: 'utf8' }), { mode: 0o600 })

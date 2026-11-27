@@ -157,7 +157,7 @@ test.describe('optimization in-place resize', () => {
     const buttons = page.getByTestId('optimization-resize')
     test.skip((await buttons.count()) === 0, 'no kube-system row with a recommendation that differs from its request')
     await buttons.first().click()
-    const dialog = page.getByRole('dialog')
+    const dialog = page.locator('[role="dialog"]:not([data-testid="resource-drawer"])')
     await expect(dialog).toContainText(/Apply without restart|재시작 없이 적용/)
     await expect(dialog).toContainText(/\//)
     await dialog.getByRole('button', { name: /Cancel|취소/ }).click()

@@ -13,7 +13,7 @@ import { sessionToken } from './session-token'
 
 const NS = 'e2e-rg-groups'
 const NODES = '.react-flow__node'
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const PASSWORD = process.env.E2E_USER_PASSWORD || ''
 

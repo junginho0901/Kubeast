@@ -29,7 +29,7 @@ const WINDOW_MS = 1_500
 const XRW = { 'X-Requested-With': 'XMLHttpRequest' }
 const ADMIN_EMAIL = process.env.E2E_USER_EMAIL || 'admin'
 const ADMIN_PASSWORD = process.env.E2E_USER_PASSWORD || ''
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 const run = Date.now().toString(36)
 const soft = expect.configure({ soft: true })
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

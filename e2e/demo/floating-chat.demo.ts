@@ -8,7 +8,7 @@ test('floating-chat', async ({ page }) => {
   const pod = kubectl('kubeast-b', ['-n', 'shop', 'get', 'pod', '-l', 'app=checkout-api', '-o', 'jsonpath={.items[0].metadata.name}'])
   const c = clip(page, 'floating-chat')
   await page.goto(`/workloads/pods?cluster=default&detail=Pod/shop/${pod}`)
-  await expect(page.locator('[class*="max-w-[740px]"]')).toContainText(pod, { timeout: 20_000 })
+  await expect(page.locator('[data-testid="resource-drawer"]')).toContainText(pod, { timeout: 20_000 })
   await page.waitForLoadState('networkidle')
   c.show()
   c.step('screen')

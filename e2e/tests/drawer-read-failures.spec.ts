@@ -15,7 +15,7 @@ import { test, expect } from '@playwright/test'
 const EN = JSON.parse(fs.readFileSync(path.join(__dirname, '../../frontend/src/i18n/locales/en.json'), 'utf8'))
 const REASON = 'e2e stand-in: the API server did not answer'
 const SAID = EN.common.describeFailed.replace('{{reason}}', REASON)
-const DRAWER = 'div[class*="fixed"][class*="inset-y-0"][class*="right-0"]'
+const DRAWER = '[data-testid="resource-drawer"]'
 
 const INGRESS_CLASS = `e2e-read-failures-${Date.now().toString(36)}`
 const POD_TEMPLATE = INGRESS_CLASS
