@@ -326,6 +326,18 @@ func names(p *PodPage) []string {
 	return out
 }
 
+// answerOf reads back the bytes GetPodPageJSON or GetPodNodeSummaryJSON gave, which the handler writes.
+func answerOf[T any](raw []byte, err error) (*T, error) {
+	if err != nil {
+		return nil, err
+	}
+	var v T
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
 // Search, sort, ties and the cut, as the page did them in the browser.
 func TestBuildPodPage_SearchSortAndCut(t *testing.T) {
 	now := time.Unix(1_700_001_000, 0)
@@ -540,7 +552,7 @@ func TestGetPodPage_AccessFromTheCallersIdentity(t *testing.T) {
 	ctx := context.Background()
 
 	s, _, _ := pageBundle(t, fake.NewSimpleClientset(pagePods()...), func(string) bool { return true })
-	p, err := s.GetPodPage(ctx, PodPageQuery{Limit: 50})
+	p, err := answerOf[PodPage](s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -550,14 +562,14 @@ func TestGetPodPage_AccessFromTheCallersIdentity(t *testing.T) {
 
 	// only namespace b: every namespace is refused, b is allowed
 	s, _, reviews := pageBundle(t, fake.NewSimpleClientset(pagePods()...), func(ns string) bool { return ns == "b" })
-	if _, err := s.GetPodPage(ctx, PodPageQuery{Limit: 50}); !apierrors.IsForbidden(err) {
+	if _, err := s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50}); !apierrors.IsForbidden(err) {
 		t.Fatalf("every namespace without the right: %v", err)
 	}
-	p, err = s.GetPodPage(ctx, PodPageQuery{Namespace: "b", Limit: 50})
+	p, err = answerOf[PodPage](s.GetPodPageJSON(ctx, PodPageQuery{Namespace: "b", Limit: 50}))
 	if err != nil || !reflect.DeepEqual(names(p), []string{"b/p3"}) || p.Stats.Total != 1 {
 		t.Fatalf("namespace b: %v %v", p, err)
 	}
-	if _, err := s.GetPodPage(ctx, PodPageQuery{Namespace: "a", Limit: 50}); !apierrors.IsForbidden(err) {
+	if _, err := s.GetPodPageJSON(ctx, PodPageQuery{Namespace: "a", Limit: 50}); !apierrors.IsForbidden(err) {
 		t.Fatalf("namespace a: %v", err)
 	}
 	if *reviews == 0 {
@@ -567,14 +579,14 @@ func TestGetPodPage_AccessFromTheCallersIdentity(t *testing.T) {
 	// a namespace-scoped grant: its namespaces the cluster allows, nothing outside them
 	scoped := auth.WithPayload(ctx, auth.TokenPayload{UserID: "u1", Namespaces: map[string][]string{"default": {"a", "c"}}})
 	s, _, _ = pageBundle(t, fake.NewSimpleClientset(pagePods()...), func(ns string) bool { return ns == "a" })
-	p, err = s.GetPodPage(scoped, PodPageQuery{Limit: 50})
+	p, err = answerOf[PodPage](s.GetPodPageJSON(scoped, PodPageQuery{Limit: 50}))
 	if err != nil || !reflect.DeepEqual(names(p), []string{"a/p1", "a/p2"}) {
 		t.Fatalf("scoped: %v %v", p, err)
 	}
-	if _, err := s.GetPodPage(scoped, PodPageQuery{Namespace: "b", Limit: 50}); !apierrors.IsForbidden(err) {
+	if _, err := s.GetPodPageJSON(scoped, PodPageQuery{Namespace: "b", Limit: 50}); !apierrors.IsForbidden(err) {
 		t.Fatalf("scoped, outside the grant: %v", err)
 	}
-	if _, err := s.GetPodPage(scoped, PodPageQuery{Namespace: "c", Limit: 50}); !apierrors.IsForbidden(err) {
+	if _, err := s.GetPodPageJSON(scoped, PodPageQuery{Namespace: "c", Limit: 50}); !apierrors.IsForbidden(err) {
 		t.Fatalf("scoped, refused by the cluster: %v", err)
 	}
 }
@@ -585,7 +597,7 @@ func TestGetPodPage_Revision(t *testing.T) {
 	ctx := context.Background()
 	cs := fake.NewSimpleClientset(pagePods()...)
 	s, b, _ := pageBundle(t, cs, func(string) bool { return true })
-	first, err := s.GetPodPage(ctx, PodPageQuery{Limit: 50})
+	first, err := answerOf[PodPage](s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -602,8 +614,8 @@ func TestGetPodPage_Revision(t *testing.T) {
 		return last
 	}
 	settle()
-	first, _ = s.GetPodPage(ctx, PodPageQuery{Limit: 50})
-	again, err := s.GetPodPage(ctx, PodPageQuery{Limit: 50, Revision: first.Revision})
+	first, _ = answerOf[PodPage](s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50}))
+	again, err := answerOf[PodPage](s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50, Revision: first.Revision}))
 	if err != nil || !again.Unchanged || again.Items == nil || len(again.Items) != 0 || again.Revision != first.Revision {
 		t.Fatalf("same revision: %+v %v", again, err)
 	}
@@ -622,7 +634,7 @@ func TestGetPodPage_Revision(t *testing.T) {
 		t.Fatal("the update never reached the store")
 	}
 	settle()
-	again, _ = s.GetPodPage(ctx, PodPageQuery{Limit: 50, Revision: first.Revision})
+	again, _ = answerOf[PodPage](s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50, Revision: first.Revision}))
 	if !again.Unchanged {
 		t.Fatalf("a heartbeat moved the revision: %+v", again)
 	}
@@ -634,7 +646,7 @@ func TestGetPodPage_Revision(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !eventually(t, 2*time.Second, func() bool {
-		p, _ := s.GetPodPage(ctx, PodPageQuery{Limit: 50, Revision: first.Revision})
+		p, _ := answerOf[PodPage](s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50, Revision: first.Revision}))
 		return !p.Unchanged && p.Stats.Error == 2
 	}) {
 		t.Fatal("a shown change did not move the revision")
@@ -645,7 +657,7 @@ func TestGetPodPage_Revision(t *testing.T) {
 	b.infMu.Lock()
 	b.inf = nil
 	b.infMu.Unlock()
-	p, err := s.GetPodPage(ctx, PodPageQuery{Limit: 50, Revision: first.Revision})
+	p, err := answerOf[PodPage](s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50, Revision: first.Revision}))
 	if err != nil || p.Unchanged {
 		t.Fatalf("after a restart: %+v %v", p, err)
 	}

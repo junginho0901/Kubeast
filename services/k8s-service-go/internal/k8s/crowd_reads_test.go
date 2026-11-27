@@ -24,9 +24,9 @@ func firstScreens(s *Service, b *clientBundle, ctx context.Context, nodes []stri
 	}
 	run(func() { _, _ = s.GetNamespaces(ctx) })
 	run(func() { _, _ = s.GetClusterOverview(ctx) })
-	run(func() { _, _ = s.GetPodPage(ctx, PodPageQuery{Sort: "name", Limit: 50}) })
+	run(func() { _, _ = s.GetPodPageJSON(ctx, PodPageQuery{Sort: "name", Limit: 50}) })
 	run(func() { _, _ = s.GetNodesJSON(ctx) })
-	run(func() { _, _ = s.GetPodNodeSummary(ctx, "", "", "") })
+	run(func() { _, _ = s.GetPodNodeSummaryJSON(ctx, "", "", "") })
 	run(func() {
 		_, _ = b.authz.SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{Spec: authorizationv1.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authorizationv1.ResourceAttributes{Verb: "create", Resource: "pods"},

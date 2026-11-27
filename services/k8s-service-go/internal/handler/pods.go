@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"k8s.io/apimachinery/pkg/labels"
 
+	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/flight"
 	"github.com/junginho0901/kubeast/services/k8s-service-go/internal/k8s"
 	"github.com/junginho0901/kubeast/services/pkg/response"
 )
@@ -98,23 +100,29 @@ func (h *Handler) GetPodPage(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, fmt.Sprintf("offset must be 0 or more and limit 1 to %d", k8s.PodPageMaxLimit))
 		return
 	}
-	page, err := h.svc.GetPodPage(r.Context(), q)
-	if err != nil {
-		h.handleError(w, err)
-		return
-	}
-	response.JSON(w, http.StatusOK, page)
+	raw, err := h.svc.GetPodPageJSON(r.Context(), q)
+	h.writePodAnswer(w, r, raw, err)
 }
 
 // GetPodNodeSummary handles GET /api/v1/pods/nodes: the Cluster View node
 // map — each node's pods by card colour (namespace, q, revision).
 func (h *Handler) GetPodNodeSummary(w http.ResponseWriter, r *http.Request) {
-	sum, err := h.svc.GetPodNodeSummary(r.Context(), queryParam(r, "namespace", ""), queryParam(r, "q", ""), queryParam(r, "revision", ""))
-	if err != nil {
+	raw, err := h.svc.GetPodNodeSummaryJSON(r.Context(), queryParam(r, "namespace", ""), queryParam(r, "q", ""), queryParam(r, "revision", ""))
+	h.writePodAnswer(w, r, raw, err)
+}
+
+// writePodAnswer writes a pods/page or pods/nodes answer as response.JSON writes it, the bytes several callers may share.
+func (h *Handler) writePodAnswer(w http.ResponseWriter, r *http.Request, raw []byte, err error) {
+	switch {
+	case errors.Is(err, flight.ErrPanicked):
+		response.InternalError(w, r, err)
+	case err != nil:
 		h.handleError(w, err)
-		return
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		writeShared(w, r, raw)
 	}
-	response.JSON(w, http.StatusOK, sum)
 }
 
 // GetPodsOnNode handles GET /api/v1/pods/on-node?node=<name>: the pods of one

@@ -14,11 +14,11 @@ import (
 	"github.com/junginho0901/kubeast/services/pkg/limits"
 )
 
-// A big body several callers are given (the node list and node box answers, shared or not, and a shared read's answer
-// to those who waited), longer than one socket's kernel queue holds under the server's send buffer cap (cmd/server
-// connSendBufferBytes, doubled), is written bigWritePart at a time holding one of bigWritePlaces. The node list is built
-// again each second while its callers wait for it, and they then wrote it all at once: 73 copies of 0.9 MiB in 30 ms,
-// each kept by its socket's kernel outside the Go memory limit.
+// A big body several callers are given (the node list and node box answers, shared or not, the Pods page's and the node
+// map's, and a shared read's answer to those who waited), longer than one socket's kernel queue holds under the server's
+// send buffer cap (cmd/server connSendBufferBytes, doubled), is written bigWritePart at a time holding one of
+// bigWritePlaces. The node list is built again each second while its callers wait for it, and they then wrote it all at
+// once: 73 copies of 0.9 MiB in 30 ms, each kept by its socket's kernel outside the Go memory limit.
 const (
 	bigSharedBody  = 256 << 10
 	bigWritePart   = 64 << 10
@@ -43,7 +43,7 @@ var writePlaceWaitBuckets = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25
 // places="big_write". A take waits at most until its body's deadline (placeWait), so no observation passes bigWriteWait.
 var bigWriteWaited = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:        "kubeast_shared_write_place_wait_seconds",
-	Help:        "Seconds a node list, node box or shared read answer past 256 KiB waited for one of the write places, each time it took one (a few microseconds when one was free), a take that stopped waiting too.",
+	Help:        "Seconds a node list, node box, Pods page, node map or shared read answer past 256 KiB waited for one of the write places, each time it took one (a few microseconds when one was free), a take that stopped waiting too.",
 	ConstLabels: prometheus.Labels{"service": "k8s", "places": "big_write"},
 	Buckets:     writePlaceWaitBuckets,
 })

@@ -157,19 +157,29 @@ type PodPage struct {
 var errPodsForbidden = apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "",
 	errors.New("your identity in this cluster may not list pods in every namespace"))
 
-// GetPodPage returns one page of the Pods list.
+// GetPodPage returns one page of the Pods list, made for this caller alone.
 func (s *Service) GetPodPage(ctx context.Context, q PodPageQuery) (*PodPage, error) {
-	set, err := s.callerPodRows(ctx, q.Namespace, q.Revision)
+	set, err := s.callerPodRows(ctx, q.Namespace, q.Revision, false)
 	if err != nil {
 		return nil, err
 	}
 	defer set.done()
+	return podPageOf(set, q, s.podNow()), nil
+}
+
+// podPageOf is q's page of set's rows, or the short answer when the caller's revision is current.
+func podPageOf(set *podRowSet, q PodPageQuery, now time.Time) *PodPage {
 	if set.unchanged {
-		return &PodPage{Filters: q.filters(), Items: []PodListItem{}, Stats: PodStats{TopReasons: []PodReasonCount{}}, Revision: set.revision, Unchanged: true, Source: set.source}, nil
+		return &PodPage{Filters: q.filters(), Items: []PodListItem{}, Stats: PodStats{TopReasons: []PodReasonCount{}}, Revision: set.revision, Unchanged: true, Source: set.source}
 	}
-	page := buildPodPage(rowsOfOwner(set.rows, q.OwnerKind, q.OwnerName), q, time.Now())
-	page.Filters, page.Revision, page.Source = q.filters(), set.revision, set.source
-	return page, nil
+	return podPageFrom(set.rows, set.revision, set.source, q, now)
+}
+
+// podPageFrom is q's page of rows under the revision rev.
+func podPageFrom(rows []*podRow, rev, source string, q PodPageQuery, now time.Time) *PodPage {
+	page := buildPodPage(rowsOfOwner(rows, q.OwnerKind, q.OwnerName), q, now)
+	page.Filters, page.Revision, page.Source = q.filters(), rev, source
+	return page
 }
 
 func (q PodPageQuery) filters() PodPageFilters {
@@ -317,6 +327,11 @@ type podRowSet struct {
 	unchanged bool   // the caller's revision is current: no rows
 	source    string // "index" or "list"
 	release   func() // gives back the podRowSlots place the rows took
+	// a set callerPodRows gave a caller whose answer is shared holds no rows yet: the informer set and the access
+	// decision its answer's build reads them by (pods_share.go)
+	ci         *clusterInformers
+	all        bool
+	namespaces []string
 }
 
 // done gives back the set's place; every caller defers it.
@@ -358,8 +373,10 @@ func takePodRowSlot(ctx context.Context) (func(), error) {
 // callerPodRows returns the pod rows the caller may see in namespace ("" =
 // every namespace it may see): from the informer after podListAccess, or
 // listed as the caller until the informer can serve. A revision equal to the
-// current one returns unchanged and no rows.
-func (s *Service) callerPodRows(ctx context.Context, namespace, revision string) (*podRowSet, error) {
+// current one returns unchanged and no rows. With share, the informer's set
+// holds no rows and no place: its caller's answer is built for everyone with
+// the same decision and query (pods_share.go), which reads them.
+func (s *Service) callerPodRows(ctx context.Context, namespace, revision string, share bool) (*podRowSet, error) {
 	b := s.bundleForCtx(ctx)
 	if b == nil {
 		return nil, errNotLoaded
@@ -374,6 +391,9 @@ func (s *Service) callerPodRows(ctx context.Context, namespace, revision string)
 			return &podRowSet{revision: rev, unchanged: true, source: "index"}, nil
 		}
 		accesstrail.Cached(ctx, "pod rows (watched as "+overviewCacheUser+")")
+		if share {
+			return &podRowSet{revision: rev, source: "index", ci: ci, all: all, namespaces: namespaces}, nil
+		}
 		release, err := takePodRowSlot(ctx)
 		if err != nil {
 			return nil, err

@@ -116,7 +116,7 @@ func (s *Service) podMetricsIn(ctx context.Context, namespace string) ([]map[str
 // AddPodLimits puts each pod's cpu_limit_millicores and memory_limit_bytes (nil without a limit) on the metric
 // rows, from the pod rows the caller may see in namespace. A caller who may not list pods gets the rows as they are.
 func (s *Service) AddPodLimits(ctx context.Context, namespace string, rows []map[string]interface{}) {
-	set, err := s.callerPodRows(ctx, namespace, "")
+	set, err := s.callerPodRows(ctx, namespace, "", false)
 	if err != nil {
 		slog.Debug("pod metrics: no limits", "namespace", namespace, "err", err)
 		return

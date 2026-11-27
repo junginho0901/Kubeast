@@ -203,10 +203,10 @@ func TestPodRowSlots_TakenWhileTheRowsAreHeldAndGivenBack(t *testing.T) {
 	defer cancel()
 	s, _, _ := pageBundle(t, fake.NewSimpleClientset(pagePods()...), func(string) bool { return true })
 	for i := 0; i < 2*cap(podRowSlots)+1; i++ {
-		if _, err := s.GetPodPage(ctx, PodPageQuery{Limit: 50}); err != nil {
+		if _, err := s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50}); err != nil {
 			t.Fatalf("page %d: %v", i, err)
 		}
-		if _, err := s.GetPodNodeSummary(ctx, "", "", ""); err != nil {
+		if _, err := s.GetPodNodeSummaryJSON(ctx, "", "", ""); err != nil {
 			t.Fatalf("node map %d: %v", i, err)
 		}
 	}
@@ -224,11 +224,11 @@ func TestPodRowSlots_TakenWhileTheRowsAreHeldAndGivenBack(t *testing.T) {
 	}
 	gone, stop := context.WithTimeout(ctx, 50*time.Millisecond)
 	defer stop()
-	if _, err := s.GetPodPage(gone, PodPageQuery{Limit: 50}); err == nil {
+	if _, err := s.GetPodPageJSON(gone, PodPageQuery{Limit: 50}); err == nil {
 		t.Fatal("a page was built with every place taken")
 	}
 	held[0]()
-	if _, err := s.GetPodPage(ctx, PodPageQuery{Limit: 50}); err != nil {
+	if _, err := s.GetPodPageJSON(ctx, PodPageQuery{Limit: 50}); err != nil {
 		t.Fatalf("after a place was given back: %v", err)
 	}
 	for _, release := range held[1:] {
