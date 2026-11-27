@@ -19,6 +19,8 @@ import {
 } from './gatewayClassHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -80,6 +82,7 @@ export function GatewayClassTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -93,20 +96,20 @@ export function GatewayClassTable({
         <table className="w-full text-sm min-w-[940px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewayClassesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
+                <SortButton>{tr('gatewayClassesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[270px] cursor-pointer" onClick={() => handleSort('controller')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewayClassesPage.table.controller', 'Controller')}{renderSortIcon('controller')}</span>
+              <th className="text-left py-3 px-4 w-[270px] cursor-pointer" {...sortHead('controller')}>
+                <SortButton>{tr('gatewayClassesPage.table.controller', 'Controller')}{renderSortIcon('controller')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewayClassesPage.table.conditions', 'Conditions')}{renderSortIcon('status')}</span>
+              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" {...sortHead('status')}>
+                <SortButton>{tr('gatewayClassesPage.table.conditions', 'Conditions')}{renderSortIcon('status')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('parameters')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewayClassesPage.table.parametersRef', 'Parameters Ref')}{renderSortIcon('parameters')}</span>
+              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('parameters')}>
+                <SortButton>{tr('gatewayClassesPage.table.parametersRef', 'Parameters Ref')}{renderSortIcon('parameters')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('gatewayClassesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
+                <SortButton>{tr('gatewayClassesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

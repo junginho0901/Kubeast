@@ -18,6 +18,8 @@ import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 // Cluster → Validating / Mutating Admission Policies: the admissionregistration.k8s.io/v1
 // policies with their bindings, read-only (create and edit go through YAML).
@@ -92,6 +94,7 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -233,27 +236,27 @@ export default function AdmissionPolicies({ kind }: { kind: AdmissionPolicyKind 
           <table className="w-full text-sm min-w-[760px] table-fixed" data-testid="admission-policies-table">
             <thead ref={theadRef} className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4 w-[320px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="text-left py-3 px-4 w-[320px] cursor-pointer" {...sortHead('name')}>
+                  <SortButton>
                     {tr('admissionPolicies.table.name', 'Name')}{renderSortIcon('name')}
-                  </span>
+                  </SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('rules')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('rules')}>
+                  <SortButton>
                     {validating ? tr('admissionPolicies.table.validations', 'Validations') : tr('admissionPolicies.table.mutations', 'Mutations')}{renderSortIcon('rules')}
-                  </span>
+                  </SortButton>
                 </th>
                 <th className="col-optional text-left py-3 px-4 w-[220px]">{tr('admissionPolicies.table.paramKind', 'Param kind')}</th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('bindings')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('bindings')}>
+                  <SortButton>
                     {tr('admissionPolicies.table.bindings', 'Bindings')}{renderSortIcon('bindings')}
-                  </span>
+                  </SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[120px]">{tr('admissionPolicies.table.failurePolicy', 'Failure policy')}</th>
-                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
+                  <SortButton>
                     {tr('admissionPolicies.table.age', 'Age')}{renderSortIcon('age')}
-                  </span>
+                  </SortButton>
                 </th>
               </tr>
             </thead>

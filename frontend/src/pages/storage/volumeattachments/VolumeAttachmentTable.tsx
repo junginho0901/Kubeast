@@ -25,6 +25,8 @@ import {
 } from './volumeAttachmentHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -85,6 +87,7 @@ export function VolumeAttachmentTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -98,26 +101,26 @@ export function VolumeAttachmentTable({
         <table className="w-full min-w-[900px] text-sm">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.name', 'Name')}{renderSortIcon('name')}</span>
+              <th className="text-left py-3 px-4 cursor-pointer select-none" {...sortHead('name')}>
+                <SortButton>{tr('volumeattachments.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('attacher')}>
-                <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.attacher', 'Attacher')}{renderSortIcon('attacher')}</span>
+              <th className="text-left py-3 px-4 cursor-pointer select-none" {...sortHead('attacher')}>
+                <SortButton>{tr('volumeattachments.table.attacher', 'Attacher')}{renderSortIcon('attacher')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('pv')}>
-                <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.persistentVolume', 'Persistent Volume')}{renderSortIcon('pv')}</span>
+              <th className="text-left py-3 px-4 cursor-pointer select-none" {...sortHead('pv')}>
+                <SortButton>{tr('volumeattachments.table.persistentVolume', 'Persistent Volume')}{renderSortIcon('pv')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('node')}>
-                <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.node', 'Node')}{renderSortIcon('node')}</span>
+              <th className="text-left py-3 px-4 cursor-pointer select-none" {...sortHead('node')}>
+                <SortButton>{tr('volumeattachments.table.node', 'Node')}{renderSortIcon('node')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('attached')}>
-                <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.attached', 'Attached')}{renderSortIcon('attached')}</span>
+              <th className="text-left py-3 px-4 cursor-pointer select-none" {...sortHead('attached')}>
+                <SortButton>{tr('volumeattachments.table.attached', 'Attached')}{renderSortIcon('attached')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('error')}>
-                <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.error', 'Error')}{renderSortIcon('error')}</span>
+              <th className="text-left py-3 px-4 cursor-pointer select-none" {...sortHead('error')}>
+                <SortButton>{tr('volumeattachments.table.error', 'Error')}{renderSortIcon('error')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 cursor-pointer select-none" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('volumeattachments.table.age', 'Age')}{renderSortIcon('age')}</span>
+              <th className="col-low text-left py-3 px-4 cursor-pointer select-none" {...sortHead('age')}>
+                <SortButton>{tr('volumeattachments.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

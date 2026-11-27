@@ -13,6 +13,7 @@ import { classifyReadFailure } from '@/utils/aiContext/readFailure'
 import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
 import RollbackModal from '../modals/RollbackModal'
 import RevisionDetailModal from '../modals/RevisionDetailModal'
+import { openOnPress } from '@/components/openOnPress'
 
 export default function HistoryTab({
   namespace,
@@ -91,7 +92,7 @@ export default function HistoryTab({
                   key={h.revision}
                   ref={idx === 0 ? firstRowRef : undefined}
                   className="hover:bg-slate-800/60 cursor-pointer"
-                  onClick={() => setInspectTarget(h.revision)}
+                  {...openOnPress(() => setInspectTarget(h.revision))}
                 >
                   <td className="px-3 py-2 text-ink font-medium">
                     {h.revision}

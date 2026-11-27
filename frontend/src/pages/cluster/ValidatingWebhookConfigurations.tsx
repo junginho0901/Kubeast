@@ -20,6 +20,8 @@ import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide
 import { applyWebhookConfigWatchEvent } from './webhooks/webhookConfigWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 type SortKey = null | 'name' | 'webhooksCount' | 'age'
 
@@ -94,6 +96,7 @@ export default function ValidatingWebhookConfigurations() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -270,20 +273,20 @@ webhooks:
           <table className="w-full text-sm min-w-[600px] table-fixed">
             <thead ref={theadRef} className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4 w-[400px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="text-left py-3 px-4 w-[400px] cursor-pointer" {...sortHead('name')}>
+                  <SortButton>
                     {tr('validatingWebhooks.table.name', 'Name')}{renderSortIcon('name')}
-                  </span>
+                  </SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('webhooksCount')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('webhooksCount')}>
+                  <SortButton>
                     {tr('validatingWebhooks.table.webhooks', 'Webhooks')}{renderSortIcon('webhooksCount')}
-                  </span>
+                  </SortButton>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
+                  <SortButton>
                     {tr('validatingWebhooks.table.age', 'Age')}{renderSortIcon('age')}
-                  </span>
+                  </SortButton>
                 </th>
               </tr>
             </thead>

@@ -21,6 +21,8 @@ import {
 import { absoluteTitle } from '@/utils/time'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -85,6 +87,7 @@ export function CronJobTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -99,30 +102,30 @@ export function CronJobTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[140px]">{tr('cronjobs.table.namespace', 'Namespace')}</th>}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('cronjobs.table.name', 'Name')}{renderSortIcon('name')}</span>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
+                <SortButton>{tr('cronjobs.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('schedule')}>
-                <span className="inline-flex items-center gap-1">{tr('cronjobs.table.schedule', 'Schedule')}{renderSortIcon('schedule')}</span>
+              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" {...sortHead('schedule')}>
+                <SortButton>{tr('cronjobs.table.schedule', 'Schedule')}{renderSortIcon('schedule')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('suspend')}>
-                <span className="inline-flex items-center gap-1">{tr('cronjobs.table.suspend', 'Suspend')}{renderSortIcon('suspend')}</span>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('suspend')}>
+                <SortButton>{tr('cronjobs.table.suspend', 'Suspend')}{renderSortIcon('suspend')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('active')}>
-                <span className="inline-flex items-center gap-1">{tr('cronjobs.table.active', 'Active')}{renderSortIcon('active')}</span>
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('active')}>
+                <SortButton>{tr('cronjobs.table.active', 'Active')}{renderSortIcon('active')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('lastSchedule')}>
-                <span className="inline-flex items-center gap-1">{tr('cronjobs.table.lastSchedule', 'Last Schedule')}{renderSortIcon('lastSchedule')}</span>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('lastSchedule')}>
+                <SortButton>{tr('cronjobs.table.lastSchedule', 'Last Schedule')}{renderSortIcon('lastSchedule')}</SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[180px]">{tr('cronjobs.table.nextRun', 'Next Run')}</th>
-              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
-                <span className="inline-flex items-center gap-1">{tr('cronjobs.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
+              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('containers')}>
+                <SortButton>{tr('cronjobs.table.containers', 'Containers')}{renderSortIcon('containers')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
-                <span className="inline-flex items-center gap-1">{tr('cronjobs.table.images', 'Images')}{renderSortIcon('images')}</span>
+              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" {...sortHead('images')}>
+                <SortButton>{tr('cronjobs.table.images', 'Images')}{renderSortIcon('images')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('cronjobs.table.age', 'Age')}{renderSortIcon('age')}</span>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
+                <SortButton>{tr('cronjobs.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

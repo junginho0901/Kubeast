@@ -9,6 +9,7 @@ import { usePagedItems } from '@/hooks/usePagedItems'
 import { failureText } from '@/utils/failureText'
 import { classifyReadFailure } from '@/utils/aiContext/readFailure'
 import { forbiddenResourceFromUrl } from '@/utils/forbiddenResource'
+import { openOnPress } from '@/components/openOnPress'
 
 const NO_RESOURCES: never[] = []
 
@@ -69,14 +70,14 @@ export default function ResourcesTab({ namespace, name }: { namespace: string; n
                 key={`${r.kind}/${r.namespace ?? ''}/${r.name}/${i}`}
                 ref={i === 0 ? firstRowRef : undefined}
                 className="hover:bg-slate-800/60 cursor-pointer"
-                onClick={() =>
+                {...openOnPress(() =>
                   open({
                     kind: r.kind,
                     name: r.name,
                     namespace: r.namespace,
                     apiVersion: r.apiVersion,
                   })
-                }
+                )}
               >
                 <td className="px-3 py-2 text-ink">{r.kind}</td>
                 <td className="px-3 py-2 text-slate-400">{r.apiVersion}</td>

@@ -9,6 +9,8 @@ import { getStatusColor, type SortKey } from './gpuNodesHelpers'
 import { nodeStatusParts } from '@/utils/nodeStatus'
 import { vendorNames } from '../gpuNumbers'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface Props {
   sortedNodes: GPUNodeInfo[]
@@ -52,6 +54,7 @@ export default function GPUNodesTable({
     t(key, { defaultValue: fallback, ...options })
   const { open: openDetail } = useResourceDetail()
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, onSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc' ? (
@@ -67,29 +70,29 @@ export default function GPUNodesTable({
         <table className="w-full text-sm min-w-[1090px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => onSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.name', 'Name')}{renderSortIcon('name')}</span>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
+                <SortButton>{tr('gpuNodes.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => onSort('gpu_vendor')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.vendor', 'Vendor')}{renderSortIcon('gpu_vendor')}</span>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('gpu_vendor')}>
+                <SortButton>{tr('gpuNodes.table.vendor', 'Vendor')}{renderSortIcon('gpu_vendor')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => onSort('gpu_model')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.gpuModel', 'GPU Model')}{renderSortIcon('gpu_model')}</span>
+              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('gpu_model')}>
+                <SortButton>{tr('gpuNodes.table.gpuModel', 'GPU Model')}{renderSortIcon('gpu_model')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('gpu_memory')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.gpuMemory', 'GPU Memory')}{renderSortIcon('gpu_memory')}</span>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('gpu_memory')}>
+                <SortButton>{tr('gpuNodes.table.gpuMemory', 'GPU Memory')}{renderSortIcon('gpu_memory')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => onSort('gpu_capacity')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.capacity', 'Capacity')}{renderSortIcon('gpu_capacity')}</span>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('gpu_capacity')}>
+                <SortButton>{tr('gpuNodes.table.capacity', 'Capacity')}{renderSortIcon('gpu_capacity')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => onSort('gpu_allocatable')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.allocatable', 'Allocatable')}{renderSortIcon('gpu_allocatable')}</span>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('gpu_allocatable')}>
+                <SortButton>{tr('gpuNodes.table.allocatable', 'Allocatable')}{renderSortIcon('gpu_allocatable')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => onSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.status', 'Status')}{renderSortIcon('status')}</span>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('status')}>
+                <SortButton>{tr('gpuNodes.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => onSort('mig_strategy')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuNodes.table.migStrategy', 'MIG Strategy')}{renderSortIcon('mig_strategy')}</span>
+              <th className="col-optional text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('mig_strategy')}>
+                <SortButton>{tr('gpuNodes.table.migStrategy', 'MIG Strategy')}{renderSortIcon('mig_strategy')}</SortButton>
               </th>
             </tr>
           </thead>

@@ -18,6 +18,8 @@ import {
 } from './hpaHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -82,6 +84,7 @@ export function HPATable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -98,35 +101,35 @@ export function HPATable({
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[150px]">{tr('hpas.table.namespace', 'Namespace')}</th>
               )}
-              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[250px] cursor-pointer" {...sortHead('name')}>
+                <SortButton>
                   {tr('hpas.table.name', 'Name')}{renderSortIcon('name')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('target')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[240px] cursor-pointer" {...sortHead('target')}>
+                <SortButton>
                   {tr('hpas.table.reference', 'Reference')}{renderSortIcon('target')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('minReplicas')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('minReplicas')}>
+                <SortButton>
                   {tr('hpas.table.min', 'Min')}{renderSortIcon('minReplicas')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('maxReplicas')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('maxReplicas')}>
+                <SortButton>
                   {tr('hpas.table.max', 'Max')}{renderSortIcon('maxReplicas')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('currentReplicas')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('currentReplicas')}>
+                <SortButton>
                   {tr('hpas.table.replicas', 'Replicas')}{renderSortIcon('currentReplicas')}
-                </span>
+                </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="col-low text-left py-3 px-4 w-[160px] cursor-pointer" {...sortHead('age')}>
+                <SortButton>
                   {tr('hpas.table.age', 'Age')}{renderSortIcon('age')}
-                </span>
+                </SortButton>
               </th>
             </tr>
           </thead>

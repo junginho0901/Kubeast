@@ -21,6 +21,8 @@ import {
 } from './jobHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -85,6 +87,7 @@ export function JobTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -99,26 +102,26 @@ export function JobTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[140px]">{tr('jobs.table.namespace', 'Namespace')}</th>}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.name', 'Name')}{renderSortIcon('name')}</span>
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
+                <SortButton>{tr('jobs.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('completions')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.completions', 'Completions')}{renderSortIcon('completions')}</span>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('completions')}>
+                <SortButton>{tr('jobs.table.completions', 'Completions')}{renderSortIcon('completions')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.status', 'Status')}{renderSortIcon('status')}</span>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('status')}>
+                <SortButton>{tr('jobs.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('duration')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.duration', 'Duration')}{renderSortIcon('duration')}</span>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('duration')}>
+                <SortButton>{tr('jobs.table.duration', 'Duration')}{renderSortIcon('duration')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('containers')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.containers', 'Containers')}{renderSortIcon('containers')}</span>
+              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('containers')}>
+                <SortButton>{tr('jobs.table.containers', 'Containers')}{renderSortIcon('containers')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('images')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.images', 'Images')}{renderSortIcon('images')}</span>
+              <th className="col-optional text-left py-3 px-4 w-[240px] cursor-pointer" {...sortHead('images')}>
+                <SortButton>{tr('jobs.table.images', 'Images')}{renderSortIcon('images')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('jobs.table.age', 'Age')}{renderSortIcon('age')}</span>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
+                <SortButton>{tr('jobs.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

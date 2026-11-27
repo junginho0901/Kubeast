@@ -16,6 +16,9 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { formatMoney, formatPercent } from '@/utils/money'
 import { costOutsideCards, hasCostOutside, type CostOutside } from '@/utils/costParts'
 import { formatTime } from '@/utils/time'
+import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 
 // Workload kinds the detail drawer opens; OpenCost's other rows (no controller, a ReplicationController) stay plain.
@@ -80,6 +83,7 @@ export default function Cost() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -307,41 +311,41 @@ export default function Cost() {
               <table className="w-full text-sm min-w-[760px] table-fixed" data-testid="cost-table">
                 <thead ref={theadRef} className="text-slate-400">
                   <tr>
-                    <th className="text-left py-3 px-4 w-[300px] cursor-pointer" onClick={() => handleSort('name')}>
-                      <span className="inline-flex items-center gap-1">
+                    <th className="text-left py-3 px-4 w-[300px] cursor-pointer" {...sortHead('name')}>
+                      <SortButton>
                         {tr('cost.table.name', 'Name')}{renderSortIcon('name')}
-                      </span>
+                      </SortButton>
                     </th>
                     {byWorkload && <th className="col-low text-left py-3 px-4 w-[160px]">{tr('cost.table.namespace', 'Namespace')}</th>}
-                    <th className="text-right py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('cpu')}>
-                      <span className="inline-flex items-center gap-1">
+                    <th className="text-right py-3 px-4 w-[110px] cursor-pointer" {...sortHead('cpu')}>
+                      <SortButton>
                         {tr('cost.table.cpu', 'CPU')}{renderSortIcon('cpu')}
-                      </span>
+                      </SortButton>
                     </th>
-                    <th className="text-right py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('ram')}>
-                      <span className="inline-flex items-center gap-1">
+                    <th className="text-right py-3 px-4 w-[110px] cursor-pointer" {...sortHead('ram')}>
+                      <SortButton>
                         {tr('cost.table.ram', 'Memory')}{renderSortIcon('ram')}
-                      </span>
+                      </SortButton>
                     </th>
-                    <th className="col-optional text-right py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('pv')}>
-                      <span className="inline-flex items-center gap-1">
+                    <th className="col-optional text-right py-3 px-4 w-[110px] cursor-pointer" {...sortHead('pv')}>
+                      <SortButton>
                         {tr('cost.table.pv', 'PV')}{renderSortIcon('pv')}
-                      </span>
+                      </SortButton>
                     </th>
-                    <th className="col-optional text-right py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('network')}>
-                      <span className="inline-flex items-center gap-1">
+                    <th className="col-optional text-right py-3 px-4 w-[110px] cursor-pointer" {...sortHead('network')}>
+                      <SortButton>
                         {tr('cost.table.network', 'Network')}{renderSortIcon('network')}
-                      </span>
+                      </SortButton>
                     </th>
-                    <th className="text-right py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('total')}>
-                      <span className="inline-flex items-center gap-1">
+                    <th className="text-right py-3 px-4 w-[120px] cursor-pointer" {...sortHead('total')}>
+                      <SortButton>
                         {tr('cost.table.total', 'Total')}{renderSortIcon('total')}
-                      </span>
+                      </SortButton>
                     </th>
-                    <th className="col-optional text-right py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('efficiency')}>
-                      <span className="inline-flex items-center gap-1">
+                    <th className="col-optional text-right py-3 px-4 w-[100px] cursor-pointer" {...sortHead('efficiency')}>
+                      <SortButton>
                         {tr('cost.table.efficiency', 'Efficiency')}{renderSortIcon('efficiency')}
-                      </span>
+                      </SortButton>
                     </th>
                   </tr>
                 </thead>
@@ -354,7 +358,7 @@ export default function Cost() {
                       key={`${row.namespace}/${row.kind || ''}/${row.name}`}
                       data-testid="cost-row"
                       data-openable={onOpen ? 'true' : 'false'}
-                      onClick={onOpen ?? undefined}
+                      {...(onOpen ? openOnPress(onOpen) : {})}
                       className={`text-slate-200 hover:bg-slate-800/60 ${onOpen ? 'cursor-pointer' : ''}`}
                     >
                       <td className="py-3 px-4 font-medium text-ink">

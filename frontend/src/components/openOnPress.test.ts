@@ -84,27 +84,23 @@ describe('a list page with the helper', () => {
   })
 })
 
-// Every table row of the console that does something on a click is reachable from the keyboard, but those listed
-// here, page rows not reached yet (rows that select, expand, go to a page or open a window).
+// Every table row of the console that does something on a click is reachable from the keyboard: the row itself
+// (openOnPress), or, for the rows listed here, a control in the row that does what the row's click does and takes the
+// keys itself — a Tab stop on the row as well would be a second one for the same thing.
 const sources = import.meta.glob(['/src/**/*.tsx', '!/src/**/*.test.*'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
-const NOT_YET: Record<string, number> = {
-  '/src/pages/AdminAudit.tsx': 1,
-  '/src/pages/AdminUsers.tsx': 1,
-  '/src/pages/Cost.tsx': 1,
-  '/src/pages/admin/ClusterHygiene.tsx': 1,
-  '/src/pages/alerts/AlertInbox.tsx': 1,
-  '/src/pages/helm/releases/ReleaseTable.tsx': 1,
-  '/src/pages/helm/tabs/HistoryTab.tsx': 1,
-  '/src/pages/helm/tabs/ResourcesTab.tsx': 1,
-  '/src/pages/resource-graph/PodGroupList.tsx': 2,
-  '/src/pages/security/PolicyReports.tsx': 3,
+const CONTROL_IN_ROW: Record<string, RegExp> = {
+  // a pending user's checkbox selects the user, as the row's click does
+  '/src/pages/AdminUsers.tsx': /<input\s+type="checkbox"\s+checked=\{isChecked\}/,
+  // the release's name links to the page the row's click goes to
+  '/src/pages/helm/releases/ReleaseTable.tsx': /<Link to=\{to\}/,
 }
 
-// the opening tags `<tr …>` holding an onClick, read past the `>` inside `{…}`
-function clickRowsWithoutKeys(source: string): number {
-  let count = 0
-  for (const m of source.matchAll(/<tr\b/g)) {
-    let i = m.index! + 3
+// the elements `<tr …>…</tr>` (or `<th …>…</th>`) whose opening tag holds an onClick (or what `opens` names), read past
+// the `>` inside `{…}`
+function clicked(source: string, tag: 'tr' | 'th', opens = /\bonClick=/): { open: string; whole: string }[] {
+  const found: { open: string; whole: string }[] = []
+  for (const m of source.matchAll(new RegExp(`<${tag}\\b`, 'g'))) {
+    let i = m.index! + tag.length + 1
     let depth = 0
     for (; i < source.length; i++) {
       const c = source[i]
@@ -112,20 +108,55 @@ function clickRowsWithoutKeys(source: string): number {
       else if (c === '}') depth--
       else if (c === '>' && depth === 0 && source[i - 1] !== '=') break
     }
-    const tag = source.slice(m.index, i)
-    if (/\bonClick=/.test(tag) && !/openOnPress\(|tabIndex=/.test(tag)) count++
+    const open = source.slice(m.index, i)
+    const end = source.indexOf(`</${tag}>`, i)
+    if (opens.test(open)) found.push({ open, whole: source.slice(m.index, end < 0 ? i : end) })
   }
-  return count
+  return found
 }
+const rowsWithoutKeys = (source: string) => clicked(source, 'tr').filter((r) => !/openOnPress\(|tabIndex=/.test(r.open)).map((r) => r.whole)
+// a header whose click sorts takes the Tab order through the SortButton in it, and its click and aria-sort from
+// sortHeaderProps, so it says the order the table is in
+const SORT_HEAD = /\{\.\.\.sortHead\(/
+const sortingHeaders = (source: string) => clicked(source, 'th', new RegExp(`\\bonClick=|${SORT_HEAD.source}`))
+const headersWithoutButton = (source: string) => sortingHeaders(source).filter((h) => !/<SortButton\b/.test(h.whole)).length
+const headersWithoutOrder = (source: string) => clicked(source, 'th', /(?:)/)
+  .filter((h) => /<SortButton\b/.test(h.whole) || /\bonClick=/.test(h.open)).filter((h) => !SORT_HEAD.test(h.open)).length
 
 describe('the rows the keyboard reaches', () => {
-  it('are every clicked row but the ones still listed, and a listed one fixed leaves the list', () => {
+  it('are every clicked row, the listed ones through the control in them, and a listed one fixed leaves the list', () => {
+    const found: Record<string, string[]> = {}
+    for (const [path, source] of Object.entries(sources)) {
+      const rows = rowsWithoutKeys(source)
+      if (rows.length > 0) found[path] = rows
+    }
+    expect(Object.keys(found).sort()).toEqual(Object.keys(CONTROL_IN_ROW).sort())
+    for (const [path, rows] of Object.entries(found)) {
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatch(CONTROL_IN_ROW[path])
+    }
+  })
+
+  it('and every header a click sorts by', () => {
     const found: Record<string, number> = {}
     for (const [path, source] of Object.entries(sources)) {
-      const n = clickRowsWithoutKeys(source)
+      const n = headersWithoutButton(source)
       if (n > 0) found[path] = n
     }
-    expect(found).toEqual(NOT_YET)
+    expect(found).toEqual({})
+  })
+
+  it('and every such header says the order the table is in', () => {
+    const found: Record<string, number> = {}
+    let headers = 0
+    for (const [path, source] of Object.entries(sources)) {
+      headers += sortingHeaders(source).length
+      const n = headersWithoutOrder(source)
+      if (n > 0) found[path] = n
+    }
+    expect(found).toEqual({})
+    // the sortable headers of the console when aria-sort came (57 files)
+    expect(headers).toBeGreaterThanOrEqual(334)
   })
 
   it('include the boxes of a list page that open the drawer', () => {

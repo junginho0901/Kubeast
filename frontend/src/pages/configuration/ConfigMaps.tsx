@@ -24,6 +24,8 @@ import { applyConfigMapWatchEvent } from './configmaps/configMapWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 type SortKey = null | 'name' | 'namespace' | 'dataCount' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -116,6 +118,7 @@ export default function ConfigMaps() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -276,18 +279,18 @@ data:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="col-low text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                    <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                  <th className="col-low text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('namespace')}>
+                    <SortButton>{tr('configMapsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                   </th>
                 )}
-                <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <th className="text-left py-3 px-4 cursor-pointer" {...sortHead('name')}>
+                  <SortButton>{tr('configMapsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('dataCount')}>
-                  <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.data', 'Data')}{renderSortIcon('dataCount')}</span>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('dataCount')}>
+                  <SortButton>{tr('configMapsPage.table.data', 'Data')}{renderSortIcon('dataCount')}</SortButton>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('configMapsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('age')}>
+                  <SortButton>{tr('configMapsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

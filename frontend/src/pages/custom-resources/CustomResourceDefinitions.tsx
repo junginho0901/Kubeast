@@ -21,6 +21,8 @@ import { crdVersionsText } from './crdVersions'
 import { applyCRDWatchEvent } from './crdWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 type SortKey = null | 'name' | 'group' | 'version' | 'scope' | 'kind' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -91,6 +93,7 @@ export default function CustomResourceDefinitions() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -239,23 +242,23 @@ spec:
           <table className="w-full text-sm min-w-[900px] table-fixed">
             <thead ref={theadRef} className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <th className="text-left py-3 px-4 cursor-pointer" {...sortHead('name')}>
+                  <SortButton>{tr('crdPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('group')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.group', 'Group')}{renderSortIcon('group')}</span>
+                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('group')}>
+                  <SortButton>{tr('crdPage.table.group', 'Group')}{renderSortIcon('group')}</SortButton>
                 </th>
-                <th className="col-optional text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('version')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.versions', 'Versions')}{renderSortIcon('version')}</span>
+                <th className="col-optional text-left py-3 px-4 w-[160px] cursor-pointer" {...sortHead('version')}>
+                  <SortButton>{tr('crdPage.table.versions', 'Versions')}{renderSortIcon('version')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('scope')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.scope', 'Scope')}{renderSortIcon('scope')}</span>
+                <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('scope')}>
+                  <SortButton>{tr('crdPage.table.scope', 'Scope')}{renderSortIcon('scope')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('kind')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.kind', 'Kind')}{renderSortIcon('kind')}</span>
+                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('kind')}>
+                  <SortButton>{tr('crdPage.table.kind', 'Kind')}{renderSortIcon('kind')}</SortButton>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('crdPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
+                  <SortButton>{tr('crdPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

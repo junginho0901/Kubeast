@@ -25,6 +25,8 @@ import { applySecretWatchEvent } from './secrets/secretWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { useDismiss } from '@/hooks/useDismiss'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 type SortKey = null | 'name' | 'namespace' | 'type' | 'data' | 'age'
 type SummaryCard = [label: string, value: number | string, boxClass: string, labelClass: string]
@@ -129,6 +131,7 @@ export default function Secrets() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -295,21 +298,21 @@ stringData:
             <thead ref={theadRef} className="text-slate-400">
               <tr>
                 {showNamespaceColumn && (
-                  <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                    <span className="inline-flex items-center gap-1">{tr('secretsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                  <th className="col-low text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('namespace')}>
+                    <SortButton>{tr('secretsPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                   </th>
                 )}
-                <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('secretsPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <th className="text-left py-3 px-4 cursor-pointer" {...sortHead('name')}>
+                  <SortButton>{tr('secretsPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('type')}>
-                  <span className="inline-flex items-center gap-1">{tr('secretsPage.table.type', 'Type')}{renderSortIcon('type')}</span>
+                <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('type')}>
+                  <SortButton>{tr('secretsPage.table.type', 'Type')}{renderSortIcon('type')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[80px] cursor-pointer" onClick={() => handleSort('data')}>
-                  <span className="inline-flex items-center gap-1">{tr('secretsPage.table.data', 'Data')}{renderSortIcon('data')}</span>
+                <th className="text-left py-3 px-4 w-[80px] cursor-pointer" {...sortHead('data')}>
+                  <SortButton>{tr('secretsPage.table.data', 'Data')}{renderSortIcon('data')}</SortButton>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('secretsPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <th className="col-low text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('age')}>
+                  <SortButton>{tr('secretsPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

@@ -27,6 +27,7 @@ import { RefreshFailure } from '@/components/RefreshFailure'
 import { failureOf } from '@/hooks/useRefresh'
 import { ActionFailure } from '@/components/ActionFailure'
 import { useDownload } from '@/hooks/useDownload'
+import { openOnPress } from '@/components/openOnPress'
 
 // Cluster → Cluster hygiene: configuration risks of one cluster (Pod Security
 // Standards, image tags, resources, namespace policy, service account tokens,
@@ -448,7 +449,7 @@ export default function ClusterHygiene() {
                     <tr
                       key={`${f.check}-${f.kind}-${f.namespace}-${f.name}-${f.container}-${i}`}
                       ref={i === 0 ? findingsTable.firstRowRef : undefined}
-                      onClick={onOpen ?? undefined}
+                      {...(onOpen ? openOnPress(onOpen) : {})}
                       data-openable={onOpen ? 'true' : 'false'}
                       className={`border-t border-slate-700/60 text-slate-300 align-top ${onOpen ? 'cursor-pointer hover:bg-slate-700/30' : ''}`}
                       data-testid="hygiene-finding-row"

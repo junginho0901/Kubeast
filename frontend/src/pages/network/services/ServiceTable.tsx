@@ -20,6 +20,8 @@ import {
 } from './serviceHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -84,6 +86,7 @@ export function ServiceTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -98,26 +101,26 @@ export function ServiceTable({
           <thead ref={theadRef} className="text-slate-400">
             <tr>
               {showNamespaceColumn && <th className="col-low text-left py-3 px-4 w-[150px]">{tr('servicesPage.table.namespace', 'Namespace')}</th>}
-              <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('servicesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+              <th className="text-left py-3 px-4 w-[240px] cursor-pointer" {...sortHead('name')}>
+                <SortButton>{tr('servicesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" onClick={() => handleSort('type')}>
-                <span className="inline-flex items-center gap-1">{tr('servicesPage.table.type', 'Type')}{renderSortIcon('type')}</span>
+              <th className="text-left py-3 px-4 w-[120px] cursor-pointer" {...sortHead('type')}>
+                <SortButton>{tr('servicesPage.table.type', 'Type')}{renderSortIcon('type')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('clusterIp')}>
-                <span className="inline-flex items-center gap-1">{tr('servicesPage.table.clusterIp', 'Cluster IP')}{renderSortIcon('clusterIp')}</span>
+              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('clusterIp')}>
+                <SortButton>{tr('servicesPage.table.clusterIp', 'Cluster IP')}{renderSortIcon('clusterIp')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('externalIp')}>
-                <span className="inline-flex items-center gap-1">{tr('servicesPage.table.externalIp', 'External IP')}{renderSortIcon('externalIp')}</span>
+              <th className="text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('externalIp')}>
+                <SortButton>{tr('servicesPage.table.externalIp', 'External IP')}{renderSortIcon('externalIp')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[300px] cursor-pointer" onClick={() => handleSort('ports')}>
-                <span className="inline-flex items-center gap-1">{tr('servicesPage.table.ports', 'Ports')}{renderSortIcon('ports')}</span>
+              <th className="text-left py-3 px-4 w-[300px] cursor-pointer" {...sortHead('ports')}>
+                <SortButton>{tr('servicesPage.table.ports', 'Ports')}{renderSortIcon('ports')}</SortButton>
               </th>
-              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('selector')}>
-                <span className="inline-flex items-center gap-1">{tr('servicesPage.table.selector', 'Selector')}{renderSortIcon('selector')}</span>
+              <th className="col-optional text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('selector')}>
+                <SortButton>{tr('servicesPage.table.selector', 'Selector')}{renderSortIcon('selector')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('servicesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
+                <SortButton>{tr('servicesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
             </tr>
           </thead>

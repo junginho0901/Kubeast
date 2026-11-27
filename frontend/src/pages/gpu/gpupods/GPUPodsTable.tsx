@@ -19,6 +19,8 @@ import { formatAge, getStatusColor, type SortKey } from './gpuPodsHelpers'
 import { vendorNames, type PodGpuUsage } from '../gpuNumbers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -89,6 +91,7 @@ export function GPUPodsTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc' ? (
@@ -107,26 +110,26 @@ export function GPUPodsTable({
         <table className="w-full text-sm min-w-[1090px] table-fixed">
           <thead ref={theadRef} className="text-slate-400">
             <tr>
-              <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuPods.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+              <th className="col-low text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('namespace')}>
+                <SortButton>{tr('gpuPods.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuPods.table.name', 'Name')}{renderSortIcon('name')}</span>
+              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" {...sortHead('name')}>
+                <SortButton>{tr('gpuPods.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" onClick={() => handleSort('node_name')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuPods.table.node', 'Node')}{renderSortIcon('node_name')}</span>
+              <th className="text-left py-3 px-4 w-[200px] cursor-pointer" {...sortHead('node_name')}>
+                <SortButton>{tr('gpuPods.table.node', 'Node')}{renderSortIcon('node_name')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('gpu_requested')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuPods.table.gpus', 'GPUs')}{renderSortIcon('gpu_requested')}</span>
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('gpu_requested')}>
+                <SortButton>{tr('gpuPods.table.gpus', 'GPUs')}{renderSortIcon('gpu_requested')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" onClick={() => handleSort('gpu_vendor')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuPods.table.vendor', 'Vendor')}{renderSortIcon('gpu_vendor')}</span>
+              <th className="text-left py-3 px-4 w-[110px] cursor-pointer" {...sortHead('gpu_vendor')}>
+                <SortButton>{tr('gpuPods.table.vendor', 'Vendor')}{renderSortIcon('gpu_vendor')}</SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuPods.table.status', 'Status')}{renderSortIcon('status')}</span>
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('status')}>
+                <SortButton>{tr('gpuPods.table.status', 'Status')}{renderSortIcon('status')}</SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">{tr('gpuPods.table.age', 'Age')}{renderSortIcon('age')}</span>
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
+                <SortButton>{tr('gpuPods.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
               </th>
               {metricsAvailable && (
                 <>

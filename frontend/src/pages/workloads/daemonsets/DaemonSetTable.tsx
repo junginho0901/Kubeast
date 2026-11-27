@@ -19,6 +19,8 @@ import {
 import { workloadStatusLabel, workloadStatusTitle } from '@/utils/workloadStatus'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -83,6 +85,7 @@ export function DaemonSetTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -99,51 +102,51 @@ export function DaemonSetTable({
               {showNamespaceColumn && (
                 <th className="col-low text-left py-3 px-4 w-[140px]">{tr('daemonsets.table.namespace', 'Namespace')}</th>
               )}
-              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[220px] cursor-pointer" {...sortHead('name')}>
+                <SortButton>
                   {tr('daemonsets.table.name', 'Name')}{renderSortIcon('name')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('ready')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('ready')}>
+                <SortButton>
                   {tr('daemonsets.table.ready', 'Ready')}{renderSortIcon('ready')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('current')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('current')}>
+                <SortButton>
                   {tr('daemonsets.table.current', 'Current')}{renderSortIcon('current')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('desired')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('desired')}>
+                <SortButton>
                   {tr('daemonsets.table.desired', 'Desired')}{renderSortIcon('desired')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[95px] cursor-pointer" onClick={() => handleSort('updated')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[95px] cursor-pointer" {...sortHead('updated')}>
+                <SortButton>
                   {tr('daemonsets.table.updated', 'Updated')}{renderSortIcon('updated')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('available')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('available')}>
+                <SortButton>
                   {tr('daemonsets.table.available', 'Available')}{renderSortIcon('available')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[130px] cursor-pointer" {...sortHead('status')}>
+                <SortButton>
                   {tr('daemonsets.table.status', 'Status')}{renderSortIcon('status')}
-                </span>
+                </SortButton>
               </th>
               <th className="text-left py-3 px-4 w-[200px]">{tr('daemonsets.table.nodeSelector', 'Node Selector')}</th>
-              <th className="col-optional text-left py-3 px-4 w-[230px] cursor-pointer" onClick={() => handleSort('images')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="col-optional text-left py-3 px-4 w-[230px] cursor-pointer" {...sortHead('images')}>
+                <SortButton>
                   {tr('daemonsets.table.images', 'Images')}{renderSortIcon('images')}
-                </span>
+                </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
+                <SortButton>
                   {tr('daemonsets.table.age', 'Age')}{renderSortIcon('age')}
-                </span>
+                </SortButton>
               </th>
             </tr>
           </thead>

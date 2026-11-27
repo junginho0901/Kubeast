@@ -13,6 +13,8 @@ import { TableEmptyRow } from '@/components/TableEmptyRow'
 import { formatAge, getStatusColor, runningNotReady, type SortKey } from './podHelpers'
 import { Trans } from 'react-i18next'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface OpenDetailArgs {
   kind: string
@@ -80,6 +82,7 @@ export function PodTable({
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -98,40 +101,40 @@ export function PodTable({
                   {tr('pods.table.namespace', 'Namespace')}
                 </th>
               )}
-              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" onClick={() => handleSort('name')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[260px] cursor-pointer" {...sortHead('name')}>
+                <SortButton>
                   {tr('pods.table.name', 'Name')}{renderSortIcon('name')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('ready')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('ready')}>
+                <SortButton>
                   {tr('pods.table.ready', 'Ready')}{renderSortIcon('ready')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('status')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('status')}>
+                <SortButton>
                   {tr('pods.table.status', 'Status')}{renderSortIcon('status')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('restarts')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('restarts')}>
+                <SortButton>
                   {tr('pods.table.restarts', 'Restarts')}{renderSortIcon('restarts')}
-                </span>
+                </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[140px] cursor-pointer" onClick={() => handleSort('pod_ip')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="col-low text-left py-3 px-4 w-[140px] cursor-pointer" {...sortHead('pod_ip')}>
+                <SortButton>
                   {tr('pods.table.podIp', 'Pod IP')}{renderSortIcon('pod_ip')}
-                </span>
+                </SortButton>
               </th>
-              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" onClick={() => handleSort('node_name')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="text-left py-3 px-4 w-[170px] cursor-pointer" {...sortHead('node_name')}>
+                <SortButton>
                   {tr('pods.table.node', 'Node')}{renderSortIcon('node_name')}
-                </span>
+                </SortButton>
               </th>
-              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                <span className="inline-flex items-center gap-1">
+              <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
+                <SortButton>
                   {tr('pods.table.age', 'Age')}{renderSortIcon('age')}
-                </span>
+                </SortButton>
               </th>
             </tr>
           </thead>

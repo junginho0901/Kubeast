@@ -17,6 +17,8 @@ import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react
 import CustomDropdown from '@/components/CustomDropdown'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 // Gateway → Policies: one table of every policy object attached to Gateway
 // API resources, whichever implementation owns the kind (label-discovered
@@ -120,6 +122,7 @@ export default function Policies() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -282,21 +285,21 @@ export default function Policies() {
           <table className="w-full text-sm min-w-[900px] table-fixed">
             <thead ref={theadRef} className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4 w-[190px] cursor-pointer" onClick={() => handleSort('kind')}>
-                  <span className="inline-flex items-center gap-1">{tr('policiesPage.table.kind', 'Kind')}{renderSortIcon('kind')}</span>
+                <th className="text-left py-3 px-4 w-[190px] cursor-pointer" {...sortHead('kind')}>
+                  <SortButton>{tr('policiesPage.table.kind', 'Kind')}{renderSortIcon('kind')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('policiesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <th className="text-left py-3 px-4 cursor-pointer" {...sortHead('name')}>
+                  <SortButton>{tr('policiesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[160px] cursor-pointer" onClick={() => handleSort('namespace')}>
-                  <span className="inline-flex items-center gap-1">{tr('policiesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</span>
+                <th className="text-left py-3 px-4 w-[160px] cursor-pointer" {...sortHead('namespace')}>
+                  <SortButton>{tr('policiesPage.table.namespace', 'Namespace')}{renderSortIcon('namespace')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 cursor-pointer" onClick={() => handleSort('target')}>
-                  <span className="inline-flex items-center gap-1">{tr('policiesPage.table.target', 'Target')}{renderSortIcon('target')}</span>
+                <th className="text-left py-3 px-4 cursor-pointer" {...sortHead('target')}>
+                  <SortButton>{tr('policiesPage.table.target', 'Target')}{renderSortIcon('target')}</SortButton>
                 </th>
                 <th className="text-left py-3 px-4 w-[110px]">{tr('policiesPage.table.accepted', 'Accepted')}</th>
-                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('policiesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
+                  <SortButton>{tr('policiesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

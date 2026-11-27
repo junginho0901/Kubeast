@@ -16,6 +16,7 @@ import { formatAge, utcTitle } from '@/utils/time'
 import { getStatusColor } from '../workloads/pods/podHelpers'
 import { kindIcon } from './constants'
 import { unlessRefused } from '@/services/queryDefaults'
+import { openOnPress } from '@/components/openOnPress'
 
 const ROWS = 20
 
@@ -168,7 +169,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
                 <tr
                   key={`${p.namespace}/${p.name}`}
                   className="border-b border-slate-700/60 hover:bg-slate-700/40 cursor-pointer"
-                  onClick={() => onOpen({ kind: 'Pod', name: p.name, namespace: p.namespace })}
+                  {...openOnPress(() => onOpen({ kind: 'Pod', name: p.name, namespace: p.namespace }))}
                   data-testid="pod-group-row"
                 >
                   <td className="py-2 px-4 font-mono text-xs text-ink">{p.name}</td>
@@ -181,7 +182,7 @@ export function PodGroupList({ group, onClose, onExpand, onOpen }: Props) {
                 <tr
                   key={name}
                   className="border-b border-slate-700/60 hover:bg-slate-700/40 cursor-pointer"
-                  onClick={() => onOpen({ kind: group.kind, name, namespace: group.namespace || undefined })}
+                  {...openOnPress(() => onOpen({ kind: group.kind, name, namespace: group.namespace || undefined }))}
                   data-testid="pod-group-row"
                 >
                   <td className="py-2 px-4 font-mono text-xs text-ink">{name}</td>

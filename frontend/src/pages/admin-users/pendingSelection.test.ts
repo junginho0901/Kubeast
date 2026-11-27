@@ -1,5 +1,9 @@
+import i18next from 'i18next'
 import { describe, expect, it } from 'vitest'
-import { allPendingSelected, toggleAllFound, toggleAllPending, toggleOnePending } from './pendingSelection'
+import en from '../../i18n/locales/en.json'
+import ko from '../../i18n/locales/ko.json'
+import adminUsersSrc from '../AdminUsers.tsx?raw'
+import { allPendingSelected, pendingAccountName, toggleAllFound, toggleAllPending, toggleOnePending } from './pendingSelection'
 
 // The Pending window pages its accounts ten at a time; what is chosen is kept by account id across the pages, and
 // the box in the header row chooses every pending account, on every page.
@@ -52,5 +56,23 @@ describe('choosing pending accounts', () => {
     const chosen = new Set(['p1', 'p2'])
     expect(allPendingSelected(chosen, [])).toBe(false)
     expect([...toggleAllFound(chosen, [])]).toEqual(['p1', 'p2'])
+  })
+})
+
+// A row's box had no name (WCAG 4.1.2): a screen reader read "checkbox, not checked" on every row of the window.
+describe('a pending account\'s box', () => {
+  it('is named for the account its row shows, by name and email, in English and Korean', async () => {
+    expect(pendingAccountName({ name: 'Kim', email: 'kim@example.com' })).toBe('Kim (kim@example.com)')
+    expect(pendingAccountName({ name: 'Kim' })).toBe('Kim')
+    expect(pendingAccountName({ name: 'Kim', email: null })).toBe('Kim')
+
+    const i18n = i18next.createInstance()
+    await i18n.init({ lng: 'en', fallbackLng: 'en', resources: { en: { translation: en }, ko: { translation: ko } }, interpolation: { escapeValue: false } })
+    const account = pendingAccountName({ name: 'Kim', email: 'kim@example.com' })
+    expect(i18n.t('adminUsers.bulk.selectAccount', { account })).toBe('Select Kim (kim@example.com)')
+    expect(i18n.getFixedT('ko')('adminUsers.bulk.selectAccount', { account })).toBe('Kim (kim@example.com) 선택')
+
+    // the window opens on a click, which a static render does not make: the row's box is read from the source
+    expect(adminUsersSrc).toMatch(/checked=\{isChecked\}[\s\S]{0,200}?aria-label=\{tr\('adminUsers\.bulk\.selectAccount', 'Select \{\{account\}\}', \{ account: pendingAccountName\(u\) \}\)\}/)
   })
 })

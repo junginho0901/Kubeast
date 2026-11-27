@@ -5,6 +5,8 @@ import { copyText } from '@/utils/clipboard'
 import { SearchResult, SearchSortKey, compareResults } from './searchEngine'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { detailTarget } from '@/components/resource-detail/crDetail'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 interface Props {
   results: SearchResult[]
@@ -67,6 +69,7 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
     else { setSortKey(key); setSortDir('asc') }
     setPage(0)
   }
+  const sortHead = sortHeaderProps(sortKey, sortDir, toggleSort)
 
   // the result stays on the row last copied until the next copy, as a pressed button's result does on every screen
   const copyName = async (name: string, idx: number) => {
@@ -115,12 +118,12 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
                 <th
                   key={col.key}
                   className={`px-4 py-2.5 text-left text-xs font-semibold text-slate-400 cursor-pointer hover:text-slate-200 transition-colors ${col.className}`}
-                  onClick={() => toggleSort(col.key)}
+                  {...sortHead(col.key)}
                 >
-                  <span className="flex items-center gap-1">
+                  <SortButton className="flex items-center gap-1">
                     {col.label}
                     <ArrowUpDown className={`w-3 h-3 ${sortKey === col.key ? 'text-primary-400' : 'text-slate-600'}`} />
-                  </span>
+                  </SortButton>
                 </th>
               ))}
               <th className="px-4 py-2.5 text-right text-xs font-semibold text-slate-400 w-24">

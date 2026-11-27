@@ -24,13 +24,15 @@ import { BULK_CSV_HEADER, bulkCreateFailureRows, bulkCreateFailures, bulkCreateS
 import { roleMenuOpensUp } from './admin-users/roleMenu'
 import { failureText } from '@/utils/failureText'
 import { copyText } from '@/utils/clipboard'
-import { allPendingSelected, toggleAllFound, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
+import { allPendingSelected, pendingAccountName, toggleAllFound, toggleAllPending as toggleAllPendingIds, toggleOnePending } from './admin-users/pendingSelection'
 import { ownLevelChangeAsksSignIn } from './admin-users/ownLevel'
 import { passwordResetOffered } from './admin-users/passwordReset'
 import { usersMatching } from './admin/adminListSearch'
 import { useDismiss } from '@/hooks/useDismiss'
 import { announceCreated } from '@/services/createdNoticeStore'
 import { CreatedNotice } from '@/components/CreatedNotice'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 const USER_COLUMNS = 6
 
@@ -343,6 +345,7 @@ export default function AdminUsers() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc' ? (
@@ -490,17 +493,17 @@ export default function AdminUsers() {
         <table className="w-full text-sm">
           <thead ref={theadRef} className="bg-slate-800 text-slate-400">
             <tr className="text-left">
-              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('name')}>
-                {tr('adminUsers.table.name', 'Name')}{renderSortIcon('name')}
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" {...sortHead('name')}>
+                <SortButton className="text-left">{tr('adminUsers.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
               </th>
-              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('email')}>
-                {tr('adminUsers.table.email', 'Email')}{renderSortIcon('email')}
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" {...sortHead('email')}>
+                <SortButton className="text-left">{tr('adminUsers.table.email', 'Email')}{renderSortIcon('email')}</SortButton>
               </th>
-              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('team')}>
-                {tr('adminUsers.table.team', 'Team')}{renderSortIcon('team')}
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" {...sortHead('team')}>
+                <SortButton className="text-left">{tr('adminUsers.table.team', 'Team')}{renderSortIcon('team')}</SortButton>
               </th>
-              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" onClick={() => handleSort('role')}>
-                {tr('adminUsers.table.role', 'Role')}{renderSortIcon('role')}
+              <th className="px-4 py-3 cursor-pointer select-none hover:text-ink" {...sortHead('role')}>
+                <SortButton className="text-left">{tr('adminUsers.table.role', 'Role')}{renderSortIcon('role')}</SortButton>
               </th>
               <th className="px-4 py-3">{tr('adminUsers.table.password', 'Password')}</th>
               <th className="px-4 py-3">{tr('adminUsers.table.delete', 'Delete')}</th>
@@ -823,6 +826,7 @@ export default function AdminUsers() {
                                 checked={isChecked}
                                 onChange={() => togglePendingSelect(u.id)}
                                 onClick={(e) => e.stopPropagation()}
+                                aria-label={tr('adminUsers.bulk.selectAccount', 'Select {{account}}', { account: pendingAccountName(u) })}
                                 className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
                               />
                             </td>

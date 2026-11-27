@@ -20,6 +20,8 @@ import { summarizeList } from '@/utils/aiContext/summarizeList'
 import { buildResourceLink } from '@/utils/resourceLink'
 import { Loader2, ChevronDown, ChevronUp, RefreshCw, Search } from 'lucide-react'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 type SortKey = null | 'name' | 'node' | 'driver' | 'pool' | 'devices' | 'age'
 
@@ -96,6 +98,7 @@ export default function ResourceSlices() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -247,23 +250,23 @@ export default function ResourceSlices() {
           <table className="w-full text-sm min-w-[940px] table-fixed">
             <thead ref={theadRef} className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4 w-[240px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.name', 'Name')}{renderSortIcon('name')}</span>
+                <th className="text-left py-3 px-4 w-[240px] cursor-pointer" {...sortHead('name')}>
+                  <SortButton>{tr('resourceSlicesPage.table.name', 'Name')}{renderSortIcon('name')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('node')}>
-                  <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.node', 'Node')}{renderSortIcon('node')}</span>
+                <th className="text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('node')}>
+                  <SortButton>{tr('resourceSlicesPage.table.node', 'Node')}{renderSortIcon('node')}</SortButton>
                 </th>
-                <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" onClick={() => handleSort('driver')}>
-                  <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.driver', 'Driver')}{renderSortIcon('driver')}</span>
+                <th className="col-optional text-left py-3 px-4 w-[180px] cursor-pointer" {...sortHead('driver')}>
+                  <SortButton>{tr('resourceSlicesPage.table.driver', 'Driver')}{renderSortIcon('driver')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" onClick={() => handleSort('pool')}>
-                  <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.pool', 'Pool')}{renderSortIcon('pool')}</span>
+                <th className="text-left py-3 px-4 w-[150px] cursor-pointer" {...sortHead('pool')}>
+                  <SortButton>{tr('resourceSlicesPage.table.pool', 'Pool')}{renderSortIcon('pool')}</SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('devices')}>
-                  <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.devices', 'Devices')}{renderSortIcon('devices')}</span>
+                <th className="text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('devices')}>
+                  <SortButton>{tr('resourceSlicesPage.table.devices', 'Devices')}{renderSortIcon('devices')}</SortButton>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">{tr('resourceSlicesPage.table.age', 'Age')}{renderSortIcon('age')}</span>
+                <th className="col-low text-left py-3 px-4 w-[90px] cursor-pointer" {...sortHead('age')}>
+                  <SortButton>{tr('resourceSlicesPage.table.age', 'Age')}{renderSortIcon('age')}</SortButton>
                 </th>
               </tr>
             </thead>

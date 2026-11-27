@@ -20,6 +20,8 @@ import { Loader2, ChevronDown, ChevronUp, Plus, RefreshCw, Search } from 'lucide
 import { applyRuntimeClassWatchEvent } from './runtimeclasses/runtimeClassWatchNormalize'
 import { countsOf } from '@/utils/listCounts'
 import { openOnPress } from '@/components/openOnPress'
+import { SortButton } from '@/components/SortButton'
+import { sortHeaderProps } from '@/components/sortHeaderProps'
 
 type SortKey = null | 'name' | 'handler' | 'age'
 
@@ -96,6 +98,7 @@ export default function RuntimeClasses() {
     setSortKey(null)
   }
 
+  const sortHead = sortHeaderProps(sortKey, sortDir, handleSort)
   const renderSortIcon = (key: NonNullable<SortKey>) => {
     if (sortKey !== key) return null
     return sortDir === 'asc'
@@ -259,20 +262,20 @@ handler: runc
           <table className="w-full text-sm min-w-[600px] table-fixed">
             <thead ref={theadRef} className="text-slate-400">
               <tr>
-                <th className="text-left py-3 px-4 w-[300px] cursor-pointer" onClick={() => handleSort('name')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="text-left py-3 px-4 w-[300px] cursor-pointer" {...sortHead('name')}>
+                  <SortButton>
                     {tr('runtimeClasses.table.name', 'Name')}{renderSortIcon('name')}
-                  </span>
+                  </SortButton>
                 </th>
-                <th className="text-left py-3 px-4 w-[250px] cursor-pointer" onClick={() => handleSort('handler')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="text-left py-3 px-4 w-[250px] cursor-pointer" {...sortHead('handler')}>
+                  <SortButton>
                     {tr('runtimeClasses.table.handler', 'Handler')}{renderSortIcon('handler')}
-                  </span>
+                  </SortButton>
                 </th>
-                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" onClick={() => handleSort('age')}>
-                  <span className="inline-flex items-center gap-1">
+                <th className="col-low text-left py-3 px-4 w-[100px] cursor-pointer" {...sortHead('age')}>
+                  <SortButton>
                     {tr('runtimeClasses.table.age', 'Age')}{renderSortIcon('age')}
-                  </span>
+                  </SortButton>
                 </th>
               </tr>
             </thead>

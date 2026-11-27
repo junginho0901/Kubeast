@@ -35,7 +35,7 @@ const render = (pvs: PVInfo[]) => renderToStaticMarkup(createElement(QueryClient
   tr,
 })))
 
-const heads = (html: string) => [...html.matchAll(/<th[^>]*>.*?<span[^>]*>(.*?)<\/span>/g)].map((m) => m[1].replace(/<[^>]+>/g, ''))
+const heads = (html: string) => [...html.matchAll(/<th[^>]*>.*?<button[^>]*>(.*?)<\/button>/g)].map((m) => m[1].replace(/<[^>]+>/g, ''))
 const firstRow = (html: string) => [...html.split('<tbody')[1].split('</tr>')[0].matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => m[1].replace(/<[^>]+>/g, ''))
 
 // `kubectl get pv` prints why a volume failed next to its phase; the list says the same.
