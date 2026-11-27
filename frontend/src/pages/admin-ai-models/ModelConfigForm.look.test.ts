@@ -19,4 +19,9 @@ describe('the edit form under a model card', () => {
   it('draws Cancel as the shared secondary button, no taller than Update', () => {
     expect(buttonOf('resetForm')).toContain('className="btn btn-secondary px-3 py-1.5 text-xs"')
   })
+
+  it("keeps its title's icon in the neutral icon tone", () => {
+    expect(source).toContain('<Pencil className="h-3.5 w-3.5 text-slate-400" />')
+    expect(source).toContain('<Plus className="h-3.5 w-3.5 text-slate-400" />')
+  })
 })

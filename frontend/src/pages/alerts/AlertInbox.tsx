@@ -493,7 +493,7 @@ function AlertDetailModal({ id, store, silenceWith, onClose }: {
       <ModalFrame
         title={data ? data.alertname || id : tr('alertInbox.detail', 'Alert')}
         subtitle={data ? `${data.cluster}${data.namespace ? ' / ' + data.namespace : ''} · ${formatTime(data.starts_at)}` : undefined}
-        icon={<BellRing className="w-5 h-5 text-primary-400" />}
+        icon={<BellRing className="w-5 h-5 text-slate-400" />}
         size="lg"
         body="scroll"
         onClose={onClose}

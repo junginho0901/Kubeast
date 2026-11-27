@@ -67,12 +67,12 @@ export default function ModelConfigForm({ form, inModal }: Props) {
         <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
           {editingId ? (
             <>
-              <Pencil className="h-3.5 w-3.5 text-primary-400" />
+              <Pencil className="h-3.5 w-3.5 text-slate-400" />
               {tr('admin.aiModels.edit', 'Edit Model')}
             </>
           ) : (
             <>
-              <Plus className="h-3.5 w-3.5 text-primary-400" />
+              <Plus className="h-3.5 w-3.5 text-slate-400" />
               {tr('admin.aiModels.new', 'New Model')}
             </>
           )}
