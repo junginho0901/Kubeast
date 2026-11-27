@@ -47,8 +47,8 @@
     },
     {
       "screen": "^(default|dark|light) · /(admin/(clusters|users|roles|access-requests|organizations|audit|session-recordings|investigations)|cluster/hygiene) on (self|default|test2)$",
-      "why": "The administration screens and Cluster Hygiene take the console surfaces, buttons and table spacing of the redesign (frontend/src/pages/admin/, AdminUsers.tsx, AdminRoles.tsx, AdminOrganizations.tsx, AdminAudit.tsx).",
-      "pr": "TBD v080/design-pr-14-admin"
+      "why": "The administration screens and Cluster Hygiene take the console surfaces, buttons and table spacing of the redesign (frontend/src/pages/admin/, AdminUsers.tsx, AdminRoles.tsx, AdminOrganizations.tsx, AdminAudit.tsx). Rendering only on Cluster Hygiene: the 24px press area each button now carries (button::after with a transform) changes how the edge of its shield icon is antialiased; no content or layout changes.",
+      "pr": "TBD v080/design-pr-14-admin, TBD v080/design-pr-18-interaction-states"
     },
     {
       "screen": "^(default|dark|light) · /ai-chat on (self|default|test2)$",
@@ -67,8 +67,8 @@
     },
     {
       "screen": "^(default|dark|light) · drawer [A-Za-z]+ \\((namespace under test|cluster|kube-node-lease)\\)$",
-      "why": "The resource drawer takes the panel border of the redesign, separates its sections with dividers instead of cards and aligns the tables inside it (frontend/src/components/ResourceDetailDrawer.tsx, resource-detail/).",
-      "pr": "#1116, #1117, #1118, TBD v080/design-b3-fixes"
+      "why": "The resource drawer takes the panel border of the redesign, separates its sections with dividers instead of cards and aligns the tables inside it (frontend/src/components/ResourceDetailDrawer.tsx, resource-detail/). Rendering only: the 24px press area each button now carries (button::after with a transform) changes how the text of the Show top talkers button is antialiased; no content or layout changes.",
+      "pr": "#1116, #1117, #1118, TBD v080/design-b3-fixes, TBD v080/design-pr-18-interaction-states"
     },
     {
       "screen": "^(default|dark|light) · /(cluster/(validating|mutating)admissionpolicies|gateway/backendtlspolicies|admin/ai-usage) on (self|default|test2)$",
