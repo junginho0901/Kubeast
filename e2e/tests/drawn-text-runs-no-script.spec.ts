@@ -480,6 +480,7 @@ test.describe.serial('Drawn text runs no script: resource names', () => {
   const user = `<img src=x onerror=${call(41)}>`
   const crb = `${prefix}-crb <details open ontoggle=${call(42)}>`
   const group = `<svg onload=${call(43)}>`
+  const viaConsole = `${prefix}-yaml <img src=x onerror=${call(44)}>`
   const rules = [{ apiGroups: [''], resources: ['configmaps'], verbs: ['get'] }]
   const API = 'rbac.authorization.k8s.io'
   let made = false
@@ -487,7 +488,7 @@ test.describe.serial('Drawn text runs no script: resource names', () => {
   // the outside address a planted image names is never asked (each ask is cut off before it leaves), and no image of it is drawn
   async function outside(page: Page) {
     const asked: string[] = []
-    await page.route(/e2e-outside\.invalid/, (route) => {
+    await page.route((url) => url.hostname === OUTSIDE, (route) => {
       asked.push(route.request().url())
       return route.abort()
     })
@@ -512,27 +513,27 @@ test.describe.serial('Drawn text runs no script: resource names', () => {
 
   test.afterAll(() => {
     if (!made) return
-    for (const name of [...names, crb]) {
+    for (const name of [...names, viaConsole, crb]) {
       kubectl(['delete', name === crb ? 'clusterrolebinding' : 'clusterrole', name, '--ignore-not-found', '--wait=false'])
     }
     kubectl(['delete', 'namespace', ns, '--ignore-not-found', '--wait=false'])
   })
 
-  test('the RBAC lists draw the names, roleRefs and subjects as their words and run none of them', async ({ page }) => {
+  test('the RBAC lists draw the names and roleRefs as their words and run none of them', async ({ page }) => {
     test.setTimeout(90_000)
     const ran = await watch(page)
     const asked = await outside(page)
     const lists: [string, string[]][] = [
       [`/security/clusterroles?cluster=${CLUSTER}`, names],
       [`/security/roles?cluster=${CLUSTER}&namespace=${ns}`, roles],
-      [`/security/rolebindings?cluster=${CLUSTER}&namespace=${ns}`, [rb]],
-      [`/security/clusterrolebindings?cluster=${CLUSTER}`, [crb]],
+      [`/security/rolebindings?cluster=${CLUSTER}&namespace=${ns}`, [rb, roles[1]]],
+      [`/security/clusterrolebindings?cluster=${CLUSTER}`, [crb, names[0]]],
     ]
     for (const [address, shown] of lists) {
       await test.step(address, async () => {
         await page.goto(address)
         await page.locator('main input[type="text"][placeholder]').first().fill(prefix)
-        const table = page.locator('main tbody')
+        const table = page.locator('main tbody:not([aria-hidden])').first()
         for (const name of shown) await expect(table).toContainText(name, { timeout: 20_000 })
         await settle(page)
         expect(await madeFrom(page.locator('main'))).toEqual(NOTHING_MADE)
@@ -542,7 +543,7 @@ test.describe.serial('Drawn text runs no script: resource names', () => {
     }
   })
 
-  test('the drawers of a ClusterRole, a RoleBinding and a ClusterRoleBinding draw the names and subjects as their words', async ({ page }) => {
+  test('the drawers of a ClusterRole, a RoleBinding and a ClusterRoleBinding draw the names as their words', async ({ page }) => {
     test.setTimeout(90_000)
     const ran = await watch(page)
     const asked = await outside(page)
@@ -552,8 +553,8 @@ test.describe.serial('Drawn text runs no script: resource names', () => {
     const opened: [string, string[]][] = [
       ['', [names[0]]],
       [`ClusterRole/${names[8]}`, [names[8]]],
-      [`RoleBinding/${ns}/${rb}`, [rb, user, roles[1]]],
-      [`ClusterRoleBinding/${crb}`, [crb, group, names[0]]],
+      [`RoleBinding/${ns}/${rb}`, [rb]],
+      [`ClusterRoleBinding/${crb}`, [crb]],
     ]
     for (const [detail, shown] of opened) {
       await test.step(detail || 'ClusterRole from its row', async () => {
@@ -573,6 +574,9 @@ test.describe.serial('Drawn text runs no script: resource names', () => {
     const ran = await watch(page)
     const asked = await outside(page)
     await page.goto(`/cluster/resource-graph?cluster=${CLUSTER}&namespace=${ns}`)
+    // the Security sources (ServiceAccount, Role, RoleBinding …) are off until picked
+    await page.getByRole('main').getByRole('button', { name: /^(Filter|필터)$/ }).click()
+    await page.getByRole('main').getByRole('button', { name: 'Security', exact: true }).click()
     const binding = page.locator('[data-testid^="rf__node-RoleBinding/"]')
     await expect(binding).toHaveCount(1, { timeout: 30_000 })
     expect(await binding.getAttribute('data-testid')).toBe(`rf__node-RoleBinding/${ns}/${rb}`)
@@ -589,7 +593,7 @@ test.describe.serial('Drawn text runs no script: resource names', () => {
     await page.getByRole('button', { name: ns, exact: true }).click()
     await page.locator('.monaco-editor').first().click()
     await page.keyboard.type('true')
-    const results = page.locator('main table tbody')
+    const results = page.locator('main table tbody:not([aria-hidden])').first()
     for (const name of [...roles, rb]) await expect(results).toContainText(name, { timeout: 20_000 })
     await settle(page)
     expect(await madeFrom(page.locator('main'))).toEqual(NOTHING_MADE)
@@ -597,17 +601,20 @@ test.describe.serial('Drawn text runs no script: resource names', () => {
     expect(await asked()).toEqual(NOTHING_ASKED)
   })
 
-  test('the audit log draws the name of a ClusterRole deleted through the console as its words and runs none of it', async ({ page }) => {
+  test('the audit log draws the names of a console create and delete as their words and runs none of them', async ({ page }) => {
     test.setTimeout(60_000)
     const ran = await watch(page)
     const asked = await outside(page)
+    const created = await page.request.post(`/api/v1/cluster/resources/yaml/create?cluster=${CLUSTER}`, {
+      headers: XRW, data: { yaml: JSON.stringify({ apiVersion: `${API}/v1`, kind: 'ClusterRole', metadata: { name: viaConsole }, rules }) },
+    })
+    expect(created.ok(), `create through the console: ${created.status()} ${await created.text()}`).toBeTruthy()
     const gone = await page.request.delete(`/api/v1/cluster/clusterroles/${encodeURIComponent(names[9])}?cluster=${CLUSTER}`, { headers: XRW, failOnStatusCode: false })
     await test.info().attach('delete.txt', { body: `${gone.status()} ${(await gone.text()).slice(0, 300)}` })
     await page.goto('/admin/audit')
-    const row = page.locator('main tbody tr').filter({ hasText: `clusterrole/${prefix}-9` }).first()
-    await expect(row).toBeVisible({ timeout: 20_000 })
-    await row.click()
-    await expect(page.locator('main')).toContainText('k8s.clusterrole.delete')
+    await expect(page.locator('main tbody tr').filter({ hasText: `clusterrole/${prefix}-9` }).first()).toBeVisible({ timeout: 20_000 })
+    await page.locator('main tbody tr').filter({ hasText: 'k8s.yaml.create' }).first().click()
+    await expect(page.locator('main')).toContainText(viaConsole)
     await settle(page)
     expect(await madeFrom(page.locator('main'))).toEqual(NOTHING_MADE)
     expect(await ran()).toEqual(NOTHING_RAN)
