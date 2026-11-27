@@ -7,7 +7,7 @@ export function UrlFieldProblem({ problem, testId }: { problem: UrlProblem | nul
   if (!problem) return null
   const { key, defaultValue } = URL_PROBLEM_TEXT[problem]
   return (
-    <p role="alert" data-testid={testId} className="mt-1 text-[11px] text-red-400">
+    <p role="alert" data-testid={testId} className="mt-1 text-xs text-red-400">
       {t(key, { defaultValue })}
     </p>
   )

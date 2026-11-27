@@ -18,12 +18,12 @@ export function TypeToConfirm({ expected, value, onChange }: { expected: string;
         autoComplete="off"
         spellCheck={false}
         placeholder={expected}
-        className="w-full h-10 rounded-lg bg-slate-950/60 border border-slate-700 px-3 text-sm text-ink font-mono placeholder:text-slate-600 focus:outline-hidden focus:border-red-500"
+        className="w-full h-10 rounded-lg bg-slate-900 border border-control px-3 text-sm text-ink font-mono placeholder:text-slate-500 focus:outline-hidden focus:border-red-500 focus:ring-1 focus:ring-red-500"
       />
     </div>
   )
 }
 
 export function WarningBox({ children }: { children: ReactNode }) {
-  return <p className="mt-3 text-xs text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-lg break-keep whitespace-pre-line">{children}</p>
+  return <p className="mt-3 text-sm text-red-300 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg [overflow-wrap:anywhere] whitespace-pre-line">{children}</p>
 }

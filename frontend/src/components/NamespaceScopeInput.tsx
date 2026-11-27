@@ -42,7 +42,7 @@ export default function NamespaceScopeInput({
       }}
       placeholder={t('namespaceScope.placeholder', { defaultValue: 'All namespaces — or list some, comma-separated' })}
       title={t('namespaceScope.hint', { defaultValue: 'Empty = the whole cluster. Up to 50 namespaces; the cluster must bind the role in each (chart auth.impersonation.customRoles).' })}
-      className={`rounded-lg border border-slate-600 bg-slate-900/60 px-2 py-1 text-xs text-ink placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden disabled:opacity-50 ${className ?? ''}`}
+      className={`min-w-0 rounded-lg border border-control bg-slate-900 px-2 py-1 text-xs text-ink placeholder:text-slate-500 focus:border-primary-400 focus:outline-hidden focus:ring-1 focus:ring-primary-400 disabled:opacity-50 ${className ?? ''}`}
     />
   )
 }

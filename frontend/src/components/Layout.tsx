@@ -488,9 +488,9 @@ export default function Layout() {
     <div className="min-h-screen bg-slate-900">
       {clusterSettled && <ResourceDetailDrawer />}
       {aiOn && <FloatingAIChat />}
-      <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700">
+      <div className="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-hairline">
         <div className="flex flex-col h-full">
-          <div className="flex items-center gap-3 px-6 border-b border-slate-700 h-[100px]">
+          <div className="flex items-center gap-3 px-6 border-b border-hairline h-[100px]">
             <img src="/icon.svg" alt="" className="w-8 h-8" data-testid="brand-logo" />
             <div>
               {/* not an <h1>: the page title is the one heading of each screen */}
@@ -503,7 +503,7 @@ export default function Layout() {
 
           {/* min-h-0: a flex child defaults to min-height:auto, so without it the nav grows
               past the sidebar and the ADMIN items end up under the account box */}
-          <nav data-testid="sidebar-nav" className="sidebar-nav flex-1 min-h-0 px-4 py-6 space-y-2 overflow-y-auto">
+          <nav data-testid="sidebar-nav" className="sidebar-nav flex-1 min-h-0 px-4 py-4 space-y-2 overflow-y-auto">
             {navGroups
               .filter((group) => groupItems(group).length > 0)
               .map((group) => (
@@ -511,7 +511,7 @@ export default function Layout() {
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.id)}
-                    className={`w-full flex items-center px-4 py-1.5 text-xs font-semibold transition-colors ${
+                    className={`w-full flex items-center rounded-lg px-4 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-400 ${
                       openGroups[group.id] ? 'text-slate-200' : 'text-slate-500 hover:text-slate-300'
                     }`}
                   >
@@ -540,8 +540,8 @@ export default function Layout() {
                             title={item.name}
                             aria-current={isActive ? 'page' : undefined}
                             className={`
-                              flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors
-                              ${isActive ? 'bg-primary-600 text-white' : 'text-slate-300 hover:bg-slate-700/50 hover:text-ink'}
+                              relative flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary-400
+                              ${isActive ? 'bg-slate-700 text-ink sidebar-selected' : 'text-slate-300 hover:bg-slate-700/50 hover:text-ink'}
                             `}
                           >
                             {/* shrink-0: a long name squeezed the icon; truncate: the long kind names ran out of the bar */}
@@ -569,7 +569,7 @@ export default function Layout() {
           <div className="px-6 py-4">
             <Link
               to="/account"
-              className="block rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 hover:bg-slate-700/20 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-600"
+              className="block rounded-lg border border-hairline px-3 py-2 hover:bg-slate-700/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-600"
               title={t('layout.accountTitle')}
             >
               <div className="text-[11px] text-slate-400">{t('layout.account')}</div>
@@ -580,13 +580,13 @@ export default function Layout() {
             <button
               type="button"
               onClick={handleLogout}
-              className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700/40"
+              className="mt-3 w-full flex items-center justify-center gap-2 rounded-lg border border-control px-3 py-2 text-sm text-slate-200 hover:bg-slate-700/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400"
             >
               <LogOut className="w-4 h-4" />
               {t('layout.logout')}
             </button>
 
-            <div className="-mx-6 mt-4 border-t border-slate-700" />
+            <div className="-mx-6 mt-4 border-t border-hairline" />
             <div className="mt-3 flex items-center gap-2 text-sm text-slate-400" data-testid="cluster-status">
               {hasNoCluster ? (
                 <>
@@ -634,7 +634,7 @@ export default function Layout() {
                   data-testid="no-accessible-cluster"
                   className="flex min-h-[60vh] flex-col items-center justify-center text-center px-6"
                 >
-                  <div className="rounded-full bg-slate-800 border border-slate-700 p-4 mb-4">
+                  <div className="rounded-xl bg-slate-800 border border-hairline p-4 mb-4">
                     <Activity className="w-8 h-8 text-slate-500" />
                   </div>
                   <h2 className="text-lg font-semibold text-ink">

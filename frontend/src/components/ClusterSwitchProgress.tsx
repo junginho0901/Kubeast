@@ -24,10 +24,10 @@ export default function ClusterSwitchProgress() {
       <div
         data-testid="cluster-switch-progress"
         aria-live="polite"
-        className="fixed top-3 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-slate-700 bg-slate-800/95 px-3 py-1.5 text-xs text-slate-200 shadow-lg"
+        className="fixed top-3 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-hairline bg-slate-800 px-3 py-1.5 text-xs text-slate-200 shadow-lg"
       >
-        <span className="h-3 w-3 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
-        <span>{t('cluster.switching', 'Switching to {{cluster}}…', { cluster: currentCluster })}</span>
+        <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
+        <span className="min-w-0 [overflow-wrap:anywhere]">{t('cluster.switching', 'Switching to {{cluster}}…', { cluster: currentCluster })}</span>
       </div>
     </>
   )

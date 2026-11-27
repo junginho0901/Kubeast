@@ -15,7 +15,7 @@
 }
 
 /* Colours: see DESIGN.md. primary is the one sky accent, the same in every colour mode; primary-600, the fill of
-   buttons and selections, is the brightest sky that keeps white text at 4.5:1 (#027ac0, 4.6:1). The neutral
+   primary actions, is the brightest sky that keeps white text at 4.5:1 (#027ac0, 4.6:1). The neutral
    ladders slate-* and gray-* are set per colour mode below. */
 @theme {
   --color-primary-50: #f0f9ff;
@@ -34,6 +34,8 @@
 
   /* ink: text on a surface (white here, near-black in light); text-white is for text on a filled colour */
   --color-ink: #fff;
+  --color-hairline: #303a49;
+  --color-control: #718096;
 
   --font-sans: InterVariable, Inter, system-ui, sans-serif;
 
@@ -59,23 +61,6 @@
 
 /* Role names keep the current values inline, including local colour-mode scopes. */
 @theme inline {
-  --color-console-card-fill: var(--color-slate-800);
-  --color-console-card-line: color-mix(in oklab, var(--color-slate-700) 70%, transparent);
-  --spacing-console-card: calc(var(--spacing) * 6);
-  --color-console-secondary-fill: var(--color-slate-700);
-  --color-console-secondary-hover: var(--color-slate-600);
-  --color-console-row-line: var(--color-slate-600);
-  --spacing-console-sidebar-fade: 24px;
-  --color-console-success-fill: color-mix(in oklab, var(--color-green-500) 20%, transparent);
-  --color-console-success-line: color-mix(in oklab, var(--color-green-500) 30%, transparent);
-  --color-console-warning-fill: color-mix(in oklab, var(--color-yellow-500) 20%, transparent);
-  --color-console-warning-line: color-mix(in oklab, var(--color-yellow-500) 30%, transparent);
-  --color-console-error-fill: color-mix(in oklab, var(--color-red-500) 20%, transparent);
-  --color-console-error-line: color-mix(in oklab, var(--color-red-500) 30%, transparent);
-  --color-console-info-fill: color-mix(in oklab, var(--color-primary-500) 20%, transparent);
-  --color-console-info-line: color-mix(in oklab, var(--color-primary-500) 30%, transparent);
-  --color-console-neutral-fill: color-mix(in oklab, var(--color-slate-500) 20%, transparent);
-  --color-console-neutral-line: color-mix(in oklab, var(--color-slate-500) 30%, transparent);
   --color-console-tool-fill: color-mix(in oklab, var(--color-slate-800) 50%, transparent);
   --color-console-tool-line: var(--color-slate-600);
   --color-console-tool-nested-fill: color-mix(in oklab, var(--color-slate-800) 30%, transparent);
@@ -94,6 +79,8 @@
   :root,
   [data-color-mode='default'] {
     --color-ink: #fff;
+    --color-hairline: #303a49;
+    --color-control: #718096;
     --color-slate-50: oklch(98.4% 0.003 247.858);
     --color-slate-100: oklch(96.8% 0.007 247.896);
     --color-slate-200: oklch(92.9% 0.013 255.508);
@@ -118,7 +105,15 @@
     --color-gray-950: oklch(12.9% 0.042 264.695);
   }
 
+  :root:not([data-color-mode]),
+  :root[data-color-mode='default'] {
+    --color-hairline: #303a49;
+    --color-control: #718096;
+  }
+
   :root[data-color-mode='dark'] {
+    --color-hairline: #363636;
+    --color-control: #7b7b7b;
     --color-ink: #fff;
     --color-slate-50: #fafafa;
     --color-slate-100: #f3f3f3;
@@ -150,6 +145,8 @@
      Tailwind's 950-800 of the same hue and the dark tints and borders (800-950) its 200-50, so text keeps 4.5:1 on
      its tint (axe-core color-contrast over every screen). Inside a filled colour ink is white again (below). */
   :root[data-color-mode='light'] {
+    --color-hairline: #d8e0e7;
+    --color-control: #788593;
     color-scheme: light;
     --color-ink: #1f2328;
     --color-slate-50: #1f2328;
@@ -506,7 +503,12 @@ body {
 @layer components {
   /* flat: depth comes from the ladder's steps and a hairline, not a shadow */
   .card {
-    @apply bg-console-card-fill rounded-xl p-console-card border border-console-card-line;
+    @apply bg-slate-800 rounded-xl p-5 border border-hairline;
+  }
+
+  /* Standalone list cards already pad their cells and footer. The surrounding padding only duplicates that space. */
+  .card:has(> div:first-child > table) {
+    padding: 0;
   }
 
   .btn {
@@ -519,7 +521,15 @@ body {
   }
 
   .btn-secondary {
-    @apply bg-console-secondary-fill hover:bg-console-secondary-hover text-ink;
+    @apply bg-slate-800 hover:bg-slate-700 text-ink;
+    box-shadow: inset 0 0 0 1px var(--color-control);
+  }
+
+  .btn:focus-visible,
+  .btn-row:focus-visible,
+  .btn-row-danger:focus-visible {
+    outline: 2px solid var(--color-primary-400);
+    outline-offset: 2px;
   }
 
   .badge {
@@ -597,16 +607,20 @@ body {
   /* A small action in a table row, on a card or in a drawer header (Test, Edit, Delete …): one size and shape on every
      screen; btn-row-danger is the one that deletes. */
   .btn-row {
-    @apply inline-flex items-center gap-1.5 rounded-lg border border-console-row-line px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40 disabled:opacity-50;
+    @apply inline-flex items-center gap-1.5 rounded-lg border border-control px-2.5 py-1.5 text-xs text-slate-200 hover:bg-slate-700/40 disabled:opacity-50;
   }
   .btn-row-danger {
     @apply inline-flex items-center gap-1.5 rounded-lg border border-red-800/60 bg-red-950/20 px-2.5 py-1.5 text-xs text-red-200 hover:bg-red-950/40 disabled:opacity-50;
   }
 
-  /* The sidebar menu scrolls: a fade over its bottom 24px shows that items go on below the account box. At the
-     end of the list only the menu's own bottom padding (py-6 = 24px) sits under the fade. */
+  /* The sidebar menu scrolls: a fade over its bottom padding shows that more items follow. */
   .sidebar-nav {
-    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--spacing-console-sidebar-fade)), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  }
+
+  .sidebar-selected::before {
+    content: '';
+    @apply absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-primary-400;
   }
 
   /* useAdaptiveTable marks the scroll wrapper while the table overflows it:
@@ -644,25 +658,32 @@ body {
   }
 
   .badge-success {
-    @apply bg-console-success-fill text-green-400 border border-console-success-line;
+    @apply bg-green-500/10 text-green-400 border border-transparent;
   }
 
   .badge-warning {
-    @apply bg-console-warning-fill text-yellow-400 border border-console-warning-line;
+    @apply bg-yellow-500/10 text-yellow-400 border border-transparent;
   }
 
   .badge-error {
-    @apply bg-console-error-fill text-red-400 border border-console-error-line;
+    @apply bg-red-500/10 text-red-400 border border-transparent;
   }
 
   .badge-info {
-    @apply bg-console-info-fill text-primary-300 border border-console-info-line;
+    @apply bg-primary-500/10 text-primary-300 border border-transparent;
   }
 
   /* a state that needs no attention (Idle: scaled to zero) */
   .badge-neutral {
-    @apply bg-console-neutral-fill text-slate-300 border border-console-neutral-line;
+    @apply bg-slate-700/50 text-slate-300 border border-transparent;
   }
+}
+
+/* After the utility layer: existing text-3xl/font-semibold page titles keep one shared size and weight. */
+.page-head h1.text-3xl {
+  font-size: 1.75rem;
+  line-height: 2.25rem;
+  font-weight: 500;
 }
 
 /* Text the AI writes (chat answers, the floating chat, investigation reports, the optimization answer) is prose-invert,
