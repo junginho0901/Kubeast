@@ -629,3 +629,61 @@ func TestGuardedATableThatRefusesEveryRowRefusesTheNextAction(t *testing.T) {
 		}
 	}
 }
+
+// CheckReady answers from a check of its own, whatever answer Ready keeps, and Ready keeps what it found.
+func TestGuardedCheckReadyAsksTheStoreWhateverAnswerIsKept(t *testing.T) {
+	ctx := context.Background()
+	p := &fakePinger{err: errors.New("down")}
+	g := Guard(&fakeStore{id: 1}, p, true)
+	if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("down: %v", err)
+	}
+	p.err = nil
+	if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("the refusal is kept: %v", err)
+	}
+	if err := g.CheckReady(ctx); err != nil {
+		t.Fatalf("the store is back: %v", err)
+	}
+	if err := g.Ready(ctx); err != nil || p.calls != 2 {
+		t.Fatalf("after the check: %v, %d pings, want none and 2", err, p.calls)
+	}
+	p.err = errors.New("down again")
+	if err := g.Ready(ctx); err != nil {
+		t.Fatalf("the pass is kept: %v", err)
+	}
+	if err := g.CheckReady(ctx); !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "down again") {
+		t.Fatalf("down again: %v", err)
+	}
+	if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("after the check: %v", err)
+	}
+
+	calls := p.calls
+	for _, off := range []*Guarded{Guard(&fakeStore{id: 1}, p, false), Guard(&fakeStore{id: 1}, nil, true)} {
+		if err := off.CheckReady(ctx); err != nil || p.calls != calls {
+			t.Fatalf("with nothing to ask: %v, %d pings more", err, p.calls-calls)
+		}
+	}
+}
+
+// A probe write is part of CheckReady's own check too: after a failed write the one kept from before is not its answer.
+func TestGuardedCheckReadyProbesAgain(t *testing.T) {
+	ctx := context.Background()
+	p := &probingPinger{probeErr: errors.New("disk full")}
+	st := &fakeStore{id: 1, err: errors.New("disk full")}
+	g := Guard(st, p, true)
+	if _, err := g.Write(ctx, Record{Action: "k8s.pod.delete"}); err == nil {
+		t.Fatal("the write should fail")
+	}
+	if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("the probe fails: %v", err)
+	}
+	p.probeErr = nil
+	if err := g.Ready(ctx); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("the probe's refusal is kept: %v", err)
+	}
+	if err := g.CheckReady(ctx); err != nil {
+		t.Fatalf("a probe lands: %v", err)
+	}
+}

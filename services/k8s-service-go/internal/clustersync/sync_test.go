@@ -63,6 +63,7 @@ type replica struct {
 	kept    map[cluster.ID]int64
 	stale   []string
 	notices []cluster.ID
+	told    []int // how many clusters each read said there are
 }
 
 func (r *replica) ClusterVersions() map[cluster.ID]int64 {
@@ -89,6 +90,12 @@ func (r *replica) DropCluster(id cluster.ID) {
 	defer r.mu.Unlock()
 	delete(r.kept, id)
 	r.notices = append(r.notices, id)
+}
+
+func (r *replica) Registered(clusters int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.told = append(r.told, clusters)
 }
 
 func (r *replica) build(id cluster.ID, v int64) {
@@ -199,6 +206,24 @@ func TestAVersionsReadThatFailsDropsNothing(t *testing.T) {
 	r.Compare(context.Background(), r)
 	if got := r.staleDrops(); !equal(got, []string{"prod"}) {
 		t.Fatalf("dropped %v after the read came back", got)
+	}
+}
+
+// Each read of the versions says how many clusters the registry holds; one that fails says nothing.
+func TestEachReadOfTheVersionsSaysHowManyClustersThereAre(t *testing.T) {
+	g := &registry{versions: map[cluster.ID]int64{"prod": 1}}
+	r := newReplica(t, g, nil, time.Hour)
+	ctx := context.Background()
+	r.Compare(ctx, r)
+	g.set("dev", 1)
+	r.Compare(ctx, r)
+	g.err = errors.New("database down")
+	r.Compare(ctx, r)
+	g.err = nil
+	g.remove("prod")
+	r.Compare(ctx, r)
+	if want := []int{1, 2, 1}; !equal(r.told, want) {
+		t.Fatalf("told %v, want %v", r.told, want)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/junginho0901/kubeast/services/pkg/audit"
 	"github.com/junginho0901/kubeast/services/pkg/response"
@@ -125,22 +126,27 @@ func csvCells(cells ...string) []string {
 // auditFilterFromQuery reads the list/export filter query params. since and
 // until are RFC 3339 times, an offset read as the instant it names, kept in
 // UTC as created_at keeps it; a value that does not parse is an error, so the
-// handler answers 400 instead of reading every row.
+// handler answers 400 instead of reading every row, and so is a text no row can
+// hold (filterText).
 func auditFilterFromQuery(r *http.Request) (audit.Filter, error) {
 	q := r.URL.Query()
 	filter := audit.Filter{
-		Service:    q.Get("service"),
-		Action:     q.Get("action"),
-		ActorEmail: q.Get("actor_email"),
-		TargetID:   q.Get("target_id"),
-		Cluster:    q.Get("cluster"),
-		Namespace:  q.Get("namespace"),
-		Result:     q.Get("result"),
-		AsOf:       int64(queryInt(r, "as_of", 0)),
-		Limit:      queryInt(r, "limit", 100),
-		Offset:     queryInt(r, "offset", 0),
+		AsOf:   int64(queryInt(r, "as_of", 0)),
+		Limit:  queryInt(r, "limit", 100),
+		Offset: queryInt(r, "offset", 0),
 	}
 	var err error
+	for _, f := range []struct {
+		name string
+		text *string
+	}{
+		{"service", &filter.Service}, {"action", &filter.Action}, {"actor_email", &filter.ActorEmail}, {"target_id", &filter.TargetID},
+		{"cluster", &filter.Cluster}, {"namespace", &filter.Namespace}, {"result", &filter.Result},
+	} {
+		if *f.text, err = filterText(q, f.name); err != nil {
+			return audit.Filter{}, err
+		}
+	}
 	if filter.Since, err = windowBound(q, "since"); err != nil {
 		return audit.Filter{}, err
 	}
@@ -148,6 +154,16 @@ func auditFilterFromQuery(r *http.Request) (audit.Filter, error) {
 		return audit.Filter{}, err
 	}
 	return filter, nil
+}
+
+// filterText reads a text filter. No row holds a 0x00 or a byte that is not
+// UTF-8, and PostgreSQL refuses a query that names one.
+func filterText(q url.Values, name string) (string, error) {
+	s := q.Get(name)
+	if !utf8.ValidString(s) || strings.IndexByte(s, 0) >= 0 {
+		return "", fmt.Errorf("%s must be UTF-8 text without 0x00", name)
+	}
+	return s, nil
 }
 
 // windowBound reads since or until: zero when absent, in UTC when RFC 3339.
