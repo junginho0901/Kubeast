@@ -15,7 +15,7 @@ import i18next from 'i18next'
 import type { ResourceGraphNode, ResourceGraphEdge, TrafficEnd, TrafficLine } from '@/services/api'
 import { edgeLabel, edgeStyles, isIssueNode, kindIcon, nodeColor, pointsUp, type GroupBy } from './constants'
 import { applyElkLayout } from './elkLayout'
-import { boxHeight, buildTraffic, byPort, endText, lineColor, portText, BOX_HEIGHT, ROW_HEIGHT, ROWS_PADDING, type GraphView, type PortEdge, type PortRow, type TrafficEdge } from './traffic'
+import { boxHeight, buildTraffic, byPort, endText, lineColor, lineText, portText, BOX_HEIGHT, ROW_HEIGHT, ROWS_PADDING, type GraphView, type PortEdge, type PortRow, type TrafficEdge } from './traffic'
 
 export interface ResourceGraphLayoutInput {
   graphData: { nodes: ResourceGraphNode[]; edges: ResourceGraphEdge[] } | undefined
@@ -60,7 +60,7 @@ function trafficEdge(t: TrafficEdge | PortEdge): Edge {
     // the arrowhead keeps its size on a wide line
     markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14, markerUnits: 'userSpaceOnUse' },
     label,
-    labelStyle: { fill: color, fontSize: 10, fontWeight: 600 },
+    labelStyle: { fill: lineText[t.state], fontSize: 10, fontWeight: 600 },
     labelBgStyle: { fill: 'var(--color-slate-900)', fillOpacity: 0.9 },
     labelBgPadding: [4, 2] as [number, number],
     labelBgBorderRadius: 4,
@@ -79,9 +79,9 @@ function rowsBlock(rows: PortRow[]) {
         <div key={r.key} className="flex items-center justify-between px-2 font-mono text-[10px] text-slate-300" style={{ height: ROW_HEIGHT }} data-testid="port-row" data-port-text={r.text}>
           <span>{r.text}</span>
           <span>
-            {r.allowed > 0 && <span style={{ color: lineColor.allowed }}>{count(r.allowed)}</span>}
+            {r.allowed > 0 && <span style={{ color: lineText.allowed }}>{count(r.allowed)}</span>}
             {r.allowed > 0 && r.dropped > 0 && <span className="text-slate-500"> · </span>}
-            {r.dropped > 0 && <span style={{ color: lineColor.dropped }}>✕ {count(r.dropped)}</span>}
+            {r.dropped > 0 && <span style={{ color: lineText.dropped }}>✕ {count(r.dropped)}</span>}
           </span>
         </div>
       ))}

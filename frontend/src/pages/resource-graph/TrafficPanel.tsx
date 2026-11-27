@@ -6,7 +6,7 @@ import { modalOpen } from '@/hooks/useModalStack'
 import type { TrafficEnd, TrafficLine, TrafficResult } from '@/services/api'
 import { endLabel } from '@/components/resource-detail/netflowText'
 import { formatTime } from '@/utils/time'
-import { checkFor, endText, lineColor, lineState, openableEnd, type LineCheck } from './traffic'
+import { checkFor, endText, lineState, lineText, openableEnd, type LineCheck } from './traffic'
 
 // The window a traffic line opens on the right: its ends, what was counted, the ports, the drop reasons and the
 // policies that denied it, and (recent flows) its latest connections — with the NetworkPolicy check for a
@@ -54,7 +54,7 @@ export function TrafficPanel({ line, result, opener, titleRef, onClose, onWhy, o
         <div className="flex gap-1.5"><span className="text-slate-500 w-10 shrink-0">{tr('resourceGraph.traffic.from', 'From')}</span>{end(line.from)}</div>
         <div className="flex gap-1.5"><span className="text-slate-500 w-10 shrink-0">{tr('resourceGraph.traffic.to', 'To')}</span>{end(line.to)}</div>
       </div>
-      <p className="mb-2" style={{ color: lineColor[state] }} data-testid="traffic-panel-counts">
+      <p className="mb-2" style={{ color: lineText[state] }} data-testid="traffic-panel-counts">
         {relay
           ? tr('resourceGraph.traffic.countsRelay', '{{allowed}} flows allowed · {{dropped}} dropped in the last {{w}}', { allowed: line.allowed, dropped: line.dropped, w: win })
           : tr('resourceGraph.traffic.countsMetrics', '{{allowed}} TCP connections opened · {{dropped}} packets dropped in the last {{w}}', { allowed: line.allowed, dropped: line.dropped, w: win })}

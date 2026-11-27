@@ -43,6 +43,9 @@ export function lineState(l: TrafficLine): LineState {
 }
 
 export const lineColor: Record<LineState, string> = { allowed: '#10b981', dropped: '#ef4444', mixed: '#f59e0b' }
+// A state's text (a line's counts, a port row's, the panel's) in the mode's own shade of that state's colour: the line
+// colours above are for the dark grounds and fall under 4.5:1 as text on the light one
+export const lineText: Record<LineState, string> = { allowed: 'var(--color-emerald-400)', dropped: 'var(--color-red-400)', mixed: 'var(--color-amber-400)' }
 
 // The kind of a stand-in node: an end the graph does not show (another namespace, outside the cluster's pods,
 // or a kind the filters hide).
