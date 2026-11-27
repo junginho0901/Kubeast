@@ -88,6 +88,20 @@ const drawn = (describe: Record<string, unknown>) => {
     createElement(ServiceInfo, { name: 'web', namespace: 'ns', rawJson: {} }))))
 }
 
+describe("a Service's Publish Not Ready", () => {
+  const row = (describe: Record<string, unknown>) => /Publish Not Ready<\/[^>]+>\s*<[^>]+>([^<]*)</.exec(drawn(describe))?.[1] ?? 'no row'
+
+  it('reads Yes or No, false as No and not as a missing value', () => {
+    expect(row({ publish_not_ready_addresses: true })).toBe('Yes')
+    expect(row({ publish_not_ready_addresses: false })).toBe('No')
+  })
+
+  it('reads - when the answer has no value', () => {
+    expect(row({})).toBe('-')
+    expect(row({ publish_not_ready_addresses: null })).toBe('-')
+  })
+})
+
 describe("a Service's ports and conditions", () => {
   it('are drawn whole, each table marked as bounded by the one Service', () => {
     const ports = Array.from({ length: 12 }, (_, i) => ({ name: `p${i}`, protocol: 'TCP', port: 8000 + i, target_port: `${9000 + i}` }))

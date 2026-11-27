@@ -267,7 +267,7 @@ export default function ServiceInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="IP Families" value={(describe?.ip_families || []).join(', ') || '-'} />
           <InfoRow label="IP Family Policy" value={describe?.ip_family_policy || '-'} />
           <InfoRow label="External Name" value={describe?.external_name || '-'} />
-          <InfoRow label="Publish Not Ready" value={String(describe?.publish_not_ready_addresses ?? '-')} />
+          <InfoRow label="Publish Not Ready" value={describe?.publish_not_ready_addresses == null ? '-' : describe.publish_not_ready_addresses ? 'Yes' : 'No'} />
           {(() => {
             // topology-aware-routing — annotation 또는 spec.topologyKeys 로 어느 zone 우선
             // 라우팅인지 결정. EndpointSlice hints.forZones 와 짝.
