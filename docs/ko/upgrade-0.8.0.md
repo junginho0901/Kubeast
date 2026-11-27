@@ -64,7 +64,7 @@ kubectl -n kubeast exec deploy/postgres -c postgres -- pg_dump -Fc -U kubeast ku
 kubectl get modelconfigs -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,PROVIDER:.spec.provider
 ```
 
-- 공급자가 `bedrock`·`geminivertexai`·`anthropicvertexai`인 ModelConfig는 업그레이드 뒤에도 남지만, 컨트롤러가 더는 동기화하지 않고 API 서버는 새로 만드는 것을 거부합니다. Kubeast에는 이 공급자를 부르는 코드가 없었습니다. 그 모델은 OpenAI 호환 엔드포인트(provider `openai`에 `spec.baseURL`)로 쓰거나 ModelConfig를 지우세요. 지우면 Admin → AI Models의 그 설정도 함께 없어집니다.
+- 공급자가 `bedrock`·`geminivertexai`·`anthropicvertexai`인 ModelConfig는 업그레이드 뒤에도 남지만, 컨트롤러가 더는 동기화하지 않고 API 서버는 새로 만드는 것을 거부합니다. Kubeast에는 이 공급자를 부르는 코드가 없었습니다. 그 모델은 OpenAI 호환 엔드포인트로 쓰세요. 공급자가 제공하면 그 엔드포인트를, 아니면 그 앞에 둔 LiteLLM 같은 게이트웨이를 쓰고, provider `openai`에 `spec.baseURL`로 주소를 넣거나 Admin → AI Models에서 provider `custom`을 고릅니다. 저장된 ModelConfig는 `spec.provider`를 바꾸거나 지우세요. 지우면 Admin → AI Models의 그 설정도 함께 없어집니다.
 - Admin → AI Models에서 `base_url`이 없고 공급자에 자기 주소가 없는 설정(`custom`, 또는 API로 저장한 `groq` 같은 이름)은 업그레이드 뒤 채팅과 **Test**가 거절하고 아무것도 보내지 않습니다. 0.7.9는 그 채팅을 OpenAI 주소로 보냈습니다. 그 엔드포인트를 `base_url`로 넣거나(provider `custom`) 지우세요. 끄기만 할 수도 있습니다.
 
 Microsoft Entra ID: 그룹이 200개 넘는 사람이면 Entra ID가 ID 토큰에서 그룹을 빼고, 0.8.0은 그 로그인을 `oidc_groups_overage`로 거부합니다. 그럴 수 있다면 업그레이드 전에 Entra ID가 애플리케이션에 할당된 그룹만 보내게 하거나, 앱 역할과 `auth.oidc.claims.groups: roles`를 쓰세요([SSO(OIDC) 설정 — Microsoft Entra ID](oidc.md#microsoft-entra-id)).
@@ -185,7 +185,7 @@ ConfigMap에 일곱 값의 줄이 하나씩 더해져 체크섬이 바뀌므로,
 
 **그 밖**
 
-- 차트 기본값에서 0.8.0은 차트 객체, ClusterRole, Role을 더하지 않습니다. 차트 템플릿 가운데 바뀌는 것은 [3](#3-바꿔야-하는-값)의 줄만큼의 ConfigMap과, `spec.provider` 목록에서 값 셋이 빠진 ModelConfig CRD입니다(#〔PR srv8-modelconfig-providers〕). `multicluster.flowSchemas`를 켜면 차트가 FlowSchema `kubeast-cache`와 `kubeast`를 더합니다. 클러스터 전체의 객체이고, API 서버가 Kubeast의 요청을 다른 사용자의 요청 사이 어디에 두는지를 바꿉니다(#〔PR apf-flowschema〕). 이름이 바뀌거나 없어진 값은 없습니다.
+- 차트 기본값에서 0.8.0은 차트 객체, ClusterRole, Role을 더하지 않습니다. 차트 템플릿 가운데 바뀌는 것은 [3](#3-바꿔야-하는-값)의 줄만큼의 ConfigMap과, `spec.provider` 목록에서 값 셋이 빠진 ModelConfig CRD입니다(#〔PR srv8-modelconfig-providers〕). ConfigMap이 바뀌어 Deployment 여섯의 `checksum/config` 주석이 바뀌므로, 새 이미지 때처럼 그 파드가 바뀝니다. `multicluster.flowSchemas`를 켜면 차트가 FlowSchema `kubeast-cache`와 `kubeast`를 더합니다. 클러스터 전체의 객체이고, API 서버가 Kubeast의 요청을 다른 사용자의 요청 사이 어디에 두는지를 바꿉니다(#〔PR apf-flowschema〕). 이름이 바뀌거나 없어진 값은 없습니다.
 
 ## 5. 이번 업그레이드에서 한 번 일어나는 일
 

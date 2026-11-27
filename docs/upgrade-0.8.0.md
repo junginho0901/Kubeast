@@ -64,7 +64,7 @@ AI model settings that 0.8.0 no longer calls:
 kubectl get modelconfigs -A -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,PROVIDER:.spec.provider
 ```
 
-- A ModelConfig whose provider is `bedrock`, `geminivertexai` or `anthropicvertexai` stays after the upgrade, but the controller no longer syncs it and the API server refuses a new one. Kubeast had no code that calls them. Use an OpenAI-compatible endpoint for those models (provider `openai` with `spec.baseURL`), or delete the ModelConfig; deleting it also removes its setting from Admin → AI Models.
+- A ModelConfig whose provider is `bedrock`, `geminivertexai` or `anthropicvertexai` stays after the upgrade, but the controller no longer syncs it and the API server refuses a new one. Kubeast had no code that calls them. For those models, use an OpenAI-compatible endpoint: the provider's own where it offers one, or a gateway such as LiteLLM in front of it, as provider `openai` with the address in `spec.baseURL`, or provider `custom` in Admin → AI Models. Change the stored ModelConfig's `spec.provider` or delete it; deleting it also removes its setting from Admin → AI Models.
 - In Admin → AI Models, a setting with no `base_url` whose provider has no address of its own (`custom`, or a name such as `groq` saved through the API) is refused by the chat and **Test** after the upgrade, with nothing sent; 0.7.9 sent its chat to OpenAI's address. Give it its endpoint as `base_url` (provider `custom`), or delete it. It can also be turned off.
 
 Microsoft Entra ID: for a person in more than 200 groups, Entra ID leaves the groups out of the ID token, and 0.8.0 refuses that sign-in with `oidc_groups_overage`. Where that can happen, have Entra ID send only the groups assigned to the application, or app roles with `auth.oidc.claims.groups: roles`, before upgrading ([SSO (OIDC) setup — Microsoft Entra ID](oidc.md#microsoft-entra-id)).
@@ -185,7 +185,7 @@ Turn a switch on with another `helm upgrade`, once this one has settled. Each is
 
 **Other**
 
-- With the chart's defaults 0.8.0 adds no chart object, ClusterRole or Role: of the chart's templates the ConfigMap changes, by the lines in [3](#3-values-you-must-change), and the ModelConfig CRD's `spec.provider` list loses three values (#〔PR srv8-modelconfig-providers〕). With `multicluster.flowSchemas` on, the chart adds the FlowSchemas `kubeast-cache` and `kubeast`, objects of the whole cluster that change where its API server places Kubeast's requests among its other users' (#〔PR apf-flowschema〕). No value is renamed or removed.
+- With the chart's defaults 0.8.0 adds no chart object, ClusterRole or Role: of the chart's templates the ConfigMap changes, by the lines in [3](#3-values-you-must-change), and the ModelConfig CRD's `spec.provider` list loses three values (#〔PR srv8-modelconfig-providers〕). The ConfigMap's change moves the `checksum/config` annotation of six Deployments, so their pods roll, as they do for their new images. With `multicluster.flowSchemas` on, the chart adds the FlowSchemas `kubeast-cache` and `kubeast`, objects of the whole cluster that change where its API server places Kubeast's requests among its other users' (#〔PR apf-flowschema〕). No value is renamed or removed.
 
 ## 5. One-time effects of this upgrade
 
