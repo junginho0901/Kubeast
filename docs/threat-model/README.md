@@ -6,7 +6,7 @@ Each release writes one page covering only what that release changes. The pages 
 | --- | --- | --- |
 | v0.7.8 | A stream server for terminals and followed logs, state moving from a server's memory to PostgreSQL and Redis, several k8s-service and tool-server replicas and HPA, role names and the cluster groups they give | [v0.7.8](v0.7.8.md) |
 | v0.7.9 | What the AI reads from the cluster, new AI tools, password sign-in of SSO accounts | [v0.7.9](v0.7.9.md) |
-| v0.8.0 | The screen components that draw text | not written yet |
+| v0.8.0 | The screens (the restyle and the keyboard), log search across Namespaces and places shared between clusters, answers built once for many and approved AI writes at shutdown, what the AI reads and says, which model answers, an alert's earlier investigations, sign-in groups, model providers and audit sinks, FlowSchemas | [v0.8.0](v0.8.0.md) |
 
 Beside the release pages, the [ASVS 5.0 self-check](asvs-5.0.md) checks the whole of Kubeast against the OWASP ASVS 5.0.0: every level 1 requirement and the level 2 areas it names. It is read again against each release's tree.
 

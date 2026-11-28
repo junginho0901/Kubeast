@@ -61,7 +61,7 @@ Kubeast는 **로그인한 사람의 신원으로**(impersonation) 클러스터�
 | Admin의 `nodes/proxy` get — AI 도구 `nodes_stats_summary`·`nodes_log` | API 서버 프록시를 거쳐 노드의 kubelet stats summary를 읽고 로그를 질의할 때 필요합니다. `kubeast:admin`(cluster-admin)에는 이미 들어 있고, 커스텀 역할로 Admin 도구를 쓰려면 역할에 `admin.nodes.read`를, 그 그룹에 `nodes` get + `nodes/proxy` get을 넣어야 합니다. `nodes_log`에는 kubelet 설정 `enableSystemLogHandler: true` + `enableSystemLogQuery: true`(NodeLogQuery, 1.36 GA)도 필요하며, 꺼져 있으면 도구가 unavailable로 답합니다. kind는 기본값에서 query가 꺼져 있습니다 | 차트 `impersonation-rbac`(cluster-admin) · kubelet 설정 |
 | 로그 파일 Namespace의 `pods/exec` | 로그 파일 보기를 켤 때(§10) | `features.logFiles` → `templates/logfiles-rbac.yaml` |
 | 알림 조사 신원 `kubeast:investigator` — impersonate 허용 + 읽기 전용 ClusterRole(get·list·watch, Secret·exec·프록시·쓰기 없음) | 알림 → AI 조사를 켤 때 필요합니다. Kubeast는 사람 대신 이 신원으로 읽기 도구를 실행합니다. 조사에서 CRD(Kyverno PolicyReport·Argo Rollout 등)도 읽어야 하면 `features.alertInvestigation.extraRules`에 읽기 규칙을 추가합니다. get·list·watch 외의 동사, `apiGroups "*"`, Secret·exec·프록시·토큰은 렌더 단계에서 거부합니다 | `features.alertInvestigation` → `templates/impersonation-investigator.yaml`(impersonation이 꺼져 있으면 렌더 실패) |
-| FlowSchema `kubeast-cache`와 `kubeast`(API Priority and Fairness, Kubernetes 1.29 이상) | 클러스터 API 서버가 Kubeast의 요청을 다른 사용자의 요청 사이 어디에 두는지. 없으면 클러스터 자체 FlowSchema가 사람의 요청과 `kubeast:cache`의 요청을 `global-default` 수준에 둡니다. API 서버 기본 한도에서 자리는 약 49개이고, 목록 하나는 그 네임스페이스에 객체가 몇 개 없어도 자리 8개까지로 세며, 거기서 15초 기다린 요청은 429를 받습니다(client-go는 `Retry-After` 뒤에 읽기를 다시 보냄). 있으면 모두를 위해 한 번 읽는 `kubeast:cache`는 기본으로 파드 서비스 계정의 수준인 `workload-low`(자리 약 245개)로 가고 네임스페이스마다 흐름 하나입니다. 사람은 `priorityLevel`이 다른 수준을 적지 않으면 `global-default`에 남고 `flow_schema="kubeast"`로 따로 셉니다. 클러스터에 있는 수준을 적으세요. API 서버는 없는 수준을 가리키는 FlowSchema를 무시합니다. 만들려면 `flowschemas.flowcontrol.apiserver.k8s.io`의 `create`가 필요합니다. 확인: `kubectl get flowschema kubeast-cache kubeast -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Dangling")].status}{"\n"}{end}'`(`False`면 수준이 있음), 그다음 `kubectl get --raw /metrics \| grep 'flow_schema="kubeast'` | `multicluster.flowSchemas`(끔) → `templates/flowschemas.yaml`(`auth.impersonation.enabled`가 꺼져 있으면 렌더가 멈춤) |
+| FlowSchema `kubeast-cache`와 `kubeast`(API Priority and Fairness, Kubernetes 1.29 이상) | 클러스터 API 서버가 Kubeast의 요청을 다른 사용자의 요청 사이 어디에 두는지. 없으면 클러스터 자체 FlowSchema가 사람의 요청과 `kubeast:cache`의 요청을 `global-default` 수준에 둡니다. API 서버 기본 한도에서 자리는 약 49개이고, 목록 하나는 그 네임스페이스에 객체가 몇 개 없어도 자리 8개까지로 세며, 거기서 15초 기다린 요청은 429를 받습니다(client-go는 `Retry-After` 뒤에 읽기를 다시 보냄). 있으면 모두를 위해 한 번 읽는 `kubeast:cache`는 기본으로 파드 서비스 계정의 수준인 `workload-low`(자리 약 245개)로 가고 네임스페이스마다 흐름 하나입니다. 사람은 `priorityLevel`이 다른 수준을 적지 않으면 `global-default`에 남고 `flow_schema="kubeast"`로 따로 셉니다. 클러스터에 있는 수준을 적으세요. API 서버는 없는 수준을 가리키는 FlowSchema를 무시합니다. 만들려면 `flowschemas.flowcontrol.apiserver.k8s.io`의 `create`가 필요합니다. 확인: `kubectl get flowschema kubeast-cache kubeast -o jsonpath='{range .items[*]}{.metadata.name} {.status.conditions[?(@.type=="Dangling")].status}{"\n"}{end}'`(`False`면 수준이 있음), 그다음 `kubectl get --raw /metrics \| grep 'flow_schema="kubeast'`. 값을 끄거나 앞 버전으로 되돌린 뒤 클러스터에서 떼어 내려면 `kubectl delete flowschema kubeast-cache kubeast`입니다. 설치 클러스터의 것은 `helm upgrade`나 `helm rollback`이 지웁니다 | `multicluster.flowSchemas`(끔) → `templates/flowschemas.yaml`(`auth.impersonation.enabled`가 꺼져 있으면 렌더가 멈춤) |
 
 **사용자 이름은 계정의 이메일입니다.** 그 `User`에 묶은 바인딩은 그 계정을 가진 사람에게 적용됩니다.
 새 계정의 이름에는 콜론·공백·제어 문자를 쓸 수 없습니다. 그래서 `system:`, `eks:`, `kubeast:` 사용자나 앞뒤에 공백을 붙인 다른 주소가 될 수 없습니다.
@@ -204,6 +204,7 @@ discovery에 `metrics.k8s.io`가 없으면 모든 사용자에게 metrics-server
   - `features.prometheus.url`과 `features.logSearch.url`은 설치자가 정하는 값이라 이 제한을 받지 않습니다.
   - 참고: [운영 기능 — 대시보드 빠른 작업의 "Prometheus 소스"](operations.md#대시보드-빠른-작업-이슈--최적화--스토리지)
   - 이때 아래 지표에는 그 클러스터 레이블이 붙어 있어야 합니다.
+  - **Grafana Mimir**: 주소는 Mimir 주소에 Prometheus 접두사(기본 `/prometheus`)를 붙인 것입니다(`http://<mimir>/prometheus`). Kubeast는 테넌트 헤더(`X-Scope-OrgID`)를 보내지 않으므로, 멀티테넌시를 켠 Mimir(기본값)는 401로 답하고 저장소 상태가 unhealthy로 나옵니다. 이런 Mimir는 테넌트를 붙여 보내는 Grafana 데이터소스를 거쳐(아래) 읽거나, Mimir를 `-auth.multitenancy-enabled=false`로 띄우세요.
 - **Grafana를 거쳐**: 저장소 조회 API를 외부에 열지 않고 Grafana 데이터소스로만 쓰는 환경이면 다음과 같이 적습니다.
   - 주소: Grafana 데이터소스 프록시 `https://<Grafana>/api/datasources/proxy/uid/<데이터소스 UID>`
   - 인증: Grafana 서비스 계정 토큰(Viewer, bearer)
@@ -308,6 +309,7 @@ VictoriaMetrics는 Prometheus 질의 API를 그대로 제공하므로 화면과 
 - **kube-prometheus-stack** `92.3.0`: operator가 만드는 `prometheus-operated`(레이블 `operated-prometheus=true`, 포트 9090)를 레이블로 찾으므로, 어느 Namespace에 설치해도 찾을 수 있습니다.
   - 레이블과 포트는 Prometheus Operator v0.94.1 소스에서 확인했습니다.
   - 지표도 기본 ServiceMonitor로 모두 수집됩니다(렌더로만 확인).
+  - 한 Namespace에 Prometheus 리소스가 여럿이면 `prometheus-operated`가 그 파드를 모두 고르므로 질의가 이쪽저쪽으로 갑니다. 읽을 쪽의 Service를 직접 지정하거나(예: `monitoring/<릴리스>-kube-prometheus-prometheus:9090`) 그 Service에 `kubeast.io/prometheus=true`를 붙이세요.
 
 ### 확인
 
@@ -345,6 +347,7 @@ Read 사용자에게도 열어 주려면 이 주소를 §1의 `viewerProxyServic
   - 보고서는 정책이 있어야 생기므로 Audit 정책 몇 개로 시작하세요.
   - 개발용 값과 정책 예시는 [`deploy/kind/kyverno-values.yaml`](../../deploy/kind/kyverno-values.yaml)·[`kyverno-policies.yaml`](../../deploy/kind/kyverno-policies.yaml)에 있습니다.
 - 같은 CRD를 쓰는 다른 도구의 보고서도 읽을 수 있지만, 검증은 Kyverno로만 했습니다.
+- **Trivy Operator**는 PolicyReport가 아니라 자기 CRD(`aquasecurity.github.io`의 이미지 스캔 보고서·ConfigAuditReport 등)에 씁니다. Trivy 문서는 이를 PolicyReport로 바꿔 주는 `trivy-operator-polr-adapter`를 안내합니다(`wgpolicyk8s.io/v1alpha2`가 기본이며, 대신 OpenReports 출력을 켜면 Kubeast는 아무것도 읽지 못합니다). 어댑터는 Deployment 이미지의 보고서를 그 Deployment의 ReplicaSet에 붙이고, 워크로드 상세 창은 그 워크로드와 그 파드의 보고서만 보여 주므로, 그런 결과는 Deployment가 아니라 ReplicaSet의 상세 창과 정책 보고서 화면에 나옵니다. Trivy Operator 0.36.1과 어댑터 0.11.5를 읽어 쓴 것이며 클러스터에서는 검증하지 않았습니다.
 - 레이블로 리소스를 고르는 결과(`resourceSelector`, 또는 보고서의 `scopeSelector`)는 레이블이 맞는 개체마다 그 상세 창에 붙습니다. 이를 위해 상세 창이 개체의 레이블을 사용자 권한으로 읽으며, 읽을 수 없으면 그 결과를 맞춰 보지 못했다고 알려 줍니다.
 - 네임스페이스 개체의 상세 창과, 그 네임스페이스로 좁힌 Policy Reports 화면·AI의 `policy_reports`는 ClusterPolicyReport가 그 개체에 대해 담은 결과도 보여 줍니다. 사용자 권한으로 분당 한 번까지 읽습니다. 사용자가 읽을 수 없거나 네임스페이스 한정 권한이면 그 결과가 나열되지 않았다고 알려 줍니다.
 - **확인**: `kubectl --context <cluster> get policyreports -A`
@@ -375,9 +378,9 @@ CRD가 없으면 Kubeast는 빈 목록과 "설치 안 됨"(`X-Kubeast-Not-Instal
 | --- | --- |
 | VerticalPodAutoscalers | `autoscaling.k8s.io/v1` CRD. 추천값은 VPA recommender가 채웁니다. MinReplicas·OOMSeconds 열과 startup boost·OOM·메모리 집계 필드는 vertical-pod-autoscaler 1.7.0 이상의 CRD(`vpa-v1-crd-gen.yaml`)가 있어야 하고, 그보다 옛 CRD면 "-"로 보입니다 |
 | Gateway API | `gateway.networking.k8s.io/v1` CRD(GatewayClass·Gateway·HTTPRoute 등)와 구현체 |
-| Gateway 정책 | 라벨 `gateway.networking.k8s.io/policy`가 붙은 CRD(GEP-713), 또는 기본 목록 — BackendTLSPolicy, Envoy Gateway(`gateway.envoyproxy.io`의 BackendTraffic·ClientTraffic·Security·EnvoyPatch·EnvoyExtension Policy), Istio(AuthorizationPolicy·RequestAuthentication·PeerAuthentication·Telemetry·WasmPlugin·EnvoyFilter·DestinationRule). 읽기 그룹은 Gateway API 자체 정책 종류를 `kubeast:cluster-reader`로 읽습니다. 다른 구현체의 종류는 그 설치본의 `aggregate-to-view` ClusterRole이나 커스텀 역할이 있어야 하며, 없으면 화면에 거절로 표시됩니다 |
+| Gateway 정책 | 라벨 `gateway.networking.k8s.io/policy`가 붙은 CRD(GEP-713), 또는 기본 목록 — BackendTLSPolicy, Envoy Gateway(`gateway.envoyproxy.io`의 BackendTraffic·ClientTraffic·Security·EnvoyPatch·EnvoyExtension Policy), Istio(AuthorizationPolicy·RequestAuthentication·PeerAuthentication·Telemetry·WasmPlugin·EnvoyFilter·DestinationRule). 읽기 그룹은 Gateway API 자체 정책 종류를 `kubeast:cluster-reader`로 읽습니다. 다른 구현체의 종류는 그 설치본의 `aggregate-to-view` ClusterRole이나 커스텀 역할이 있어야 하며, 없으면 화면에 거절로 표시됩니다. 기본 목록은 Envoy Gateway 1.5와 Istio 1.28의 CRD에서 읽었고, Envoy Gateway 1.10.0도 같은 다섯 종류입니다. Istio 1.32에 새로 생긴 TrafficExtension(`extensions.istio.io`)은 목록에 없으므로 `gatewayApi.policyKinds`에 `extensions.istio.io/trafficextensions`를 더하세요. kgateway의 TrafficPolicy·ListenerPolicy·BackendConfigPolicy(`gateway.kgateway.dev`)는 GEP-713 라벨이 붙어 있어(kgateway 2.5.2) 값 없이 찾습니다. 라벨로 대상을 고르는 정책(Envoy Gateway와 kgateway의 `targetSelectors`)은 화면에 대상이 나오지 않습니다 |
 | Admission Policies | ValidatingAdmissionPolicy(`admissionregistration.k8s.io/v1`), MutatingAdmissionPolicy(`admissionregistration.k8s.io/v1`) — 이 API를 제공하지 않는 클러스터는 "설치 안 됨". Read 그룹은 `kubeast:cluster-reader`로 정책과 바인딩을 읽습니다. 이 권한은 2026-10-22에 추가되었고 `view`에는 없으므로, 그 전에 RBAC를 적용한 클러스터는 다시 적용하세요 |
-| Ingress 드로어 지연 | ingress-nginx 컨트롤러와 §3의 `nginx_ingress_controller_*` 지표 수집 |
+| Ingress 드로어 지연 | 지표를 켠 ingress-nginx 컨트롤러(차트 값 `controller.metrics.enabled`·`controller.metrics.serviceMonitor.enabled`, `controller.metrics.serviceMonitor.additionalLabels`에 kube-prometheus-stack이 고르는 라벨)와 §3의 `nginx_ingress_controller_*` 지표 수집. Ingress의 Namespace는 ingress-nginx 자체 대시보드처럼 `exported_namespace`에서 읽으므로, `honorLabels: true`로 수집하면 지연이 비어 보입니다. ingress-nginx는 2026년 3월에 은퇴했습니다. 저장소가 보관되어 새 릴리스와 보안 수정이 더 없으므로, 이미 쓰는 클러스터를 위한 것입니다 |
 | NetworkPolicy 보기와 연결 확인(Pod·워크로드 드로어, AI 도구 `network_policy_check`) | 설치할 것은 없습니다. 로그인한 사람의 권한으로 NetworkPolicy·파드·Service·워크로드·Namespace를 읽습니다. 정책이 실제로 강제되는지는 네트워크 플러그인에 달려 있습니다(kind의 kindnet·Calico·Cilium은 강제합니다. 쓰는 플러그인을 확인하세요). 네임스페이스를 레이블로 고르는 규칙은 그 Namespace의 `get` 권한이 필요하며, 없으면 답이 알 수 없음입니다. Cilium(`cilium.io`)·Calico(`projectcalico.org`, API 서버가 없으면 `crd.projectcalico.org`)·network-policy-api(`policy.networking.k8s.io`) 정책은 디스커버리로 찾아 `list`로 개수를 셉니다(권한이 없으면 개수 모름). 평가하지는 않습니다 |
 | Cluster View 파드 창의 RBAC 탭, AI 도구 `pod_rbac` | 설치할 것은 없습니다. 로그인한 사람의 권한으로 ServiceAccount, 파드 네임스페이스의 RoleBinding, ClusterRoleBinding과 거기 적힌 역할을 읽습니다(그 종류의 `get`·`list`, Read 그룹은 `kubeast:cluster-reader`가 줍니다). 클러스터가 거절한 것은 탭에 이름이 나오고 나머지는 그대로 보입니다. **확인**: `kubectl auth can-i --list --as system:serviceaccount:<네임스페이스>:<계정> -n <네임스페이스>`가 "광범위 포함"을 켠 탭의 합과 같습니다 |
 | AI 도구 `gitops_status` | `applications.argoproj.io` CRD(Argo CD). 이 CRD는 Argo CD가 설치된 클러스터에만 있으므로, 중앙 Argo CD를 쓴다면 관리 클러스터에서 호출하세요. 없으면 도구가 unavailable로 답합니다. 권한 상한은 읽는 사람의 RBAC(`applications.argoproj.io` get/list)입니다 |
@@ -508,6 +511,7 @@ Loki는 최근 3시간치 중 창 안에서 30줄 이상 나온 패턴만 돌려
     - 수집기 구성: OpenTelemetry Collector `file_log` + `container` 파서 또는 `k8sattributes`, `otlp_http` → Loki `/otlp`
     - 0.162 이전 이름인 `filelog`·`otlphttp`도 경고와 함께 아직 동작합니다.
   - Promtail이나 Alloy의 Kubernetes 탐색 방식을 쓴다면 `namespace`·`pod`·`container`로 바꾸세요.
+  - Promtail은 2026-03-02에 지원이 끝났고(EOL), Grafana는 대신 Alloy를 권합니다. Promtail 차트는 스트림에 클러스터 라벨을 붙이지 않습니다(아래 **클러스터 라벨** 참고).
 - **클러스터 라벨**: Loki 하나에 여러 클러스터의 로그를 넣는다면 클러스터마다 다른 `k8s.cluster.name`(수집기의 resource 프로세서)을 붙이고, 그 값을 `features.logSearch.clusters`에 Kubeast 클러스터 ID와 짝지어 적으세요.
   - 여기에 적지 않은 클러스터에서는 검색을 쓸 수 없습니다.
 - **클러스터별 저장소**: 로그가 다른 Loki에 있는 클러스터는 Admin → Clusters → 편집에서 그 저장소의 주소·인증·테넌트·레이블 값을 적습니다(쓸 수 있는 주소: §3). 이 값은 `features.logSearch.url`보다 우선합니다.
@@ -779,7 +783,7 @@ Resource Graph의 통신·둘 다 보기는 두 출처 중 하나로 선을 그�
   Kubeast의 NetworkPolicy는 443 포트로 AWS에 나가는 것을 이미 엽니다. AWS가 거부하면 설치 설정 문제이므로 API는 AWS 오류 코드와 함께 502를 돌려줍니다.
 - **누가 읽나**: `resource.networkflow.read`가 있고, 클러스터가 그 네임스페이스의 파드 `list`를 허용하는 사용자(Kubeast가 사용자로서 SelfSubjectAccessReview로 묻습니다). 사용자가 파드를 볼 수 없는 네임스페이스나 네임스페이스 한정 권한 밖의 상대는 네임스페이스와 주소만 보입니다. 읽을 때마다 `k8s.networkflows.query`(`provider: nfm`)로 감사 로그에 남습니다.
 - **확인**: `aws networkflowmonitor list-monitors --region <region>`에 모니터가 나오고, Pod 드로어 → 상위 통신 → 상위 통신 보기에 줄이 나오면 됩니다.
-- **검증**: 개발 클러스터의 API 대역(`deploy/kind/devtools.yaml`, e2e `network-top-flows.spec.ts`)에 AWS SDK for Go v2 클라이언트로 확인했습니다. 실제 모니터로는 아직 확인하지 않았습니다.
+- **검증**: 2026-10-29 EKS 1.35에서 Kubeast 0.7.5로 실제 모니터를 읽었습니다. 에이전트와 Kubeast의 IRSA 롤, 2초 안의 질의 응답, 연결 하나가 양 끝에서 한 번씩 나오는 것, 비어 있는 단위와 갈래, NetworkPolicy가 막은 연결이 나오지 않는 것을 확인했습니다. 그 뒤에 바꾼 것(갈래는 질의에서, 단위는 지표에서 정함, 받는 끝의 행을 여는 끝의 행에 합침, Service cluster IP에 이름 붙임)은 개발 클러스터의 API 대역(`deploy/kind/devtools.yaml`, e2e `network-top-flows.spec.ts`)에 AWS SDK for Go v2 클라이언트로 확인했습니다.
 
 ## 20. 호출 관계 (AI `resource_graph`의 include calls)
 

@@ -25,6 +25,21 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   --header "Authorization: Bearer $KUBEAST_API_KEY"
 ```
 
+For Cursor, put the server in `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
+
+```json
+{
+  "mcpServers": {
+    "kubeast": {
+      "url": "https://console.example.com/api/v1/ai/mcp",
+      "headers": { "Authorization": "Bearer <your Kubeast API key>" }
+    }
+  }
+}
+```
+
+The file then holds the key, so keep it out of a shared repository. Kubeast takes the key in the `Authorization` header only. It has no OAuth sign-in for MCP clients, so a client that offers to sign in after a 401 has the wrong key or none.
+
 - Turning it on: `mcp.enabled: true` (`MCP_ENABLED` in compose). Off by default; when off, the path does not exist.
 - Permissions:
   - `ai.mcp.use` on that cluster. The system Read and Write roles include it, and Admin has everything.
@@ -135,7 +150,7 @@ Without it, or with AI off, a cluster with an alert store still has **Alerts** i
 
 - **Who**: people who read the selected cluster without a Namespace limit (`resource.pod.read` on that cluster). This is the same rule as the AI alert tool and alert store reads.
   - The alert's AI investigation report can be opened here too, and each opening records `ai.investigation.view`.
-  - With `pastReports.window` (off by default) the alert's window also lists the same alert's earlier investigations: the done ones of the same fingerprint, cluster and Namespace of the last 30 days and since the cluster was registered, at most five, newest first, received before the one the window shows — when, the outcome, the causes (Not verified where that run's `evidenceCheck` did not verify one) and a button that opens that report, recorded as `ai.investigation.view` like the other. Values masked for the model stay their placeholders. Nothing new is stored: they go with `retention.investigationDays`, and the AI's `alerts_inbox` and the floating chat are not given the list.
+  - With `pastReports.window` (off by default) the alert's window also lists the same alert's earlier investigations: the done ones of the same fingerprint, cluster and Namespace of the last 30 days and since the cluster was registered, at most five, newest first, received before the one the window shows — when, the outcome, the causes (None where the report named none, Not verified where that run's `evidenceCheck` did not verify one) and a button that opens that report, recorded as `ai.investigation.view` like the other. Values masked for the model stay their placeholders. Nothing new is stored: they go with `retention.investigationDays`, and the AI's `alerts_inbox` and the floating chat are not given the list.
 - **One row = one alert**: the same cluster, fingerprint and `startsAt`.
   - When Alertmanager resends every `repeat_interval`, "Received" goes up. When resolved arrives, the row becomes Resolved. If the alert fires again after resolving, it gets a new row.
   - Statuses are Firing, **Status unknown** and Resolved. Status unknown means firing, but nothing heard for `inbox.staleAfterHours` (8); Alertmanager does not send a firing alert's `endsAt` through the webhook.
@@ -167,7 +182,7 @@ Without it, or with AI off, a cluster with an alert store still has **Alerts** i
 - **Handling marks**: Acknowledge, Assign to me/Unassign, Note and Mark done.
   - They are records inside Kubeast and do not change Alertmanager or the alert rules. The rule decides "Resolved".
   - Every change records `alert.inbox.update` (before and after values). When the audit DB cannot be written, the response is 503 and the mark is rolled back.
-- **Screen**: status tabs (Firing, Status unknown, Resolved, All) and filters for severity (critical, warning, info and any other value the cluster's alerts carry), Assigned to me and Not done.
+- **Screen**: status tabs (Firing, Status unknown, Resolved, All) and filters for severity (critical, warning, info and any other value the cluster's alerts carry), Assigned to me and Not done. The tabs and the list's footer count only from an answer: before the first one, or after a first read that failed, they show `-`, and a refresh that fails keeps the counts of the answer before it.
   - A skipped investigation says why in the row, the alert window and its report ("Skipped by the investigation limit", with the numbers).
   - Pressing the object (label `pod`, `deployment`, `node`, etc.) opens the resource details window.
   - Opening one alert shows labels, annotations, the alert sender link, the handling area and the AI investigation.

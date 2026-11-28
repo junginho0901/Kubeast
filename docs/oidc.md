@@ -125,11 +125,14 @@ auth:
 - A token holds up to 200 groups. For a person in more, Entra ID leaves the groups out and sends `_claim_names` and `_claim_sources` in their place (groups overage). Kubeast then refuses the sign-in with `oidc_groups_overage` (§6), whatever `syncRoles` says: without the groups, a first sign-in would get `defaultRole` and a stored account would keep the role and cluster grants its groups gave it before. Kubeast does not read the groups from Microsoft Graph. Where people are in many groups, use one of these:
   - Send only the groups assigned to the application: in the groups claim, choose **Groups assigned to the application** (`groupMembershipClaims: ApplicationGroup` in the manifest), and assign the groups you map to the enterprise application. Nested groups are not counted.
   - Use app roles instead of groups: define app roles on the app registration, assign them to users or groups, and set `auth.oidc.claims.groups: roles`. `roleMapping` and `clusterGroupMapping` then take the app roles' values.
+- An account without a mailbox has no `email` claim, so its sign-in is refused with `oidc_no_email`. To sign such accounts in, set `auth.oidc.claims.email: preferred_username` (the user principal name, `name@<tenant domain>`) and list your tenant's domains in `allowedDomains`. The claim is then read for every sign-in, so a person whose mail address and user principal name differ signs in to another account than before. Microsoft says this claim can change: a person renamed in Entra ID becomes a new account in Kubeast.
 
 ### Okta
 
 - OIDC Web Application, Sign-in redirect URI = the callback above. `issuerUrl` is the authorization server you use (`https://<org>.okta.com/oauth2/default`, etc.).
-- For groups, put the authorization server's claim (`groups`, scope limited with a filter) in the ID token.
+- For groups, add a groups claim on the authorization server, include it in the **ID Token** and set it to **Always**. Without **Always** the claim goes only into tokens that ask for it, and people sign in with no groups (`defaultRole`).
+- With the org authorization server (`issuerUrl: https://<org>.okta.com`), or with a claim tied to the `groups` scope, add `groups` to `auth.oidc.scopes`.
+- Keep the claim's filter narrow, such as **Starts with** `kubeast-`. A token holds up to 100 groups; past that, Okta refuses the sign-in and it comes back with `oidc_denied`.
 
 ## 5. Kubernetes side
 

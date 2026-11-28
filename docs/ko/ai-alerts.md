@@ -24,6 +24,21 @@ claude mcp add --transport http kubeast https://console.example.com/api/v1/ai/mc
   --header "Authorization: Bearer $KUBEAST_API_KEY"
 ```
 
+Cursor는 `~/.cursor/mcp.json`(프로젝트라면 `.cursor/mcp.json`)에 서버를 적습니다.
+
+```json
+{
+  "mcpServers": {
+    "kubeast": {
+      "url": "https://console.example.com/api/v1/ai/mcp",
+      "headers": { "Authorization": "Bearer <your Kubeast API key>" }
+    }
+  }
+}
+```
+
+그 파일에 키가 들어가므로 함께 쓰는 저장소에는 넣지 마세요. Kubeast는 키를 `Authorization` 헤더로만 받습니다. MCP 클라이언트용 OAuth 로그인이 없으므로, 401 뒤에 클라이언트가 로그인을 권하면 키가 틀렸거나 빠진 것입니다.
+
 - 켜기: `mcp.enabled: true`(컴포즈는 `MCP_ENABLED`). 기본은 꺼져 있고, 꺼져 있으면 경로 자체가 없습니다.
 - 권한: 그 클러스터에 대한 `ai.mcp.use`(시스템 Read·Write 역할에 포함, Admin은 모든 권한)와 쓰려는 도구의 `ai.tool.<이름>`이 필요합니다.
   - Read는 읽기 도구 53종만, Write는 전부와 쓰기 미리보기 `k8s_diff`를 쓸 수 있습니다.
@@ -133,7 +148,7 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
 
 - **누가**: 선택한 클러스터를 Namespace 제한 없이 읽을 수 있는 사람(그 클러스터의 `resource.pod.read`)이 봅니다. AI 알림 도구, 알림 저장소 읽기와 같은 기준입니다.
   - 그 알림의 AI 조사 보고서도 여기서 열 수 있고, 열 때마다 `ai.investigation.view`가 남습니다.
-  - `pastReports.window`(기본 꺼짐)를 켜면 알림 창에 같은 알림의 지난 조사도 나옵니다. fingerprint · 클러스터 · Namespace가 같고 끝까지 돈 조사 가운데 창에 보이는 것보다 앞서 30일 안에 · 클러스터를 등록한 뒤에 받은 것을 최신 순으로 최대 다섯 개, 시각 · 결론 · 원인(그 조사의 `evidenceCheck`가 확인하지 못한 것은 확인 안 됨)과 그 보고서를 여는 버튼으로 보여 줍니다. 보고서를 열면 다른 보고서와 같이 `ai.investigation.view`가 남습니다. 모델에게 가려진 값은 자리 표시 그대로입니다. 새로 저장하는 것은 없으므로 `retention.investigationDays`가 지나면 같이 없어지고, AI의 `alerts_inbox`와 떠 있는 채팅에는 이 목록을 주지 않습니다.
+  - `pastReports.window`(기본 꺼짐)를 켜면 알림 창에 같은 알림의 지난 조사도 나옵니다. fingerprint · 클러스터 · Namespace가 같고 끝까지 돈 조사 가운데 창에 보이는 것보다 앞서 30일 안에 · 클러스터를 등록한 뒤에 받은 것을 최신 순으로 최대 다섯 개, 시각 · 결론 · 원인(보고서가 원인을 하나도 적지 않았으면 None, 그 조사의 `evidenceCheck`가 확인하지 못한 것은 확인 안 됨)과 그 보고서를 여는 버튼으로 보여 줍니다. 보고서를 열면 다른 보고서와 같이 `ai.investigation.view`가 남습니다. 모델에게 가려진 값은 자리 표시 그대로입니다. 새로 저장하는 것은 없으므로 `retention.investigationDays`가 지나면 같이 없어지고, AI의 `alerts_inbox`와 떠 있는 채팅에는 이 목록을 주지 않습니다.
 - **한 줄 = 알림 1건**: 클러스터, fingerprint, `startsAt`이 같으면 같은 알림입니다.
   - Alertmanager가 `repeat_interval`마다 다시 보내면 "받은 횟수"가 오릅니다.
   - resolved가 오면 해결됨이 되고, 해결 뒤 다시 울리면 새 줄이 생깁니다.
@@ -168,7 +183,7 @@ Alertmanager(또는 Grafana 알림)가 보낸 알림을 **울리는 중인 것�
 - **처리 표시**: 확인함 · 내가 담당/해제 · 메모 · 조치 완료를 표시할 수 있습니다.
   - Kubeast 안에만 남는 기록이며 Alertmanager나 알림 규칙은 바꾸지 않습니다. "해결됨"은 알림 규칙이 정합니다.
   - 바꿀 때마다 `alert.inbox.update`(전·후 값)를 남기고, 감사 DB에 쓸 수 없으면 503을 돌려주며 표시도 되돌립니다.
-- **화면**: 상태 탭(울리는 중, 상태 확인 안 됨, 해결됨, 전체)이 있고 심각도(critical·warning·info와 그 클러스터 알림에 있는 다른 값), 내 담당, 조치 안 된 것으로 거를 수 있습니다.
+- **화면**: 상태 탭(울리는 중, 상태 확인 안 됨, 해결됨, 전체)이 있고 심각도(critical·warning·info와 그 클러스터 알림에 있는 다른 값), 내 담당, 조치 안 된 것으로 거를 수 있습니다. 탭과 목록 바닥줄의 수는 답이 온 뒤에만 셉니다. 첫 답이 오기 전이나 첫 읽기가 실패하면 `-`이고, 새로고침이 실패하면 앞 답의 수를 그대로 둡니다.
   - 건너뛴 조사는 행, 알림 창, 보고서에 이유를 보입니다("조사 한도로 건너뜀"과 수).
   - 대상(라벨 `pod`·`deployment`·`node` 등)을 누르면 리소스 상세 창이 열립니다.
   - 한 건을 열면 라벨, 주석, 알림 보낸 곳 링크, 처리 칸, AI 조사가 나옵니다.

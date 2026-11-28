@@ -77,7 +77,7 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 ### 업그레이드
 
-0.7.8에서 0.7.9로 올릴 때는 먼저 [0.7.8에서 0.7.9로 업그레이드](upgrade-0.7.9.md)를, 0.7.7에서 0.7.8로 올릴 때는 [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md)를 읽습니다. 업그레이드 전에 확인할 것, 바뀌는 것, 되돌리는 방법이 있습니다.
+0.7.9에서 0.8.0으로 올릴 때는 먼저 [0.7.9에서 0.8.0으로 업그레이드](upgrade-0.8.0.md)를, 0.7.8에서 0.7.9로 올릴 때는 [0.7.8에서 0.7.9로 업그레이드](upgrade-0.7.9.md)를, 0.7.7에서 0.7.8로 올릴 때는 [0.7.7에서 0.7.8로 업그레이드](upgrade-0.7.8.md)를 읽습니다. 업그레이드 전에 확인할 것, 바뀌는 것, 되돌리는 방법이 있습니다.
 
 ```bash
 helm upgrade kubeast oci://ghcr.io/junginho0901/charts/kubeast --version 0.8.0 \
@@ -344,6 +344,23 @@ Anthropic(provider `anthropic`)은 OpenAI 호환 주소가 아니라 Messages AP
 - `base_url`이 없으면 `custom`과 그 밖의 공급자는 400으로 거절합니다. 0.8.0 전에는 이런 설정의 채팅이 OpenAI 주소로 갔고, `groq`, `deepseek`, `mistral`, `together`, `fireworks`의 **Test**는 그 공급자로 갔습니다.
 - 업그레이드 전에 이렇게 저장된 설정은 목록에 그대로 남습니다. 채팅과 **Test**는 그 설정을 거절하고 아무것도 보내지 않습니다. 끄거나 지울 수 있고, 그 밖의 변경은 `base_url`을 넣거나 위 공급자 중 하나로 바꿔야 합니다.
 - `base_url`이 있는 Gemini 설정의 **Test**는 채팅처럼 그 주소의 OpenAI 호환 API를 부릅니다.
+- `base_url`이 없는 Gemini 설정의 **Test**는 Google 자체 API(`generateContent`)에 도구 없이 짧은 답을 묻고, 채팅은 Google의 OpenAI 호환 주소를 도구와 함께 부릅니다. **Test**가 통과하면 키와 모델 이름이 받아들여진다는 뜻이고, 나머지는 도구를 부르는 첫 채팅 답에서 드러납니다.
+
+**그 밖의 OpenAI 호환 공급자**는 provider `custom`에 주소를 `base_url`로, 그리고 키를 넣어 씁니다.
+
+| 공급자 | `base_url` |
+| --- | --- |
+| Groq | `https://api.groq.com/openai/v1` |
+| DeepSeek | `https://api.deepseek.com` |
+| Mistral AI | `https://api.mistral.ai/v1` |
+| Together AI | `https://api.together.ai/v1` |
+| Fireworks AI | `https://api.fireworks.ai/inference/v1` |
+| 이 클러스터 안의 LiteLLM 프록시 | 그 Service(예: `http://litellm.<namespace>.svc:<port>`) |
+
+- **Test**는 질문과 함께 도구 하나를 보내므로, 도구를 받지 않는 모델은 채팅에서처럼 **Test**에서도 실패합니다.
+- 추론 글을 `reasoning_content`나 `reasoning`으로 주는 사고 모델(DeepSeek의 사고 모드, Together의 사고 모델)은 그 공급자들이 요구하는 대로, 도구 고리의 다음 요청에서 그 글을 돌려받습니다.
+- 클러스터 안의 LiteLLM 프록시는 사설 주소이므로, 호스트를 `ai.baseUrlAllowedHosts`에 적고 `networkPolicy.enabled`면 주소와 포트를 `networkPolicy.allowExternalEgressCIDRs`에 적으세요(EKS VPC CNI에서는 Service의 cluster IP, [클러스터 요구사항 §15](cluster-requirements.md#ai-서비스가-밖으로-여는-연결)).
+- **이 서비스들로는 아직 검증하지 않았습니다**: 주소는 각 공급자의 문서에서 가져왔고, 호출은 가짜 서버로만 확인했습니다.
 
 **Claude 구독으로 쓰기 (provider `claude-code`, 개인용)** — API 키 대신 Claude Pro/Max 구독의 `claude setup-token` 값으로 채팅합니다.
 구독 토큰은 Claude Code에서만 쓸 수 있으므로, ai-service는 모델을 호출할 때마다 Claude Agent SDK(`app/services/claude_code.py`)로 Claude Code를 띄웁니다.

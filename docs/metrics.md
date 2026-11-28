@@ -83,9 +83,12 @@ metrics:
       - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
   prometheusRule:
     enabled: true           # five alerts, one more each with the AI on (the default), an audit anchor sink and alert investigations
+    labels: {release: monitoring}   # kube-prometheus-stack reads a PrometheusRule only with this label
 ```
 
-One ServiceMonitor selects the five backend Services labelled `kubeast.io/metrics: "true"`, with port name `http` and path `/metrics`. A Prometheus without the Operator can select the same label with `kubernetes_sd_configs` (role `endpoints`).
+One ServiceMonitor selects the backend Services labelled `kubeast.io/metrics: "true"` (auth-service, ai-service, k8s-service, session-service and, with the AI on, tool-server; k8s-service-stream too with `streams.enabled`), with port name `http` and path `/metrics`. A Prometheus without the Operator can select the same label with `kubernetes_sd_configs` (role `endpoints`).
+
+kube-prometheus-stack selects ServiceMonitors and PrometheusRules by its `release` label by default (`serviceMonitorSelectorNilUsesHelmValues` and `ruleSelectorNilUsesHelmValues`). Without `metrics.prometheusRule.labels` the rule is made and none of its alerts is loaded, and nothing says so: check that Prometheus' `/api/v1/rules` lists the group `kubeast`.
 
 ## Alerts (`metrics.prometheusRule.enabled`)
 
@@ -107,6 +110,7 @@ Useful expressions:
 - p95 per route: `histogram_quantile(0.95, sum by (route, le) (rate(kubeast_http_request_duration_seconds_bucket{service="k8s"}[5m])))`
 - p95 wait for a write place of the big shared answers: `histogram_quantile(0.95, sum by (le) (rate(kubeast_shared_write_place_wait_seconds_bucket[5m])))`. Near 0 the write places do not slow the node list, the node boxes, the Pods page, the node map or the shared reads; a body's waits stop a second after it began, and the rest of it goes without a place (`kubeast_shared_writes_without_place_total`)
 - p95 wait for the client's rate to the clusters: `histogram_quantile(0.95, sum by (limiter, le) (rate(kubeast_k8s_client_rate_wait_seconds_bucket[5m])))`. Near 0 the rate is not what slows the screens; seconds while the API server answers without 429 point at `multicluster.clientQPS` and `clientBurst` (or `reviewQPS` for the access checks)
+- With `multicluster.flowSchemas` on, a cluster's API server counts Kubeast's waits and refusals apart, in its own metrics, where a Prometheus reads that API server: `histogram_quantile(0.95, sum by (flow_schema, le) (rate(apiserver_flowcontrol_request_wait_duration_seconds_bucket{flow_schema=~"kubeast.*"}[5m])))` and `sum by (flow_schema, reason) (rate(apiserver_flowcontrol_rejected_requests_total{flow_schema=~"kubeast.*"}[5m]))`. A wait close to 15 s, or any refusal, says the level that `cachePriorityLevel` or `priorityLevel` names is full ([Target cluster requirements](cluster-requirements.md) §1)
 - p95 wait for a cluster's read places: `histogram_quantile(0.95, sum by (places, le) (rate(kubeast_k8s_read_place_wait_seconds_bucket[5m])))`. Seconds for `node_pods` while `limiter="cache"` waits near 0 mean the places, not the rate, set the pace of the node boxes
 - Big reads waiting for a place, per second: `sum(rate(kubeast_k8s_read_place_wait_seconds_count{places="big_read"}[5m])) - sum(rate(kubeast_k8s_read_place_wait_seconds_bucket{places="big_read",le="0.001"}[5m]))`. Above 0 while `limiter="user"` waits near 0, the timeline and the other paged reads wait for `multicluster.bigReadConcurrency`, or for their cluster's half of it, which holds k8s-service's memory, not for the API server
 
