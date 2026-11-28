@@ -10,7 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const release = resolve(here, '.release')
 const frontend = resolve(release, 'frontend')
 const outDir = resolve(here, '../site/demo')
-const commit = 'b4e4ff9f9c592e6ccf909ead68f8cdf87c360786'
+const commit = 'ce70615c3feea0143d5cec7ed813593c8e176bd5'
 const base = process.env.KUBEAST_DEMO_BASE || '/Kubeast/demo/'
 
 if (!existsSync(resolve(release, 'SOURCE')) || readFileSync(resolve(release, 'SOURCE'), 'utf8').trim() !== commit) {

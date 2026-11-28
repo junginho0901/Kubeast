@@ -9,7 +9,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 HERE="$ROOT/site-demo"
 RELEASE="$HERE/.release"
-COMMIT=b4e4ff9f9c592e6ccf909ead68f8cdf87c360786   # v0.7.9
+COMMIT=ce70615c3feea0143d5cec7ed813593c8e176bd5   # v0.8.0
 
 # The console's source at v0.8.0 (a shallow clone fetches that one commit).
 if [ ! -f "$RELEASE/SOURCE" ] || [ "$(cat "$RELEASE/SOURCE")" != "$COMMIT" ]; then
