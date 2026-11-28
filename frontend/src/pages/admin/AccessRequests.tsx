@@ -249,7 +249,7 @@ export default function AccessRequests() {
                               data-testid={`access-request-approve-${r.id}`}
                               disabled={busy || approvalHeld(r.role, r.cluster_id) || sharedGroup.has(r.role)}
                               onClick={() => approve.mutate(r.id)}
-                              className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                              className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
                             >
                               <Check className="w-3.5 h-3.5" />{tr('accessRequests.admin.approve', 'Approve')}
                             </button>

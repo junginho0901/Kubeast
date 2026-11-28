@@ -126,7 +126,7 @@ export default function RollbackModal({
             type="button"
             onClick={() => applyMutation.mutate()}
             disabled={loading || applying || !!error}
-            className="btn h-9 text-sm bg-amber-600 hover:bg-amber-700 text-white disabled:opacity-50 inline-flex items-center gap-2"
+            className="btn h-9 text-sm bg-amber-700 text-white disabled:opacity-50 inline-flex items-center gap-2"
           >
             {applying && <Loader2 className="w-4 h-4 animate-spin" />}
             {applying

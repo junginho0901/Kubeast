@@ -13,9 +13,9 @@ import {
 } from '@xyflow/react'
 import i18next from 'i18next'
 import type { ResourceGraphNode, ResourceGraphEdge, TrafficEnd, TrafficLine } from '@/services/api'
-import { edgeStyles, isIssueNode, kindIcon, nodeColor, pointsUp, type GroupBy } from './constants'
+import { edgeLabel, edgeStyles, isIssueNode, kindIcon, nodeColor, pointsUp, type GroupBy } from './constants'
 import { applyElkLayout } from './elkLayout'
-import { boxHeight, buildTraffic, byPort, endText, lineColor, portText, BOX_HEIGHT, ROW_HEIGHT, ROWS_PADDING, type GraphView, type PortEdge, type PortRow, type TrafficEdge } from './traffic'
+import { boxHeight, buildTraffic, byPort, endText, lineColor, lineText, portText, BOX_HEIGHT, ROW_HEIGHT, ROWS_PADDING, type GraphView, type PortEdge, type PortRow, type TrafficEdge } from './traffic'
 
 export interface ResourceGraphLayoutInput {
   graphData: { nodes: ResourceGraphNode[]; edges: ResourceGraphEdge[] } | undefined
@@ -60,7 +60,7 @@ function trafficEdge(t: TrafficEdge | PortEdge): Edge {
     // the arrowhead keeps its size on a wide line
     markerEnd: { type: MarkerType.ArrowClosed, color, width: 14, height: 14, markerUnits: 'userSpaceOnUse' },
     label,
-    labelStyle: { fill: color, fontSize: 10, fontWeight: 600 },
+    labelStyle: { fill: lineText[t.state], fontSize: 10, fontWeight: 600 },
     labelBgStyle: { fill: 'var(--color-slate-900)', fillOpacity: 0.9 },
     labelBgPadding: [4, 2] as [number, number],
     labelBgBorderRadius: 4,
@@ -79,9 +79,9 @@ function rowsBlock(rows: PortRow[]) {
         <div key={r.key} className="flex items-center justify-between px-2 font-mono text-[10px] text-slate-300" style={{ height: ROW_HEIGHT }} data-testid="port-row" data-port-text={r.text}>
           <span>{r.text}</span>
           <span>
-            {r.allowed > 0 && <span style={{ color: lineColor.allowed }}>{count(r.allowed)}</span>}
+            {r.allowed > 0 && <span style={{ color: lineText.allowed }}>{count(r.allowed)}</span>}
             {r.allowed > 0 && r.dropped > 0 && <span className="text-slate-500"> · </span>}
-            {r.dropped > 0 && <span style={{ color: lineColor.dropped }}>✕ {count(r.dropped)}</span>}
+            {r.dropped > 0 && <span style={{ color: lineText.dropped }}>✕ {count(r.dropped)}</span>}
           </span>
         </div>
       ))}
@@ -242,6 +242,7 @@ export function useResourceGraphLayout({
       .filter(e => edgeTypeFilters.has(e.type) && nodeIds.has(e.source) && nodeIds.has(e.target))
       .map((e, i) => {
         const style = edgeStyles[e.type] || edgeStyles.owns
+        const word = edgeLabel(edgeStyles[e.type] ? e.type : 'owns', (key, fallback) => i18next.t(key, fallback))
         const arrow = { type: MarkerType.ArrowClosed, color: style.stroke }
         const up = pointsUp(kindOf.get(e.source) ?? '', kindOf.get(e.target) ?? '')
         return {
@@ -251,8 +252,11 @@ export function useResourceGraphLayout({
           animated: e.type === 'selects',
           style: { stroke: style.stroke, strokeDasharray: style.strokeDasharray, strokeWidth: 1.5 },
           ...(up ? { markerStart: arrow } : { markerEnd: arrow }),
-          label: e.count && e.count > 1 ? `${style.label} · ${e.count}` : style.label,
-          labelStyle: { fill: style.stroke, fontSize: 10 },
+          label: e.count && e.count > 1 ? `${word} · ${e.count}` : word,
+          // React Flow's own name is "Edge from <id> to <id>" in English
+          ariaLabel: i18next.t('resourceGraph.edgeAria', { defaultValue: '{{source}} → {{target}} ({{relation}})', source: e.source, target: e.target, relation: word }),
+          // the mode's text colour, not the line's: the line colours are for the dark grounds and fall under 4.5:1 in light
+          labelStyle: { fill: 'var(--color-slate-300)', fontSize: 10 },
           labelBgStyle: { fill: 'var(--color-slate-900)', fillOpacity: 0.8 },
           labelBgPadding: [4, 2] as [number, number],
           labelBgBorderRadius: 4,

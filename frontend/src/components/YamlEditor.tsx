@@ -75,6 +75,7 @@ export default function YamlEditor({
   const [focusNext, setFocusNext] = useState<YamlFocusNext | null>(null)
   // Monaco's own Tab switch (Ctrl+M, Ctrl+Shift+M on a Mac), read back from Monaco so the hint follows it.
   const [tabMovesFocus, setTabMovesFocus] = useState(false)
+  const [editorMounted, setEditorMounted] = useState(false)
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null)
   const editButtonRef = useRef<HTMLButtonElement>(null)
   const applyButtonRef = useRef<HTMLButtonElement>(null)
@@ -123,12 +124,15 @@ export default function YamlEditor({
   useEffect(() => {
     if (!focusNext || isApplying || !isReady) return
     const next = focusNext === 'editor' ? editorRef.current : focusNext === 'edit' ? editButtonRef.current : applyButtonRef.current
+    // Edit pressed before Monaco has mounted: the request waits for the mount
+    if (focusNext === 'editor' && !next) return
     refocusIfDropped(document, next)
     setFocusNext(null)
-  }, [focusNext, isApplying, isReady])
+  }, [focusNext, isApplying, isReady, editorMounted])
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor
+    setEditorMounted(true)
     followTabMovesFocus(editor, monaco.editor.EditorOption.tabFocusMode, setTabMovesFocus)
   }
 
@@ -176,11 +180,13 @@ export default function YamlEditor({
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-3">
         <p className="min-w-0 text-xs text-slate-400 [overflow-wrap:anywhere]">{labels.title}</p>
         <div className="flex flex-wrap items-center gap-2">
+          {/* aria-disabled during a read, not disabled: a disabled button drops the focus it had to the page */}
           <button
             type="button"
-            onClick={onRefresh}
-            disabled={!isReady || isRefreshing}
-            className="btn-row"
+            onClick={() => { if (!isRefreshing) onRefresh?.() }}
+            disabled={!isReady}
+            aria-disabled={isRefreshing || undefined}
+            className="btn-row aria-disabled:opacity-50"
           >
             {labels.refresh}
           </button>

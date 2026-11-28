@@ -41,9 +41,19 @@
       "why": "When the server made the report, which the two builds can read a second apart."
     },
     {
+      "screen": "/admin/access-review on",
+      "selector": "span.text-slate-500:has-text(\"기준 시각\")",
+      "why": "When the server made the report, in Korean (accessReview.generatedAt), which the two builds can read a second apart."
+    },
+    {
       "screen": "/cluster/hygiene on",
       "selector": "span.text-slate-500:has-text(\"Scanned\")",
       "why": "When the scan the page shows was made, which the two builds can read a second apart."
+    },
+    {
+      "screen": "/cluster/hygiene on",
+      "selector": "span.text-slate-500:has-text(\"점검 시각\")",
+      "why": "When the scan the page shows was made, in Korean (clusterHygiene.generatedAt), which the two builds can read a second apart."
     },
     {
       "screen": "/security/policyreports on",

@@ -92,16 +92,16 @@ export default function NodeInfo({ name }: Props) {
       <InfoSection title={tr('nodes.detail.system', 'System Info')}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-200 break-words">
           {([
-            ['OS', nodeDescribe.system_info?.operating_system],
-            ['Arch', nodeDescribe.system_info?.architecture],
-            ['OS Image', nodeDescribe.system_info?.os_image],
-            ['Kernel', nodeDescribe.system_info?.kernel_version],
-            ['Runtime', nodeDescribe.system_info?.container_runtime_version],
-            ['Kubelet', nodeDescribe.system_info?.kubelet_version],
-            ['Boot ID', nodeDescribe.system_info?.boot_id],
-            ['Machine ID', nodeDescribe.system_info?.machine_id],
-            ['System UUID', nodeDescribe.system_info?.system_uuid],
-            ['Roles', nodeRoles.length > 0 ? nodeRoles.join(', ') : 'worker'],
+            [tr('nodes.detail.systemOs', 'OS'), nodeDescribe.system_info?.operating_system],
+            [tr('nodes.detail.systemArch', 'Arch'), nodeDescribe.system_info?.architecture],
+            [tr('nodes.detail.systemImage', 'OS Image'), nodeDescribe.system_info?.os_image],
+            [tr('nodes.detail.systemKernel', 'Kernel'), nodeDescribe.system_info?.kernel_version],
+            [tr('nodes.detail.systemRuntime', 'Runtime'), nodeDescribe.system_info?.container_runtime_version],
+            [tr('nodes.detail.systemKubelet', 'Kubelet'), nodeDescribe.system_info?.kubelet_version],
+            [tr('nodes.detail.systemBootId', 'Boot ID'), nodeDescribe.system_info?.boot_id],
+            [tr('nodes.detail.systemMachineId', 'Machine ID'), nodeDescribe.system_info?.machine_id],
+            [tr('nodes.detail.systemUuid', 'System UUID'), nodeDescribe.system_info?.system_uuid],
+            [tr('nodes.detail.systemRoles', 'Roles'), nodeRoles.length > 0 ? nodeRoles.join(', ') : 'worker'],
           ] as [string, string | null | undefined][]).map(([label, val]) => (
             <div key={label}>{label}: {val || '-'}</div>
           ))}

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/services/api'
 import { useResourceDetail } from '@/components/ResourceDetailContext'
 import { openOnPress } from '@/components/openOnPress'
@@ -42,6 +43,7 @@ interface VolumeAttachmentDescribeResponse {
 }
 
 export default function VolumeAttachmentDetail({ name, rawJson }: { name: string; rawJson?: Record<string, unknown> }) {
+  const { t } = useTranslation()
   const { open: openDetail } = useResourceDetail()
   const { data: describe, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: ['volumeattachment-describe', name],
@@ -110,7 +112,7 @@ export default function VolumeAttachmentDetail({ name, rawJson }: { name: string
       <InfoSection title="VolumeAttachment Info">
         <div className="space-y-2">
           <InfoRow label="Name" value={name} />
-          <InfoRow label="Status" value={<StatusBadge status={state.status} />} />
+          <InfoRow label="Status" value={<StatusBadge status={state.status} label={t(`volumeattachments.status.${state.status}`, state.status)} />} />
           <InfoRow label="Attached" value={state.attached} />
           <InfoRow label="Attacher" value={attacher} />
           <InfoRow

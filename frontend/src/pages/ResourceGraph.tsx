@@ -26,6 +26,7 @@ import { keepSameRead } from '@/utils/keepSameRead'
 import {
   ALL_EDGE_TYPES,
   DEFAULT_KINDS,
+  edgeLabel,
   edgeStyles,
   isIssueNode,
   nodeColor,
@@ -76,6 +77,17 @@ function focusLines(nodes: Node[], edges: Edge[], focus: { edge?: string; node?:
 export default function ResourceGraph() {
   const { t } = useTranslation()
   const { open: openDetail, target: drawerTarget } = useResourceDetail()
+  // React Flow's control buttons and mini map name themselves in English unless given these
+  const flowLabels = useMemo(() => ({
+    // Controls puts this label on its panel, a div with no role, where ARIA allows no aria-label and a screen reader
+    // drops it; left out, the panel has none and each of its buttons keeps its own
+    'controls.ariaLabel': undefined,
+    'controls.zoomIn.ariaLabel': t('resourceGraph.controls.zoomIn', 'Zoom In'),
+    'controls.zoomOut.ariaLabel': t('resourceGraph.controls.zoomOut', 'Zoom Out'),
+    'controls.fitView.ariaLabel': t('resourceGraph.controls.fitView', 'Fit View'),
+    'controls.interactive.ariaLabel': t('resourceGraph.controls.interactive', 'Toggle Interactivity'),
+    'minimap.ariaLabel': t('resourceGraph.controls.miniMap', 'Mini Map'),
+  }), [t])
 
   // State
   const [searchParams] = useSearchParams()
@@ -556,6 +568,7 @@ export default function ResourceGraph() {
               fitViewOptions={{ padding: routed ? { top: '64px', right: 0.1, bottom: 0.1, left: legendOpen ? '180px' : 0.1 } : 0.2 }}
               minZoom={0.05}
               maxZoom={2}
+              ariaLabelConfig={flowLabels}
             >
               <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--color-slate-700)" />
               {/* bottom centre: the legend holds the bottom-left corner and the traffic panel the right edge */}
@@ -635,7 +648,7 @@ export default function ResourceGraph() {
                   <line x1="0" y1="4" x2="20" y2="4" stroke={style.stroke} strokeWidth="2" strokeDasharray={style.strokeDasharray || ''} />
                   <polygon points="20,1 24,4 20,7" fill={style.stroke} />
                 </svg>
-                <span className="text-slate-400">{style.label}</span>
+                <span className="text-slate-400">{edgeLabel(type, (k, f) => t(k, f))}</span>
               </div>
             )
           })}

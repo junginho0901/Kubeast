@@ -202,7 +202,8 @@ export default function AdminClusters() {
                   </td>
                   <td className="px-4 py-3 text-slate-400">{c.created_by || '-'}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                    {/* wraps on a narrow screen, so the buttons stay in the card instead of behind its sideways scroll */}
+                    <div className="flex flex-wrap items-center justify-end gap-2 whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => runTest(c.id)}

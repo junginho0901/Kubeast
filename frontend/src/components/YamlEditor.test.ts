@@ -36,6 +36,31 @@ const findApply = (node: unknown): Node | null => {
   return element.type === 'button' && element.props.children === LABELS.apply ? element : findApply(element.props.children)
 }
 
+type Refresh = ReactElement<{ children?: unknown; onClick?: () => void; disabled?: boolean; 'aria-disabled'?: boolean }>
+const findRefresh = (node: unknown): Refresh | null => {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findRefresh(item)
+      if (found) return found
+    }
+    return null
+  }
+  if (!node || typeof node !== 'object' || !('props' in node)) return null
+  const element = node as Refresh
+  return element.type === 'button' && element.props.children === LABELS.refresh ? element : findRefresh(element.props.children)
+}
+
+const renderRefresh = (isRefreshing: boolean, onRefresh: () => void) => {
+  let refresh: Refresh | null = null
+  const Grab = () => {
+    refresh = findRefresh(YamlEditor({ value: 'a: 1\n', canEdit: true, isLoading: false, isRefreshing, onRefresh, labels: LABELS }))
+    return null
+  }
+  renderToStaticMarkup(createElement(Grab))
+  expect(refresh).not.toBeNull()
+  return refresh!
+}
+
 // Renders the editor in edit mode and presses Apply.
 const pressApply = async (onApply: (next: string) => Promise<boolean>) => {
   const onApplySuccess = vi.fn()
@@ -85,5 +110,31 @@ describe('YamlEditor Apply', () => {
     expect(state.sets[SLOT.editing]).toBeUndefined()
     expect(state.sets[SLOT.success]).toBeUndefined()
     expect(state.sets[SLOT.applying]).toEqual([true, false])
+  })
+})
+
+// D5 keyboard flow: Refresh pressed from the keyboard keeps the focus while the YAML is read again.
+describe('YamlEditor Refresh', () => {
+  beforeEach(() => {
+    state.next = 0
+    state.sets = {}
+  })
+
+  it('stays in the Tab order during a read and ignores a press until it ends', () => {
+    const onRefresh = vi.fn()
+    const refresh = renderRefresh(true, onRefresh)
+    expect(refresh.props.disabled).toBe(false)
+    expect(refresh.props['aria-disabled']).toBe(true)
+    refresh.props.onClick!()
+    expect(onRefresh).toHaveBeenCalledTimes(0)
+  })
+
+  it('reads again when pressed with no read under way', () => {
+    const onRefresh = vi.fn()
+    const refresh = renderRefresh(false, onRefresh)
+    expect(refresh.props.disabled).toBe(false)
+    expect(refresh.props['aria-disabled']).toBeUndefined()
+    refresh.props.onClick!()
+    expect(onRefresh).toHaveBeenCalledTimes(1)
   })
 })

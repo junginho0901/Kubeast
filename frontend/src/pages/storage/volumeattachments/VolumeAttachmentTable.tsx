@@ -166,7 +166,7 @@ export function VolumeAttachmentTable({
                     ) : '-'}
                   </td>
                   <td className="py-3 px-4">
-                    <span className={`badge ${statusBadgeClass(status)}`}>{status}</span>
+                    <span className={`badge ${statusBadgeClass(status)}`}>{tr(`volumeattachments.status.${status}`, status)}</span>
                   </td>
                   <td className="py-3 px-4 text-slate-300 max-w-[320px]">
                     <span className="block truncate" title={errors}>{errors}</span>

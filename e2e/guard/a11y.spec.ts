@@ -207,7 +207,8 @@ async function look(context: BrowserContext, job: Job): Promise<Screen> {
   try {
     await open(page, job)
     const controls = (await page.evaluate(probeControls, { max: MAX_CONTROLS, drawer: DRAWER })) as Control[]
-    const axe = await new AxeBuilder({ page }).withTags(TAGS).options({ resultTypes: ['violations', 'incomplete'] }).analyze()
+    // options() first: it replaces every option, the runOnly withTags() sets too, and axe then runs every rule it has
+    const axe = await new AxeBuilder({ page }).options({ resultTypes: ['violations', 'incomplete'] }).withTags(TAGS).analyze()
     const nodes: { kind: 'violation' | 'incomplete'; rule: string; impact: string; target: string | null; extra: string }[] = []
     for (const v of axe.violations) for (const n of v.nodes) nodes.push({ kind: 'violation', rule: v.id, impact: n.impact ?? '', target: lastSelector(n.target), extra: '' })
     for (const v of axe.incomplete) for (const n of v.nodes) {

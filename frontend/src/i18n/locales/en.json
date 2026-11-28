@@ -29,7 +29,7 @@
     "failed": "The key was not created.",
     "admin": {
       "title": "API keys",
-      "empty": "No API keys"
+      "empty": "No API keys."
     },
     "mcp": {
       "title": "Connect an AI agent (MCP)",
@@ -491,7 +491,8 @@
     "sessionRecordings": "Session Recordings",
     "validatingAdmissionPolicies": "Validating Admission Policies",
     "mutatingAdmissionPolicies": "Mutating Admission Policies",
-    "investigations": "Investigations"
+    "investigations": "Investigations",
+    "tagline": "K8s DevOps Platform"
   },
   "layout": {
     "accountTitle": "Settings",
@@ -540,7 +541,8 @@
       "age": "Age",
       "node": "Node",
       "podIp": "Pod IP",
-      "notReadyHint": "Not ready ({{ready}})"
+      "notReadyHint": "Not ready ({{ready}})",
+      "phaseHint": "Phase: {{phase}}"
     },
     "stats": {
       "total": "Total",
@@ -1556,6 +1558,12 @@
       "detached": "Detached",
       "errors": "Errors"
     },
+    "status": {
+      "Attached": "Attached",
+      "Detached": "Detached",
+      "Error": "Error",
+      "Unknown": "Unknown"
+    },
     "delete": {
       "button": "Delete VolumeAttachment",
       "title": "Delete VolumeAttachment"
@@ -1571,7 +1579,7 @@
       "title": "Top nodes by resource usage",
       "loading": "Loading metrics...",
       "error": "Metrics unavailable",
-      "empty": "No metrics available",
+      "empty": "No metrics available.",
       "unavailable": "Metrics server not available for this cluster"
     },
     "table": {
@@ -1689,6 +1697,7 @@
       "systemBootId": "Boot ID",
       "systemMachineId": "Machine ID",
       "systemUuid": "System UUID",
+      "systemRoles": "Roles",
       "eventsTitle": "Events"
     },
     "pods": {
@@ -2123,8 +2132,8 @@
       "errorTitle": "Failed to load pod metrics",
       "retrying": "Retrying automatically... (every 5 seconds)",
       "unavailableAll": "Pod metrics are not available",
-      "noPodsInNamespace": "No pods in {{namespace}} namespace",
-      "noneInGrant": "No pod metrics in the namespaces you can see",
+      "noPodsInNamespace": "No pods in {{namespace}} namespace.",
+      "noneInGrant": "No pod metrics in the namespaces you can see.",
       "noneInGrantHint": "Your access to this cluster is limited to the namespaces {{namespaces}}, and no pod in them has metrics now. Choose a namespace to see its pods.",
       "searchPlaceholder": "Search pods by name..."
     },
@@ -2268,7 +2277,7 @@
       "subtitle": "Requests and limits of each workload container against its usage; recommendation = CPU 95th percentile, memory peak + 15%.",
       "selectNamespaceTitle": "Select namespace",
       "selectNamespace": "Select namespace",
-      "noNamespaces": "No namespaces to display",
+      "noNamespaces": "No namespaces to display.",
       "runTitle": "Ask the AI to explain this table",
       "running": "Explaining...",
       "run": "Explain with AI",
@@ -2307,7 +2316,7 @@
       },
       "tableLoading": "Computing the table...",
       "tableError": "Failed to load the table",
-      "tableEmpty": "No running pods in this namespace",
+      "tableEmpty": "No running pods in this namespace.",
       "stopTitle": "Stop",
       "stop": "Stop",
       "copyTitle": "Copy result",
@@ -2385,7 +2394,7 @@
       "searchPlaceholder": "Search issues (name/namespace/kind/severity/message)...",
       "loading": "Collecting issues...",
       "error": "Failed to collect issues",
-      "none": "No issues detected",
+      "none": "No issues detected.",
       "noneHint": "Check your filters/search terms",
       "count": "{{count}}",
       "lastSeen": "last {{age}} ago",
@@ -2414,7 +2423,7 @@
     },
     "autoRefresh": "Auto refresh every 5 seconds",
     "topResources": {
-      "empty": "No resource usage data"
+      "empty": "No resource usage data."
     },
     "metrics": {
       "unavailable": "Metrics server not available for this cluster"
@@ -2477,14 +2486,14 @@
       "searchPlaceholder": "Search (name/namespace/status/StorageClass/volume/capacity)...",
       "searchPvsPlaceholder": "Search (name/status/capacity/StorageClass/reclaim policy/claim)...",
       "loading": "Loading storage data...",
-      "noPVC": "No PVCs to display",
+      "noPVC": "No PVCs to display.",
       "pvLabel": "PV",
-      "noPV": "No PVs to display",
+      "noPV": "No PVs to display.",
       "reclaimLabel": "Reclaim",
       "claimLabel": "Claim",
       "topologyTitle": "Storage Topology",
       "topologySummary": "Nodes: {{nodes}} · Edges: {{edges}}",
-      "noTopologyEdges": "No topology edges to display",
+      "noTopologyEdges": "No topology edges to display.",
       "topologyLoading": "Loading topology...",
       "topologyError": "Failed to load topology",
       "topologyUnavailable": "Topology data is unavailable"
@@ -2495,18 +2504,18 @@
       "totalFiltered": "{{shown}} of {{count}}",
       "searchPlaceholder": "Search...",
       "namespaceSummary": "Pods: {{pods}} | Services: {{services}} | Deployments: {{deployments}}",
-      "noNamespaces": "No namespaces",
-      "noPods": "No pods",
+      "noNamespaces": "No namespaces.",
+      "noPods": "No pods.",
       "typeLabel": "Type",
       "clusterIpLabel": "Cluster IP",
-      "noServices": "No services",
+      "noServices": "No services.",
       "replicasLabel": "Replicas",
-      "noDeployments": "No deployments",
-      "noPVCs": "No PVCs",
+      "noDeployments": "No deployments.",
+      "noPVCs": "No PVCs.",
       "versionLabel": "Version",
       "internalIpLabel": "Internal IP",
       "rolesLabel": "Roles",
-      "noNodes": "No nodes"
+      "noNodes": "No nodes."
     },
     "nodeModal": {
       "title": "Node details",
@@ -2606,7 +2615,7 @@
       "containerLabel": "Container",
       "selectContainer": "Select container",
       "containerSearchPlaceholder": "Search containers...",
-      "noContainers": "No containers",
+      "noContainers": "No containers.",
       "downloadLines": "Log download lines",
       "linesCount": "{{count}} lines",
       "linesCount_one": "{{count}} line",
@@ -2687,14 +2696,16 @@
     "allNamespaces": "All namespaces",
     "loading": "Loading data...",
     "searchResults": "Results",
+    "countSuffix_one": "item",
     "countSuffix": "items",
     "searchResultsTotal": "(out of {{count}})",
-    "noSearchResults": "No pods found for \"{{query}}\"",
+    "noSearchResults": "No pods found for \"{{query}}\".",
     "nodePodsCount": "{{count}} Pods",
     "nodePodsCount_one": "{{count}} Pod",
     "restarts": "Restarts: {{count}}",
     "podDeleting": "Deleting...",
-    "noPods": "No pods found",
+    "unscheduled": "Unscheduled",
+    "noPods": "No pods found.",
     "box": {
       "shown": "Showing {{shown}} of {{total}} Pods",
       "more": "+{{count}} show all on this Node",
@@ -2740,7 +2751,7 @@
       },
       "imageLabel": "Image",
       "restartsLabel": "Restarts",
-      "none": "No containers"
+      "none": "No containers."
     },
     "health": {
       "title": "Health"
@@ -3053,7 +3064,7 @@
       "saving": "Saving...",
       "close": "Close",
       "permissions": "Permissions",
-      "noPerms": "No permissions assigned"
+      "noPerms": "No permissions assigned."
     },
     "searchPlaceholder": "Search by name, email or team...",
     "selfAccount": "Your account"
@@ -3294,9 +3305,30 @@
     "search": "Search resources...",
     "filter": "Filter",
     "legend": "Legend",
+    "edgeType": {
+      "owns": "owns",
+      "selects": "selects",
+      "mounts": "mounts",
+      "routes": "routes",
+      "binds": "binds",
+      "bound_to": "bound_to",
+      "provisions": "provisions",
+      "hpa_targets": "targets",
+      "network_policy": "policy",
+      "endpoint_of": "endpoint",
+      "sa_used_by": "uses SA"
+    },
+    "edgeAria": "{{source}} → {{target}} ({{relation}})",
+    "controls": {
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "fitView": "Fit View",
+      "interactive": "Toggle Interactivity",
+      "miniMap": "Mini Map"
+    },
     "sources": "Sources",
     "issuesOnly": "Issues",
-    "noData": "No resources found",
+    "noData": "No resources found.",
     "emptyDesc1": "Visualize relationships between Kubernetes resources as a graph.",
     "emptyDesc2": "Deployment → ReplicaSet → Pod, Service → Pod, Ingress → Service,",
     "emptyDesc3": "PVC → PV → StorageClass, and more — see all relationships at a glance.",
@@ -3421,7 +3453,7 @@
     "loaded": "{{count}} items loaded",
     "loaded_one": "{{count}} item loaded",
     "refresh": "Refresh",
-    "noResults": "No resources match your query",
+    "noResults": "No resources match your query.",
     "noResultsHint": "Check your expression syntax or try a different query",
     "unreadable": "The expression could not be read: {{reason}}",
     "noResources": "Select resource types to search",
@@ -3789,7 +3821,7 @@
     "rollouts": "Rollouts",
     "aiSummary": "AI Summary",
     "summarizing": "Summarizing...",
-    "noEvents": "No events in this period",
+    "noEvents": "No events in this period.",
     "noEventsHint": "K8s events typically have a ~1 hour TTL. Older events may not be available.",
     "revision": "Revision",
     "changeCause": "Change Cause",
@@ -4017,6 +4049,8 @@
     "usersWithRole": "Users with this global (account-level) role",
     "usersWithRoleNote": "This counts the global role only. Per-cluster access (Read/Write on a cluster) is granted separately in cluster access.",
     "noUsers": "No users assigned to this role.",
+    "selectedCount": "{{count}} permissions selected",
+    "selectedCount_one": "{{count}} permission selected",
     "deleteConfirm": "Delete role \"{{name}}\"?",
     "deleteTitle": "Delete role",
     "closeUsers": "Close",
@@ -4164,6 +4198,8 @@
     "currentPage": "Current page: {{title}}",
     "contextIncluded": "Current page context included",
     "sessionLoading": "Preparing session...",
+    "statusAnswering": "Writing the answer...",
+    "statusAnswered": "The answer is complete.",
     "emptyHint": "Ask a question about the current page.",
     "emptyExamples": "e.g. \"What's this?\", \"Any issues?\", \"Why is this?\"",
     "inputPlaceholder": "Ask about this page...",
@@ -4462,7 +4498,8 @@
       "tierDefault": "Default",
       "tierDefaultHint": "the chat",
       "tierEconomy": "Economy",
-      "tierEconomyHint": "history summaries and the floating assistant"
+      "tierEconomyHint": "history summaries and the floating assistant",
+      "keyEnv": "env: {{name}}"
     }
   },
   "adminAudit": {

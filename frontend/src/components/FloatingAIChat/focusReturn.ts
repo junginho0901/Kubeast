@@ -13,7 +13,7 @@ export function shortcutStep(isOpen: boolean, doc: Doc, panel: Inside | null): '
   return active && panel?.contains(active) ? 'close' : 'focus'
 }
 
-/** The focus into the open chat: its input, else the window itself (the input takes none while a conversation is made). */
+/** The focus into the open chat: its input, else the window itself. */
 export function focusChat(doc: Doc, input: { focus(): void } | null, panel: { focus(): void } | null): 'input' | 'window' | 'none' {
   input?.focus()
   if (input && (doc.activeElement as unknown) === input) return 'input'
