@@ -410,8 +410,8 @@ multicluster:
 | `ai.chat.maxSteps` | 20 | beta | 이 한도에 닿는 채팅 질문을 API 키와 Claude 구독으로 kind 개발 설치에서 돌린 경우 |
 | `ai.refuseRepeatedReads` | false | alpha | 끄고 켠 AI 평가(`scripts/ai-eval.py`), 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.toolResultDetails` | false | alpha | 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
-| `ai.pastHints` | false | alpha | 70분 뒤에 묻는 AI 평가의 `16_past_outage`를 끄고 켠 경우, 켠 상태로 kind 개발 설치에서 돌린 경우 |
-| `ai.traceSpanTable` | false | alpha | 끄고 켠 AI 평가(트레이스가 있는 문제), 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.pastHints` | false | alpha | 70분 뒤에 묻는 AI 평가의 `16_past_outage`를 끄고 켠 경우, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `ai.traceSpanTable` | false | alpha | 끄고 켠 AI 평가(트레이스가 있는 문제), 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.yamlSpecFirst` | false | alpha | 끄고 켠 AI 평가, 켠 상태의 심어 둔 지시 문제, 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `ai.redaction.numbered` | false | alpha | `ai.redaction.pii`와 함께 켠 상태로 kind 개발 설치에서 한 채팅, 끄고 켠 AI 평가 |
 | `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, true, false, [], [] | alpha | `chat`과 `investigations`를 하나씩 끄고 켠 AI 평가, 그 옆에서 `symptoms`를 끄고 켠 AI 평가, 켠 상태로 kind 개발 설치에서 돌린 경우 |
@@ -428,10 +428,10 @@ multicluster:
 | `features.alertInvestigation.pastReports.window` | false | alpha | 켠 kind 개발 설치에서 e2e `alert-past-investigations.spec.ts` |
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | 이 값만 끄고 켠 AI 평가. 돌려 봄: AI 스위치를 켠 kind 설치의 전체 e2e에서 `ai-anomaly-rank.spec.ts`(2026-11-25), 시험 넷 모두 통과 |
 | `features.nodeNeighbors.enabled` | false | alpha | 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 켠 상태로 kind 개발 설치에서 돌린 경우 |
-| `features.nodeNeighbors.busiestCPU`(`enabled` 없이는 아무것도 안 함) | false | alpha | `enabled`와 함께 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 둘 다 켠 상태로 kind 개발 설치에서 돌린 경우 |
+| `features.nodeNeighbors.busiestCPU`(`enabled` 없이는 아무것도 안 함) | false | alpha | `enabled`와 함께 끄고 켠 AI 평가의 `03_node_cpu_saturated`, 켠 상태의 심어 둔 지시 문제, 둘 다 켠 상태로 kind 개발 설치에서 돌린 경우 |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | 값을 정한 채 kind 개발 설치에서 한 `loki_query` |
 | `features.callGraph.enabled` | false | alpha | 끄고 켠 AI 평가. 돌려 봄: kind의 전체 e2e에서 `ai-call-graph.spec.ts`(2026-11-25) |
-| `features.callGraph.clientLatency` | false | alpha | 클라이언트 히스토그램이 있는 Prometheus에서 켠 상태로 한 번도 안 돌림, `features.callGraph.enabled`를 켠 채 끄고 켠 AI 평가의 `07_one_segment_slow` |
+| `features.callGraph.clientLatency` | false | alpha | 클라이언트 히스토그램이 있는 Prometheus에서 켠 상태로 한 번도 안 돌림, `features.callGraph.enabled`를 켠 채 끄고 켠 AI 평가의 `07_one_segment_slow`, 켠 상태의 심어 둔 지시 문제 |
 | `gateway.servedByHeader` | false | alpha | 켠 상태로 한 번도 안 돌림 |
 | `multicluster.flowSchemas.enabled`, `cachePriorityLevel`, `priorityLevel` | false, workload-low, global-default | alpha | 켠 상태로 kind 개발 설치에서 100명이 한꺼번에 화면을 연 부하(API 서버의 기다림과 거절을 FlowSchema마다 셈), 같은 부하를 EKS 클러스터에서 |
 

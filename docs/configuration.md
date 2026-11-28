@@ -422,8 +422,8 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `ai.chat.maxSteps` | 20 | beta | A chat question that reaches it, on the kind dev install, with an API key and on a Claude subscription |
 | `ai.refuseRepeatedReads` | false | alpha | The AI evaluation (`scripts/ai-eval.py`) with it off and on, and a run on the kind dev install with it on |
 | `ai.toolResultDetails` | false | alpha | The AI evaluation with it off and on, and a run on the kind dev install with it on |
-| `ai.pastHints` | false | alpha | The AI evaluation's `16_past_outage` asked 70 minutes after with it off and on, and a run on the kind dev install with it on |
-| `ai.traceSpanTable` | false | alpha | The AI evaluation with it off and on (its problems with traces), and a run on the kind dev install with it on |
+| `ai.pastHints` | false | alpha | The AI evaluation's `16_past_outage` asked 70 minutes after with it off and on, the planted instruction cases with it on, and a run on the kind dev install with it on |
+| `ai.traceSpanTable` | false | alpha | The AI evaluation with it off and on (its problems with traces), the planted instruction cases with it on, and a run on the kind dev install with it on |
 | `ai.yamlSpecFirst` | false | alpha | The AI evaluation with it off and on, the planted instruction cases with it on, and a run on the kind dev install with it on |
 | `ai.redaction.numbered` | false | alpha | A chat on the kind dev install with it and `ai.redaction.pii` on, and the AI evaluation with it off and on |
 | `ai.ruleCards.chat`, `ai.ruleCards.investigations`, `ai.ruleCards.symptoms`, `ai.ruleCards.cards`, `ai.ruleCards.remove` | false, true, false, [], [] | alpha | The AI evaluation with `chat` and `investigations` each off and on, then with `symptoms` off and on beside them, and a run on the kind dev install with them on |
@@ -440,10 +440,10 @@ A value that an install with the chart's defaults reads is beta; a value used on
 | `features.alertInvestigation.pastReports.window` | false | alpha | On the kind dev install with the e2e `alert-past-investigations.spec.ts` |
 | `features.anomalyRank.enabled`, `maxQueries`, `checkTimeoutSeconds`, `timeoutSeconds`, `concurrency`, `cacheSeconds`, `logMaxBytes` | true, 12, 5, 20, 4, 60, 10737418240 | beta | The AI evaluation with it alone off and on. Tested: the e2e `ai-anomaly-rank.spec.ts` in a whole e2e run on a kind install with the AI switches on (2026-11-25), its four tests passing |
 | `features.nodeNeighbors.enabled` | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on, and a run on the kind dev install with it on |
-| `features.nodeNeighbors.busiestCPU` (nothing without `enabled`) | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on beside `enabled`, and a run on the kind dev install with both on |
+| `features.nodeNeighbors.busiestCPU` (nothing without `enabled`) | false | alpha | The AI evaluation's `03_node_cpu_saturated` with it off and on beside `enabled`, the planted instruction cases with it on, and a run on the kind dev install with both on |
 | `features.logSearch.queryMaxBytes` | 0 | alpha | A `loki_query` on the kind dev install with it set |
 | `features.callGraph.enabled` | false | alpha | The AI evaluation with it off and on. Tested: the e2e `ai-call-graph.spec.ts` in whole e2e runs on kind (2026-11-25) |
-| `features.callGraph.clientLatency` | false | alpha | Any run with it on against a Prometheus that holds the client histogram, and the AI evaluation's `07_one_segment_slow` with it off and on beside `features.callGraph.enabled` |
+| `features.callGraph.clientLatency` | false | alpha | Any run with it on against a Prometheus that holds the client histogram, the AI evaluation's `07_one_segment_slow` with it off and on beside `features.callGraph.enabled`, and the planted instruction cases with it on |
 | `gateway.servedByHeader` | false | alpha | Any run with it on |
 | `multicluster.flowSchemas.enabled`, `cachePriorityLevel`, `priorityLevel` | false, workload-low, global-default | alpha | 100 people opening the screens at once on the kind dev install with it on, the API server's waits and refusals counted per FlowSchema, and the same crowd on an EKS cluster |
 
