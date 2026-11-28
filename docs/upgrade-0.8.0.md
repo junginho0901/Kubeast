@@ -162,7 +162,7 @@ Turn a switch on with another `helm upgrade`, once this one has settled. Each is
 
 **AI chat**
 
-- A write that ran in an answer (`ai.writeApproval` off), or one approved from its card, drops what the conversation keeps of the reads before it, so the same read after it reads the cluster, also in an answer that began after the approval (#1147, #1148).
+- A write that ran in an answer (`ai.writeApproval` off) drops what the conversation keeps of the reads before it, so the same read after it reads the cluster (#1147, #1148). A write approved from its card does not yet, as in 0.7.9: the same read in the next five minutes can be answered with what was there before the write.
 - A log, a describe or a YAML read is not taken for a failure or a refusal because a line in it is a JSON object with an `error` or a `status`.
 
 **Alert investigations**
