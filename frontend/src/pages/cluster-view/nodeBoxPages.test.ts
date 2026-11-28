@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, type ComponentType } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import i18next from 'i18next'
@@ -558,6 +559,8 @@ describe('the live node list on the screen', () => {
     // the map can be reached from the keyboard, says what it is, and the line under the legend names the cell reached;
     // its name counts the four nodes listed, the two with no pod too, as kubectl get nodes does
     expect(html).toMatch(/<canvas role="application" aria-roledescription="Node map" aria-label="Node map: 4 nodes[^"]*"[^>]*tabindex="0"/)
+    // and its focus shows the console's outline, not the browser's own ring (2.89:1 on the map's card on a Mac)
+    expect(readFileSync(new URL('../../index.css', import.meta.url), 'utf8').match(/:where\(([^)]*)\):focus-visible \{\s*outline: 2px solid var\(--color-primary-400\)/)?.[1]).toContain("[role='application']")
     expect(attr(html, 'aria-label')).toBe('Node map: 4 nodes, 6 pods (0 errors, 0 warnings). 2 nodes not Ready, 1 SchedulingDisabled.')
     // that line is no live region (a mouse over the cells is not read out), is hidden from assistive technology (it
     // shows what the live region says, which would be read twice) and holds no hint: the hint is the canvas's
