@@ -42,6 +42,37 @@
       "tailCopies": true,
       "why": "A lease's holder renews it on a timer: kube-apiserver its identity lease and the kubelet its node's lease every 10 seconds, Kyverno its kyverno-health lease, and leader election (kube-scheduler, kube-controller-manager, Kyverno's controllers) every 2 seconds. A build's first live frame stays open up to 15 seconds, so how many renewals fall inside it is timing, and one build's frames can hold a lease's events past the other build's last. Only those events are taken, whole, and only while all three frames hold the lease's first event; an event both builds' frames hold is still compared cell by cell, and so is a lease one frame lacks.",
       "pr": "#946"
+    },
+    {
+      "route": "^/api/v1/ai/model-configs/uses$",
+      "cell": "^\\$status$",
+      "newStatus": "^200$",
+      "why": "GET /ai/model-configs/uses is new: it says which model config answers alert investigations, Investigate now and Optimization, and why (docs/features.md \"Which model answers what\"). v0.7.9 has no GET there and answers 405.",
+      "pr": "#1152"
+    },
+    {
+      "route": "^/api/v1/ai/model-configs/uses$",
+      "cell": "^\\$\\.detail$",
+      "why": "The detail of v0.7.9's 405 answer, Method Not Allowed, which the new route does not send.",
+      "pr": "#1152"
+    },
+    {
+      "route": "^/api/v1/ai/model-configs/uses$",
+      "cell": "^\\$\\.uses(\\.\\$length|\\[[^\\]]+\\]\\.[a-z_]+(\\.[a-z_]+)?)$",
+      "why": "The new route's answer: one row per use (alert investigations, Investigate now, Optimization) with its choice and the config that answers it.",
+      "pr": "#1152"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/metrics$",
+      "cell": "^\\$\\.(gpu_count|total_memory_mb|total_memory_free_mb|gpus\\.\\$(length|order))$",
+      "why": "GPU metrics read dcgm-exporter 4.9.0's metric names beside the earlier ones. The kind dev install's stand-in exporter (deploy/kind/gpu-metrics.yaml) serves two of its four GPUs under the 4.9.0 names, which v0.7.9 does not read: the GPU count, the memory totals and the list's length and order count those two.",
+      "pr": "#1164"
+    },
+    {
+      "route": "^/api/v1/cluster/gpu/metrics$",
+      "cell": "^\\$\\.gpus\\[[^\\]]+\\]\\.[a-z_]+$",
+      "why": "The rows of the two GPUs the stand-in exporter serves under dcgm-exporter 4.9.0's names, which v0.7.9 does not read.",
+      "pr": "#1164"
     }
   ]
 }
