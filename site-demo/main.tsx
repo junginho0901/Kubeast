@@ -1,4 +1,4 @@
-// The project site's demo: eight screens of the released console (v0.7.9, imported unchanged from its source) on
+// The project site's demo: eight screens of the released console (v0.8.0, imported unchanged from its source) on
 // sample data answered in the page. ./sample/install goes first so no console module runs before the stand-ins.
 import './sample/install'
 import React, { lazy, Suspense, useEffect } from 'react'
@@ -33,7 +33,7 @@ const AIChat = lazy(() => import('@/pages/AIChat'))
 const client = new QueryClient({ defaultOptions: { queries: queryDefaults } })
 const samplePod = '/workloads/pods?cluster=default&detail=Pod/commerce/checkout-api-7b9bc96fc8-8vn4z'
 
-// Live logs in the Pod window. v0.7.9's Pod window reads a Pod's logs once per Load or Refresh (the console's followed
+// Live logs in the Pod window. v0.8.0's Pod window reads a Pod's logs once per Load or Refresh (the console's followed
 // log is Cluster View's, which streams them); in the demo the lines written since are put into that read every 0.5–2 s
 // while the window shows them, and nothing is read once it closes. false keeps the console's own behaviour.
 const LIVE_DRAWER_LOGS = false

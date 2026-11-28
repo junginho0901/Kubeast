@@ -1,4 +1,4 @@
-// Builds the demo into site/demo/ for GitHub Pages. Run through build.sh, which extracts the v0.7.9 console into
+// Builds the demo into site/demo/ for GitHub Pages. Run through build.sh, which extracts the v0.8.0 console into
 // .release/ and links its node_modules here. KUBEAST_DEMO_BASE sets the path the demo is served at (default
 // /Kubeast/demo/, the project site; /site/demo/ or similar for a local preview).
 import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
@@ -10,11 +10,11 @@ const here = dirname(fileURLToPath(import.meta.url))
 const release = resolve(here, '.release')
 const frontend = resolve(release, 'frontend')
 const outDir = resolve(here, '../site/demo')
-const commit = 'b4e4ff9f9c592e6ccf909ead68f8cdf87c360786'
+const commit = 'ce70615c3feea0143d5cec7ed813593c8e176bd5'
 const base = process.env.KUBEAST_DEMO_BASE || '/Kubeast/demo/'
 
 if (!existsSync(resolve(release, 'SOURCE')) || readFileSync(resolve(release, 'SOURCE'), 'utf8').trim() !== commit) {
-  throw new Error('site-demo/.release does not hold the v0.7.9 console; run site-demo/build.sh')
+  throw new Error('site-demo/.release does not hold the v0.8.0 console; run site-demo/build.sh')
 }
 if (!existsSync(resolve(frontend, 'node_modules'))) throw new Error('site-demo/.release/frontend has no node_modules; run site-demo/build.sh')
 if (!/^\/([^/]+\/)*$/.test(base)) throw new Error('KUBEAST_DEMO_BASE must start and end with /')
@@ -95,5 +95,5 @@ for (const file of files.filter((f) => /\.(html|js|css|json)$/.test(f))) {
   const text = readFileSync(file, 'utf8')
   for (const rule of forbidden) if (rule.test(text)) throw new Error(file + ' holds ' + rule)
 }
-writeFileSync(resolve(outDir, 'demo-source.json'), JSON.stringify({ release: 'v0.7.9', commit, entry: 'site-demo/main.tsx', base, files: files.length }, null, 2) + '\n')
+writeFileSync(resolve(outDir, 'demo-source.json'), JSON.stringify({ release: 'v0.8.0', commit, entry: 'site-demo/main.tsx', base, files: files.length }, null, 2) + '\n')
 console.log('demo built into ' + outDir + ' (' + files.length + ' files, base ' + base + ')')

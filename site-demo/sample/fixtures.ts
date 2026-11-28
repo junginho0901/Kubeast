@@ -7,7 +7,7 @@ import { fromYaml } from './yaml'
 export { created, deletePod, describe, logs, nodes, optimization, overview, podMetrics, pods } from './cluster'
 type Row = Record<string, any>
 
-// The built-in Write role's permissions in v0.7.9 (auth-service repository.SeedSystemRoles) less resource.secret.reveal,
+// The built-in Write role's permissions in v0.8.0 (auth-service repository.SeedSystemRoles) less resource.secret.reveal,
 // plus admin.audit.read for the Audit screen: a custom role, as an operator might have. No exec, rollback of workloads,
 // Helm uninstall or Secret values, so every Secret reads masked.
 const writePermissions = [
