@@ -180,11 +180,13 @@ export default function YamlEditor({
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4 pb-3">
         <p className="min-w-0 text-xs text-slate-400 [overflow-wrap:anywhere]">{labels.title}</p>
         <div className="flex flex-wrap items-center gap-2">
+          {/* aria-disabled during a read, not disabled: a disabled button drops the focus it had to the page */}
           <button
             type="button"
-            onClick={onRefresh}
-            disabled={!isReady || isRefreshing}
-            className="btn-row"
+            onClick={() => { if (!isRefreshing) onRefresh?.() }}
+            disabled={!isReady}
+            aria-disabled={isRefreshing || undefined}
+            className="btn-row aria-disabled:opacity-50"
           >
             {labels.refresh}
           </button>
