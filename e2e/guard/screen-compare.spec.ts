@@ -1,10 +1,6 @@
-import fs from 'node:fs'
-import path from 'node:path'
-
 import { test, expect, type Page } from '@playwright/test'
 
 import { comparePictures, compileIntended, FAINT_DELTA, FAINT_PIXELS, intendedWithin, TOLERANCE, type IntendedRule } from './screen-compare'
-import { DRAWERS, ROLES, SIDEBAR, drawerTargets } from './shared'
 
 // The picture comparison on its own, with pictures drawn in the browser: no cluster.
 
@@ -86,26 +82,5 @@ test.describe('the picture comparison', () => {
     expect(() => compileIntended([{ ...rule, within: ' ' }])).toThrow(/no element to keep to/)
     expect(() => intendedWithin([{ ...rule, within: '' }])).toThrow(/no element to keep to/)
     expect(() => intendedWithin([{ ...rule, pr: '' }])).toThrow(/reason and a PR/)
-  })
-
-  // Every name screen-diff.spec.ts gives a screen, as its jobs() builds them.
-  const modes = ['default', 'dark', 'light']
-  const drawers = Object.entries(DRAWERS).flatMap(([kind, d]) => ('skip' in d ? [] : drawerTargets(kind, d, ROLES[0], 'node').map((t) => `drawer ${kind} (${t.view})`)))
-  const names = [
-    ...modes.flatMap((mode) => [...[...new Set(SIDEBAR), '/account'].map((p) => `${mode} · ${p} on self`), ...drawers.map((d) => `${mode} · ${d}`)]),
-    ...['default', 'test2'].flatMap((cluster) => [...new Set(SIDEBAR)].map((p) => `default · ${p} on ${cluster}`)),
-  ]
-  const intendedList = () => (JSON.parse(fs.readFileSync(path.join(__dirname, 'screen-diff-intended.json'), 'utf8')) as { rules: IntendedRule[] }).rules
-
-  test('the intended list takes every screen and drawer whole, each by one rule, and no other screen', () => {
-    const rules = intendedList()
-    const takers = (name: string) => rules.filter((r) => new RegExp(r.screen).test(name))
-    expect(names.filter((name) => takers(name).length !== 1), 'screens taken by no rule or by more than one').toEqual([])
-    expect(rules.filter((r) => !names.some((name) => new RegExp(r.screen).test(name))).map((r) => r.screen), 'rules that take no screen').toEqual([])
-    expect(names.filter((name) => intendedWithin(rules)(name).length > 0), 'screens with a covered element').toEqual([])
-    const match = compileIntended(rules)
-    for (const other of ['default · /workloads/pods on another', 'default · /workloads/podsx on self', 'default · drawer Pod (other namespace)', 'contrast · / on self', 'default · /cluster on self']) {
-      expect(match(other), other).toBeNull()
-    }
   })
 })

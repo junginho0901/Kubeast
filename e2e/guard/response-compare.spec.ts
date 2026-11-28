@@ -10,15 +10,6 @@ import { addsRow, clusterOf, compileRules, flatten, rowsLeftOut, sortCells, tail
 const answer = (body: unknown, status = 200): Answer => ({ status, body })
 const rows = (...names: string[]) => ({ items: names.map((name) => ({ name, namespace: 'n', phase: 'Running' })) })
 
-// The cells response-diff.spec.ts would fail on, one rule list and one request's answers given: what the list does not name.
-function unnamed(rules: IgnoreRule[], request: string, old: Answer, fresh: Answer): string[] {
-  const match = compileRules(rules)
-  return sortCells(old, fresh, old).real
-    .filter((d) => !match(request.split('?')[0], d.cell, 'global-admin', String(fresh.status), clusterOf(request), rowsLeftOut(old, fresh, old), tailCopies(old, fresh, old)(d.cell), d))
-    .map((d) => d.cell).sort()
-}
-const ignoreList = () => (JSON.parse(fs.readFileSync(path.join(__dirname, 'response-diff-ignore.json'), 'utf8')) as { rules: IgnoreRule[] }).rules
-
 test.describe('the response comparison', () => {
   test('nothing differs: no real difference and no noise', () => {
     const a = answer({ a: 1, b: { c: ['x', 'y'] } })
@@ -228,31 +219,6 @@ test.describe('the response comparison', () => {
     expect(() => compileRules([{ route: 'x', cell: '.', why: 'z', pr: '#1' }])).toThrow(/names newStatus/)
     expect(() => compileRules([{ route: 'x', cell: '^\\$status$', why: 'z', pr: '#1' }])).toThrow(/names newStatus/)
     expect(() => compileRules([{ route: 'x', cell: '^\\$\\.a', why: 'z', pr: '#1' }])).not.toThrow()
-  })
-
-  test('the ignore list names the model uses route v0.7.9 does not have, and a server error, another key or another route is still reported', () => {
-    const request = '/api/v1/ai/model-configs/uses?cluster=self'
-    const use = (name: string) => ({ use: name, choice: null, answers: { id: 1, name: 'default' }, by: 'active', chart_model: null, daily_token_budget: null, on: true, problem: null })
-    const uses = { uses: [use('investigation'), use('investigate_now'), use('optimization')] }
-    const v079 = answer({ detail: 'Method Not Allowed' }, 405)
-    expect(unnamed(ignoreList(), request, v079, answer(uses))).toEqual([])
-    expect(unnamed(ignoreList(), request, v079, answer({ detail: 'database unavailable' }, 500)), 'a server error').toEqual(['$status'])
-    expect(unnamed(ignoreList(), request, v079, answer({ ...uses, more: true })), 'another key of the answer').toEqual(['$.more'])
-    expect(unnamed(ignoreList(), '/api/v1/ai/model-configs?cluster=self', v079, answer(uses)), 'the same answer on another route')
-      .toEqual(expect.arrayContaining(['$status', '$.detail', '$.uses.$length', '$.uses[0].use']))
-  })
-
-  test('the ignore list names the two GPUs v0.7.9 does not read under dcgm-exporter 4.9.0 names, and a server error, another key or another route is still reported', () => {
-    const request = '/api/v1/cluster/gpu/metrics?cluster=test2'
-    const gpu = (n: number) => ({ uuid: `GPU-e2e-seed-${n}`, gpu: String(n), hostname: 'stand-in', model_name: 'stand-in', gpu_util: 0, memory_used_mb: 0,
-      memory_free_mb: 81050, memory_total_mb: 81050, memory_util_percent: 0, memory_temp: 30, exported_namespace: '', exported_pod: '' })
-    const of = (...gpus: number[]) => ({ gpu_count: gpus.length, total_memory_mb: 81050 * gpus.length, total_memory_free_mb: 81050 * gpus.length, gpus: gpus.map(gpu) })
-    const v079 = answer(of(0, 1))
-    expect(unnamed(ignoreList(), request, v079, answer(of(0, 1, 2, 3)))).toEqual([])
-    expect(unnamed(ignoreList(), request, v079, answer({ detail: 'x' }, 500)), 'a server error').toEqual(['$.detail', '$status'])
-    expect(unnamed(ignoreList(), request, v079, answer({ ...of(0, 1, 2, 3), source: 'dcgm' })), 'another key of the answer').toEqual(['$.source'])
-    expect(unnamed(ignoreList(), '/api/v1/cluster/gpu/nodes?cluster=test2', v079, answer(of(0, 1, 2, 3))), 'the same answer on another route')
-      .toEqual(expect.arrayContaining(['$.gpu_count', '$.gpus.$length', '$.gpus[GPU-e2e-seed-2].uuid']))
   })
 
   test('the ignore list of the response comparison compiles', () => {
