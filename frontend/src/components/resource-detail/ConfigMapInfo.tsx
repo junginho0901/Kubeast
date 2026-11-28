@@ -135,7 +135,7 @@ export default function ConfigMapInfo({ name, namespace, rawJson }: Props) {
                   {isExpanded && (
                     <div className="px-3 pb-2 border-t border-hairline">
                       <pre className={`text-xs text-slate-300 whitespace-pre-wrap wrap-break-word mt-1.5 ${isLong ? 'max-h-[300px] overflow-y-auto' : ''}`}>
-                        {value || <span className="text-slate-600 italic"><Tx>(empty)</Tx></span>}
+                        {value || <span className="text-slate-400 italic"><Tx>(empty)</Tx></span>}
                       </pre>
                     </div>
                   )}

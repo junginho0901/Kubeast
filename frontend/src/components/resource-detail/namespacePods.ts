@@ -13,8 +13,8 @@ export interface NamespacePodRow {
 }
 
 // The Namespace window's Pods table says what the Pods list says of a pod, in its colour; the phase stays on hover.
-export function namespacePodBadge(pod: NamespacePodRow): { text: string; badge: string; title?: string } {
-  const { text, badge, title } = podWindowBadge(pod)
+export function namespacePodBadge(pod: NamespacePodRow, tr?: Parameters<typeof podWindowBadge>[1]): { text: string; badge: string; title?: string } {
+  const { text, badge, title } = podWindowBadge(pod, tr)
   return { text, badge, title }
 }
 

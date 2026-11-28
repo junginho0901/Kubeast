@@ -39,7 +39,7 @@ function CollapsibleJson({ label, data }: { label: string; data: unknown }) {
         onClick={() => setOpen(!open)}
         className="w-full flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-slate-800/40 transition-colors"
       >
-        <span className="text-slate-400 font-medium">{label} <span className="text-slate-600 ml-1"><Tx text="({{n}} keys)" values={{ n: typeof data === 'object' && data ? Object.keys(data as object).length : 0 }} /></span></span>
+        <span className="text-slate-400 font-medium">{label} <span className="text-slate-400 ml-1"><Tx text="({{n}} keys)" values={{ n: typeof data === 'object' && data ? Object.keys(data as object).length : 0 }} /></span></span>
         <span className="text-slate-500 text-xs">{open ? '▼ ' : '▶ '}<Tx>{open ? 'collapse' : 'expand'}</Tx></span>
       </button>
       <div className="px-3 pb-2">

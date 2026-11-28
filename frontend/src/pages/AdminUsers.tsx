@@ -802,7 +802,7 @@ export default function AdminUsers() {
                             title={selectAllLabel}
                             aria-label={selectAllLabel}
                             data-testid="admin-users-pending-select-all"
-                            className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
+                            className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 accent-primary-600 focus:ring-primary-600 focus:ring-offset-0"
                           />
                         </th>
                         <th className="px-3 py-2.5">{tr('adminUsers.table.name', 'Name')}</th>
@@ -827,7 +827,7 @@ export default function AdminUsers() {
                                 onChange={() => togglePendingSelect(u.id)}
                                 onClick={(e) => e.stopPropagation()}
                                 aria-label={tr('adminUsers.bulk.selectAccount', 'Select {{account}}', { account: pendingAccountName(u) })}
-                                className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0"
+                                className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 accent-primary-600 focus:ring-primary-600 focus:ring-offset-0"
                               />
                             </td>
                             <td className="px-3 py-2.5">{u.name}</td>
@@ -866,7 +866,7 @@ export default function AdminUsers() {
                     type="button"
                     onClick={() => handlePendingBulkApprove('Member')}
                     disabled={pendingSelectedIds.size === 0 || bulkUpdateRoleMutation.isPending}
-                    className="rounded-lg bg-green-600 px-4 py-2 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-40"
+                    className="rounded-lg bg-green-700 px-4 py-2 text-xs font-medium text-white disabled:opacity-40"
                   >
                     {tr('adminUsers.bulk.approveMember', 'Approve as Member')}
                   </button>

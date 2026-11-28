@@ -246,7 +246,8 @@ allowVolumeExpansion: true
           <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.expandable}</p>
         </div>
         <div className="px-4 py-2.5">
-          <p className="text-xs leading-4 whitespace-nowrap text-slate-400">{tr('storageclasses.stats.waitForFirstConsumer', 'WaitForFirstConsumer')}</p>
+          {/* the longest label of the four: it takes a second line on a narrow screen instead of running past its card */}
+          <p className="text-xs leading-4 break-words text-slate-400">{tr('storageclasses.stats.waitForFirstConsumer', 'WaitForFirstConsumer')}</p>
           <p className="text-lg text-ink font-medium tabular-nums mt-1">{cards.waitForFirstConsumer}</p>
         </div>
       </div>

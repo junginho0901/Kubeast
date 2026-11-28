@@ -26,7 +26,7 @@ export function InputArea({ inputRef: ref, onSubmit, onStop, isStreaming, disabl
   const handleSubmit = (e?: FormEvent) => {
     e?.preventDefault()
     const trimmed = value.trim()
-    if (!trimmed || isStreaming) return
+    if (!trimmed || isStreaming || disabled) return
     const sent = onSubmit(trimmed)
     setValue('')
     void Promise.resolve(sent).then((ok) => {
@@ -66,8 +66,10 @@ export function InputArea({ inputRef: ref, onSubmit, onStop, isStreaming, disabl
         onCompositionEnd={keys.onCompositionEnd}
         placeholder={t('floatingChat.inputPlaceholder', { defaultValue: 'Ask about this page...' })}
         rows={1}
-        disabled={disabled}
-        className="min-h-10 min-w-0 flex-1 resize-none rounded-lg border border-control bg-slate-800 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden focus:ring-2 focus:ring-primary-400 disabled:opacity-50"
+        // read-only, not disabled, while the conversation is made: a disabled field drops the focus to the page (WCAG 2.4.3)
+        readOnly={disabled}
+        aria-disabled={disabled || undefined}
+        className="min-h-10 min-w-0 flex-1 resize-none rounded-lg border border-control bg-slate-800 px-3 py-2 text-sm text-ink placeholder:text-slate-500 focus:border-primary-500 focus:outline-hidden focus:ring-2 focus:ring-primary-400 aria-disabled:opacity-50"
       />
       {isStreaming ? (
         <button

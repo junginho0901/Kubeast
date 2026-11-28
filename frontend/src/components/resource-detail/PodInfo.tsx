@@ -294,7 +294,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div className="relative" ref={execContainerRef}>
               <button
                 onClick={() => { setIsExecContainerOpen(!isExecContainerOpen); setIsExecShellOpen(false) }}
-                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
+                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 transition-colors flex items-center gap-1.5 min-w-[120px] justify-between"
               >
                 <span className="text-xs font-medium truncate">{execSelectContainer || containerNames[0]}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform motion-reduce:transition-none ${isExecContainerOpen ? 'rotate-180' : ''}`} />
@@ -318,7 +318,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             <div className="relative" ref={execShellRef}>
               <button
                 onClick={() => { setIsExecShellOpen(!isExecShellOpen); setIsExecContainerOpen(false) }}
-                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
+                className="h-8 max-w-full px-2.5 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 transition-colors flex items-center gap-1.5 min-w-[90px] justify-between"
               >
                 <span className="text-xs font-medium">{execCommand}</span>
                 <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform motion-reduce:transition-none ${isExecShellOpen ? 'rotate-180' : ''}`} />
@@ -411,9 +411,9 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
           <InfoRow label="Restart Policy" value={restartPolicy || '-'} />
           {runtimeClassName && <InfoRow label="Runtime Class" value={runtimeClassName} />}
           {preemptionPolicy && <InfoRow label="Preemption Policy" value={preemptionPolicy} />}
-          <InfoRow label="Host Network" value={hostNetwork ? 'Enabled' : 'Disabled'} />
-          <InfoRow label="Host PID" value={hostPID ? 'Enabled' : 'Disabled'} />
-          <InfoRow label="Host IPC" value={hostIPC ? 'Enabled' : 'Disabled'} />
+          <InfoRow label="Host Network" value={dl(hostNetwork ? 'Enabled' : 'Disabled')} />
+          <InfoRow label="Host PID" value={dl(hostPID ? 'Enabled' : 'Disabled')} />
+          <InfoRow label="Host IPC" value={dl(hostIPC ? 'Enabled' : 'Disabled')} />
           {(() => {
             // imagePullSecrets — registry 인증용 Secret list. backend snake_case +
             // raw spec camelCase 둘 다 처리. ResourceLink 로 Secret detail 점프.
@@ -895,7 +895,7 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
               testId="pod-logs-lines"
               value={String(logLines)}
               onChange={(v) => setLogLines(Number(v))}
-              options={[50, 100, 500, 1000].map(n => ({ value: String(n), label: `${n} lines` }))}
+              options={[50, 100, 500, 1000].map(n => ({ value: String(n), label: tr('clusterView.logs.linesCount', '{{count}} lines', { count: n }) }))}
             />
             <button
               onClick={() => { setShowLogs(true); refetchLogs() }}
@@ -906,7 +906,8 @@ export default function PodInfo({ name, namespace, rawJson }: Props) {
             </button>
           </div>
           {showLogs && (
-            <div ref={logRef} className="bg-slate-950 rounded-lg p-3 font-mono text-xs text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
+            // in the Tab order, so the keys scroll it (the drawer's Tab cycle counts only what has a tabindex or is a control)
+            <div ref={logRef} tabIndex={0} className="bg-slate-950 rounded-lg p-3 font-mono text-xs text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-400">
               {logsFetching ? dl('Loading...') : logsError ? null : logData || dl('(no logs)')}
               {/* a refused or failed read is not "no logs": its reason (a container not started, no permission) */}
               {!logsFetching && logsError && (

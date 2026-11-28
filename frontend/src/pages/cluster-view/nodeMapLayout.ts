@@ -29,6 +29,38 @@ export function layoutMap(width: number, entries: NodeEntry[]): Layout {
   return { cell, cols, per, dot, height: rows * (cell + GAP) - GAP }
 }
 
+// A pod's dot is told apart by its shape as well as its colour (WCAG 1.4.1): a square for a healthy pod, a triangle for a
+// warning, a cross for an error. A dot under DOT_SHAPE_MIN px is too small for a shape and stays a square.
+export const DOT_SHAPE_MIN = 4
+export type DotKind = 'ok' | 'warn' | 'error'
+export type DotShape = 'square' | 'triangle' | 'cross'
+export function dotShape(kind: DotKind, size: number): DotShape {
+  if (kind === 'ok' || size < DOT_SHAPE_MIN) return 'square'
+  return kind === 'warn' ? 'triangle' : 'cross'
+}
+
+// The cross's line width; half of it is kept inside the dot's box, so a cross covers no more than its square would.
+export const crossWidth = (size: number): number => Math.max(1, Math.round(size / 3))
+
+type Pen = { moveTo(x: number, y: number): void; lineTo(x: number, y: number): void; closePath(): void }
+
+// Adds the triangle (filled) or the cross (stroked with crossWidth) of a dot of `size` at x, y to the pen's path, so the
+// dots of one kind are one fill or one stroke.
+export function traceDot(pen: Pen, shape: Exclude<DotShape, 'square'>, x: number, y: number, size: number): void {
+  if (shape === 'triangle') {
+    pen.moveTo(x + size / 2, y)
+    pen.lineTo(x + size, y + size)
+    pen.lineTo(x, y + size)
+    pen.closePath()
+    return
+  }
+  const m = crossWidth(size) / 2
+  pen.moveTo(x + m, y + m)
+  pen.lineTo(x + size - m, y + size - m)
+  pen.moveTo(x + size - m, y + m)
+  pen.lineTo(x + m, y + size - m)
+}
+
 // The cell the map's live region names when the canvas takes the focus: from the keyboard the cell the keys start from
 // (the one the mouse reached, else the first), from a pointer none, so a mouse over the cells is never read out.
 export function focusSpokenCell(byPointer: boolean, at: number | null, count: number): number | null {

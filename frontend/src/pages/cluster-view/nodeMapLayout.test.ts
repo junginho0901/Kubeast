@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import i18n from '@/i18n'
-import { GAP, focusSpokenCell, layoutMap, mapKey, mapNodeCount, mapSpeech, pointerFocusAfter, spokenAfter, type MapPointerEvent } from './nodeMapLayout'
+import { DOT_SHAPE_MIN, GAP, crossWidth, dotShape, focusSpokenCell, layoutMap, mapKey, mapNodeCount, mapSpeech, pointerFocusAfter, spokenAfter, traceDot, type MapPointerEvent } from './nodeMapLayout'
 import type { NodeEntry } from './hooks/useClusterDerived'
 
 const nodes = (n: number, pods: (i: number) => number): NodeEntry[] =>
@@ -130,5 +130,45 @@ describe('what the node map says', () => {
     expect(mapNodeCount([cell('cp-0', 3, 0, 0), cell('', 2, 0, 0)], list)).toBe(3)
     expect(mapNodeCount([cell('cp-0', 3, 0, 0), { ...cell('w-1', 0, 0, 0), dim: true }, cell('', 2, 0, 0)])).toBe(2)
     expect(mapNodeCount([], [])).toBe(0)
+  })
+})
+
+describe('node map dot shapes', () => {
+  // the path a dot adds, as [command, x, y]
+  const traced = (shape: 'triangle' | 'cross', x: number, y: number, size: number) => {
+    const steps: (string | number)[][] = []
+    traceDot({ moveTo: (a, b) => steps.push(['M', a, b]), lineTo: (a, b) => steps.push(['L', a, b]), closePath: () => steps.push(['Z']) }, shape, x, y, size)
+    return steps
+  }
+
+  it('a healthy pod is a square, a warning a triangle, an error a cross', () => {
+    expect(dotShape('ok', 6)).toBe('square')
+    expect(dotShape('warn', 6)).toBe('triangle')
+    expect(dotShape('error', 6)).toBe('cross')
+  })
+
+  it('a dot under the shape size stays a square whatever its kind', () => {
+    for (const kind of ['ok', 'warn', 'error'] as const) {
+      for (let size = 1; size < DOT_SHAPE_MIN; size++) expect(dotShape(kind, size), `${kind} ${size}px`).toBe('square')
+    }
+    expect(dotShape('warn', DOT_SHAPE_MIN)).toBe('triangle')
+  })
+
+  it('the triangle points up and stays inside the dot', () => {
+    expect(traced('triangle', 10, 20, 6)).toEqual([['M', 13, 20], ['L', 16, 26], ['L', 10, 26], ['Z']])
+  })
+
+  it('the cross is two lines whose stroke stays inside the dot', () => {
+    for (const size of [4, 6, 7, 11, 44]) {
+      const w = crossWidth(size)
+      const steps = traced('cross', 0, 0, size)
+      expect(steps.map((s) => s[0])).toEqual(['M', 'L', 'M', 'L'])
+      for (const [, x, y] of steps) {
+        expect(Number(x) - w / 2, `${size}px`).toBeGreaterThanOrEqual(0)
+        expect(Number(x) + w / 2, `${size}px`).toBeLessThanOrEqual(size)
+        expect(Number(y) - w / 2, `${size}px`).toBeGreaterThanOrEqual(0)
+        expect(Number(y) + w / 2, `${size}px`).toBeLessThanOrEqual(size)
+      }
+    }
   })
 })

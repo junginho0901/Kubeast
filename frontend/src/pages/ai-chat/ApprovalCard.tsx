@@ -97,7 +97,7 @@ export function ApprovalCard({ approvalId, tool, args, cluster, initialStatus }:
             type="button"
             onClick={() => decide('approve')}
             disabled={busy !== null}
-            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
           >
             {busy === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             {t('aiChat.approval.approve', 'Approve and run')}

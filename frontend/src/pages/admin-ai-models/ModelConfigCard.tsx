@@ -82,7 +82,7 @@ export default function ModelConfigCard({
             <div className="break-all text-xs text-slate-500 mt-0.5">
               {(provDef && providerLabel(provDef, tr)) || cfg.provider} · <code className="text-slate-400">{getModelLabel(cfg.provider, cfg.model)}</code>
               {keyVariable
-                ? <span className="text-emerald-400 ml-1">· 🔑 env: {keyVariable}</span>
+                ? <span className="text-emerald-400 ml-1">· 🔑 {tr('admin.aiModels.keyEnv', 'env: {{name}}', { name: keyVariable })}</span>
                 : provDef?.needsApiKey === false
                   ? null
                   : <span className="text-red-400 ml-1">· ⚠ {tr('admin.aiModels.noKeyEnv', 'No key env')}</span>}

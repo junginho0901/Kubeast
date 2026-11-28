@@ -10,6 +10,7 @@ import {
   toPorts,
 } from './podInfoFormatters'
 import { fmtTs } from '../detailFormat'
+import { useDetailLabel } from '../useDetailLabel'
 import { ResourceLink } from '../ResourceLink'
 import { Tx } from '../DetailCommon'
 
@@ -41,7 +42,9 @@ export default function ContainerCard({
   keyPrefix,
 }: Props) {
   const state = c.state || {}
-  const stateKey = Object.keys(state).find(k => state[k]) || 'unknown'
+  const dl = useDetailLabel()
+  const stateFound = Object.keys(state).find(k => state[k])
+  const stateKey = stateFound || 'unknown'
   const stateDetail = state[stateKey] || {}
   const ready = c.ready !== undefined ? c.ready : undefined
   const requests = c.requests ?? c?.resources?.requests
@@ -82,7 +85,7 @@ export default function ContainerCard({
           {isContainer && ready !== undefined && (
             <span className={`w-2 h-2 rounded-full ${ready ? 'bg-emerald-400' : 'bg-red-400'}`} />
           )}
-          <span className="text-xs text-slate-400">{stateKey}</span>
+          <span className="text-xs text-slate-400">{stateFound ?? dl('unknown')}</span>
         </div>
       </div>
       <div className="divide-y divide-slate-800/70">

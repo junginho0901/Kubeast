@@ -56,7 +56,7 @@ export default function WorkloadDialogs({
           role={triggerToast.type === 'error' ? 'alert' : 'status'}
           data-testid="workload-action-toast"
           className={`fixed bottom-4 right-4 z-50 max-w-md flex items-start gap-3 px-4 py-2 rounded-lg text-sm shadow-lg ${
-            triggerToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+            triggerToast.type === 'success' ? 'bg-emerald-700 text-white' : 'bg-red-600 text-white'
           }`}
         >
           <span className="break-words">{triggerToast.message}</span>
@@ -138,7 +138,7 @@ export default function WorkloadDialogs({
               <button
                 onClick={() => { if (selectedRevision != null) rollbackMut.mutate(selectedRevision) }}
                 disabled={rollbackMut.isPending || selectedRevision == null}
-                className="btn bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                className="btn bg-amber-700 text-white disabled:opacity-50"
               >{rollbackMut.isPending ? '...' : tr('rollback.confirm', 'Rollback')}</button>
             </div>
           </div>
