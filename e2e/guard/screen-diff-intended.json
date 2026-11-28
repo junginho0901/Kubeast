@@ -3,27 +3,27 @@
     {
       "screen": "^(default|dark|light) · /admin/access-review on (self|default|test2)$",
       "why": "Access Review opens a role's permissions from its rows (frontend/src/pages/admin/AccessReview.tsx, AccessReviewRolePermissions.tsx), and its table and header take the console surfaces of the redesign. On a narrower screen its header names wrap instead of widening the table.",
-      "pr": "TBD v080/design-pr-20-access-review-permissions, TBD v080/design-pr-14-admin, TBD v080/d5-fixes"
+      "pr": "#1128, #1127, #1175"
     },
     {
       "screen": "^(default|dark|light) · /admin/ai-models on (self|default|test2)$",
       "why": "AI Models says which model answers alert investigations, Investigate now and Optimization (frontend/src/pages/admin-ai-models/ModelUses.tsx), and its cards and model choices take the shared buttons, badges and colours (ModelConfigCard.tsx, ModelConfigForm.tsx). A card's key variable label goes through the catalog, so it reads in Korean in the Korean console.",
-      "pr": "TBD v080/ai8-model-choice, TBD v080/design-pr-14-admin, TBD v080/design-b3-fixes, TBD v080/design-v080-screens, TBD v080/d5-fixes"
+      "pr": "#1152, #1127, #1172, #1173, #1175"
     },
     {
       "screen": "^(default|dark|light) · /alerts on (self|default|test2)$",
       "why": "Alerts takes the shared buttons, colours and empty values of the redesign, and its list draws its badges as pills (frontend/src/pages/alerts/AlertInbox.tsx).",
-      "pr": "TBD v080/design-pr-17-other-screens, TBD v080/design-b3-fixes, TBD v080/design-v080-screens"
+      "pr": "#1127, #1172, #1173"
     },
     {
       "screen": "^(default|dark|light) · / on (self|default|test2)$",
       "why": "The dashboard takes a quieter layout and shows its states as horizontal bars (frontend/src/pages/dashboard/, StatusBarChart.tsx). Its Pods window gives the phase on hover through the catalog (modals/podWindowBadge.ts).",
-      "pr": "#1119, #1120, TBD v080/d5-fixes"
+      "pr": "#1119, #1120, #1175"
     },
     {
       "screen": "^(default|dark|light) · /cluster-view on (self|default|test2)$",
       "why": "The cluster map and its pod cards take the console surfaces of the redesign (frontend/src/pages/cluster-view/). The node map draws a warning pod's dot as a triangle and an error pod's as a cross, and its legend shows the same shapes, so the state reads without the colour (ClusterNodeMap.tsx, nodeMapLayout.ts); the Unscheduled box's name goes through the catalog.",
-      "pr": "#1122, TBD v080/d5-fixes"
+      "pr": "#1122, #1175"
     },
     {
       "screen": "^(default|dark|light) · /workloads/(pods|deployments|statefulsets|daemonsets|replicasets|jobs|cronjobs|hpas|vpas|pdbs) on (self|default|test2)$",
@@ -33,47 +33,47 @@
     {
       "screen": "^(default|dark|light) · /(cluster/(namespaces|nodes|priorityclasses|runtimeclasses|mutatingwebhookconfigurations|validatingwebhookconfigurations|resourcequotas|limitranges|leases)|configuration/(configmaps|secrets)|custom-resources/(instances|groups)) on (self|default|test2)$",
       "why": "The cluster, configuration and custom resource lists take the console surfaces and table spacing of the redesign (frontend/src/pages/cluster/, cluster-nodes/, namespaces/, configuration/, custom-resources/).",
-      "pr": "TBD v080/design-pr-11-cluster-config"
+      "pr": "#1124"
     },
     {
       "screen": "^(default|dark|light) · /(storage\\?tab=(pvcs|pvs|storageclasses|volumeattachments)|network/(services|endpoints|endpointslices|ingresses|ingressclasses|networkpolicies)|gateway/(gatewayclasses|gateways|httproutes|grpcroutes|referencegrants|policies)) on (self|default|test2)$",
       "why": "The network, storage and gateway lists take the console surfaces and table spacing of the redesign (frontend/src/pages/network/, storage/, gateway/). The VolumeAttachment states go through the catalog, and the StorageClass summary card's longest label wraps where it does not fit (StorageClasses.tsx, volumeattachments/).",
-      "pr": "TBD v080/design-pr-12-network-storage-gateway, TBD v080/d5-fixes"
+      "pr": "#1125, #1175"
     },
     {
       "screen": "^(default|dark|light) · /gpu/(dashboard|nodes|pods|deviceclasses|resourceclaims|resourceclaimtemplates|resourceslices) on (self|default|test2)$",
       "why": "The GPU and device screens take the console surfaces and summary colours of the redesign (frontend/src/pages/gpu/).",
-      "pr": "TBD v080/design-pr-13-gpu"
+      "pr": "#1126"
     },
     {
       "screen": "^(default|dark|light) · /(admin/(clusters|users|roles|access-requests|organizations|audit|session-recordings|investigations)|cluster/hygiene) on (self|default|test2)$",
       "why": "The administration screens and Cluster Hygiene take the console surfaces, buttons and table spacing of the redesign (frontend/src/pages/admin/, AdminUsers.tsx, AdminRoles.tsx, AdminOrganizations.tsx, AdminAudit.tsx). On a narrower screen a cluster row's buttons wrap inside the card, and the audit integrity line's separator is hidden from screen readers (admin/Clusters.tsx, AdminAudit.tsx). Rendering only on Cluster Hygiene: the 24px press area each button now carries (button::after with a transform) changes how the edge of its shield icon is antialiased; no content or layout changes.",
-      "pr": "TBD v080/design-pr-14-admin, TBD v080/design-pr-18-interaction-states, TBD v080/d5-fixes"
+      "pr": "#1127, #1175"
     },
     {
       "screen": "^(default|dark|light) · /ai-chat on (self|default|test2)$",
       "why": "The chat page refines its history list, welcome questions, message bubbles and launcher (frontend/src/pages/ai-chat/, components/FloatingAIChat/). The floating chat keeps the focus in its input while a new conversation starts and has a status line for screen readers under its header (ChatPanel.tsx, chatStatus.ts).",
-      "pr": "TBD v080/design-pr-15-ai-chat, TBD v080/d5-fixes"
+      "pr": "#1127, #1175"
     },
     {
       "screen": "^(default|dark|light) · /(monitoring|helm/releases) on (self|default|test2)$",
       "why": "Monitoring and Helm releases take the console surfaces and table spacing of the redesign (frontend/src/pages/Monitoring.tsx, monitoring/, helm/).",
-      "pr": "TBD v080/design-pr-16-monitoring-helm"
+      "pr": "#1127"
     },
     {
       "screen": "^(default|dark|light) · /(cost|timeline|cluster/search|cluster/resource-graph|security/(serviceaccounts|roles|rolebindings|clusterroles|clusterrolebindings|policyreports)|account) on (self|default|test2)$",
       "why": "Advanced Search, Cost, the timeline, the Resource Graph, the security lists and Settings take the console surfaces of the redesign (frontend/src/pages/AdvancedSearch.tsx, Cost.tsx, Timeline.tsx, ResourceGraph.tsx, security/, Account.tsx). The Resource Graph's relation names, legend and filters go through the catalog, and a relationship line's label is drawn in the colour mode's text colour instead of the line's colour, so it reads at 4.5:1 in every mode; the lines keep their colours (resource-graph/).",
-      "pr": "TBD v080/design-pr-17-other-screens, TBD v080/d5-fixes"
+      "pr": "#1127, #1175"
     },
     {
       "screen": "^(default|dark|light) · drawer [A-Za-z]+ \\((namespace under test|cluster|kube-node-lease)\\)$",
       "why": "The resource drawer takes the panel border of the redesign, separates its sections with dividers instead of cards and aligns the tables inside it (frontend/src/components/ResourceDetailDrawer.tsx, resource-detail/). Its field labels (container fields, Node System Info, host namespaces, byte sizes, limit and webhook types, container and VolumeAttachment states) go through the catalog, so they read in Korean in the Korean console. Rendering only: the 24px press area each button now carries (button::after with a transform) changes how the text of the Show top talkers button is antialiased; no content or layout changes.",
-      "pr": "#1116, #1117, #1118, TBD v080/design-b3-fixes, TBD v080/design-pr-18-interaction-states, TBD v080/d5-fixes"
+      "pr": "#1116, #1117, #1118, #1172, #1127, #1175"
     },
     {
       "screen": "^(default|dark|light) · /(cluster/(validating|mutating)admissionpolicies|gateway/backendtlspolicies|admin/ai-usage) on (self|default|test2)$",
       "why": "Only the console around the page changed here: the sidebar's selected item and spacing, the shared table controls and the refined palette (frontend/src/components/Layout.tsx, ListPager.tsx, index.css); the page's own code is unchanged. The sidebar's subtitle goes through the catalog, and a long sidebar name wraps at a word joint instead of being cut (Layout.tsx).",
-      "pr": "#1114, TBD v080/design-pr-19-palette-docs, TBD v080/d5-fixes"
+      "pr": "#1114, #1127, #1175"
     }
   ]
 }

@@ -48,31 +48,31 @@
       "cell": "^\\$status$",
       "newStatus": "^200$",
       "why": "GET /ai/model-configs/uses is new: it says which model config answers alert investigations, Investigate now and Optimization, and why (docs/features.md \"Which model answers what\"). v0.7.9 has no GET there and answers 405.",
-      "pr": "TBD v080/ai8-model-choice"
+      "pr": "#1152"
     },
     {
       "route": "^/api/v1/ai/model-configs/uses$",
       "cell": "^\\$\\.detail$",
       "why": "The detail of v0.7.9's 405 answer, Method Not Allowed, which the new route does not send.",
-      "pr": "TBD v080/ai8-model-choice"
+      "pr": "#1152"
     },
     {
       "route": "^/api/v1/ai/model-configs/uses$",
       "cell": "^\\$\\.uses(\\.\\$length|\\[[^\\]]+\\]\\.[a-z_]+(\\.[a-z_]+)?)$",
       "why": "The new route's answer: one row per use (alert investigations, Investigate now, Optimization) with its choice and the config that answers it.",
-      "pr": "TBD v080/ai8-model-choice"
+      "pr": "#1152"
     },
     {
       "route": "^/api/v1/cluster/gpu/metrics$",
       "cell": "^\\$\\.(gpu_count|total_memory_mb|total_memory_free_mb|gpus\\.\\$(length|order))$",
       "why": "GPU metrics read dcgm-exporter 4.9.0's metric names beside the earlier ones. The kind dev install's stand-in exporter (deploy/kind/gpu-metrics.yaml) serves two of its four GPUs under the 4.9.0 names, which v0.7.9 does not read: the GPU count, the memory totals and the list's length and order count those two.",
-      "pr": "TBD v080/srv12-dcgm-names"
+      "pr": "#1164"
     },
     {
       "route": "^/api/v1/cluster/gpu/metrics$",
       "cell": "^\\$\\.gpus\\[[^\\]]+\\]\\.[a-z_]+$",
       "why": "The rows of the two GPUs the stand-in exporter serves under dcgm-exporter 4.9.0's names, which v0.7.9 does not read.",
-      "pr": "TBD v080/srv12-dcgm-names"
+      "pr": "#1164"
     }
   ]
 }
