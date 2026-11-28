@@ -75,6 +75,10 @@ export const edgeStyles: Record<string, { stroke: string; strokeDasharray?: stri
   sa_used_by:     { stroke: '#f97316', strokeDasharray: '4 4', label: 'uses SA' },
 }
 
+// A line's word on the graph, in the legend and in the filter, in the UI language
+export const edgeLabel = (type: string, tr: (key: string, fallback: string) => string) =>
+  tr(`resourceGraph.edgeType.${type}`, (edgeStyles[type] || edgeStyles.owns).label)
+
 export const SOURCE_GROUPS = [
   { id: 'workloads', label: 'Workloads', kinds: ['Pod', 'Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job', 'CronJob'], default: true },
   { id: 'network', label: 'Network', kinds: ['Service', 'Ingress', 'Endpoints', 'EndpointSlice', 'NetworkPolicy'], default: true },

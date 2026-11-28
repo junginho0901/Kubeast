@@ -225,7 +225,7 @@ export function ResourceModal({
                 <div className="space-y-2">
                   {filteredResources.length > 0 ? (
                     pageItems.map((pod) => {
-                      const shown = podWindowBadge(pod)
+                      const shown = podWindowBadge(pod, tr)
                       const notReadyHint = shown.notReady ? tr('pods.table.notReadyHint', 'Not ready ({{ready}})', { ready: pod.ready }) : ''
                       return (
                         <div

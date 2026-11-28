@@ -253,7 +253,7 @@ export default function AdminAudit() {
     const isSuccess = result === 'success'
     return (
       <span
-        className={`inline-flex items-center whitespace-nowrap rounded-sm px-2 py-0.5 text-xs font-medium ${
+        className={`badge ${
           isSuccess
             ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
             : 'bg-red-500/15 text-red-300 border border-red-500/30'
@@ -309,7 +309,7 @@ export default function AdminAudit() {
               <span className="text-slate-500"> ({tr('adminAudit.integrity.unsealed', '미봉인 {{n}}', { n: integrity.unsealed_rows })})</span>
             )}
           </span>
-          <span className="text-slate-600">·</span>
+          <span className="text-slate-600" aria-hidden="true">·</span>
           <span className="text-slate-300" data-testid="audit-integrity-anchor-state" title={tr('adminAudit.integrity.anchorTitle', 'An anchor is a copy of the chain head written outside the database (the sink), so the chain can be checked against it')}>
             {integrity.last_anchor
               ? tr('adminAudit.integrity.lastAnchor', '마지막 앵커 {{when}} (#{{seq}} → {{sink}})', {

@@ -334,7 +334,7 @@ export default function NamespaceInfo({ name }: Props) {
                 <p className="text-xs text-ink font-medium mb-2">{lr.name}</p>
                 {lr.limits?.map((lim: any, li: number) => (
                   <div key={li} className="overflow-x-auto mb-2">
-                    <p className="text-xs text-slate-400 mb-1">Type: {lim.type || '-'}</p>
+                    <p className="text-xs text-slate-400 mb-1"><Tx>Type</Tx>: {lim.type || '-'}</p>
                     <table className="w-full text-xs table-fixed min-w-[480px]">
                       <thead className="text-slate-400"><tr><Th className="text-left py-1 w-[20%]">Resource</Th><Th className="text-left py-1 w-[20%]">Min</Th><Th className="text-left py-1 w-[20%]">Max</Th><Th className="text-left py-1 w-[20%]">Default</Th><Th className="text-left py-1 w-[20%]">Default Req</Th></tr></thead>
                       <tbody className="divide-y divide-slate-800">
@@ -381,7 +381,7 @@ export default function NamespaceInfo({ name }: Props) {
                 <thead className="text-slate-400"><tr><Th className="text-left py-2 w-[30%]">Name</Th><Th className="text-left py-2 w-[12%]">Status</Th><Th className="text-left py-2 w-[10%]">Ready</Th><Th className="text-left py-2 w-[10%]">Restarts</Th><Th className="text-left py-2 w-[23%]">Node</Th><Th className="text-left py-2 w-[15%]">Age</Th></tr></thead>
                 <tbody className="divide-y divide-slate-800">
                   {pagedPods.map((pod: any) => {
-                    const status = namespacePodBadge(pod)
+                    const status = namespacePodBadge(pod, tr)
                     return (
                       <tr key={pod.name} className="text-slate-200">
                         <td className="py-2 pr-2"><span className="block truncate font-mono" title={pod.name}><ResourceLink kind="Pod" name={pod.name} namespace={name} /></span></td>

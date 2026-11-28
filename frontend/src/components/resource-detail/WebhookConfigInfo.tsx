@@ -5,6 +5,7 @@ import { InfoSection, InfoRow, SummaryBadge, KeyValueTags, EventsSection, Th, Tx
 import { fmtRel } from './detailFormat'
 import { ResourceLink } from './ResourceLink'
 import { webhookAffected, type WebhookRule } from './clusterDetail'
+import { useDetailLabel } from './useDetailLabel'
 import { useDrawerFollowsObject } from './useDrawerFollowsObject'
 import { useDrawerFollowsEvents } from './useDrawerFollowsEvents'
 import { usePagination } from './usePagination'
@@ -19,6 +20,7 @@ interface Props {
 
 export default function WebhookConfigInfo({ name, kind }: Props) {
   const isMutating = kind === 'MutatingWebhookConfiguration'
+  const dl = useDetailLabel()
 
   const { data: desc, isLoading, error: describeError, dataUpdatedAt } = useQuery({
     queryKey: [isMutating ? 'mutatingwebhookconfiguration-describe' : 'validatingwebhookconfiguration-describe', name],
@@ -61,7 +63,7 @@ export default function WebhookConfigInfo({ name, kind }: Props) {
       {/* Summary Badges */}
       <div className="flex flex-wrap gap-2">
         <SummaryBadge label="Webhooks" value={webhooks.length} color={webhooks.length > 0 ? 'green' : 'default'} />
-        <SummaryBadge label="Type" value={isMutating ? 'Mutating' : 'Validating'} color={isMutating ? 'amber' : 'green'} />
+        <SummaryBadge label="Type" value={dl(isMutating ? 'Mutating' : 'Validating')} color={isMutating ? 'amber' : 'green'} />
       </div>
 
       {/* Basic Info */}

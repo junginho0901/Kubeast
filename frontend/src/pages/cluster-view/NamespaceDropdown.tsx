@@ -19,7 +19,7 @@ export function NamespaceDropdown({ namespaces }: Props) {
     <div className="relative" ref={namespaceDropdownRef}>
       <button
         onClick={() => setIsNamespaceDropdownOpen(!isNamespaceDropdownOpen)}
-        className="h-10 px-4 bg-slate-800 hover:bg-slate-700 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] max-w-full justify-between"
+        className="h-10 px-4 bg-slate-800 hover:bg-slate-700 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 w-[220px] max-w-full justify-between"
       >
         <span className="text-sm font-medium truncate min-w-0">
           {selectedNamespace === 'all'

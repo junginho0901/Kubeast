@@ -418,7 +418,7 @@ export default function AccessReview() {
           ) : (
             <table className="min-w-full text-sm" data-testid="access-review-table">
               <thead ref={theadRef} className="text-slate-400">
-                <tr>{columns[tab].map((c) => <th key={c.key} className="px-3 py-2 text-left whitespace-nowrap">{c.label}</th>)}</tr>
+                <tr>{columns[tab].map((c) => <th key={c.key} className="px-3 py-2 text-left">{c.label}</th>)}</tr>
               </thead>
               <tbody>
                 {shown.rows.map((r, i) => (

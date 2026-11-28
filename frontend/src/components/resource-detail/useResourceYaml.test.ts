@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CASES from './yamlOpened.cases.json'
-import { useResourceYaml } from './useResourceYaml'
+import { keepSameRead } from '@/utils/keepSameRead'
+import { YAML_NONCE_AT, useResourceYaml } from './useResourceYaml'
 import { encodeSecretYaml, yamlOpenedOf } from './utils'
 
 const api = vi.hoisted(() => ({
@@ -123,6 +124,36 @@ describe('the YAML of a custom resource', () => {
   it('is saved as the CRD the drawer names now', async () => {
     await save('CustomResourceInstance', null, NODECLASS)(EDITED, OPENED)
     expect(api.applyResourceYaml).toHaveBeenCalledWith('ec2nodeclasses.karpenter.k8s.aws', 'x', EDITED, undefined, SENT)
+  })
+})
+
+// Refresh read under a new key with no answer yet, so the editor turned not ready, Refresh went off and the focus fell
+// to the page. The last YAML of the same object now stays while Refresh reads it again; another object's never does.
+describe('the YAML while Refresh reads it again', () => {
+  const key = (kind: string, ns: string | null, name: string, type: string, nonce: number) => ['resource-yaml', kind, ns, name, type, nonce]
+  const keep = (from: unknown[], to: unknown[]) => keepSameRead(to, [YAML_NONCE_AT])({ yaml: 'before' }, { queryKey: from })
+
+  it('keeps the last YAML of the same object, and only of that object', () => {
+    expect(keep(key('ConfigMap', 'ns', 'cm', 'configmaps', 0), key('ConfigMap', 'ns', 'cm', 'configmaps', 1))).toEqual({ yaml: 'before' })
+    expect(keep(key('ConfigMap', 'ns', 'cm', 'configmaps', 0), key('ConfigMap', 'ns', 'other', 'configmaps', 1))).toBeUndefined()
+    expect(keep(key('ConfigMap', 'ns', 'cm', 'configmaps', 0), key('ConfigMap', 'ns2', 'cm', 'configmaps', 1))).toBeUndefined()
+    expect(keep(key('CustomResourceInstance', null, 'default', 'nodepools.karpenter.sh', 0), key('CustomResourceInstance', null, 'default', 'ec2nodeclasses.karpenter.k8s.aws', 1))).toBeUndefined()
+  })
+
+  it('is the read the drawer makes', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const Tab = () => {
+      useResourceYaml({ target: { kind: 'ConfigMap', namespace: 'ns', name: 'cm' }, tab: 'yaml', canEditYaml: true })
+      return null
+    }
+    renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(Tab)))
+    const [read] = client.getQueryCache().findAll({ queryKey: ['resource-yaml'] })
+    expect(read.queryKey.slice(0, 4)).toEqual(['resource-yaml', 'ConfigMap', 'ns', 'cm'])
+    expect(read.queryKey[YAML_NONCE_AT]).toBe(0)
+    const placeholder = (read.options as { placeholderData?: unknown }).placeholderData as (prev: unknown, prevQuery?: { queryKey: unknown[] }) => unknown
+    const earlier = read.queryKey.map((part, at) => (at === YAML_NONCE_AT ? 7 : part))
+    expect(placeholder({ yaml: 'before' }, { queryKey: earlier })).toEqual({ yaml: 'before' })
+    expect(placeholder({ yaml: 'before' }, { queryKey: earlier.map((part, at) => (at === 3 ? 'other' : part)) })).toBeUndefined()
   })
 })
 

@@ -29,7 +29,7 @@ export function PodExecPanel() {
               setIsExecContainerDropdownOpen(!isExecContainerDropdownOpen)
               setIsExecShellDropdownOpen(false)
             }}
-            className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[160px] justify-between"
+            className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[160px] justify-between"
           >
             <span className="text-xs font-medium truncate">{execContainer || '-'}</span>
             <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform motion-reduce:transition-none ${isExecContainerDropdownOpen ? 'rotate-180' : ''}`} />
@@ -59,7 +59,7 @@ export function PodExecPanel() {
               setIsExecShellDropdownOpen(!isExecShellDropdownOpen)
               setIsExecContainerDropdownOpen(false)
             }}
-            className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus:outline-hidden focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[120px] justify-between"
+            className="h-8 px-3 bg-slate-700 hover:bg-slate-600 text-ink rounded-lg border border-control focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-400 focus:border-primary-500 transition-colors flex items-center gap-2 min-w-[120px] justify-between"
           >
             <span className="text-xs font-medium">{execCommand}</span>
             <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform motion-reduce:transition-none ${isExecShellDropdownOpen ? 'rotate-180' : ''}`} />

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { PodNodeCount, PodNodeSummary } from '@/services/api'
 
 // The node boxes and map cells in one order: control planes first, then workers, the pods not scheduled last, by name
@@ -25,12 +26,12 @@ interface Params {
 export const UNSCHEDULED = 'Unscheduled'
 
 // The entries in the map's order (useClusterDerived without React, for tests).
-export function deriveEntries(summary: PodNodeSummary | undefined, nodes: any[] | undefined, search = ''): NodeEntry[] {
+export function deriveEntries(summary: PodNodeSummary | undefined, nodes: any[] | undefined, search = '', unscheduledLabel = UNSCHEDULED): NodeEntry[] {
   const list = Array.isArray(nodes) ? nodes : []
   const controlPlane = new Set(list.filter((n: any) => n?.roles?.includes('control-plane')).map((n: any) => n.name))
   const statusOf = new Map<string, string>(list.filter((n: any) => typeof n?.name === 'string').map((n: any) => [n.name, String(n.status ?? '')]))
   const withStatus = (e: NodeEntry): NodeEntry => (e.node && statusOf.has(e.node) ? { ...e, status: statusOf.get(e.node) } : e)
-  const entries: NodeEntry[] = (summary?.nodes ?? []).map((c) => withStatus({ node: c.node, label: c.node || UNSCHEDULED, counts: c }))
+  const entries: NodeEntry[] = (summary?.nodes ?? []).map((c) => withStatus({ node: c.node, label: c.node || unscheduledLabel, counts: c }))
   if (search && summary) {
     const matched = new Set(entries.map((e) => e.node))
     for (const n of list) {
@@ -50,5 +51,8 @@ export function deriveEntries(summary: PodNodeSummary | undefined, nodes: any[] 
 }
 
 export function useClusterDerived({ summary, nodes, search = '' }: Params): NodeEntry[] {
-  return useMemo(() => deriveEntries(summary, nodes, search), [summary, nodes, search])
+  const { t } = useTranslation()
+  // the label is what the box and the map say; ?node= keeps UNSCHEDULED
+  const unscheduledLabel = t('clusterView.unscheduled', 'Unscheduled')
+  return useMemo(() => deriveEntries(summary, nodes, search, unscheduledLabel), [summary, nodes, search, unscheduledLabel])
 }

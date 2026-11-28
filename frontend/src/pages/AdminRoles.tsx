@@ -583,7 +583,7 @@ export default function AdminRoles() {
                           checked={formPerms.has(p.key)}
                           onChange={() => togglePerm(p.key)}
                           disabled={editingRole?.is_system}
-                          className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 text-primary-600 focus:ring-primary-600 focus:ring-offset-0 disabled:opacity-50"
+                          className="h-4 w-4 rounded-sm border-slate-600 bg-slate-900 accent-primary-600 focus:ring-primary-600 focus:ring-offset-0 disabled:opacity-50"
                         />
                         <div className="flex-1 min-w-0">
                           <span className="text-xs font-mono text-slate-300 group-hover:text-ink transition-colors break-all">

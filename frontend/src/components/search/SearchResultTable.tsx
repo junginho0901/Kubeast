@@ -212,6 +212,8 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
           <button
             onClick={() => setPage(p => Math.max(0, p - 1))}
             disabled={safePage === 0}
+            aria-label={t('common.prev', 'Previous')}
+            title={t('common.prev', 'Previous')}
             className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 btn-secondary focus-visible:outline-2 focus-visible:outline-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -219,6 +221,8 @@ export default function SearchResultTable({ results, maxDisplay = 500 }: Props) 
           <button
             onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
             disabled={safePage >= totalPages - 1}
+            aria-label={t('common.next', 'Next')}
+            title={t('common.next', 'Next')}
             className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 btn-secondary focus-visible:outline-2 focus-visible:outline-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronRight className="w-4 h-4" />

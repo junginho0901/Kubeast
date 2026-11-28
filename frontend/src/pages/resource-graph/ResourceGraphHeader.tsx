@@ -11,6 +11,7 @@ import type { ResourceGraphEdgeType } from '@/services/api'
 import {
   ALL_EDGE_TYPES,
   ALL_KINDS,
+  edgeLabel,
   edgeStyles,
   kindIcon,
   SOURCE_GROUPS,
@@ -362,7 +363,7 @@ export function ResourceGraphHeader({
                       }}
                     />
                     <span style={{ color: edgeTypeFilters.has(type) ? style.stroke : undefined }}>
-                      {style.label}
+                      {edgeLabel(type, (k, f) => t(k, f))}
                     </span>
                   </button>
                 )

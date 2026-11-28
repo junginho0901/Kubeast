@@ -573,8 +573,8 @@ body {
     transform: translate(-50%, -50%);
   }
 
-  /* Controls without a local ring use the console's keyboard focus outline. */
-  :where(button, input, select, textarea, [role='button']):focus-visible {
+  /* Controls without a local ring use the console's keyboard focus outline (the node map's canvas too: a browser's own ring is 2.89:1 on a Mac). */
+  :where(button, input, select, textarea, [role='button'], [role='application']):focus-visible {
     outline: 2px solid var(--color-primary-400);
     outline-offset: 2px;
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { elementsOf } from '@/testing/fakeHooks'
-import { openOnPress, opensOnKey } from './openOnPress'
+import { openOnPress, opensOnKey, rowName } from './openOnPress'
 import { VolumeAttachmentTable } from '@/pages/storage/volumeattachments/VolumeAttachmentTable'
 
 // A list row opened its drawer on a click only (WCAG 2.1.1): no Tab stop and no key. The rows now take the Tab order
@@ -41,6 +41,21 @@ describe('a row that opens on a press', () => {
     openOnPress(open).onKeyDown(press(' ', { target: { tag: 'a' } as never }))
     expect(open).not.toHaveBeenCalled()
     expect(inner.preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('names a table row from its cells on its own focus, so a screen reader says the row and not only "list box"', () => {
+    const cell = (innerText: string) => ({ innerText, textContent: innerText })
+    const tr = { tagName: 'TR', cells: [cell('kbd-cm'), cell(''), cell(' 1\n'), cell('9s')], setAttribute: vi.fn() }
+    openOnPress(() => {}).onFocus({ target: tr, currentTarget: tr })
+    expect(tr.setAttribute).toHaveBeenCalledWith('aria-label', 'kbd-cm, 1, 9s')
+
+    // a focus that arrived on a control inside the row leaves the row's name alone, and a box outside a table is no row
+    openOnPress(() => {}).onFocus({ target: { tag: 'button' }, currentTarget: tr })
+    const box = { tagName: 'DIV', setAttribute: vi.fn() }
+    openOnPress(() => {}, { button: true }).onFocus({ target: box, currentTarget: box })
+    expect(tr.setAttribute).toHaveBeenCalledTimes(1)
+    expect(box.setAttribute).not.toHaveBeenCalled()
+    expect(rowName({ tagName: 'TR', cells: [{ textContent: ' a  b ' }], setAttribute: () => {} })).toBe('a b')
   })
 
   it('opens nothing on another key, a held key or a key with a modifier', () => {

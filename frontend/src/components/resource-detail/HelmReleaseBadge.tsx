@@ -19,9 +19,9 @@ export function HelmReleaseBadge({ rawJson }: { rawJson: Record<string, unknown>
       title={dl('Helm release {{release}}', { release: `${rel.namespace}/${rel.name}` })}
     >
       <Package className="w-3 h-3 shrink-0" />
-      <span className="text-primary-400/80">Helm</span>
+      <span>Helm</span>
       <span className="font-medium break-all">{rel.name}</span>
-      <span className="text-primary-400/80">·</span>
+      <span>·</span>
       <span className="text-slate-400 break-all">{rel.namespace}</span>
       <ArrowUpRight className="w-3 h-3 shrink-0" />
     </Link>

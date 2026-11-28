@@ -9,6 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/services/api'
 import { retryUnlessRefused } from '@/services/queryDefaults'
+import { keepSameRead } from '@/utils/keepSameRead'
 
 import { objectResourceType } from './crDetail'
 import { encodeSecretYaml, yamlOpenedOf } from './utils'
@@ -21,6 +22,9 @@ interface Target {
   apiVersion?: string
   rawJson?: any
 }
+
+/** Where the YAML read's key holds the Refresh count, after the object (kind, namespace, name, resource type). */
+export const YAML_NONCE_AT = 5
 
 interface Args {
   target: Target | null
@@ -41,8 +45,11 @@ export function useResourceYaml({ target, tab, canEditYaml }: Args) {
   // or group may serve an object of the same namespace and name, so the key names it too and the read of one is never
   // the other's YAML
   const type = target ? objectResourceType(target) : ''
+  const yamlKey = ['resource-yaml', kind, ns, name, type, yamlRefreshNonce] as const
   const { data: yamlData, isLoading: yamlLoading, isFetching: yamlFetching, error: yamlError } = useQuery({
-    queryKey: ['resource-yaml', kind, ns, name, type, yamlRefreshNonce],
+    queryKey: yamlKey,
+    // Refresh reads the same object under a new key: its last YAML stays meanwhile, so the editor and Refresh keep the focus
+    placeholderData: keepSameRead(yamlKey, [YAML_NONCE_AT]),
     queryFn: async () => {
       if (kind === 'Node') return api.getNodeYaml(name, yamlRefreshNonce > 0)
       if (kind === 'Namespace') return api.getNamespaceYaml(name, yamlRefreshNonce > 0)
