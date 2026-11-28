@@ -2,16 +2,16 @@
    (interactions.js adds this sheet to the frame's page). The console's pages are made for a full browser window; here
    each one fits the frame. */
 
-/* Overview: the title, the six counts in one row and the Pod and Node status charts. The lists below them (top pods
-   and nodes, the node cards, quick actions) are left out. */
+/* Overview: the title, the six counts in one row, the Pod and Node status charts and the quick actions, whose three
+   windows open on the sample data. The lists between them (top pods and nodes, the node cards) are left out. */
 .page-scrolls:has([data-testid="stat-value-namespaces"]) { padding-bottom: 0; }
 .page-scrolls:has([data-testid="stat-value-namespaces"]) > * { margin-block: 0 16px; }
 .page-scrolls:has([data-testid="stat-value-namespaces"]) > .page-head p { display: inline-block; margin: 8px 14px 0 0; }
 .page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
 .page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) > .card { padding: 16px 18px; }
-.page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) + * { margin-bottom: 0; }
 .page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) + * > .card { padding: 20px; }
-.page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) + * ~ * { display: none; }
+.page-scrolls > :has(> * [data-testid="stat-value-namespaces"]) + * ~ :not(.card:has(> .grid > .btn-secondary)) { display: none; }
+.page-scrolls:has([data-testid="stat-value-namespaces"]) > .card:has(> .grid > .btn-secondary) { margin-bottom: 0; padding: 18px 20px; }
 /* While the line naming what was deleted shows: it keeps its row under the title, and the charts take the height left. */
 .page-scrolls:has([data-testid="stat-value-namespaces"]):has(> [data-testid="yaml-created"]) { display: flex; flex-direction: column; height: calc(100vh - 48px); }
 .page-scrolls:has(> [data-testid="yaml-created"]) > :has(> * [data-testid="stat-value-namespaces"]) + * { flex: 1 1 0; grid-template-rows: minmax(0, 1fr); min-height: 0; }
