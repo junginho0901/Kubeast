@@ -21,6 +21,14 @@ describe('plural forms', () => {
     expect(i18n.getFixedT('ko')('adminRoles.selectedCount', { count: 1 })).toBe(ko.adminRoles.selectedCount.replace('{{count}}', '1'))
   })
 
+  it('says one item for a Cluster View search that matched one pod, and items otherwise', () => {
+    const tEn = i18n.getFixedT('en')
+    expect(tEn('clusterView.countSuffix', { count: 1 })).toBe('item')
+    expect(tEn('clusterView.countSuffix', { count: 0 })).toBe('items')
+    expect(tEn('clusterView.countSuffix', { count: 2 })).toBe('items')
+    expect(i18n.getFixedT('ko')('clusterView.countSuffix', { count: 1 })).toBe(ko.clusterView.countSuffix)
+  })
+
   it('keeps the plain entry next to every singular one', () => {
     const missing: string[] = []
     const walk = (o: unknown, path: string) => {

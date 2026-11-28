@@ -2696,6 +2696,7 @@
     "allNamespaces": "All namespaces",
     "loading": "Loading data...",
     "searchResults": "Results",
+    "countSuffix_one": "item",
     "countSuffix": "items",
     "searchResultsTotal": "(out of {{count}})",
     "noSearchResults": "No pods found for \"{{query}}\".",

@@ -152,7 +152,7 @@ export function PodNodeGrid({ entries, matched, all, isLoading, canDeletePod, no
         <div className="text-sm text-slate-400" data-testid="cluster-view-search-count">
           {tr('clusterView.searchResults', 'Results')}:{' '}
           <span className="text-ink font-medium">{matched}</span>{' '}
-          {tr('clusterView.countSuffix', 'items')}
+          {tr('clusterView.countSuffix', 'items', { count: matched })}
           {matched !== all && (
             <span className="ml-2">
               {tr('clusterView.searchResultsTotal', '(out of {{count}})', { count: all })}
